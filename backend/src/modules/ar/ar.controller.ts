@@ -46,12 +46,12 @@ export class ArController {
   @ApiOperation({ summary: '產生帳齡分析表' })
   @ApiResponse({ status: 200, description: 'AR帳齡分析' })
   async getAgingReport(@Query('entityId') entityId: string) {
-    return this.arService.getAgingReport(entityId);
+    return this.arService.getAgingReport(entityId, new Date());
   }
 
   @Put('invoices/:id/write-off')
   @ApiOperation({ summary: '呆帳沖銷' })
   async writeOff(@Param('id') id: string, @Body() data: any) {
-    return this.arService.writeOffBadDebt(id, data);
+    return this.arService.writeOffBadDebt(id, data.amount || 0, data.reason || 'Write off');
   }
 }

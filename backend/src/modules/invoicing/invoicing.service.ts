@@ -8,7 +8,8 @@ import {
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { PreviewInvoiceDto } from './dto/preview-invoice.dto';
 import { IssueInvoiceDto } from './dto/issue-invoice.dto';
-import { Prisma, Decimal } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 
 /**
  * InvoicingService
