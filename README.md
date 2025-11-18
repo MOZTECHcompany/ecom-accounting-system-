@@ -421,6 +421,12 @@ npm run test:e2e
 
 ## 🚢 部署到 Render
 
+### 正式環境 URL
+- **前端**: https://ecom-accounting-frontend.onrender.com
+- **後端**: https://ecom-accounting-backend.onrender.com
+- **API Base URL**: https://ecom-accounting-backend.onrender.com/api/v1
+- **Swagger 文件**: https://ecom-accounting-backend.onrender.com/api-docs
+
 ### 1. 準備工作
 - 註冊 [Render](https://render.com) 帳號
 - Fork 此專案到您的 GitHub
@@ -441,13 +447,15 @@ npm run test:e2e
    - **Build Command**: `npm install && npx prisma generate && npm run build`
    - **Start Command**: `npx prisma migrate deploy && npm run start:prod`
 4. 環境變數：
-   ```
+   ```bash
    DATABASE_URL=<您的 Internal Database URL>
-   JWT_SECRET=<隨機產生的安全字串>
+   JWT_SECRET=<隨機產生的安全字串，至少32字元>
    NODE_ENV=production
    PORT=3000
+   API_PREFIX=/api/v1
    ```
 5. 點擊 "Create Web Service"
+6. 部署完成後，複製您的 Backend URL（例如：`https://ecom-accounting-backend.onrender.com`）
 
 ### 4. 建立 Frontend Web Service
 1. 點擊 "New" → "Static Site"
@@ -457,10 +465,12 @@ npm run test:e2e
    - **Root Directory**: `frontend`
    - **Build Command**: `npm install && npm run build`
    - **Publish Directory**: `dist`
-4. 環境變數：
+4. **重要：環境變數設定**
+   ```bash
+   # 必須指向您的 Backend URL（步驟3取得的URL）
+   VITE_API_URL=https://ecom-accounting-backend.onrender.com/api/v1
    ```
-   VITE_API_URL=<您的 Backend URL>/api/v1
-   ```
+   ⚠️ **注意**：請將上方 URL 替換為您實際的 Backend URL
 5. 點擊 "Create Static Site"
 
 ### 5. 初始化資料
@@ -468,6 +478,36 @@ Backend 部署完成後，執行種子資料：
 ```bash
 # 在 Render Shell 中執行
 npm run prisma:seed
+```
+
+### 6. 驗證部署
+
+#### 檢查 Backend Health
+```bash
+curl https://ecom-accounting-backend.onrender.com/health
+# 預期回應：{"status":"ok","timestamp":"...","env":"production"}
+```
+
+#### 檢查 Swagger 文件
+開啟瀏覽器訪問：
+```
+https://ecom-accounting-backend.onrender.com/api-docs
+```
+
+#### 測試登入 API
+```bash
+curl -X POST https://ecom-accounting-backend.onrender.com/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@example.com",
+    "password": "Admin@123456"
+  }'
+```
+
+#### 測試前端訪問
+開啟瀏覽器：
+```
+https://ecom-accounting-frontend.onrender.com
 ```
 
 ---

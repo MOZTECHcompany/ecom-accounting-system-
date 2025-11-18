@@ -1,7 +1,17 @@
 import axios from 'axios'
 
+// 根據環境自動選擇 baseURL
+// 本地開發：使用 proxy (/api/v1)
+// 正式環境：使用環境變數 (VITE_API_URL)
+const getBaseURL = () => {
+  if (import.meta.env.DEV) {
+    return '/api/v1'
+  }
+  return import.meta.env.VITE_API_URL || 'https://ecom-accounting-backend.onrender.com/api/v1'
+}
+
 const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: getBaseURL(),
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
