@@ -421,6 +421,14 @@ npm run test:e2e
 
 ## 🚢 部署到 Render
 
+### ⚠️ 重要：Monorepo 結構說明
+
+此專案為 **monorepo** 結構：
+- `backend/` - NestJS 後端應用程式
+- `frontend/` - React 前端應用程式
+
+部署時必須正確設定 **Root Directory**，否則會找不到 `package.json`。
+
 ### 正式環境 URL
 - **前端**: https://ecom-accounting-frontend.onrender.com
 - **後端**: https://ecom-accounting-backend.onrender.com
@@ -439,13 +447,28 @@ npm run test:e2e
 5. 複製 "Internal Database URL"
 
 ### 3. 建立 Backend Web Service
+
+#### ⚠️ 關鍵設定：Root Directory
+
+**方案 A：設定 Root Directory（推薦）**
+
 1. 點擊 "New" → "Web Service"
 2. 連接您的 GitHub 儲存庫
-3. 設定：
+3. **關鍵設定**：
    - **Name**: `ecom-accounting-backend`
-   - **Root Directory**: `backend`
+   - **Root Directory**: `backend` ⚠️ **必須設定為 backend**
    - **Build Command**: `npm install && npx prisma generate && npm run build`
    - **Start Command**: `npx prisma migrate deploy && npm run start:prod`
+
+**方案 B：在命令中切換目錄**
+
+如果 Root Directory 留空，則必須在命令中加入 `cd backend`：
+   - **Root Directory**: （留空）
+   - **Build Command**: `cd backend && npm install && npx prisma generate && npm run build`
+   - **Start Command**: `cd backend && npx prisma migrate deploy && npm run start:prod`
+
+#### 環境變數設定
+
 4. 環境變數：
    ```bash
    DATABASE_URL=<您的 Internal Database URL>
@@ -454,15 +477,27 @@ npm run test:e2e
    PORT=3000
    API_PREFIX=/api/v1
    ```
+
 5. 點擊 "Create Web Service"
 6. 部署完成後，複製您的 Backend URL（例如：`https://ecom-accounting-backend.onrender.com`）
+
+#### 常見錯誤排解
+
+- ❌ **錯誤**：`Cannot find module '@nestjs/cli'` 或 `nest: not found`
+  - ✅ **解決**：確認 `backend/package.json` 的 build script 使用 `node_modules/.bin/nest build`
+  
+- ❌ **錯誤**：`Error: Cannot find module './dist/main'`
+  - ✅ **解決**：確認 Root Directory 設定為 `backend`，或在命令前加 `cd backend`
+  
+- ❌ **錯誤**：`sh: 1: nest: not found`
+  - ✅ **解決**：`@nestjs/cli` 必須在 `devDependencies` 中，且 build script 使用完整路徑
 
 ### 4. 建立 Frontend Web Service
 1. 點擊 "New" → "Static Site"
 2. 連接相同的儲存庫
 3. 設定：
    - **Name**: `ecom-accounting-frontend`
-   - **Root Directory**: `frontend`
+   - **Root Directory**: `frontend` ⚠️ **必須設定為 frontend**
    - **Build Command**: `npm install && npm run build`
    - **Publish Directory**: `dist`
 4. **重要：環境變數設定**
