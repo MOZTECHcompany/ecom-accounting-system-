@@ -1,0 +1,59 @@
+{
+  "name": "E-Commerce Accounting System (Monorepo)",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "backend",
+  "workspaceFolder": "/workspaces/ecom-accounting-system-",
+  "runServices": ["postgres", "backend", "frontend"],
+  
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "Prisma.prisma",
+        "ms-azuretools.vscode-docker",
+        "GitHub.copilot",
+        "GitHub.copilot-chat",
+        "bradlc.vscode-tailwindcss"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit"
+        },
+        "[prisma]": {
+          "editor.defaultFormatter": "Prisma.prisma"
+        }
+      }
+    }
+  },
+
+  "forwardPorts": [3000, 3001, 5432],
+  "portsAttributes": {
+    "3000": {
+      "label": "Backend API",
+      "onAutoForward": "notify"
+    },
+    "3001": {
+      "label": "Frontend",
+      "onAutoForward": "openBrowser"
+    },
+    "5432": {
+      "label": "PostgreSQL"
+    }
+  },
+
+  "postCreateCommand": "cd /workspaces/ecom-accounting-system-/backend && npm install && npx prisma generate",
+  "postStartCommand": "echo '✅ Monorepo Ready! Frontend: http://localhost:3001 | Backend: http://localhost:3000 | Swagger: http://localhost:3000/api-docs'",
+
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    },
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+
+  "remoteUser": "root"
+}

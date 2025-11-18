@@ -1,0 +1,830 @@
+// Prisma Schema for E-Commerce Accounting System
+// 此 schema 設計支援多公司實體、多幣別、多平台的電商會計系統
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// 1. 系統核心：使用者、角色、權限、審計軌跡
+// ============================================
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  roles               UserRole[]
+  createdJournalEntries JournalEntry[] @relation("CreatedBy")
+  approvedJournalEntries JournalEntry[] @relation("ApprovedBy")
+  createdExpenseRequests ExpenseRequest[] @relation("RequestedBy")
+  approvedExpenseRequests ExpenseRequest[] @relation("ApprovedBy")
+  approvalRequests ApprovalRequest[] @relation("RequesterUser")
+  approvalsGiven   ApprovalRequest[] @relation("ApproverUser")
+  auditLogs        AuditLog[]
+  payrollRunsCreated PayrollRun[] @relation("CreatedBy")
+  payrollRunsApproved PayrollRun[] @relation("ApprovedBy")
+
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique // ADMIN, ACCOUNTANT, OPERATOR
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  resource    String   // users, accounts, journal_entries, sales_orders, etc.
+  action      String   // create, read, update, delete, approve
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  roles RolePermission[]
+
+  @@unique([resource, action])
+  @@map("permissions")
+}
+
+model UserRole {
+  userId String @map("user_id")
+  roleId String @map("role_id")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String @map("role_id")
+  permissionId String @map("permission_id")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// 審計軌跡：記錄所有重要操作
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?  @map("user_id")
+  tableName  String   @map("table_name")
+  recordId   String   @map("record_id")
+  action     String   // CREATE, UPDATE, DELETE, APPROVE
+  oldData    Json?    @map("old_data")
+  newData    Json?    @map("new_data")
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tableName, recordId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ============================================
+// 2. 公司實體與會計核心
+// ============================================
+
+// 公司實體（支援多公司營運）
+model Entity {
+  id           String  @id @default(uuid())
+  name         String
+  country      String  // TW, CN, US, etc.
+  baseCurrency String  @map("base_currency") // TWD, CNY, USD
+  isActive     Boolean @default(true) @map("is_active")
+  taxId        String? @map("tax_id")
+  address      String?
+  contactEmail String? @map("contact_email")
+  contactPhone String? @map("contact_phone")
+
+  // Relations
+  accounts         Account[]
+  journalEntries   JournalEntry[]
+  periods          Period[]
+  customers        Customer[]
+  vendors          Vendor[]
+  products         Product[]
+  salesChannels    SalesChannel[]
+  salesOrders      SalesOrder[]
+  arInvoices       ArInvoice[]
+  apInvoices       ApInvoice[]
+  bankAccounts     BankAccount[]
+  departments      Department[]
+  employees        Employee[]
+  payrollRuns      PayrollRun[]
+  expenseRequests  ExpenseRequest[]
+  expenses         Expense[]
+  purchaseOrders   PurchaseOrder[]
+  productBatches   ProductBatch[]
+  devCosts         DevCost[]
+  shipments        Shipment[]
+  payments         Payment[]
+  approvalRequests ApprovalRequest[]
+
+  @@map("entities")
+}
+
+// 會計科目表
+model Account {
+  id         String   @id @default(uuid())
+  entityId   String   @map("entity_id")
+  code       String   // 科目代號，例如 1101, 4101
+  name       String   // 科目名稱，例如 現金、銷貨收入
+  type       String   // asset, liability, equity, revenue, expense
+  parentId   String?  @map("parent_id")
+  isActive   Boolean  @default(true) @map("is_active")
+  description String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  entity       Entity         @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  parent       Account?       @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children     Account[]      @relation("AccountHierarchy")
+  journalLines JournalLine[]
+
+  @@unique([entityId, code])
+  @@index([entityId, type])
+  @@map("accounts")
+}
+
+// 會計期間（支援鎖帳機制）
+model Period {
+  id        String   @id @default(uuid())
+  entityId  String   @map("entity_id")
+  name      String   // 2025-01
+  startDate DateTime @map("start_date")
+  endDate   DateTime @map("end_date")
+  status    String   @default("open") // open, closed, locked
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  entity         Entity         @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  journalEntries JournalEntry[]
+
+  @@unique([entityId, name])
+  @@index([entityId, status])
+  @@map("periods")
+}
+
+// 會計分錄主檔
+model JournalEntry {
+  id           String    @id @default(uuid())
+  entityId     String    @map("entity_id")
+  date         DateTime
+  description  String
+  sourceModule String?   @map("source_module") // sales, purchase, payroll, banking, manual
+  sourceId     String?   @map("source_id") // 來源單據 ID
+  periodId     String?   @map("period_id")
+  createdBy    String    @map("created_by")
+  approvedBy   String?   @map("approved_by")
+  approvedAt   DateTime? @map("approved_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  entity        Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  period        Period?       @relation(fields: [periodId], references: [id])
+  creator       User          @relation("CreatedBy", fields: [createdBy], references: [id])
+  approver      User?         @relation("ApprovedBy", fields: [approvedBy], references: [id])
+  journalLines  JournalLine[]
+
+  @@index([entityId, date])
+  @@index([sourceModule, sourceId])
+  @@map("journal_entries")
+}
+
+// 會計分錄明細
+model JournalLine {
+  id             String  @id @default(uuid())
+  journalEntryId String  @map("journal_entry_id")
+  accountId      String  @map("account_id")
+  debit          Decimal @default(0) @db.Decimal(18, 2)
+  credit         Decimal @default(0) @db.Decimal(18, 2)
+  currency       String  @default("TWD")
+  fxRate         Decimal @default(1) @map("fx_rate") @db.Decimal(18, 6)
+  amountBase     Decimal @map("amount_base") @db.Decimal(18, 2) // 本位幣金額
+  memo           String?
+
+  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account      Account      @relation(fields: [accountId], references: [id])
+
+  @@index([journalEntryId])
+  @@index([accountId])
+  @@map("journal_lines")
+}
+
+// ============================================
+// 3. 銷售與客戶管理
+// ============================================
+
+// 銷售渠道（平台）
+model SalesChannel {
+  id              String  @id @default(uuid())
+  entityId        String  @map("entity_id")
+  name            String  // Shopify 官網、1shop、momo 等
+  code            String  // SHOPIFY, 1SHOP, MOMO, PCHOME, SHOPEE, COUPANG, SHOPLINE, AMAZON, TTSHOP
+  type            String  // own_site, marketplace, group_buy, distributor, social_commerce
+  defaultCurrency String  @default("TWD") @map("default_currency")
+  configJson      Json?   @map("config_json") // 儲存 API keys, webhook URLs 等
+  isActive        Boolean @default(true) @map("is_active")
+
+  entity      Entity       @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  salesOrders SalesOrder[]
+  payments    Payment[]
+
+  @@unique([entityId, code])
+  @@map("sales_channels")
+}
+
+// 客戶
+model Customer {
+  id        String   @id @default(uuid())
+  entityId  String   @map("entity_id")
+  name      String
+  email     String?
+  phone     String?
+  taxId     String?  @map("tax_id")
+  type      String   @default("individual") // individual, company
+  address   String?
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  entity      Entity       @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  salesOrders SalesOrder[]
+  arInvoices  ArInvoice[]
+
+  @@index([entityId])
+  @@map("customers")
+}
+
+// 供應商
+model Vendor {
+  id              String   @id @default(uuid())
+  entityId        String   @map("entity_id")
+  name            String
+  country         String?
+  defaultCurrency String?  @default("TWD") @map("default_currency")
+  taxId           String?  @map("tax_id")
+  bankInfo        Json?    @map("bank_info")
+  contactPerson   String?  @map("contact_person")
+  contactEmail    String?  @map("contact_email")
+  contactPhone    String?  @map("contact_phone")
+  address         String?
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  entity         Entity          @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  purchaseOrders PurchaseOrder[]
+  apInvoices     ApInvoice[]
+
+  @@index([entityId])
+  @@map("vendors")
+}
+
+// 商品
+model Product {
+  id             String   @id @default(uuid())
+  entityId       String   @map("entity_id")
+  sku            String
+  name           String
+  category       String?
+  description    String?
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  entity             Entity              @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  salesOrderItems    SalesOrderItem[]
+  purchaseOrderItems PurchaseOrderItem[]
+  productBatches     ProductBatch[]
+  devCosts           DevCost[]
+
+  @@unique([entityId, sku])
+  @@index([entityId])
+  @@map("products")
+}
+
+// 銷售訂單
+model SalesOrder {
+  id              String    @id @default(uuid())
+  entityId        String    @map("entity_id")
+  channelId       String    @map("channel_id")
+  customerId      String?   @map("customer_id")
+  externalOrderId String?   @map("external_order_id") // 平台訂單編號
+  orderDate       DateTime  @map("order_date")
+  currency        String    @default("TWD")
+  fxRate          Decimal   @default(1) @map("fx_rate") @db.Decimal(18, 6)
+  totalGross      Decimal   @map("total_gross") @db.Decimal(18, 2) // 訂單總額
+  taxAmount       Decimal   @default(0) @map("tax_amount") @db.Decimal(18, 2)
+  discountAmount  Decimal   @default(0) @map("discount_amount") @db.Decimal(18, 2)
+  shippingFee     Decimal   @default(0) @map("shipping_fee") @db.Decimal(18, 2)
+  status          String    @default("pending") // pending, shipped, completed, cancelled, refunded
+  hasInvoice      Boolean   @default(false) @map("has_invoice")
+  invoiceId       String?   @map("invoice_id")
+  notes           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  entity    Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  channel   SalesChannel     @relation(fields: [channelId], references: [id])
+  customer  Customer?        @relation(fields: [customerId], references: [id])
+  items     SalesOrderItem[]
+  shipments Shipment[]
+  payments  Payment[]
+
+  @@index([entityId, orderDate])
+  @@index([channelId])
+  @@index([status])
+  @@map("sales_orders")
+}
+
+// 銷售訂單明細
+model SalesOrderItem {
+  id           String  @id @default(uuid())
+  salesOrderId String  @map("sales_order_id")
+  productId    String  @map("product_id")
+  qty          Decimal @db.Decimal(18, 2)
+  unitPrice    Decimal @map("unit_price") @db.Decimal(18, 2)
+  discount     Decimal @default(0) @db.Decimal(18, 2)
+  taxAmount    Decimal @default(0) @map("tax_amount") @db.Decimal(18, 2)
+
+  salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  product    Product    @relation(fields: [productId], references: [id])
+
+  @@index([salesOrderId])
+  @@map("sales_order_items")
+}
+
+// 出貨紀錄
+model Shipment {
+  id           String   @id @default(uuid())
+  entityId     String   @map("entity_id")
+  salesOrderId String   @map("sales_order_id")
+  shipDate     DateTime @map("ship_date")
+  trackingNo   String?  @map("tracking_no")
+  carrier      String?
+  status       String   @default("shipped") // shipped, delivered, returned
+  notes        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  entity     Entity     @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id])
+
+  @@index([salesOrderId])
+  @@map("shipments")
+}
+
+// 收款紀錄（平台撥款／金流實收）
+model Payment {
+  id              String   @id @default(uuid())
+  entityId        String   @map("entity_id")
+  salesOrderId    String?  @map("sales_order_id")
+  channelId       String?  @map("channel_id")
+  payoutBatchId   String?  @map("payout_batch_id") // 平台批次撥款 ID
+  channel         String   // ECPAY, SHOPIFY_PAYOUT, MOMO_PAYOUT, BANK_TRANSFER, etc.
+  payoutDate      DateTime @map("payout_date")
+  amountGross     Decimal  @map("amount_gross") @db.Decimal(18, 2)
+  feePlatform     Decimal  @default(0) @map("fee_platform") @db.Decimal(18, 2) // 平台費
+  feeGateway      Decimal  @default(0) @map("fee_gateway") @db.Decimal(18, 2) // 金流手續費
+  shippingFeePaid Decimal  @default(0) @map("shipping_fee_paid") @db.Decimal(18, 2)
+  amountNet       Decimal  @map("amount_net") @db.Decimal(18, 2) // 實收淨額
+  currency        String   @default("TWD")
+  fxRate          Decimal  @default(1) @map("fx_rate") @db.Decimal(18, 6)
+  bankAccountId   String?  @map("bank_account_id")
+  reconciledFlag  Boolean  @default(false) @map("reconciled_flag")
+  status          String   @default("pending") // pending, completed, failed
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  entity        Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  salesOrder    SalesOrder?   @relation(fields: [salesOrderId], references: [id])
+  salesChannel  SalesChannel? @relation(fields: [channelId], references: [id])
+  bankAccount   BankAccount?  @relation(fields: [bankAccountId], references: [id])
+
+  @@index([entityId, payoutDate])
+  @@index([salesOrderId])
+  @@map("payments")
+}
+
+// ============================================
+// 4. 應收應付管理
+// ============================================
+
+// 應收帳款
+model ArInvoice {
+  id           String    @id @default(uuid())
+  entityId     String    @map("entity_id")
+  customerId   String?   @map("customer_id")
+  invoiceNo    String?   @map("invoice_no")
+  currency     String    @default("TWD")
+  amount       Decimal   @db.Decimal(18, 2)
+  fxRate       Decimal   @default(1) @map("fx_rate") @db.Decimal(18, 6)
+  amountBase   Decimal   @map("amount_base") @db.Decimal(18, 2)
+  issueDate    DateTime  @map("issue_date")
+  dueDate      DateTime  @map("due_date")
+  paidAmount   Decimal   @default(0) @map("paid_amount") @db.Decimal(18, 2)
+  status       String    @default("unpaid") // unpaid, partial, paid, overdue, written_off
+  priority     String    @default("normal") // normal, urgent
+  sourceModule String?   @map("source_module")
+  sourceId     String?   @map("source_id")
+  notes        String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  entity   Entity    @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id])
+
+  @@index([entityId, status])
+  @@index([dueDate])
+  @@map("ar_invoices")
+}
+
+// 應付帳款
+model ApInvoice {
+  id             String    @id @default(uuid())
+  entityId       String    @map("entity_id")
+  vendorId       String?   @map("vendor_id")
+  invoiceNo      String?   @map("invoice_no")
+  currency       String    @default("TWD")
+  amount         Decimal   @db.Decimal(18, 2)
+  fxRate         Decimal   @default(1) @map("fx_rate") @db.Decimal(18, 6)
+  amountBase     Decimal   @map("amount_base") @db.Decimal(18, 2)
+  invoiceDate    DateTime  @map("invoice_date")
+  dueDate        DateTime  @map("due_date")
+  paidAmount     Decimal   @default(0) @map("paid_amount") @db.Decimal(18, 2)
+  status         String    @default("pending") // pending, partial, paid, overdue
+  priority       String    @default("normal") // normal, urgent
+  sourceModule   String?   @map("source_module")
+  sourceId       String?   @map("source_id")
+  approvalStatus String    @default("pending") @map("approval_status") // pending, approved, rejected
+  notes          String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  entity Entity  @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  vendor Vendor? @relation(fields: [vendorId], references: [id])
+
+  @@index([entityId, status])
+  @@index([dueDate])
+  @@index([approvalStatus])
+  @@map("ap_invoices")
+}
+
+// ============================================
+// 5. 費用申請與審核
+// ============================================
+
+// 費用申請單
+model ExpenseRequest {
+  id            String    @id @default(uuid())
+  entityId      String    @map("entity_id")
+  vendorId      String?   @map("vendor_id")
+  amount        Decimal   @db.Decimal(18, 2)
+  currency      String    @default("TWD")
+  dueDate       DateTime? @map("due_date")
+  description   String
+  priority      String    @default("normal") // normal, urgent
+  attachmentUrl String?   @map("attachment_url")
+  departmentId  String?   @map("department_id")
+  createdBy     String    @map("created_by")
+  status        String    @default("pending") // pending, approved, rejected
+  approvalUserId String?  @map("approval_user_id")
+  approvedAt    DateTime? @map("approved_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  entity     Entity      @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  creator    User        @relation("RequestedBy", fields: [createdBy], references: [id])
+  approver   User?       @relation("ApprovedBy", fields: [approvalUserId], references: [id])
+  department Department? @relation(fields: [departmentId], references: [id])
+
+  @@index([entityId, status])
+  @@index([createdBy])
+  @@map("expense_requests")
+}
+
+// 費用紀錄（正式入帳）
+model Expense {
+  id          String   @id @default(uuid())
+  entityId    String   @map("entity_id")
+  expenseDate DateTime @map("expense_date")
+  totalAmount Decimal  @map("total_amount") @db.Decimal(18, 2)
+  currency    String   @default("TWD")
+  description String
+  sourceModule String? @map("source_module")
+  sourceId     String? @map("source_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  entity Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  items  ExpenseItem[]
+
+  @@index([entityId, expenseDate])
+  @@map("expenses")
+}
+
+// 費用明細（可對應不同科目）
+model ExpenseItem {
+  id          String  @id @default(uuid())
+  expenseId   String  @map("expense_id")
+  accountCode String? @map("account_code") // 費用科目代號
+  amount      Decimal @db.Decimal(18, 2)
+  description String?
+
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@index([expenseId])
+  @@map("expense_items")
+}
+
+// 審核流程紀錄
+model ApprovalRequest {
+  id          String    @id @default(uuid())
+  entityId    String    @map("entity_id")
+  type        String    // expense_request, payment, journal_entry, payroll_run
+  refId       String    @map("ref_id") // 對應的單據 ID
+  status      String    @default("pending") // pending, approved, rejected
+  requestedBy String    @map("requested_by")
+  approverId  String?   @map("approver_id")
+  priority    String    @default("normal")
+  remark      String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  approvedAt  DateTime? @map("approved_at")
+
+  entity    Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  requester User   @relation("RequesterUser", fields: [requestedBy], references: [id])
+  approver  User?  @relation("ApproverUser", fields: [approverId], references: [id])
+
+  @@index([entityId, status])
+  @@index([type, refId])
+  @@map("approval_requests")
+}
+
+// ============================================
+// 6. 進貨與成本管理
+// ============================================
+
+// 進貨訂單
+model PurchaseOrder {
+  id          String    @id @default(uuid())
+  entityId    String    @map("entity_id")
+  vendorId    String    @map("vendor_id")
+  orderDate   DateTime  @map("order_date")
+  currency    String    @default("TWD")
+  fxRate      Decimal   @default(1) @map("fx_rate") @db.Decimal(18, 6)
+  totalAmount Decimal   @map("total_amount") @db.Decimal(18, 2)
+  status      String    @default("pending") // pending, received, completed, cancelled
+  notes       String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  entity         Entity              @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  vendor         Vendor              @relation(fields: [vendorId], references: [id])
+  items          PurchaseOrderItem[]
+  productBatches ProductBatch[]
+
+  @@index([entityId, orderDate])
+  @@map("purchase_orders")
+}
+
+// 進貨訂單明細
+model PurchaseOrderItem {
+  id              String  @id @default(uuid())
+  purchaseOrderId String  @map("purchase_order_id")
+  productId       String  @map("product_id")
+  qty             Decimal @db.Decimal(18, 2)
+  unitCost        Decimal @map("unit_cost") @db.Decimal(18, 2)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product       Product       @relation(fields: [productId], references: [id])
+
+  @@index([purchaseOrderId])
+  @@map("purchase_order_items")
+}
+
+// 進貨批次（用於成本追蹤）
+model ProductBatch {
+  id              String   @id @default(uuid())
+  entityId        String   @map("entity_id")
+  productId       String   @map("product_id")
+  purchaseOrderId String?  @map("purchase_order_id")
+  batchCode       String   @map("batch_code")
+  qtyReceived     Decimal  @map("qty_received") @db.Decimal(18, 2)
+  unitCostOrig    Decimal  @map("unit_cost_orig") @db.Decimal(18, 6) // 原幣單價
+  currency        String   @default("TWD")
+  fxRate          Decimal  @default(1) @map("fx_rate") @db.Decimal(18, 6)
+  unitCostBase    Decimal  @map("unit_cost_base") @db.Decimal(18, 6) // 本位幣單價
+  receivedDate    DateTime @map("received_date")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  entity        Entity         @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  product       Product        @relation(fields: [productId], references: [id])
+  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+
+  @@unique([entityId, batchCode])
+  @@index([productId])
+  @@map("product_batches")
+}
+
+// 開發成本（模具費、開發費、檢驗費攤提）
+model DevCost {
+  id                String   @id @default(uuid())
+  entityId          String   @map("entity_id")
+  productId         String?  @map("product_id")
+  type              String   // development, mold, certification
+  amountOrig        Decimal  @map("amount_orig") @db.Decimal(18, 2)
+  currency          String   @default("TWD")
+  fxRate            Decimal  @default(1) @map("fx_rate") @db.Decimal(18, 6)
+  amountBase        Decimal  @map("amount_base") @db.Decimal(18, 2)
+  allocationQty     Decimal  @map("allocation_qty") @db.Decimal(18, 2) // 預計攤提數量
+  allocatedPerUnit  Decimal  @map("allocated_per_unit") @db.Decimal(18, 6) // 每單位攤提金額
+  allocatedQtySoFar Decimal  @default(0) @map("allocated_qty_so_far") @db.Decimal(18, 2)
+  status            String   @default("active") // active, fully_allocated
+  notes             String?
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  entity  Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@index([entityId, status])
+  @@map("dev_costs")
+}
+
+// ============================================
+// 7. 銀行與對帳管理
+// ============================================
+
+// 銀行帳戶
+model BankAccount {
+  id                String  @id @default(uuid())
+  entityId          String  @map("entity_id")
+  bankName          String  @map("bank_name")
+  branch            String?
+  accountNo         String  @map("account_no")
+  currency          String  @default("TWD")
+  isVirtualSupport  Boolean @default(false) @map("is_virtual_support") // 是否支援虛擬帳號
+  metaJson          Json?   @map("meta_json")
+  isActive          Boolean @default(true) @map("is_active")
+
+  entity            Entity             @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  virtualAccounts   VirtualAccount[]
+  bankTransactions  BankTransaction[]
+  payments          Payment[]
+
+  @@unique([entityId, accountNo])
+  @@map("bank_accounts")
+}
+
+// 虛擬帳號
+model VirtualAccount {
+  id               String  @id @default(uuid())
+  bankAccountId    String  @map("bank_account_id")
+  virtualAccountNo String  @map("virtual_account_no")
+  assignedToType   String? @map("assigned_to_type") // customer, order, ar_invoice
+  assignedToId     String? @map("assigned_to_id")
+  status           String  @default("active") // active, inactive
+
+  bankAccount BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([bankAccountId, virtualAccountNo])
+  @@map("virtual_accounts")
+}
+
+// 銀行交易流水（用於對帳）
+model BankTransaction {
+  id                String   @id @default(uuid())
+  bankAccountId     String   @map("bank_account_id")
+  txnDate           DateTime @map("txn_date")
+  valueDate         DateTime @map("value_date")
+  amount            Decimal  @db.Decimal(18, 2)
+  currency          String   @default("TWD")
+  descriptionRaw    String   @map("description_raw")
+  referenceNo       String?  @map("reference_no")
+  virtualAccountNo  String?  @map("virtual_account_no")
+  matchedType       String?  @map("matched_type") // payment, ar_invoice, ap_invoice
+  matchedId         String?  @map("matched_id")
+  reconcileStatus   String   @default("unmatched") @map("reconcile_status") // unmatched, matched, partial, suspicious
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  bankAccount BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+
+  @@index([bankAccountId, txnDate])
+  @@index([reconcileStatus])
+  @@map("bank_transactions")
+}
+
+// ============================================
+// 8. 人事與薪資管理
+// ============================================
+
+// 部門
+model Department {
+  id             String   @id @default(uuid())
+  entityId       String   @map("entity_id")
+  name           String
+  costCenterId   String?  @map("cost_center_id")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  entity          Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  employees       Employee[]
+  expenseRequests ExpenseRequest[]
+
+  @@map("departments")
+}
+
+// 員工
+model Employee {
+  id           String    @id @default(uuid())
+  entityId     String    @map("entity_id")
+  employeeNo   String    @map("employee_no")
+  name         String
+  country      String    // TW, CN
+  location     String?
+  departmentId String?   @map("department_id")
+  hireDate     DateTime  @map("hire_date")
+  terminateDate DateTime? @map("terminate_date")
+  salaryBase   Decimal   @map("salary_base") @db.Decimal(18, 2)
+  currency     String    @default("TWD")
+  bankInfo     Json?     @map("bank_info")
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  entity       Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  department   Department?   @relation(fields: [departmentId], references: [id])
+  payrollItems PayrollItem[]
+
+  @@unique([entityId, employeeNo])
+  @@index([entityId])
+  @@map("employees")
+}
+
+// 薪資批次
+model PayrollRun {
+  id          String    @id @default(uuid())
+  entityId    String    @map("entity_id")
+  country     String    // TW, CN
+  periodStart DateTime  @map("period_start")
+  periodEnd   DateTime  @map("period_end")
+  payDate     DateTime  @map("pay_date")
+  status      String    @default("draft") // draft, pending_approval, approved, posted
+  createdBy   String    @map("created_by")
+  approvedBy  String?   @map("approved_by")
+  approvedAt  DateTime? @map("approved_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  entity   Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  creator  User          @relation("CreatedBy", fields: [createdBy], references: [id])
+  approver User?         @relation("ApprovedBy", fields: [approvedBy], references: [id])
+  items    PayrollItem[]
+
+  @@index([entityId, country])
+  @@map("payroll_runs")
+}
+
+// 薪資明細
+model PayrollItem {
+  id           String  @id @default(uuid())
+  payrollRunId String  @map("payroll_run_id")
+  employeeId   String  @map("employee_id")
+  type         String  // BASE_SALARY, BONUS, ALLOWANCE, OVERTIME, INS_EMP_LABOR, INS_EMP_HEALTH, INS_COM_LABOR, INS_COM_HEALTH, INS_COM_PENSION, TAX_WITHHOLD
+  amount       Decimal @db.Decimal(18, 2)
+  currency     String  @default("TWD")
+  remark       String?
+
+  payrollRun PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  employee   Employee   @relation(fields: [employeeId], references: [id])
+
+  @@index([payrollRunId])
+  @@index([employeeId])
+  @@map("payroll_items")
+}

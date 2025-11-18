@@ -1,0 +1,86 @@
+import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+
+// Common modules
+import { ConfigModule } from './common/config/config.module';
+import { PrismaModule } from './common/prisma/prisma.module';
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+
+// Feature modules - 按照指定的 12 個模組順序
+import { AuthModule } from './modules/auth/auth.module';
+import { UsersModule } from './modules/users/users.module';
+import { EntitiesModule } from './modules/entities/entities.module';
+import { AccountingModule } from './modules/accounting/accounting.module';
+import { SalesModule } from './modules/sales/sales.module';
+import { CostModule } from './modules/cost/cost.module';
+import { ArModule } from './modules/ar/ar.module';
+import { ApModule } from './modules/ap/ap.module';
+import { ExpenseModule } from './modules/expense/expense.module';
+import { ApprovalsModule } from './modules/approvals/approvals.module';
+import { BankingModule } from './modules/banking/banking.module';
+import { PayrollModule } from './modules/payroll/payroll.module';
+import { ReportsModule } from './modules/reports/reports.module';
+
+/**
+ * AppModule
+ * 應用程式根模組
+ * 
+ * 架構設計：
+ * - Common: 共用模組（Prisma, Config, Guards, Decorators）
+ * - Modules: 12 個業務模組（依序為：Auth, Users, Entities, Accounting, Sales, Cost, AR, AP, Expense, Approvals, Banking, Payroll, Reports）
+ * 
+ * 模組依賴關係（重要！）：
+ * - SalesModule → AccountingModule（訂單完成時產生會計分錄）
+ * - ApModule → ApprovalsModule, BankingModule（AP需要審批流程與銀行付款）
+ * - PayrollModule → AccountingModule, ApprovalsModule（薪資需產生分錄與審批）
+ * - ExpenseModule → ApprovalsModule, ApModule（費用需審批後產生AP）
+ * - ArModule → AccountingModule（AR發票產生會計分錄）
+ * - CostModule → AccountingModule（成本攤提產生分錄）
+ * - ReportsModule → AccountingModule（報表依賴會計資料）
+ * 
+ * 全域設定：
+ * - ConfigModule: 環境變數管理
+ * - PrismaModule: 資料庫連線
+ * - JwtAuthGuard: 預設所有路由都需要 JWT 驗證（除非標記 @Public()）
+ */
+@Module({
+  imports: [
+    // Common modules
+    ConfigModule,
+    PrismaModule,
+    
+    // Feature modules - 按照依賴順序載入
+    // 1. 基礎模組
+    AuthModule,
+    UsersModule,
+    EntitiesModule,
+    
+    // 2. 核心會計模組（被其他模組依賴）
+    AccountingModule,
+    ApprovalsModule,
+    BankingModule,
+    
+    // 3. 業務模組（依賴核心模組）
+    SalesModule,        // → AccountingModule
+    CostModule,         // → AccountingModule
+    ArModule,           // → AccountingModule
+    ApModule,           // → ApprovalsModule, BankingModule
+    ExpenseModule,      // → ApprovalsModule, ApModule
+    PayrollModule,      // → AccountingModule, ApprovalsModule
+    
+    // 4. 報表模組（依賴所有業務模組）
+    ReportsModule,      // → AccountingModule
+  ],
+  controllers: [AppController],
+  providers: [
+    AppService,
+    // 全域啟用 JWT 驗證
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+  ],
+})
+export class AppModule {}
