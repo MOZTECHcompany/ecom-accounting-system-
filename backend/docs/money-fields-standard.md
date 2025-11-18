@@ -394,17 +394,84 @@ const usdOrder = await prisma.salesOrder.create({
 
 ---
 
+## 📊 新增模組的金額欄位（2025-11-18 更新）
+
+### 17. Invoice（電子發票主表）
+
+```prisma
+model Invoice {
+  // 發票金額（未稅）
+  amountOriginal    Decimal @map("amount_original") @db.Decimal(18, 2)
+  currency          String  @default("TWD")
+  fxRate            Decimal @map("fx_rate") @default(1) @db.Decimal(18, 6)
+  amountBase        Decimal @map("amount_base") @db.Decimal(18, 2)
+  
+  // 稅額
+  taxAmountOriginal Decimal @default(0) @map("tax_amount_original") @db.Decimal(18, 2)
+  taxAmountCurrency String  @map("tax_amount_currency") @default("TWD")
+  taxAmountFxRate   Decimal @map("tax_amount_fx_rate") @default(1) @db.Decimal(18, 6)
+  taxAmountBase     Decimal @default(0) @map("tax_amount_base") @db.Decimal(18, 2)
+  
+  // 總計（含稅）
+  totalAmountOriginal Decimal @map("total_amount_original") @db.Decimal(18, 2)
+  totalAmountCurrency String  @map("total_amount_currency") @default("TWD")
+  totalAmountFxRate   Decimal @map("total_amount_fx_rate") @default(1) @db.Decimal(18, 6)
+  totalAmountBase     Decimal @map("total_amount_base") @db.Decimal(18, 2)
+}
+```
+
+**說明**: 
+- 支援 B2C 和 B2B 發票
+- 完整記錄未稅金額、稅額、含稅總額
+- 所有金額欄位均符合 4 欄位標準
+- 與 sales_orders 的金額計算邏輯一致
+
+### 18. InvoiceLine（發票明細）
+
+```prisma
+model InvoiceLine {
+  // 單價
+  unitPriceOriginal Decimal @map("unit_price_original") @db.Decimal(18, 2)
+  unitPriceCurrency String  @map("unit_price_currency") @default("TWD")
+  unitPriceFxRate   Decimal @map("unit_price_fx_rate") @default(1) @db.Decimal(18, 6)
+  unitPriceBase     Decimal @map("unit_price_base") @db.Decimal(18, 2)
+  
+  // 明細金額
+  amountOriginal Decimal @map("amount_original") @db.Decimal(18, 2)
+  currency       String  @default("TWD")
+  fxRate         Decimal @map("fx_rate") @default(1) @db.Decimal(18, 6)
+  amountBase     Decimal @map("amount_base") @db.Decimal(18, 2)
+  
+  // 稅額
+  taxAmountOriginal Decimal @default(0) @map("tax_amount_original") @db.Decimal(18, 2)
+  taxAmountCurrency String  @map("tax_amount_currency") @default("TWD")
+  taxAmountFxRate   Decimal @map("tax_amount_fx_rate") @default(1) @db.Decimal(18, 6)
+  taxAmountBase     Decimal @default(0) @map("tax_amount_base") @db.Decimal(18, 2)
+  
+  // 數量（非金額欄位）
+  qty Decimal @db.Decimal(18, 2)
+}
+```
+
+**說明**:
+- 與 sales_order_items 結構一致
+- 支援產品和非產品項目（如運費、手續費）
+- 單價 × 數量 = 明細金額
+
+---
+
 ## 🎯 總結
 
 ✅ **系統目前完全符合 4 欄位金額標準**
 
-- 所有 36 個 Prisma Models 已檢查完畢
+- 所有 38 個 Prisma Models 已檢查完畢（新增 Invoice, InvoiceLine）
 - 所有金額欄位都遵循 4 欄位標準（Original/Currency/FxRate/Base）
 - 數量、單價等非金額欄位已明確區分
 - 支援多幣別交易和自動本位幣換算
+- **新增電子發票模組完全符合標準**
 
 ---
 
-**文件版本**: v1.0  
-**最後更新**: 2025-01-18  
+**文件版本**: v1.1  
+**最後更新**: 2025-11-18  
 **維護者**: System Architect

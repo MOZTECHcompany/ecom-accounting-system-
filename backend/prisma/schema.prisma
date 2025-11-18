@@ -34,6 +34,9 @@ model User {
   auditLogs        AuditLog[]
   payrollRunsCreated PayrollRun[] @relation("CreatedBy")
   payrollRunsApproved PayrollRun[] @relation("ApprovedBy")
+  invoiceLogs      InvoiceLog[]
+  bankImportBatches BankImportBatch[]
+  reconciliationResults ReconciliationResult[]
 
   @@map("users")
 }
@@ -147,6 +150,8 @@ model Entity {
   shipments        Shipment[]
   payments         Payment[]
   approvalRequests ApprovalRequest[]
+  invoices         Invoice[]
+  bankImportBatches BankImportBatch[]
 
   @@map("entities")
 }
@@ -326,6 +331,7 @@ model Product {
   purchaseOrderItems PurchaseOrderItem[]
   productBatches     ProductBatch[]
   devCosts           DevCost[]
+  invoiceLines       InvoiceLine[]
 
   @@unique([entityId, sku])
   @@index([entityId])
@@ -377,6 +383,7 @@ model SalesOrder {
   items     SalesOrderItem[]
   shipments Shipment[]
   payments  Payment[]
+  invoices  Invoice[]
 
   @@index([entityId, orderDate])
   @@index([channelId])
@@ -836,12 +843,15 @@ model BankTransaction {
   descriptionRaw    String   @map("description_raw")
   referenceNo       String?  @map("reference_no")
   virtualAccountNo  String?  @map("virtual_account_no")
+  batchId           String?  @map("batch_id") // 關聯匯入批次
   matchedType       String?  @map("matched_type") // payment, ar_invoice, ap_invoice
   matchedId         String?  @map("matched_id")
   reconcileStatus   String   @default("unmatched") @map("reconcile_status") // unmatched, matched, partial, suspicious
   createdAt         DateTime @default(now()) @map("created_at")
 
-  bankAccount BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  bankAccount          BankAccount           @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  importBatch          BankImportBatch?      @relation(fields: [batchId], references: [id])
+  reconciliationResult ReconciliationResult?
 
   @@index([bankAccountId, txnDate])
   @@index([reconcileStatus])
@@ -945,4 +955,166 @@ model PayrollItem {
   @@index([payrollRunId])
   @@index([employeeId])
   @@map("payroll_items")
+}
+
+// ============================================
+// 13. 電子發票模組（Invoicing Module）
+// ============================================
+
+// 發票主表
+model Invoice {
+  id            String    @id @default(cuid())
+  entityId      String    @map("entity_id")
+  orderId       String?   @map("order_id") // 關聯 sales_orders
+  invoiceNumber String    @unique @map("invoice_number") // 字軌 + 流水號（如：AA12345678）
+  status        String    @default("draft") // draft, issued, void
+  invoiceType   String    @default("B2C") @map("invoice_type") // B2C, B2B
+  issuedAt      DateTime? @map("issued_at")
+  voidAt        DateTime? @map("void_at")
+  voidReason    String?   @map("void_reason")
+  
+  // 買方資訊
+  buyerName     String?   @map("buyer_name")
+  buyerTaxId    String?   @map("buyer_tax_id") // 統一編號（B2B 必填）
+  buyerEmail    String?   @map("buyer_email")
+  buyerPhone    String?   @map("buyer_phone")
+  buyerAddress  String?   @map("buyer_address")
+  
+  // 發票金額（符合四欄位標準）
+  amountOriginal    Decimal @map("amount_original") @db.Decimal(18, 2) // 未稅金額
+  currency          String  @default("TWD")
+  fxRate            Decimal @map("fx_rate") @default(1) @db.Decimal(18, 6)
+  amountBase        Decimal @map("amount_base") @db.Decimal(18, 2) // 未稅本位幣
+  
+  // 稅額（符合四欄位標準）
+  taxAmountOriginal Decimal @default(0) @map("tax_amount_original") @db.Decimal(18, 2)
+  taxAmountCurrency String  @map("tax_amount_currency") @default("TWD")
+  taxAmountFxRate   Decimal @map("tax_amount_fx_rate") @default(1) @db.Decimal(18, 6)
+  taxAmountBase     Decimal @default(0) @map("tax_amount_base") @db.Decimal(18, 2)
+  
+  // 總計（含稅）
+  totalAmountOriginal Decimal @map("total_amount_original") @db.Decimal(18, 2)
+  totalAmountCurrency String  @map("total_amount_currency") @default("TWD")
+  totalAmountFxRate   Decimal @map("total_amount_fx_rate") @default(1) @db.Decimal(18, 6)
+  totalAmountBase     Decimal @map("total_amount_base") @db.Decimal(18, 2)
+  
+  // 外部平台資訊
+  externalInvoiceId String? @map("external_invoice_id") // 綠界/藍新等平台的發票 ID
+  externalPlatform  String? @map("external_platform") // ecpay, newebpay, gov
+  externalPayload   Json?   @map("external_payload") // 外部平台回傳的完整 payload
+  
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  entity       Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  salesOrder   SalesOrder?   @relation(fields: [orderId], references: [id])
+  invoiceLines InvoiceLine[]
+  invoiceLogs  InvoiceLog[]
+
+  @@index([entityId, status])
+  @@index([orderId])
+  @@index([invoiceNumber])
+  @@index([issuedAt])
+  @@map("invoices")
+}
+
+// 發票明細表
+model InvoiceLine {
+  id          String  @id @default(cuid())
+  invoiceId   String  @map("invoice_id")
+  productId   String? @map("product_id") // 可為 null（如運費、手續費）
+  description String
+  qty         Decimal @db.Decimal(18, 2)
+  
+  // 單價（符合四欄位標準）
+  unitPriceOriginal Decimal @map("unit_price_original") @db.Decimal(18, 2)
+  unitPriceCurrency String  @map("unit_price_currency") @default("TWD")
+  unitPriceFxRate   Decimal @map("unit_price_fx_rate") @default(1) @db.Decimal(18, 6)
+  unitPriceBase     Decimal @map("unit_price_base") @db.Decimal(18, 2)
+  
+  // 明細金額（符合四欄位標準）
+  amountOriginal Decimal @map("amount_original") @db.Decimal(18, 2)
+  currency       String  @default("TWD")
+  fxRate         Decimal @map("fx_rate") @default(1) @db.Decimal(18, 6)
+  amountBase     Decimal @map("amount_base") @db.Decimal(18, 2)
+  
+  // 稅額（符合四欄位標準）
+  taxAmountOriginal Decimal @default(0) @map("tax_amount_original") @db.Decimal(18, 2)
+  taxAmountCurrency String  @map("tax_amount_currency") @default("TWD")
+  taxAmountFxRate   Decimal @map("tax_amount_fx_rate") @default(1) @db.Decimal(18, 6)
+  taxAmountBase     Decimal @default(0) @map("tax_amount_base") @db.Decimal(18, 2)
+  
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@index([invoiceId])
+  @@map("invoice_lines")
+}
+
+// 發票操作記錄
+model InvoiceLog {
+  id        String   @id @default(cuid())
+  invoiceId String   @map("invoice_id")
+  action    String   // issue, void, allowance, update
+  userId    String   @map("user_id")
+  payload   Json? // 操作時的資料快照
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@index([invoiceId])
+  @@index([userId])
+  @@map("invoice_logs")
+}
+
+// ============================================
+// 14. 銀行對帳模組（Reconciliation Module）
+// ============================================
+
+// 銀行匯入批次
+model BankImportBatch {
+  id         String   @id @default(cuid())
+  entityId   String   @map("entity_id")
+  source     String   // csv, json, bank-api (esun, ctbc, line-bank)
+  importedBy String   @map("imported_by")
+  importedAt DateTime @default(now()) @map("imported_at")
+  fileName   String?  @map("file_name") // CSV 檔案名稱
+  recordCount Int     @default(0) @map("record_count")
+  notes      String?
+
+  // Relations
+  entity       Entity            @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  importer     User              @relation(fields: [importedBy], references: [id])
+  transactions BankTransaction[]
+
+  @@index([entityId, importedAt])
+  @@map("bank_import_batches")
+}
+
+// 對帳結果表
+model ReconciliationResult {
+  id                String   @id @default(cuid())
+  bankTransactionId String   @unique @map("bank_transaction_id")
+  matchedType       String?  @map("matched_type") // sales_order, payment, ar_invoice, ap_invoice, unknown
+  matchedId         String?  @map("matched_id") // 對應的業務單據 ID
+  confidence        Int      @default(0) // 0~100 信心度
+  ruleUsed          String?  @map("rule_used") // exact_amount, fuzzy_date, keyword, manual
+  matchedAt         DateTime @default(now()) @map("matched_at")
+  matchedBy         String?  @map("matched_by") // 如果是手動對帳，記錄操作人
+  notes             String?
+
+  // Relations
+  bankTransaction BankTransaction @relation(fields: [bankTransactionId], references: [id], onDelete: Cascade)
+  matcher         User?           @relation(fields: [matchedBy], references: [id])
+
+  @@index([matchedType, matchedId])
+  @@index([confidence])
+  @@map("reconciliation_results")
 }

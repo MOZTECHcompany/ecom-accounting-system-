@@ -546,6 +546,204 @@ npm run format
 
 ---
 
+## 📌 實戰流程示例
+
+### 流程 A：訂單 → 收款 → 發票
+
+完整的電子發票開立流程：
+
+#### 1. 建立銷售訂單
+```bash
+curl -X POST http://localhost:3000/sales/orders \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "entityId": "entity-uuid",
+    "channelId": "channel-uuid",
+    "customerId": "customer-uuid",
+    "orderDate": "2025-11-18",
+    "totalGrossOriginal": 1050,
+    "totalGrossCurrency": "TWD",
+    "items": [
+      {
+        "productId": "product-uuid",
+        "qty": 2,
+        "unitPriceOriginal": 500,
+        "unitPriceCurrency": "TWD"
+      }
+    ]
+  }'
+```
+
+#### 2. 預覽發票內容
+```bash
+curl -X GET http://localhost:3000/invoicing/preview/ORDER_ID \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+**預期回應**：
+```json
+{
+  "orderId": "order-uuid",
+  "invoiceType": "B2C",
+  "currency": "TWD",
+  "amountOriginal": "1000.00",
+  "taxAmountOriginal": "50.00",
+  "totalAmountOriginal": "1050.00",
+  "estimatedInvoiceNumber": "AA12345678",
+  "invoiceLines": [...]
+}
+```
+
+#### 3. 開立正式發票
+```bash
+curl -X POST http://localhost:3000/invoicing/issue/ORDER_ID \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "invoiceType": "B2C",
+    "buyerName": "測試客戶",
+    "buyerEmail": "customer@example.com"
+  }'
+```
+
+**預期回應**：
+```json
+{
+  "success": true,
+  "invoiceId": "invoice-uuid",
+  "invoiceNumber": "AA12345678",
+  "totalAmount": "1050.00"
+}
+```
+
+#### 4. 查詢發票狀態
+```bash
+curl -X GET http://localhost:3000/invoicing/by-order/ORDER_ID \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+#### 5. 作廢發票（如需要）
+```bash
+curl -X POST http://localhost:3000/invoicing/INVOICE_ID/void \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reason": "客戶要求取消訂單"
+  }'
+```
+
+---
+
+### 流程 B：匯入銀行 → 自動對帳
+
+完整的銀行對帳流程：
+
+#### 1. 匯入銀行交易明細
+```bash
+curl -X POST http://localhost:3000/reconciliation/bank/import \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "entityId": "entity-uuid",
+    "bankAccountId": "bank-account-uuid",
+    "source": "csv",
+    "fileName": "bank_statement_2025_11.csv",
+    "transactions": [
+      {
+        "transactionDate": "2025-11-18",
+        "amount": 1050,
+        "currency": "TWD",
+        "description": "訂單付款 order-abc-123",
+        "referenceNo": "TXN20251118001",
+        "virtualAccount": "886123456"
+      },
+      {
+        "transactionDate": "2025-11-18",
+        "amount": 2000,
+        "currency": "TWD",
+        "description": "客戶付款",
+        "referenceNo": "TXN20251118002"
+      }
+    ]
+  }'
+```
+
+**預期回應**：
+```json
+{
+  "success": true,
+  "batchId": "batch-uuid-123",
+  "recordCount": 2
+}
+```
+
+#### 2. 自動對帳
+```bash
+curl -X POST http://localhost:3000/reconciliation/bank/auto-match/BATCH_ID \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dateTolerance": 1,
+    "amountTolerance": 0,
+    "useFuzzyMatch": true
+  }'
+```
+
+**預期回應**：
+```json
+{
+  "success": true,
+  "totalTransactions": 2,
+  "exactMatched": 1,
+  "fuzzyMatched": 1,
+  "unmatched": 0
+}
+```
+
+#### 3. 查詢待對帳項目
+```bash
+curl -X GET "http://localhost:3000/reconciliation/pending?entityId=ENTITY_ID" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+**預期回應**：
+```json
+[
+  {
+    "id": "bank-tx-uuid",
+    "txnDate": "2025-11-18",
+    "amountOriginal": "999.00",
+    "descriptionRaw": "未知來源",
+    "reconcileStatus": "unmatched"
+  }
+]
+```
+
+#### 4. 手動對帳（針對無法自動匹配的項目）
+```bash
+curl -X POST http://localhost:3000/reconciliation/bank/manual-match \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "bankTransactionId": "bank-tx-uuid",
+    "matchedType": "payment",
+    "matchedId": "payment-uuid"
+  }'
+```
+
+#### 5. 取消對帳（如有誤）
+```bash
+curl -X POST http://localhost:3000/reconciliation/bank/unmatch \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "bankTransactionId": "bank-tx-uuid"
+  }'
+```
+
+---
+
 ## 🤝 貢獻指南
 
 1. Fork 此專案

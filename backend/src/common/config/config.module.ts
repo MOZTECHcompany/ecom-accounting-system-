@@ -13,7 +13,10 @@ import { validate } from './env.validation';
   imports: [
     NestConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env.local', '.env'],
+      envFilePath: [
+        '.env',
+        '.env.production',
+      ],
       validate,
     }),
   ],

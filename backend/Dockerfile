@@ -1,4 +1,4 @@
-# Development Dockerfile for NestJS E-Commerce Accounting System
+# Production Dockerfile for NestJS E-Commerce Accounting System
 FROM node:20-alpine
 
 # Install dependencies for Prisma
@@ -11,8 +11,8 @@ WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Install dependencies
-RUN npm ci
+# Install dependencies (production only)
+RUN npm ci --only=production
 
 # Copy source code
 COPY . .
@@ -20,8 +20,11 @@ COPY . .
 # Generate Prisma Client
 RUN npx prisma generate
 
+# Build the application
+RUN npm run build
+
 # Expose port
 EXPOSE 3000
 
-# Start in development mode
-CMD ["npm", "run", "start:dev"]
+# Start in production mode with migration
+CMD ["sh", "-c", "npx prisma migrate deploy && npm run start:prod"]

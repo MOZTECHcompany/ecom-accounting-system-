@@ -1,23 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { ImportBankTransactionsDto } from './dto/import-bank-transactions.dto';
 import { AutoMatchDto } from './dto/auto-match.dto';
+import { Decimal } from '@prisma/client/runtime/library';
 
 /**
  * ReconciliationService
- * 
- * 銀行對帳服務
- * 
- * TODO: 實作項目
- * 1. 解析各家銀行CSV格式
- * 2. 虛擬帳號邏輯匹配
- * 3. 多維度自動比對規則：
- *    - 精準匹配：金額+日期+虛擬帳號
- *    - 模糊匹配：金額+日期範圍±3天
- *    - 客戶名稱匹配（模糊搜尋）
- *    - 備註欄位關鍵字匹配
- * 4. 人工確認流程
- * 5. 差異分析報表
+ * 銀行對帳服務（實戰版）
  */
 @Injectable()
 export class ReconciliationService {
@@ -26,240 +15,219 @@ export class ReconciliationService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * 匯入銀行明細
-   * 
-   * @param dto - 銀行交易清單
-   * @param userId - 操作者ID
-   * @returns 匯入結果統計
-   * 
-   * TODO: 實作邏輯
-   * - 解析CSV/JSON格式
-   * - 驗證必要欄位（日期、金額、摘要）
-   * - 檢查重複交易
-   * - 儲存至 bank_transactions 表
-   * - 標記待對帳狀態
+   * 匯入銀行交易明細
    */
-  async importBankTransactions(
-    dto: ImportBankTransactionsDto,
-    userId: string,
-  ) {
-    this.logger.log(
-      `匯入銀行明細 - 帳戶: ${dto.bankAccountId}, 筆數: ${dto.transactions.length}, 操作者: ${userId}`,
-    );
+  async importBankTransactions(dto: ImportBankTransactionsDto, userId: string) {
+    this.logger.log(`匯入銀行交易 - 來源: ${dto.source}, 筆數: ${dto.transactions.length}`);
 
-    // TODO: 實作匯入邏輯
-    // 目前回傳 mock 結果
-    const mockImportedCount = dto.transactions.length;
-    const mockDuplicateCount = 0;
-    const mockSkippedCount = 0;
+    // 建立匯入批次
+    const batch = await this.prisma.bankImportBatch.create({
+      data: {
+        entityId: dto.entityId,
+        source: dto.source,
+        importedBy: userId,
+        fileName: dto.fileName || null,
+        recordCount: dto.transactions.length,
+        notes: dto.notes || null,
+      },
+    });
+
+    // 批次寫入銀行交易
+    const bankTransactions = dto.transactions.map((tx) => ({
+      bankAccountId: dto.bankAccountId,
+      batchId: batch.id,
+      txnDate: new Date(tx.transactionDate),
+      valueDate: new Date(tx.transactionDate),
+      amountOriginal: new Decimal(tx.amount),
+      amountCurrency: tx.currency || 'TWD',
+      amountFxRate: new Decimal(tx.fxRate || 1),
+      amountBase: new Decimal(tx.amount).mul(new Decimal(tx.fxRate || 1)),
+      descriptionRaw: tx.description,
+      referenceNo: tx.referenceNo || null,
+      virtualAccountNo: tx.virtualAccount || null,
+      reconcileStatus: 'unmatched',
+    }));
+
+    await this.prisma.bankTransaction.createMany({
+      data: bankTransactions,
+    });
+
+    this.logger.log(`匯入完成 - BatchID: ${batch.id}`);
 
     return {
       success: true,
-      summary: {
-        total: dto.transactions.length,
-        imported: mockImportedCount,
-        duplicates: mockDuplicateCount,
-        skipped: mockSkippedCount,
-      },
-      transactions: dto.transactions.map((t, index) => ({
-        id: `mock-tx-${index}`,
-        date: t.date,
-        amount: t.amount,
-        description: t.description,
-        status: 'PENDING', // 待對帳
-      })),
-      message: `成功匯入 ${mockImportedCount} 筆銀行交易（模擬）`,
+      batchId: batch.id,
+      recordCount: dto.transactions.length,
     };
   }
 
   /**
-   * 自動比對銀行交易與會計記錄
-   * 
-   * @param dto - 自動比對設定
-   * @param userId - 操作者ID
-   * @returns 比對結果
-   * 
-   * TODO: 實作邏輯
-   * 1. 精準匹配規則：
-   *    - 金額完全相同
-   *    - 日期在指定範圍內（±N天）
-   *    - 虛擬帳號匹配
-   * 
-   * 2. 模糊匹配規則：
-   *    - 金額相近（誤差範圍內）
-   *    - 客戶名稱模糊搜尋
-   *    - 備註關鍵字匹配
-   * 
-   * 3. 匹配後處理：
-   *    - 更新 BankTransaction.reconciledAt
-   *    - 建立關聯（transaction <-> journal_entry）
-   *    - 產生對帳報告
+   * 自動匹配銀行交易
    */
-  async autoMatchBankTransactions(dto: AutoMatchDto, userId: string) {
-    this.logger.log(
-      `自動對帳 - 帳戶: ${dto.bankAccountId}, 日期範圍: ${dto.dateFrom} ~ ${dto.dateTo}, 操作者: ${userId}`,
-    );
+  async autoMatchTransactions(batchId: string, config?: AutoMatchDto) {
+    this.logger.log(`自動對帳 - BatchID: ${batchId}`);
 
-    // TODO: 實作自動對帳邏輯
-    // 目前回傳 mock 結果
+    const dateTolerance = config?.dateTolerance || 1;
+    const amountTolerance = config?.amountTolerance || 0;
+
+    // 取得該批次的未匹配交易
+    const transactions = await this.prisma.bankTransaction.findMany({
+      where: {
+        batchId,
+        reconcileStatus: 'unmatched',
+      },
+    });
+
+    let matchedCount = 0;
+    let fuzzyMatchedCount = 0;
+
+    for (const tx of transactions) {
+      // 嘗試精準匹配 - 金額相同且日期接近的 Payment
+      const exactMatch = await this.prisma.payment.findFirst({
+        where: {
+          amountOriginal: tx.amountOriginal,
+          paymentDate: {
+            gte: new Date(tx.txnDate.getTime() - dateTolerance * 24 * 60 * 60 * 1000),
+            lte: new Date(tx.txnDate.getTime() + dateTolerance * 24 * 60 * 60 * 1000),
+          },
+        },
+      });
+
+      if (exactMatch) {
+        await this.createReconciliationResult(tx.id, 'payment', exactMatch.id, 100, 'exact_amount');
+        await this.prisma.bankTransaction.update({
+          where: { id: tx.id },
+          data: { reconcileStatus: 'matched', matchedType: 'payment', matchedId: exactMatch.id },
+        });
+        matchedCount++;
+        continue;
+      }
+
+      // 模糊匹配 - 檢查描述是否包含訂單編號
+      if (config?.useFuzzyMatch) {
+        const orderIdMatch = tx.descriptionRaw.match(/order-[a-z0-9-]+/i);
+        if (orderIdMatch) {
+          const orderId = orderIdMatch[0];
+          const order = await this.prisma.salesOrder.findFirst({
+            where: { id: orderId },
+          });
+
+          if (order) {
+            await this.createReconciliationResult(tx.id, 'sales_order', order.id, 70, 'keyword');
+            await this.prisma.bankTransaction.update({
+              where: { id: tx.id },
+              data: { reconcileStatus: 'matched', matchedType: 'sales_order', matchedId: order.id },
+            });
+            fuzzyMatchedCount++;
+          }
+        }
+      }
+    }
+
+    this.logger.log(`對帳完成 - 精準: ${matchedCount}, 模糊: ${fuzzyMatchedCount}`);
+
     return {
       success: true,
-      summary: {
-        totalBankTransactions: 10, // 待對帳的銀行交易數
-        matched: 7, // 成功匹配
-        unmatched: 3, // 無法匹配
-        ambiguous: 0, // 有多個可能匹配，需人工確認
-      },
-      
-      // 成功匹配的項目
-      matched: [
-        {
-          bankTransactionId: 'bt-001',
-          journalEntryId: 'je-001',
-          matchType: 'EXACT', // EXACT: 精準, FUZZY: 模糊
-          confidence: 1.0, // 信心度 0~1
-          matchedFields: ['amount', 'date', 'virtualAccount'],
-        },
-        {
-          bankTransactionId: 'bt-002',
-          journalEntryId: 'je-002',
-          matchType: 'FUZZY',
-          confidence: 0.85,
-          matchedFields: ['amount', 'date'],
-        },
-      ],
-      
-      // 無法匹配的項目
-      unmatched: [
-        {
-          bankTransactionId: 'bt-008',
-          date: '2025-01-15',
-          amount: 1500,
-          description: '匯款入帳',
-          reason: 'NO_MATCHING_JOURNAL_ENTRY', // 找不到對應會計記錄
-          suggestions: [], // 建議的可能匹配（未來可用ML預測）
-        },
-      ],
-      
-      message: '自動對帳完成（模擬）。實際環境需實作匹配規則引擎。',
+      totalTransactions: transactions.length,
+      exactMatched: matchedCount,
+      fuzzyMatched: fuzzyMatchedCount,
+      unmatched: transactions.length - matchedCount - fuzzyMatchedCount,
     };
   }
 
   /**
-   * 查詢待對帳項目
-   * 
-   * @param bankAccountId - 銀行帳戶ID
-   * @param entityId - 公司實體ID
-   * @returns 待對帳清單
-   * 
-   * TODO: 實作邏輯
-   * - 查詢 reconciledAt = null 的 BankTransaction
-   * - 提供篩選條件（日期、金額範圍、狀態）
-   * - 顯示建議匹配項目
+   * 取得待對帳項目
    */
-  async getPendingItems(bankAccountId: string, entityId: string) {
-    this.logger.log(
-      `查詢待對帳項目 - 帳戶: ${bankAccountId}, 實體: ${entityId}`,
-    );
-
-    // TODO: 實作查詢邏輯
-    // 目前回傳 mock 資料
-    return {
-      pending: [
-        {
-          id: 'bt-008',
-          date: '2025-01-15',
-          amount: 1500,
-          currency: 'TWD',
-          description: '匯款入帳',
-          status: 'PENDING',
-          suggestedMatches: [], // 建議的可能匹配
+  async getPendingReconciliation(entityId: string) {
+    const pendingTransactions = await this.prisma.bankTransaction.findMany({
+      where: {
+        bankAccount: {
+          entityId,
         },
-        {
-          id: 'bt-009',
-          date: '2025-01-16',
-          amount: 2000,
-          currency: 'TWD',
-          description: '客戶付款',
-          status: 'PENDING',
-          suggestedMatches: [
-            {
-              journalEntryId: 'je-010',
-              confidence: 0.75,
-              reason: '金額與日期相符',
-            },
-          ],
-        },
-      ],
-      summary: {
-        totalPending: 2,
-        totalAmount: 3500,
+        reconcileStatus: 'unmatched',
       },
-      message: '待對帳項目清單（模擬）',
-    };
+      include: {
+        bankAccount: true,
+        importBatch: true,
+      },
+      orderBy: {
+        txnDate: 'desc',
+      },
+      take: 100,
+    });
+
+    return pendingTransactions;
   }
 
   /**
-   * 手動確認匹配
-   * 
-   * @param bankTransactionId - 銀行交易ID
-   * @param journalEntryId - 會計分錄ID
-   * @param userId - 操作者ID
-   * @returns 確認結果
-   * 
-   * TODO: 實作邏輯
-   * - 驗證兩者是否真的對應
-   * - 更新對帳狀態
-   * - 記錄人工確認歷史
+   * 手動對帳
    */
   async manualMatch(
     bankTransactionId: string,
-    journalEntryId: string,
+    matchedType: string,
+    matchedId: string,
     userId: string,
   ) {
-    this.logger.log(
-      `手動對帳 - 銀行交易: ${bankTransactionId}, 分錄: ${journalEntryId}, 操作者: ${userId}`,
-    );
+    this.logger.log(`手動對帳 - 銀行交易: ${bankTransactionId}, 匹配: ${matchedType}/${matchedId}`);
 
-    // TODO: 實作手動對帳邏輯
-    return {
-      success: true,
-      bankTransactionId,
-      journalEntryId,
-      reconciledAt: new Date(),
-      reconciledBy: userId,
-      message: '手動對帳成功（模擬）',
-    };
+    await this.prisma.$transaction(async (tx) => {
+      await this.createReconciliationResult(bankTransactionId, matchedType, matchedId, 100, 'manual');
+
+      await tx.bankTransaction.update({
+        where: { id: bankTransactionId },
+        data: {
+          reconcileStatus: 'matched',
+          matchedType,
+          matchedId,
+        },
+      });
+    });
+
+    return { success: true };
   }
 
   /**
-   * 取消匹配
-   * 
-   * @param bankTransactionId - 銀行交易ID
-   * @param reason - 取消原因
-   * @param userId - 操作者ID
-   * @returns 取消結果
-   * 
-   * TODO: 實作邏輯
-   * - 解除對帳關聯
-   * - 重置狀態為待對帳
-   * - 記錄取消原因
+   * 取消對帳
    */
-  async unmatch(
-    bankTransactionId: string,
-    reason: string,
-    userId: string,
-  ) {
-    this.logger.log(
-      `取消對帳 - 銀行交易: ${bankTransactionId}, 原因: ${reason}, 操作者: ${userId}`,
-    );
+  async unmatch(bankTransactionId: string, userId: string) {
+    this.logger.log(`取消對帳 - 銀行交易: ${bankTransactionId}`);
 
-    // TODO: 實作取消對帳邏輯
-    return {
-      success: true,
-      bankTransactionId,
-      reason,
-      message: '已取消對帳（模擬）',
-    };
+    await this.prisma.$transaction(async (tx) => {
+      await tx.reconciliationResult.deleteMany({
+        where: { bankTransactionId },
+      });
+
+      await tx.bankTransaction.update({
+        where: { id: bankTransactionId },
+        data: {
+          reconcileStatus: 'unmatched',
+          matchedType: null,
+          matchedId: null,
+        },
+      });
+    });
+
+    return { success: true };
+  }
+
+  /**
+   * 建立對帳結果記錄
+   */
+  private async createReconciliationResult(
+    bankTransactionId: string,
+    matchedType: string,
+    matchedId: string,
+    confidence: number,
+    ruleUsed: string,
+  ) {
+    await this.prisma.reconciliationResult.create({
+      data: {
+        bankTransactionId,
+        matchedType,
+        matchedId,
+        confidence,
+        ruleUsed,
+      },
+    });
   }
 }

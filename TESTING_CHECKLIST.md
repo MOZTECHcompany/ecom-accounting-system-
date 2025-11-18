@@ -453,11 +453,361 @@ lsof -ti:5173 | xargs kill -9  # Frontend
 
 ---
 
+## 🔥 實戰流程驗收（第三版新增）
+
+### 11️⃣ 電子發票完整流程驗收
+
+**目標**: 驗證訂單 → 發票 → 作廢/折讓的完整流程
+
+#### 步驟 1: 建立測試訂單
+```bash
+# 使用現有種子資料的訂單，或透過 API 建立新訂單
+ORDER_ID="[從種子資料或 sales orders 取得]"
+```
+
+#### 步驟 2: 預覽發票
+```bash
+curl -X GET http://localhost:3000/invoicing/preview/$ORDER_ID \
+  -H "Authorization: Bearer $JWT_TOKEN" | jq
+```
+
+**驗證點**:
+- [ ] 回應包含 `amountOriginal`, `taxAmountOriginal`, `totalAmountOriginal`
+- [ ] 稅額計算正確（5%）
+- [ ] `estimatedInvoiceNumber` 格式正確（AA + 8位數字）
+- [ ] `invoiceLines` 陣列包含訂單明細
+
+#### 步驟 3: 開立發票
+```bash
+curl -X POST http://localhost:3000/invoicing/issue/$ORDER_ID \
+  -H "Authorization: Bearer $JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "invoiceType": "B2C",
+    "buyerName": "測試客戶",
+    "buyerEmail": "test@example.com"
+  }' | jq
+```
+
+**驗證點**:
+- [ ] 回應 `success: true`
+- [ ] 回應包含 `invoiceId` 和 `invoiceNumber`
+- [ ] 資料庫 `invoices` 表新增一筆記錄
+- [ ] 資料庫 `invoice_lines` 表新增明細記錄
+- [ ] 資料庫 `invoice_logs` 表記錄 `issue` 動作
+- [ ] `sales_orders.has_invoice` 更新為 `true`
+
+#### 步驟 4: 重複開立（應失敗）
+```bash
+# 再次執行步驟3的命令
+```
+
+**驗證點**:
+- [ ] 回應 HTTP 409 Conflict
+- [ ] 錯誤訊息: "訂單已開立發票，不可重複開立"
+
+#### 步驟 5: 查詢發票狀態
+```bash
+curl -X GET http://localhost:3000/invoicing/by-order/$ORDER_ID \
+  -H "Authorization: Bearer $JWT_TOKEN" | jq
+```
+
+**驗證點**:
+- [ ] 回應包含發票主表資料
+- [ ] 包含 `invoiceLines` 明細
+- [ ] 包含 `invoiceLogs` 操作記錄
+
+#### 步驟 6: 作廢發票
+```bash
+INVOICE_ID="[從步驟5取得]"
+curl -X POST http://localhost:3000/invoicing/$INVOICE_ID/void \
+  -H "Authorization: Bearer $JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"reason": "測試作廢"}' | jq
+```
+
+**驗證點**:
+- [ ] 回應 `success: true`
+- [ ] 資料庫 `invoices.status` 更新為 `void`
+- [ ] `invoices.void_at` 和 `void_reason` 已記錄
+- [ ] `invoice_logs` 新增 `void` 記錄
+- [ ] `sales_orders.has_invoice` 恢復為 `false`
+
+---
+
+### 12️⃣ 銀行對帳完整流程驗收
+
+**目標**: 驗證匯入 → 自動對帳 → 手動對帳的完整流程
+
+#### 步驟 1: 準備測試資料
+```bash
+# 確認有可用的 bankAccountId 和 entityId
+ENTITY_ID="[從種子資料取得]"
+BANK_ACCOUNT_ID="[從種子資料取得]"
+```
+
+#### 步驟 2: 匯入銀行交易
+```bash
+curl -X POST http://localhost:3000/reconciliation/bank/import \
+  -H "Authorization: Bearer $JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "entityId": "'$ENTITY_ID'",
+    "bankAccountId": "'$BANK_ACCOUNT_ID'",
+    "source": "csv",
+    "fileName": "test_2025_11.csv",
+    "transactions": [
+      {
+        "transactionDate": "2025-11-18",
+        "amount": 1050,
+        "currency": "TWD",
+        "description": "客戶付款",
+        "referenceNo": "TXN001"
+      },
+      {
+        "transactionDate": "2025-11-18",
+        "amount": 2000,
+        "currency": "TWD",
+        "description": "訂單 order-test-123",
+        "referenceNo": "TXN002"
+      }
+    ]
+  }' | jq
+```
+
+**驗證點**:
+- [ ] 回應 `success: true`
+- [ ] 回應包含 `batchId`
+- [ ] `recordCount` = 2
+- [ ] 資料庫 `bank_import_batches` 新增一筆記錄
+- [ ] 資料庫 `bank_transactions` 新增 2 筆記錄
+- [ ] 所有交易 `reconcile_status` = "unmatched"
+- [ ] 所有交易 `batch_id` 正確關聯
+
+#### 步驟 3: 自動對帳
+```bash
+BATCH_ID="[從步驟2取得]"
+curl -X POST http://localhost:3000/reconciliation/bank/auto-match/$BATCH_ID \
+  -H "Authorization: Bearer $JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dateTolerance": 1,
+    "amountTolerance": 0,
+    "useFuzzyMatch": true
+  }' | jq
+```
+
+**驗證點**:
+- [ ] 回應包含 `exactMatched`, `fuzzyMatched`, `unmatched` 計數
+- [ ] 如果有訂單/付款匹配，`exactMatched` > 0
+- [ ] 如果描述包含訂單號，`fuzzyMatched` > 0
+- [ ] 資料庫 `reconciliation_results` 新增匹配記錄
+- [ ] 匹配的交易 `reconcile_status` 更新為 "matched"
+
+#### 步驟 4: 查詢待對帳項目
+```bash
+curl -X GET "http://localhost:3000/reconciliation/pending?entityId=$ENTITY_ID" \
+  -H "Authorization: Bearer $JWT_TOKEN" | jq
+```
+
+**驗證點**:
+- [ ] 回應包含未匹配的銀行交易
+- [ ] 每筆交易包含 `bankAccount` 和 `importBatch` 關聯資料
+- [ ] `reconcile_status` = "unmatched"
+
+#### 步驟 5: 手動對帳
+```bash
+BANK_TX_ID="[從步驟4取得一筆未匹配交易]"
+PAYMENT_ID="[從現有 payments 表取得]"
+
+curl -X POST http://localhost:3000/reconciliation/bank/manual-match \
+  -H "Authorization: Bearer $JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "bankTransactionId": "'$BANK_TX_ID'",
+    "matchedType": "payment",
+    "matchedId": "'$PAYMENT_ID'"
+  }' | jq
+```
+
+**驗證點**:
+- [ ] 回應 `success: true`
+- [ ] 資料庫 `reconciliation_results` 新增記錄
+- [ ] `rule_used` = "manual"
+- [ ] `confidence` = 100
+- [ ] `bank_transactions.reconcile_status` 更新為 "matched"
+
+#### 步驟 6: 取消對帳
+```bash
+curl -X POST http://localhost:3000/reconciliation/bank/unmatch \
+  -H "Authorization: Bearer $JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"bankTransactionId": "'$BANK_TX_ID'"}' | jq
+```
+
+**驗證點**:
+- [ ] 回應 `success: true`
+- [ ] 資料庫 `reconciliation_results` 記錄已刪除
+- [ ] `bank_transactions.reconcile_status` 恢復為 "unmatched"
+- [ ] `matched_type` 和 `matched_id` 設為 null
+
+---
+
+### 13️⃣ RBAC 權限驗收
+
+**目標**: 驗證不同角色的存取權限
+
+#### 測試情境 1: ADMIN 全權限
+```bash
+# 使用 ADMIN 角色 token
+# 應可存取所有 Invoicing 和 Reconciliation endpoints
+```
+
+**驗證點**:
+- [ ] 可預覽發票 ✅
+- [ ] 可開立發票 ✅
+- [ ] 可作廢發票 ✅
+- [ ] 可匯入銀行交易 ✅
+- [ ] 可自動對帳 ✅
+- [ ] 可手動對帳 ✅
+
+#### 測試情境 2: ACCOUNTANT 有限權限
+```bash
+# 使用 ACCOUNTANT 角色 token
+```
+
+**驗證點**:
+- [ ] 可預覽發票 ✅
+- [ ] 可開立發票 ✅
+- [ ] 可作廢發票 ✅
+- [ ] 可查詢待對帳項目 ✅
+- [ ] 不可匯入銀行交易 ❌ (HTTP 403)
+- [ ] 不可自動對帳 ❌ (HTTP 403)
+- [ ] 不可手動對帳 ❌ (HTTP 403)
+
+#### 測試情境 3: OPERATOR 受限權限
+```bash
+# 使用 OPERATOR 角色 token
+```
+
+**驗證點**:
+- [ ] 不可存取 Invoicing endpoints ❌ (HTTP 403)
+- [ ] 不可存取 Reconciliation endpoints ❌ (HTTP 403)
+
+---
+
+### 14️⃣ Migration 運作確認
+
+**目標**: 驗證資料庫 Migration 可正確執行
+
+```bash
+cd /workspaces/ecom-accounting-system-/backend
+
+# 檢查 migration 檔案
+ls -la prisma/migrations/
+
+# 檢查 schema
+npx prisma validate
+
+# 套用 migration
+npx prisma migrate deploy
+```
+
+**驗證點**:
+- [ ] Migration 檔案存在: `20251118190000_add_invoicing_and_reconciliation_tables/`
+- [ ] `migration.sql` 包含 5 個 CREATE TABLE 語句
+- [ ] Prisma schema 驗證通過（無錯誤）
+- [ ] Migration 套用成功（無錯誤）
+- [ ] 資料庫新增 5 個資料表:
+  - [ ] `invoices`
+  - [ ] `invoice_lines`
+  - [ ] `invoice_logs`
+  - [ ] `bank_import_batches`
+  - [ ] `reconciliation_results`
+- [ ] `bank_transactions` 新增 `batch_id` 欄位
+
+---
+
+## 📊 最終測試報告格式（更新版）
+
+```
+===========================================
+電商會計系統 - 最終測試報告（第三版）
+執行日期: YYYY-MM-DD HH:mm:ss
+執行者: [姓名]
+===========================================
+
+【環境資訊】
+- Node.js: v20.x.x
+- PostgreSQL: 16.x
+- OS: [Linux/macOS/Windows]
+
+【基礎測試結果】
+✅ Backend 編譯: PASS
+✅ Frontend 編譯: PASS
+✅ Database Migration: PASS (38 models, +5 new tables)
+✅ Database Seed: PASS
+✅ Backend 啟動: PASS (14 modules, +2 new)
+✅ Frontend 啟動: PASS
+
+【API 基礎測試】
+✅ API Test 1 (Login): PASS
+✅ API Test 2 (Accounts): PASS
+✅ API Test 3 (Mock Order): PASS
+✅ API Test 4 (Reports): PASS
+
+【實戰流程驗收】
+✅ 電子發票流程:
+  - 預覽發票: PASS
+  - 開立發票: PASS
+  - 重複開立防護: PASS
+  - 查詢狀態: PASS
+  - 作廢發票: PASS
+  - 資料庫記錄: PASS
+
+✅ 銀行對帳流程:
+  - 匯入交易: PASS (2 records)
+  - 自動對帳: PASS (exact: 1, fuzzy: 1)
+  - 查詢待對帳: PASS
+  - 手動對帳: PASS
+  - 取消對帳: PASS
+  - 資料庫記錄: PASS
+
+【RBAC 權限驗收】
+✅ ADMIN 權限: PASS (全功能)
+✅ ACCOUNTANT 權限: PASS (發票相關)
+✅ OPERATOR 權限: PASS (受限)
+
+【Migration 驗收】
+✅ Schema 驗證: PASS
+✅ Migration 套用: PASS
+✅ 新增資料表: PASS (5 tables)
+✅ 4 欄位金額標準: PASS
+
+【單元測試】
+✅ InvoicingService Tests: 3/3 PASS
+✅ ReconciliationService Tests: 3/3 PASS
+
+【總結】
+✅ 所有測試項目通過 (34/34)
+✅ 系統可正式上線使用 🎉
+
+【備註】
+第三版新增功能：
+- 電子發票模組完整實作
+- 銀行對帳模組完整實作
+- RBAC 權限完整套用
+- 6 個單元測試全數通過
+===========================================
+```
+
+---
+
 ## 🚀 下一步行動
 
 測試全部通過後:
 1. ✅ 提交所有變更到 Git
-2. ✅ 建立 Release Tag
+2. ✅ 建立 Release Tag (v3.0.0)
 3. ✅ 部署到 Render 或其他平台
 4. ✅ 通知團隊成員系統可用
 
