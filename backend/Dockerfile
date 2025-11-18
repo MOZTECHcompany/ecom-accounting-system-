@@ -1,5 +1,5 @@
 # Production Dockerfile for NestJS E-Commerce Accounting System
-FROM node:20-alpine
+FROM node:20-alpine AS builder
 
 # Install dependencies for Prisma
 RUN apk add --no-cache openssl
@@ -11,8 +11,8 @@ WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Install dependencies (production only)
-RUN npm ci --only=production
+# Install all dependencies (including devDependencies for build)
+RUN npm ci
 
 # Copy source code
 COPY . .
@@ -22,6 +22,27 @@ RUN npx prisma generate
 
 # Build the application
 RUN npm run build
+
+# Production stage
+FROM node:20-alpine
+
+# Install dependencies for Prisma
+RUN apk add --no-cache openssl
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY prisma ./prisma/
+
+# Install only production dependencies
+RUN npm ci --only=production
+
+# Generate Prisma Client
+RUN npx prisma generate
+
+# Copy built application from builder
+COPY --from=builder /app/dist ./dist
 
 # Expose port
 EXPOSE 3000
