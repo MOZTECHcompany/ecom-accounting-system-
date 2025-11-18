@@ -86,4 +86,17 @@ export class SalesController {
   ) {
     return this.salesOrderService.completeSalesOrder(orderId, userId);
   }
+
+  /**
+   * 建立模擬訂單（用於測試）
+   */
+  @Post('orders/mock')
+  @ApiOperation({ summary: '建立模擬訂單用於測試系統流程' })
+  @ApiQuery({ name: 'entityId', required: true, description: '公司實體ID' })
+  async createMockOrder(
+    @Query('entityId', ParseUUIDPipe) entityId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.salesOrderService.createMockOrder(entityId, userId);
+  }
 }

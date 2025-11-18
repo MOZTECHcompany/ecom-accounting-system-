@@ -22,6 +22,8 @@ import { ApprovalsModule } from './modules/approvals/approvals.module';
 import { BankingModule } from './modules/banking/banking.module';
 import { PayrollModule } from './modules/payroll/payroll.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { InvoicingModule } from './modules/invoicing/invoicing.module';
+import { ReconciliationModule } from './modules/reconciliation/reconciliation.module';
 
 /**
  * AppModule
@@ -29,7 +31,7 @@ import { ReportsModule } from './modules/reports/reports.module';
  * 
  * 架構設計：
  * - Common: 共用模組（Prisma, Config, Guards, Decorators）
- * - Modules: 12 個業務模組（依序為：Auth, Users, Entities, Accounting, Sales, Cost, AR, AP, Expense, Approvals, Banking, Payroll, Reports）
+ * - Modules: 14 個業務模組（依序為：Auth, Users, Entities, Accounting, Sales, Cost, AR, AP, Expense, Approvals, Banking, Payroll, Reports, Invoicing, Reconciliation）
  * 
  * 模組依賴關係（重要！）：
  * - SalesModule → AccountingModule（訂單完成時產生會計分錄）
@@ -39,6 +41,8 @@ import { ReportsModule } from './modules/reports/reports.module';
  * - ArModule → AccountingModule（AR發票產生會計分錄）
  * - CostModule → AccountingModule（成本攤提產生分錄）
  * - ReportsModule → AccountingModule（報表依賴會計資料）
+ * - InvoicingModule → SalesModule, ArModule（電子發票整合）
+ * - ReconciliationModule → BankingModule, AccountingModule（銀行對帳整合）
  * 
  * 全域設定：
  * - ConfigModule: 環境變數管理
@@ -72,6 +76,10 @@ import { ReportsModule } from './modules/reports/reports.module';
     
     // 4. 報表模組（依賴所有業務模組）
     ReportsModule,      // → AccountingModule
+    
+    // 5. 整合模組（外部服務整合）
+    InvoicingModule,    // → SalesModule, ArModule (電子發票)
+    ReconciliationModule, // → BankingModule, AccountingModule (銀行對帳)
   ],
   controllers: [AppController],
   providers: [

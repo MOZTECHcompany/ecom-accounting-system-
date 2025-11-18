@@ -238,4 +238,53 @@ export class SalesOrderService {
       orderBy: { orderDate: 'desc' },
     });
   }
+
+  /**
+   * 處理退款
+   * @param orderId - 訂單 ID
+   * @param refundAmount - 退款金額
+   * @param reason - 退款原因
+   * @param createdBy - 操作者 ID
+   */
+  async applyRefund(
+    orderId: string,
+    refundAmount: number,
+    reason: string,
+    createdBy: string,
+  ) {
+    // TODO: 實作退款邏輯
+    // 1. 更新訂單狀態為 refunded
+    // 2. 產生沖回分錄（紅字分錄）
+    // 3. 記錄退款記錄
+    this.logger.log(`Applying refund for order ${orderId}, amount: ${refundAmount}`);
+    throw new Error('Not implemented: applyRefund');
+  }
+
+  /**
+   * 將訂單過帳至會計系統
+   * @param orderId - 訂單 ID
+   * @param createdBy - 操作者 ID
+   */
+  async postOrderToAccounting(orderId: string, createdBy: string) {
+    // TODO: 實作訂單過帳
+    // 1. 檢查訂單狀態
+    // 2. 產生完整會計分錄（包含平台費、金流費）
+    // 3. 更新訂單為已過帳狀態
+    this.logger.log(`Posting order ${orderId} to accounting...`);
+    throw new Error('Not implemented: postOrderToAccounting');
+  }
+
+  /**
+   * 建立模擬訂單（用於測試）
+   * @param entityId - 公司實體 ID
+   * @param createdBy - 建立者 ID
+   */
+  async createMockOrder(entityId: string, createdBy: string) {
+    // TODO: 建立測試用訂單
+    // 1. 隨機產生訂單資料
+    // 2. 自動完成並產生分錄
+    // 3. 用於驗證系統流程
+    this.logger.log(`Creating mock order for entity ${entityId}...`);
+    throw new Error('Not implemented: createMockOrder');
+  }
 }

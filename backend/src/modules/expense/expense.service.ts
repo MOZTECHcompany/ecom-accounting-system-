@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
 /**
  * 費用管理服務
@@ -11,6 +11,7 @@ import { Injectable } from '@nestjs/common';
  */
 @Injectable()
 export class ExpenseService {
+  private readonly logger = new Logger(ExpenseService.name);
   /**
    * 建立費用申請單
    */
@@ -55,5 +56,39 @@ export class ExpenseService {
    */
   async getExpenseByCategory(entityId: string, startDate: Date, endDate: Date) {
     // TODO: 依費用類別統計
+  }
+
+  /**
+   * 提交費用申請
+   * @param data - 費用申請資料
+   * @param requestedBy - 申請人ID
+   * @returns 建立的費用申請單
+   */
+  async submitExpenseRequest(data: any, requestedBy: string) {
+    this.logger.log(`Submitting expense request by user: ${requestedBy}`);
+    throw new Error('Not implemented: submitExpenseRequest');
+  }
+
+  /**
+   * 連結至應付發票
+   * @param expenseRequestId - 費用申請ID
+   * @param apInvoiceId - 應付發票ID
+   * @returns 更新後的費用申請單
+   */
+  async linkToApInvoice(expenseRequestId: string, apInvoiceId: string) {
+    this.logger.log(`Linking expense request ${expenseRequestId} to AP invoice ${apInvoiceId}`);
+    throw new Error('Not implemented: linkToApInvoice');
+  }
+
+  /**
+   * 按類別統計費用
+   * @param entityId - 實體ID
+   * @param startDate - 開始日期
+   * @param endDate - 結束日期
+   * @returns 費用統計報表
+   */
+  async getExpensesByCategory(entityId: string, startDate: Date, endDate: Date) {
+    this.logger.log(`Getting expenses by category for entity ${entityId}, period: ${startDate} - ${endDate}`);
+    throw new Error('Not implemented: getExpensesByCategory');
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ApRepository } from './ap.repository';
 
 /**
@@ -12,6 +12,8 @@ import { ApRepository } from './ap.repository';
  */
 @Injectable()
 export class ApService {
+  private readonly logger = new Logger(ApService.name);
+
   constructor(private readonly apRepository: ApRepository) {}
 
   async getInvoices(entityId?: string) {
@@ -65,5 +67,49 @@ export class ApService {
    */
   async schedulePayment(invoiceId: string, scheduledDate: Date) {
     // TODO: 設定付款排程
+  }
+
+  /**
+   * 從費用申請建立應付發票
+   * @param expenseRequestId - 費用申請ID
+   * @returns 建立的應付發票
+   */
+  async createApFromExpenseRequest(expenseRequestId: string) {
+    this.logger.log(`Creating AP invoice from expense request: ${expenseRequestId}`);
+    throw new Error('Not implemented: createApFromExpenseRequest');
+  }
+
+  /**
+   * 標記為已付款
+   * @param invoiceId - 發票ID
+   * @param paymentDate - 付款日期
+   * @param bankAccountId - 銀行帳戶ID
+   * @returns 更新後的發票資訊
+   */
+  async markAsPaid(invoiceId: string, paymentDate: Date, bankAccountId: string) {
+    this.logger.log(`Marking invoice ${invoiceId} as paid, payment date: ${paymentDate}`);
+    throw new Error('Not implemented: markAsPaid');
+  }
+
+  /**
+   * 取得到期報表
+   * @param entityId - 實體ID
+   * @param asOfDate - 統計基準日期
+   * @returns 到期報表
+   */
+  async getDueReport(entityId: string, asOfDate: Date) {
+    this.logger.log(`Generating due report for entity ${entityId} as of ${asOfDate}`);
+    throw new Error('Not implemented: getDueReport');
+  }
+
+  /**
+   * 套用折扣
+   * @param invoiceId - 發票ID
+   * @param discountAmount - 折扣金額
+   * @returns 更新後的發票資訊
+   */
+  async applyDiscount(invoiceId: string, discountAmount: number) {
+    this.logger.log(`Applying discount of ${discountAmount} to invoice ${invoiceId}`);
+    throw new Error('Not implemented: applyDiscount');
   }
 }

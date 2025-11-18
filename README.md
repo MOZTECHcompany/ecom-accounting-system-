@@ -1,511 +1,558 @@
-# 電商會計系統 (E-Commerce Accounting System)
+# 🏪 電商會計系統 (E-Commerce Accounting System)
 
 [![NestJS](https://img.shields.io/badge/NestJS-11.x-red.svg)](https://nestjs.com/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
 [![Prisma](https://img.shields.io/badge/Prisma-6.x-brightgreen.svg)](https://www.prisma.io/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue.svg)](https://www.postgresql.org/)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)]()
 
-專為電商設計的全功能會計與財務管理系統,支援多公司實體、多幣別、多銷售平台的綜合管理。
+專為電商企業設計的完整會計/財務管理系統，支援多公司實體、多幣別、多銷售平台。
 
 ## 📋 目錄
 
-- [系統特色](#系統特色)
-- [技術架構](#技術架構)
-- [快速開始](#快速開始)
-- [資料庫架構](#資料庫架構)
-- [API 文件](#api-文件)
-- [開發指南](#開發指南)
-- [部署說明](#部署說明)
-- [擴充計畫](#擴充計畫)
+- [系統特色](#-系統特色)
+- [快速開始](#-快速開始)
+  - [方式一：GitHub Codespaces（推薦）](#方式一github-codespaces推薦)
+  - [方式二：本機開發](#方式二本機開發)
+  - [方式三：完整 Docker Compose](#方式三完整-docker-compose)
+- [預設帳號](#-預設帳號)
+- [API 文件](#-api-文件)
+- [專案結構](#️-專案結構)
+- [資料庫 Schema](#-資料庫-schema)
+- [RBAC 權限系統](#-rbac-權限系統)
+- [種子資料](#-種子資料)
+- [測試](#-測試)
+- [部署到 Render](#-部署到-render)
+- [開發指南](#️-開發指南)
 
 ## 🌟 系統特色
 
 ### 核心功能
+- ✅ **多公司實體管理** - 支援跨國營運，每個實體獨立會計帳
+- ✅ **多幣別支援** - 4欄位金額標準（原幣、幣別、匯率、本位幣）
+- ✅ **多平台整合** - Shopify、momo、PChome、Shopee、Amazon 等9個平台
+- ✅ **完整會計循環** - 分錄、過帳、試算、結帳、報表
+- ✅ **RBAC權限控制** - ADMIN、ACCOUNTANT、OPERATOR 三層角色
+- ✅ **審批流程** - 費用申請、薪資發放等需要審批
+- ✅ **銀行對帳** - 自動匹配銀行交易與會計記錄
 
-- **多公司實體管理**：支援台灣、大陸等多個營運主體,各自獨立的會計科目與報表
-- **多幣別支援**:自動匯率轉換,支援 TWD、CNY、USD 等多種貨幣
-- **多銷售平台整合**:
-  - 官網:Shopify、SHOPLINE、1shop
-  - 電商平台:momo、PChome、Shopee、Coupang
-  - 國際平台:Amazon、TikTok Shop
-- **完整會計系統**:
-  - 會計科目表(Chart of Accounts)
-  - 自動化會計分錄產生
-  - 借貸平衡驗證
-  - 會計期間管理與鎖帳機制
-  - 四大財務報表(損益表、資產負債表、現金流量表、權益變動表)
-- **應收應付管理**:
-  - AR 齡別分析
-  - 呆帳備抵與壞帳處理
-  - AP 到期提醒系統
-  - 費用申請與審核流程
-- **銀行對帳**:
-  - 虛擬帳號支援
-  - 自動對帳匹配
-  - 異常交易標記
-- **人事薪資**:
-  - 台灣與大陸薪資結構
-  - 勞健保計算
-  - 薪資分錄自動化
-- **成本管理**:
-  - 批次成本追蹤
-  - 開發成本攤提(模具費、檢驗費)
-  - 銷貨成本自動計算
+### 技術架構
+- **Backend**: NestJS 11.x + TypeScript + Prisma ORM
+- **Database**: PostgreSQL 16
+- **Frontend**: React 18 + Vite + Ant Design + TypeScript
+- **部署**: Docker Compose + GitHub Codespaces Ready
 
-### 系統設計亮點
-
-✅ **以會計分錄為核心**:所有交易最終都會產生會計分錄,確保資料一致性  
-✅ **模組化架構**:清晰的領域模組劃分,易於維護與擴充  
-✅ **權限管理**:RBAC 角色權限控制,支援多層級審核  
-✅ **審計軌跡**:完整的操作記錄,符合稽核需求  
-✅ **型別安全**:TypeScript + Prisma 提供完整的型別檢查
-
-## 🏗️ 技術架構
-
-```
-技術棧:
-├── 後端框架:NestJS 11.x
-├── 程式語言:TypeScript 5.7
-├── ORM:Prisma 6.x
-├── 資料庫:PostgreSQL 16
-├── 認證:JWT + Passport
-├── API 文件:Swagger/OpenAPI
-├── 測試:Jest
-└── 容器化:Docker + Docker Compose
-```
-
-### 專案結構
-
-```
-backend/
-├── prisma/
-│   ├── schema.prisma          # Prisma 資料模型定義
-│   ├── seed.ts                # 資料庫初始化腳本
-│   └── migrations/            # 資料庫遷移記錄
-├── src/
-│   ├── common/                # 共用模組
-│   │   ├── config/            # 環境設定
-│   │   ├── prisma/            # Prisma 服務
-│   │   ├── guards/            # 守衛(認證、權限)
-│   │   └── decorators/        # 自訂裝飾器
-│   ├── modules/               # 業務模組
-│   │   ├── auth/              # 認證模組
-│   │   ├── users/             # 使用者管理
-│   │   ├── accounting/        # 會計核心
-│   │   │   ├── services/
-│   │   │   │   ├── journal.service.ts    # 分錄服務
-│   │   │   │   └── report.service.ts     # 報表服務
-│   │   │   ├── accounting.controller.ts
-│   │   │   └── accounting.service.ts
-│   │   ├── sales/             # 銷售管理
-│   │   │   ├── services/
-│   │   │   │   └── sales-order.service.ts
-│   │   │   └── sales.controller.ts
-│   │   ├── purchase/          # 進貨管理(待實作)
-│   │   ├── hr/                # 人事薪資(待實作)
-│   │   └── banking/           # 銀行對帳(待實作)
-│   ├── app.module.ts          # 根模組
-│   └── main.ts                # 應用程式入口
-├── .env.example               # 環境變數範本
-├── docker-compose.yml         # Docker Compose 設定
-├── Dockerfile                 # Docker 映像檔設定
-└── package.json               # npm 套件管理
-```
+---
 
 ## 🚀 快速開始
 
-### 環境需求
+### 方式一：GitHub Codespaces（推薦）
 
+1. **開啟 Codespaces**
+   - 在 GitHub 儲存庫頁面點擊 "Code" → "Codespaces" → "Create codespace on main"
+
+2. **等待自動配置完成**
+   - DevContainer 會自動啟動 PostgreSQL、Backend、Frontend
+   - 自動執行 `npm install` 和 `prisma generate`
+
+3. **執行 Migration 和 Seed**
+   ```bash
+   cd backend
+   npm run prisma:migrate
+   npm run prisma:seed
+   ```
+
+4. **啟動服務**
+   ```bash
+   # Backend (Terminal 1)
+   cd backend
+   npm run start:dev
+   
+   # Frontend (Terminal 2)
+   cd frontend
+   npm run dev
+   ```
+
+5. **訪問系統**
+   - Frontend: `http://localhost:5173`
+   - Backend API: `http://localhost:3000/api/v1`
+   - Swagger文件: `http://localhost:3000/api-docs`
+
+---
+
+### 方式二：本機開發
+
+#### 前置需求
 - Node.js 20+
-- PostgreSQL 16+
-- Docker & Docker Compose(可選)
+- PostgreSQL 16
+- Docker Desktop（可選）
 
-### 方法 1:本機開發
+#### 1. 啟動資料庫
+
+**選項 A：使用 Docker**
+```bash
+docker-compose up postgres -d
+```
+
+**選項 B：本機 PostgreSQL**
+```bash
+# 建立資料庫
+createdb ecommerce_accounting
+```
+
+#### 2. Backend 設定
 
 ```bash
-# 1. 進入專案目錄
 cd backend
 
-# 2. 安裝相依套件
+# 安裝依賴
 npm install
 
-# 3. 設定環境變數
+# 複製環境變數
 cp .env.example .env
-# 編輯 .env 檔案,設定資料庫連線等參數
 
-# 4. 啟動 PostgreSQL(如果本機沒有)
-# 可以使用 Docker
-docker run -d \
-  --name ecom-postgres \
-  -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=ecommerce_accounting \
-  -p 5432:5432 \
-  postgres:16-alpine
+# 編輯 .env，確認 DATABASE_URL
+# DATABASE_URL="postgresql://postgres:postgres@localhost:5432/ecommerce_accounting?schema=public"
 
-# 5. 執行資料庫遷移
+# 產生 Prisma Client
+npm run prisma:generate
+
+# 執行 Migration
 npm run prisma:migrate
 
-# 6. 執行資料初始化(Seeding)
+# 載入種子資料
 npm run prisma:seed
 
-# 7. 啟動開發伺服器
+# 啟動 Backend
 npm run start:dev
 ```
 
-### 方法 2:使用 Docker Compose
+#### 3. Frontend 設定
 
 ```bash
-# 1. 進入專案目錄
-cd backend
+cd frontend
 
-# 2. 使用 Docker Compose 啟動所有服務
+# 安裝依賴
+npm install
+
+# 啟動 Frontend
+npm run dev
+```
+
+#### 4. 訪問系統
+- Frontend: http://localhost:5173
+- Backend: http://localhost:3000/api/v1
+- Swagger: http://localhost:3000/api-docs
+
+---
+
+### 方式三：完整 Docker Compose
+
+```bash
+# 啟動所有服務（PostgreSQL + Backend + Frontend）
 docker-compose up -d
 
-# 服務會自動:
-# - 啟動 PostgreSQL
-# - 執行資料庫遷移
-# - 執行資料初始化
-# - 啟動 NestJS 後端服務
+# 查看日誌
+docker-compose logs -f
+
+# 停止所有服務
+docker-compose down
 ```
 
-### 方法 3:GitHub Codespaces(推薦)
+訪問：
+- Frontend: http://localhost:3001
+- Backend: http://localhost:3000/api/v1
+- Swagger: http://localhost:3000/api-docs
 
-1. 在 GitHub 上開啟此專案
-2. 點選 `Code` → `Codespaces` → `Create codespace on main`
-3. Codespaces 會自動:
-   - 載入 DevContainer 環境
-   - 安裝所有相依套件
-   - 啟動 PostgreSQL
-   - 執行 migration 與 seeding
-   - 啟動開發伺服器
+---
 
-**存取應用程式:**
+## 👤 預設帳號
 
-- API 端點:`http://localhost:3000/api/v1`
-- Swagger 文件:`http://localhost:3000/api-docs`
+系統種子資料會自動建立以下帳號：
 
-**預設管理員帳號:**
+| 角色 | Email | 密碼 | 權限 |
+|------|-------|------|------|
+| 系統管理員 | `admin@example.com` | `Admin@123456` | 所有權限 |
+
+---
+
+## 📚 API 文件
+
+### Swagger UI
+啟動 Backend 後訪問：`http://localhost:3000/api-docs`
+
+**所有 API 已使用 Swagger 註解完整標註：**
+- ✅ 所有 Controllers 都有 `@ApiTags` 分類
+- ✅ 所有端點都有 `@ApiOperation` 說明
+- ✅ 查詢參數使用 `@ApiQuery` 標註
+- ✅ 請求體使用 `@ApiBody` 標註
+- ✅ 回應格式使用 `@ApiResponse` 標註
+
+### 範例 API 測試
+
+#### 1. 登入取得 Token
+```bash
+curl -X POST http://localhost:3000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@example.com",
+    "password": "Admin@123456"
+  }'
+```
+
+回應：
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": "...",
+    "email": "admin@example.com",
+    "name": "系統管理員"
+  }
+}
+```
+
+#### 2. 查詢會計科目
+```bash
+curl -X GET "http://localhost:3000/api/v1/accounting/accounts?entityId=tw-entity-001" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+#### 3. 建立模擬訂單（測試用）
+```bash
+curl -X POST "http://localhost:3000/api/v1/sales/orders/mock?entityId=tw-entity-001" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+#### 4. 取得損益表
+```bash
+curl -X GET "http://localhost:3000/api/v1/reports/income-statement?entityId=tw-entity-001&startDate=2025-01-01&endDate=2025-12-31" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+---
+
+## 🗂️ 專案結構
 
 ```
-Email: admin@example.com
-Password: Admin@123456
+ecom-accounting-system/
+├── backend/                    # NestJS 後端
+│   ├── prisma/
+│   │   ├── schema.prisma      # 資料庫 Schema（36個 Models）
+│   │   ├── migrations/        # Migration 歷史
+│   │   └── seed.ts            # 種子資料
+│   ├── src/
+│   │   ├── common/            # 共用模組（Guards、Decorators、Prisma）
+│   │   └── modules/           # 業務模組（12個）
+│   │       ├── auth/          # 認證授權
+│   │       ├── users/         # 使用者管理
+│   │       ├── entities/      # 實體管理
+│   │       ├── accounting/    # 會計核心
+│   │       ├── sales/         # 銷售管理
+│   │       ├── ar/            # 應收帳款
+│   │       ├── ap/            # 應付帳款
+│   │       ├── expense/       # 費用管理
+│   │       ├── cost/          # 成本管理
+│   │       ├── banking/       # 銀行對帳
+│   │       ├── payroll/       # 薪資管理
+│   │       ├── approvals/     # 審批流程
+│   │       └── reports/       # 財務報表
+│   └── Dockerfile
+├── frontend/                   # React 前端
+│   ├── src/
+│   │   ├── components/        # UI 元件
+│   │   ├── contexts/          # Context (AuthContext)
+│   │   ├── pages/             # 頁面 (Login, Accounts)
+│   │   ├── services/          # API Services
+│   │   └── App.tsx
+│   └── package.json
+├── .devcontainer/              # DevContainer 配置
+│   └── devcontainer.json
+├── docker-compose.yml          # Docker Compose 配置
+├── .env.example                # 環境變數範例
+└── README.md
 ```
 
-## 🗄️ 資料庫架構
+---
 
-### 核心資料表
+## 🧩 資料庫 Schema
 
-#### 1. 系統核心
+### 核心資料表（36個）
+
+#### 系統核心
 - `users` - 使用者
-- `roles` - 角色
+- `roles` - 角色（ADMIN、ACCOUNTANT、OPERATOR）
 - `permissions` - 權限
 - `user_roles` - 使用者角色關聯
 - `role_permissions` - 角色權限關聯
-- `audit_logs` - 審計日誌
+- `audit_logs` - 審計軌跡
 
-#### 2. 會計核心
+#### 會計核心
 - `entities` - 公司實體
 - `accounts` - 會計科目表
 - `periods` - 會計期間
 - `journal_entries` - 會計分錄主檔
 - `journal_lines` - 會計分錄明細
 
-#### 3. 銷售管理
-- `sales_channels` - 銷售渠道
+#### 銷售模組
+- `sales_channels` - 銷售渠道（9個平台）
 - `customers` - 客戶
+- `vendors` - 供應商
 - `products` - 商品
 - `sales_orders` - 銷售訂單
 - `sales_order_items` - 訂單明細
 - `shipments` - 出貨記錄
-- `payments` - 收款記錄
+- `payments` - 付款記錄
 
-#### 4. 應收應付
-- `ar_invoices` - 應收帳款
-- `ap_invoices` - 應付帳款
-- `expense_requests` - 費用申請單
+#### AR/AP
+- `ar_invoices` - 應收發票
+- `ap_invoices` - 應付發票
+
+#### 費用與審批
+- `expense_requests` - 費用申請
 - `expenses` - 費用記錄
-- `approval_requests` - 審核流程
+- `expense_items` - 費用明細
+- `approval_requests` - 審批請求
 
-#### 5. 進貨成本
-- `vendors` - 供應商
-- `purchase_orders` - 進貨訂單
-- `product_batches` - 進貨批次
-- `dev_costs` - 開發成本
+#### 成本管理
+- `purchase_orders` - 採購訂單
+- `purchase_order_items` - 採購明細
+- `product_batches` - 產品批次（成本追蹤）
+- `dev_costs` - 研發成本
 
-#### 6. 銀行管理
+#### 銀行模組
 - `bank_accounts` - 銀行帳戶
 - `virtual_accounts` - 虛擬帳號
-- `bank_transactions` - 銀行交易流水
+- `bank_transactions` - 銀行交易
 
-#### 7. 人事薪資
+#### 薪資模組
 - `departments` - 部門
 - `employees` - 員工
 - `payroll_runs` - 薪資批次
 - `payroll_items` - 薪資明細
 
-### ERD 重點說明
+### 金額欄位標準
 
-- **多公司實體隔離**:幾乎所有表都有 `entity_id` 欄位
-- **多幣別支援**:金額欄位包含 `currency`、`fx_rate`、`amount_base`
-- **來源追蹤**:重要交易表都有 `source_module` 和 `source_id`
-- **審計追蹤**:關鍵操作記錄在 `audit_logs`
-
-## 📚 API 文件
-
-啟動服務後,造訪 Swagger 文件:
-
-**本機開發:** `http://localhost:3000/api-docs`
-
-### 主要 API 端點
-
-#### 認證 (`/api/v1/auth`)
-- `POST /auth/register` - 使用者註冊
-- `POST /auth/login` - 使用者登入
-
-#### 使用者 (`/api/v1/users`)
-- `GET /users/me` - 取得當前使用者資訊
-- `GET /users/me/permissions` - 取得當前使用者權限
-
-#### 會計 (`/api/v1/accounting`)
-- `GET /accounting/accounts` - 查詢會計科目表
-- `GET /accounting/periods` - 查詢會計期間
-- `GET /accounting/reports/income-statement` - 產生損益表
-- `GET /accounting/reports/balance-sheet` - 產生資產負債表
-
-#### 銷售 (`/api/v1/sales`)
-- `GET /sales/channels` - 查詢銷售渠道
-- `GET /sales/orders` - 查詢銷售訂單
-- `POST /sales/orders` - 建立銷售訂單
-- `POST /sales/orders/:id/complete` - 完成訂單(產生會計分錄)
-
-### 認證方式
-
-大部分 API 都需要 JWT Token 認證:
-
-```bash
-# 1. 登入取得 Token
-curl -X POST http://localhost:3000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@example.com","password":"Admin@123456"}'
-
-# 回應:
-# {
-#   "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-#   "user": { ... }
-# }
-
-# 2. 使用 Token 存取受保護的 API
-curl -X GET http://localhost:3000/api/v1/users/me \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
-```
-
-## 🛠️ 開發指南
-
-### 常用指令
-
-```bash
-# 開發
-npm run start:dev           # 啟動開發伺服器(熱重載)
-npm run build               # 建置專案
-npm run start:prod          # 生產環境啟動
-
-# 測試
-npm run test                # 執行單元測試
-npm run test:watch          # 測試監視模式
-npm run test:cov            # 測試覆蓋率報告
-npm run test:e2e            # 執行端對端測試
-
-# Prisma
-npm run prisma:generate     # 產生 Prisma Client
-npm run prisma:migrate      # 執行資料庫遷移
-npm run prisma:seed         # 執行資料初始化
-npm run prisma:studio       # 開啟 Prisma Studio(資料庫 GUI)
-
-# 程式碼品質
-npm run lint                # ESLint 檢查
-npm run format              # Prettier 格式化
-```
-
-### 新增模組範例
-
-```bash
-# 使用 NestJS CLI 產生新模組
-nest g module modules/purchase
-nest g service modules/purchase
-nest g controller modules/purchase
-
-# 產生 DTO
-nest g class modules/purchase/dto/create-purchase-order.dto --no-spec
-```
-
-### 資料庫 Migration
-
-```bash
-# 1. 修改 prisma/schema.prisma
-
-# 2. 建立 migration
-npx prisma migrate dev --name add_new_table
-
-# 3. 應用 migration(生產環境)
-npx prisma migrate deploy
-```
-
-### 新增會計分錄邏輯
-
-所有產生會計分錄的邏輯都應該呼叫 `JournalService.createJournalEntry()`:
-
+**所有金額欄位都採用 4 欄位標準：**
 ```typescript
-// 範例:在銷售訂單完成時產生收入分錄
-import { JournalService } from '../accounting/services/journal.service';
-
-async completeSalesOrder(orderId: string, userId: string) {
-  const order = await this.prisma.salesOrder.findUnique({ 
-    where: { id: orderId } 
-  });
-
-  // 產生會計分錄
-  await this.journalService.createJournalEntry({
-    entityId: order.entityId,
-    date: new Date(),
-    description: `銷售訂單 ${order.externalOrderId}`,
-    sourceModule: 'sales',
-    sourceId: order.id,
-    createdBy: userId,
-    lines: [
-      {
-        accountId: arAccountId,
-        debit: totalAmount,
-        credit: 0,
-        currency: order.currency,
-        fxRate: order.fxRate,
-        amountBase: totalAmount * order.fxRate,
-        memo: '應收銷貨款',
-      },
-      {
-        accountId: revenueAccountId,
-        debit: 0,
-        credit: totalAmount,
-        currency: order.currency,
-        fxRate: order.fxRate,
-        amountBase: totalAmount * order.fxRate,
-        memo: '銷貨收入',
-      },
-    ],
-  });
-}
+amountOriginal  Decimal  // 原幣金額
+currency        String   // 幣別 (TWD, USD, CNY...)
+fxRate          Decimal  // 匯率
+amountBase      Decimal  // 本位幣金額
 ```
-
-## 🚀 部署說明
-
-### Render 部署
-
-1. **準備工作**
-
-   在 Render Dashboard 建立:
-   - PostgreSQL 資料庫
-   - Web Service
-
-2. **設定環境變數**
-
-   在 Render Web Service 設定以下環境變數:
-
-   ```
-   DATABASE_URL=postgresql://user:password@host:5432/dbname
-   JWT_SECRET=your-production-secret-key
-   JWT_EXPIRES_IN=7d
-   PORT=3000
-   NODE_ENV=production
-   CORS_ORIGIN=https://yourdomain.com
-   ```
-
-3. **建置與啟動指令**
-
-   - **Build Command:** `cd backend && npm install && npx prisma generate && npm run build`
-   - **Start Command:** `cd backend && npx prisma migrate deploy && npm run start:prod`
-
-4. **自動部署**
-
-   推送到 GitHub 後,Render 會自動偵測並部署
-
-### Docker 部署
-
-```bash
-# 1. 建置映像檔
-docker build -t ecom-accounting:latest ./backend
-
-# 2. 執行容器
-docker run -d \
-  --name ecom-accounting \
-  -e DATABASE_URL="postgresql://..." \
-  -e JWT_SECRET="your-secret" \
-  -p 3000:3000 \
-  ecom-accounting:latest
-
-# 3. 執行 migration
-docker exec ecom-accounting npx prisma migrate deploy
-```
-
-### 環境變數說明
-
-| 變數名稱 | 說明 | 範例 |
-|---------|------|------|
-| `DATABASE_URL` | PostgreSQL 連線字串 | `postgresql://user:pass@host:5432/db` |
-| `JWT_SECRET` | JWT 簽章密鑰 | `your-super-secret-key` |
-| `JWT_EXPIRES_IN` | JWT 過期時間 | `7d` |
-| `PORT` | 服務埠號 | `3000` |
-| `NODE_ENV` | 執行環境 | `development` / `production` |
-| `CORS_ORIGIN` | CORS 允許來源 | `*` 或 `https://yourdomain.com` |
-| `API_PREFIX` | API 路徑前綴 | `/api/v1` |
-| `SWAGGER_ENABLED` | 是否啟用 Swagger | `true` / `false` |
-
-## 📈 擴充計畫
-
-以下模組骨架已建立,可由 Copilot 或開發者進一步實作:
-
-### 近期擴充
-
-- [ ] **進貨模組 (Purchase)**:完整的進貨訂單、驗收、成本分錄流程
-- [ ] **人事模組 (HR)**:完整的薪資計算、勞健保、年度結算
-- [ ] **銀行模組 (Banking)**:CSV 匯入、自動對帳、虛擬帳號管理
-- [ ] **應收催收**:逾期提醒、催收流程、呆帳處理
-- [ ] **應付付款**:批次付款、付款排程、審核流程
-- [ ] **KOL 分潤**:佣金計算、對帳單產生
-
-### 進階功能
-
-- [ ] **預算管理**:年度預算設定、預算執行分析
-- [ ] **成本中心**:多維度成本分攤
-- [ ] **專案會計**:專案成本追蹤與損益分析
-- [ ] **多層級審核**:可設定的審核流程引擎
-- [ ] **自動化規則**:條件式分錄產生規則
-- [ ] **報表訂閱**:定期自動寄送報表
-- [ ] **儀表板**:視覺化財務儀表板
-- [ ] **整合外部 API**:自動同步平台訂單、銀行交易
-
-### 技術優化
-
-- [ ] **快取機制**:Redis 快取熱門查詢
-- [ ] **佇列處理**:Bull Queue 處理大量分錄
-- [ ] **全文搜尋**:Elasticsearch 整合
-- [ ] **檔案上傳**:支援附件上傳(S3)
-- [ ] **匯出功能**:Excel、PDF 報表匯出
-- [ ] **國際化**:多語系支援
-
-## 📝 授權
-
-此專案僅供學習與參考使用。
-
-## 🤝 貢獻
-
-歡迎提交 Issue 或 Pull Request!
-
-## 📧 聯絡方式
-
-如有任何問題,請透過 GitHub Issues 聯繫。
 
 ---
 
-**建議使用 GitHub Copilot 搭配此專案進行後續開發!**
+## 🔐 RBAC 權限系統
 
-此專案已完整註解所有模組與方法,Copilot 可以根據註解與架構快速實作剩餘功能。
+### 角色定義
+
+| 角色 | 代碼 | 權限範圍 |
+|------|------|----------|
+| 系統管理員 | `ADMIN` | 所有權限，包含使用者管理、系統設定 |
+| 會計人員 | `ACCOUNTANT` | 查看、建立、審核會計相關資料 |
+| 操作員 | `OPERATOR` | 查看、建立訂單等基本操作 |
+
+### 使用方式
+
+在 Controller 中使用 `@Roles()` decorator：
+```typescript
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN', 'ACCOUNTANT')
+@Get('sensitive-data')
+async getSensitiveData() {
+  // 只有 ADMIN 和 ACCOUNTANT 可以訪問
+}
+```
+
+---
+
+## 📊 種子資料
+
+執行 `npm run prisma:seed` 會建立：
+
+- ✅ **2個實體**：台灣公司（TWD）、大陸公司（CNY）
+- ✅ **3個角色**：ADMIN、ACCOUNTANT、OPERATOR
+- ✅ **1個管理員**：admin@example.com
+- ✅ **64個會計科目**：完整 IFRS + 台灣常用科目表
+- ✅ **9個銷售渠道**：
+  - SHOPIFY - Shopify 官網
+  - 1SHOP - 1shop 團購
+  - SHOPLINE - SHOPLINE
+  - MOMO - momo 購物
+  - PCHOME - PChome 商店街
+  - SHOPEE - Shopee 蝦皮
+  - COUPANG - Coupang
+  - AMAZON - Amazon
+  - TTSHOP - TikTok Shop
+- ✅ **24個會計期間**：2025年度 12個月 × 2個實體
+
+---
+
+## 🧪 測試
+
+### Backend 測試
+```bash
+cd backend
+
+# 單元測試
+npm run test
+
+# E2E 測試
+npm run test:e2e
+
+# 測試覆蓋率
+npm run test:cov
+```
+
+### Frontend 測試
+```bash
+cd frontend
+
+# 單元測試
+npm run test
+
+# E2E 測試（使用 Playwright）
+npm run test:e2e
+```
+
+---
+
+## 🚢 部署到 Render
+
+### 1. 準備工作
+- 註冊 [Render](https://render.com) 帳號
+- Fork 此專案到您的 GitHub
+
+### 2. 建立 PostgreSQL 資料庫
+1. 在 Render Dashboard 點擊 "New" → "PostgreSQL"
+2. 填寫資料庫名稱：`ecommerce-accounting-db`
+3. 選擇免費方案
+4. 點擊 "Create Database"
+5. 複製 "Internal Database URL"
+
+### 3. 建立 Backend Web Service
+1. 點擊 "New" → "Web Service"
+2. 連接您的 GitHub 儲存庫
+3. 設定：
+   - **Name**: `ecom-accounting-backend`
+   - **Root Directory**: `backend`
+   - **Build Command**: `npm install && npx prisma generate && npm run build`
+   - **Start Command**: `npx prisma migrate deploy && npm run start:prod`
+4. 環境變數：
+   ```
+   DATABASE_URL=<您的 Internal Database URL>
+   JWT_SECRET=<隨機產生的安全字串>
+   NODE_ENV=production
+   PORT=3000
+   ```
+5. 點擊 "Create Web Service"
+
+### 4. 建立 Frontend Web Service
+1. 點擊 "New" → "Static Site"
+2. 連接相同的儲存庫
+3. 設定：
+   - **Name**: `ecom-accounting-frontend`
+   - **Root Directory**: `frontend`
+   - **Build Command**: `npm install && npm run build`
+   - **Publish Directory**: `dist`
+4. 環境變數：
+   ```
+   VITE_API_URL=<您的 Backend URL>/api/v1
+   ```
+5. 點擊 "Create Static Site"
+
+### 5. 初始化資料
+Backend 部署完成後，執行種子資料：
+```bash
+# 在 Render Shell 中執行
+npm run prisma:seed
+```
+
+---
+
+## 🛠️ 開發指南
+
+### 新增模組
+
+1. **建立模組檔案**
+   ```bash
+   cd backend/src/modules
+   mkdir my-module
+   cd my-module
+   touch my-module.controller.ts my-module.service.ts my-module.repository.ts my-module.module.ts
+   mkdir dto schemas
+   ```
+
+2. **檔案結構**
+   ```
+   my-module/
+   ├── my-module.controller.ts    # API 端點
+   ├── my-module.service.ts       # 業務邏輯
+   ├── my-module.repository.ts    # 資料存取層
+   ├── my-module.module.ts        # 模組定義
+   ├── dto/                       # 資料傳輸物件
+   └── schemas/                   # 驗證 schemas
+   ```
+
+3. **註冊到 AppModule**
+   ```typescript
+   // app.module.ts
+   import { MyModule } from './modules/my-module/my-module.module';
+   
+   @Module({
+     imports: [
+       // ...其他模組
+       MyModule,
+     ],
+   })
+   ```
+
+### Prisma 資料庫管理
+
+```bash
+# 產生 Prisma Client
+npm run prisma:generate
+
+# 建立新 Migration
+npm run prisma:migrate
+
+# 套用 Migration（生產環境）
+npm run prisma:deploy
+
+# 執行種子資料
+npm run prisma:seed
+
+# 開啟 Prisma Studio（資料庫 GUI）
+npm run prisma:studio
+
+# 重置資料庫（開發環境）
+npx prisma migrate reset
+```
+
+### 程式碼風格
+
+```bash
+# Lint 檢查
+npm run lint
+
+# 自動修復
+npm run lint:fix
+
+# 格式化程式碼
+npm run format
+```
+
+---
+
+## 🤝 貢獻指南
+
+1. Fork 此專案
+2. 建立功能分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交變更 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 開啟 Pull Request
+
+---
+

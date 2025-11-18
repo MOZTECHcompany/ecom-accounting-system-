@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ArRepository } from './ar.repository';
 
 /**
@@ -13,6 +13,8 @@ import { ArRepository } from './ar.repository';
  */
 @Injectable()
 export class ArService {
+  private readonly logger = new Logger(ArService.name);
+
   constructor(private readonly arRepository: ArRepository) {}
 
   /**
@@ -52,38 +54,6 @@ export class ArService {
   }
 
   /**
-   * 產生AR帳齡分析表
-   * 分組: 未逾期 / 1-30天 / 31-60天 / 61-90天 / 90天以上
-   */
-  async getAgingReport(entityId: string) {
-    // TODO: 依 due_date 計算逾期天數
-    // TODO: 分組統計
-    // TODO: 計算總應收金額
-    return {
-      entityId,
-      asOfDate: new Date(),
-      buckets: [
-        { label: '未逾期', amount: 0, count: 0 },
-        { label: '1-30天', amount: 0, count: 0 },
-        { label: '31-60天', amount: 0, count: 0 },
-        { label: '61-90天', amount: 0, count: 0 },
-        { label: '90天以上', amount: 0, count: 0 },
-      ],
-      totalAr: 0,
-    };
-  }
-
-  /**
-   * 呆帳沖銷
-   * TODO: 產生壞帳費用分錄（借：壞帳費用 / 貸：應收帳款）
-   */
-  async writeOffBadDebt(invoiceId: string, data: any) {
-    // TODO: 標記為壞帳
-    // TODO: 產生壞帳費用會計分錄
-    return this.arRepository.writeOffInvoice(invoiceId);
-  }
-
-  /**
    * 提列呆帳備抵
    * 依帳齡或歷史壞帳率提列
    */
@@ -98,5 +68,50 @@ export class ArService {
   async sendCollectionReminder(invoiceId: string) {
     // TODO: 發送 Email 或簡訊提醒
     // TODO: 記錄催收歷史
+  }
+
+  /**
+   * 從訂單建立應收發票
+   * @param orderId - 訂單ID
+   * @returns 建立的應收發票
+   */
+  async createArFromOrder(orderId: string) {
+    this.logger.log(`Creating AR invoice from order: ${orderId}`);
+    throw new Error('Not implemented: createArFromOrder');
+  }
+
+  /**
+   * 套用收款
+   * @param invoiceId - 發票ID
+   * @param paymentAmount - 收款金額
+   * @param paymentDate - 收款日期
+   * @returns 更新後的發票資訊
+   */
+  async applyPayment(invoiceId: string, paymentAmount: number, paymentDate: Date) {
+    this.logger.log(`Applying payment of ${paymentAmount} to invoice ${invoiceId}`);
+    throw new Error('Not implemented: applyPayment');
+  }
+
+  /**
+   * 取得帳齡分析報表
+   * @param entityId - 實體ID
+   * @param asOfDate - 統計基準日期
+   * @returns 帳齡分析報表
+   */
+  async getAgingReport(entityId: string, asOfDate: Date) {
+    this.logger.log(`Generating aging report for entity ${entityId} as of ${asOfDate}`);
+    throw new Error('Not implemented: getAgingReport');
+  }
+
+  /**
+   * 呆帳沖銷
+   * @param invoiceId - 發票ID
+   * @param amount - 沖銷金額
+   * @param reason - 沖銷原因
+   * @returns 沖銷記錄
+   */
+  async writeOffBadDebt(invoiceId: string, amount: number, reason: string) {
+    this.logger.log(`Writing off bad debt for invoice ${invoiceId}, amount: ${amount}, reason: ${reason}`);
+    throw new Error('Not implemented: writeOffBadDebt');
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
 /**
  * 薪資管理服務
@@ -11,6 +11,7 @@ import { Injectable } from '@nestjs/common';
  */
 @Injectable()
 export class PayrollService {
+  private readonly logger = new Logger(PayrollService.name);
   /**
    * 建立薪資批次
    */
@@ -32,14 +33,6 @@ export class PayrollService {
     // TODO: 計算加班費
     // TODO: 計算獎金
     // TODO: 扣除勞健保、稅金
-  }
-
-  /**
-   * 計算勞健保（台灣）
-   */
-  async calculateLaborInsurance(salary: number, employeeType: string) {
-    // TODO: 依台灣勞健保費率計算
-    // TODO: 分攤公司負擔與個人負擔
   }
 
   /**
@@ -78,5 +71,58 @@ export class PayrollService {
    */
   async getAnnualPayrollSummary(entityId: string, year: number) {
     // TODO: 產生年度薪資總表
+  }
+
+  /**
+   * 計算薪資
+   * @param entityId - 實體ID
+   * @param year - 年份
+   * @param month - 月份
+   * @returns 薪資計算結果
+   */
+  async calculatePayroll(entityId: string, year: number, month: number) {
+    this.logger.log(`Calculating payroll for entity ${entityId}, period: ${year}/${month}`);
+    throw new Error('Not implemented: calculatePayroll');
+  }
+
+  /**
+   * 薪資過帳至會計
+   * @param payrollRunId - 薪資批次ID
+   * @returns 過帳結果
+   */
+  async postPayrollToAccounting(payrollRunId: string) {
+    this.logger.log(`Posting payroll ${payrollRunId} to accounting`);
+    throw new Error('Not implemented: postPayrollToAccounting');
+  }
+
+  /**
+   * 沖回薪資
+   * @param payrollRunId - 薪資批次ID
+   * @param reason - 沖回原因
+   * @returns 沖回結果
+   */
+  async reversePayroll(payrollRunId: string, reason: string) {
+    this.logger.log(`Reversing payroll ${payrollRunId}, reason: ${reason}`);
+    throw new Error('Not implemented: reversePayroll');
+  }
+
+  /**
+   * 計算勞保
+   * @param salary - 薪資金額
+   * @returns 勞保金額
+   */
+  async calculateLaborInsurance(salary: number) {
+    this.logger.log(`Calculating labor insurance for salary: ${salary}`);
+    throw new Error('Not implemented: calculateLaborInsurance');
+  }
+
+  /**
+   * 計算健保
+   * @param salary - 薪資金額
+   * @returns 健保金額
+   */
+  async calculateHealthInsurance(salary: number) {
+    this.logger.log(`Calculating health insurance for salary: ${salary}`);
+    throw new Error('Not implemented: calculateHealthInsurance');
   }
 }
