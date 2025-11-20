@@ -2,7 +2,8 @@
 // 此 schema 設計支援多公司實體、多幣別、多平台的電商會計系統
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {

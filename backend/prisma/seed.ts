@@ -164,13 +164,15 @@ async function main() {
   // ============================================
   console.log('👤 Creating default admin user...');
 
-  const passwordHash = await bcrypt.hash('Admin@123456', 10);
+  const passwordHash = await bcrypt.hash('@asdf798522', 10);
   
   const adminUser = await prisma.user.upsert({
-    where: { email: 'admin@example.com' },
-    update: {},
+    where: { email: 's7896629@gmail.com' },
+    update: {
+      passwordHash, // Update password if user exists
+    },
     create: {
-      email: 'admin@example.com',
+      email: 's7896629@gmail.com',
       name: '系統管理員',
       passwordHash,
     },
@@ -191,7 +193,7 @@ async function main() {
     },
   });
 
-  console.log(`✅ Created admin user: ${adminUser.email} (password: Admin@123456)\n`);
+  console.log(`✅ Created admin user: ${adminUser.email} (password: @asdf798522)\n`);
 
   // ============================================
   // 4. 建立會計科目表（台灣公司）
@@ -473,7 +475,7 @@ async function main() {
   console.log('✨ Database seeding completed successfully!\n');
   console.log('📝 Summary:');
   console.log(`   - Entities: 2 (台灣公司, 大陸公司)`);
-  console.log(`   - Users: 1 admin (admin@example.com / Admin@123456)`);
+  console.log(`   - Users: 1 admin (s7896629@gmail.com / @asdf798522)`);
   console.log(`   - Roles: 3 (ADMIN, ACCOUNTANT, OPERATOR)`);
   console.log(`   - Permissions: ${permissions.length}`);
   console.log(`   - Accounts: ${twAccounts.length + cnAccounts.length}`);
