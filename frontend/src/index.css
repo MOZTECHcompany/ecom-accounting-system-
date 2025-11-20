@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 :root {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
@@ -103,6 +101,98 @@ body {
 }
 
 .ant-card-body {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* Inputs - 強制覆蓋 Ant Design */
+.ant-input, .ant-input-password, .ant-input-affix-wrapper {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: white !important;
+  border-radius: 12px !important;
+  padding: 8px 16px !important;
+  backdrop-filter: blur(10px);
+}
+
+.ant-input-affix-wrapper > input.ant-input {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+.ant-input:focus, .ant-input-password:focus-within, .ant-input-affix-wrapper:focus, .ant-input-affix-wrapper-focused {
+  border-color: #40a9ff !important;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.ant-input-prefix {
+  color: rgba(255, 255, 255, 0.5) !important;
+  margin-right: 12px !important;
+}
+
+.ant-input::placeholder {
+  color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Buttons */
+.ant-btn-primary {
+  background: linear-gradient(135deg, #2980b9 0%, #2c3e50 100%) !important; /* 更深沉的高級藍 */
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  height: 48px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.5px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3) !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.ant-btn-primary:hover {
+  background: linear-gradient(135deg, #3498db 0%, #34495e 100%) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Table */
+.ant-table {
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.ant-table-thead > tr > th {
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.ant-table-tbody > tr > td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.ant-table-tbody > tr:hover > td {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.ant-pagination-item a {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.ant-pagination-item-active {
+  background: transparent !important;
+  border-color: #1890ff !important;
+}
+
+.ant-pagination-item-active a {
+  color: #1890ff !important;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.ant-typography {
   color: rgba(255, 255, 255, 0.85) !important;
 }
 
