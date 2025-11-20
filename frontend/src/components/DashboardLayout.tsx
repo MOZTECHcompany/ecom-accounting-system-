@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, Avatar, Dropdown, Space, Typography } from 'antd'
+import { Layout, Menu, Avatar, Dropdown, Space, Typography, Input, Badge, Button } from 'antd'
 import {
   DashboardOutlined,
   FileTextOutlined,
@@ -12,12 +12,14 @@ import {
   LogoutOutlined,
   UserOutlined,
   BellOutlined,
-  SearchOutlined
+  SearchOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined
 } from '@ant-design/icons'
 import { useAuth } from '../contexts/AuthContext'
 
 const { Header, Sider, Content } = Layout
-const { Title } = Typography
+const { Title, Text } = Typography
 
 const DashboardLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false)
@@ -98,83 +100,104 @@ const DashboardLayout: React.FC = () => {
       label: '系統設定',
     },
     {
-      type: 'divider' as const,
+      type: 'divider',
     },
     {
       key: 'logout',
       icon: <LogoutOutlined />,
-      label: '登出',
-      onClick: () => {
-        logout()
-        navigate('/login')
-      },
+      label: '登出系統',
+      danger: true,
+      onClick: logout,
     },
   ]
 
   return (
-    <Layout style={{ minHeight: '100vh', background: 'transparent' }}>
-      <Sider 
-        collapsible 
-        collapsed={collapsed} 
-        onCollapse={setCollapsed}
+    <Layout className="min-h-screen bg-transparent">
+      <Sider
+        trigger={null}
+        collapsible
+        collapsed={collapsed}
         width={260}
-        className="glass-sider"
-        style={{
-          overflow: 'auto',
-          height: '100vh',
-          position: 'fixed',
-          left: 0,
-          top: 0,
-          bottom: 0,
-          zIndex: 100,
-        }}
+        className="!bg-transparent relative z-20"
+        theme="dark"
       >
-        <div className="h-16 flex items-center justify-center m-4 mb-8">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center backdrop-blur-md border border-blue-400/30">
+        <div className="h-full flex flex-col">
+          <div className="h-20 flex items-center justify-center px-6 mb-4">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
               <span className="text-xl">💎</span>
             </div>
             {!collapsed && (
-              <span className="text-lg font-semibold text-white tracking-wide">
-                E-Accounting
-              </span>
+              <div className="ml-3 animate-fade-in">
+                <Title level={5} className="!text-white !m-0 font-medium tracking-wide">Ecom System</Title>
+                <Text className="!text-white/40 text-xs">Accounting Pro</Text>
+              </div>
             )}
           </div>
+
+          <Menu
+            theme="dark"
+            mode="inline"
+            defaultSelectedKeys={[location.pathname]}
+            items={menuItems}
+            className="flex-1 px-3 overflow-y-auto custom-scrollbar"
+          />
+
+          <div className="p-4 mt-auto">
+            <div className={`glass-panel rounded-xl p-4 transition-all duration-300 ${collapsed ? 'items-center justify-center' : ''} flex`}>
+              <Avatar size="large" src={`https://ui-avatars.com/api/?name=${user?.name || 'Admin'}&background=3b82f6&color=fff`} />
+              {!collapsed && (
+                <div className="ml-3 overflow-hidden">
+                  <Text className="!text-white block font-medium truncate">{user?.name || 'Admin User'}</Text>
+                  <Text className="!text-white/40 text-xs block truncate">{user?.email || 'admin@example.com'}</Text>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-        <Menu 
-          theme="dark" 
-          mode="inline" 
-          defaultSelectedKeys={[location.pathname]} 
-          defaultOpenKeys={['accounting', 'sales', 'ar', 'ap']}
-          items={menuItems} 
-          className="px-2"
-        />
       </Sider>
-      <Layout style={{ marginLeft: collapsed ? 80 : 260, transition: 'all 0.2s' }}>
-        <Header className="glass-header sticky top-0 z-50 flex justify-between items-center px-8">
+      
+      <Layout className="!bg-transparent relative z-10">
+        <Header className="flex items-center justify-between sticky top-4 z-30 transition-all duration-300">
           <div className="flex items-center">
-            <Title level={4} style={{ margin: 0, fontWeight: 400 }}>
-              {menuItems.find(i => i.key === location.pathname)?.label || '儀表板'}
-            </Title>
+            <Button
+              type="text"
+              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              onClick={() => setCollapsed(!collapsed)}
+              className="!text-white/70 hover:!text-white hover:!bg-white/10 !w-10 !h-10 !rounded-xl mr-4"
+            />
+            <div className="hidden md:block w-64">
+              <Input 
+                prefix={<SearchOutlined className="text-white/30" />} 
+                placeholder="搜尋功能、報表或資料..." 
+                className="!bg-white/5 !border-white/10 !text-white hover:!border-white/20 focus:!border-blue-500/50 !rounded-xl"
+                bordered={false}
+              />
+            </div>
           </div>
-          <div className="flex items-center gap-6">
-            <div className="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center cursor-pointer transition-colors">
-              <SearchOutlined className="text-lg text-white/70" />
-            </div>
-            <div className="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center cursor-pointer transition-colors relative">
-              <BellOutlined className="text-lg text-white/70" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
-            </div>
+
+          <Space size="large">
+            <Badge count={5} dot offset={[-2, 2]} color="blue">
+              <Button 
+                type="text" 
+                icon={<BellOutlined />} 
+                className="!text-white/70 hover:!text-white hover:!bg-white/10 !w-10 !h-10 !rounded-xl"
+              />
+            </Badge>
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
-              <Space className="cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors">
-                <Avatar icon={<UserOutlined />} src={user?.avatar} className="bg-blue-500" />
-                <span className="text-white/90 font-medium">{user?.name || user?.email}</span>
-              </Space>
+              <div className="flex items-center cursor-pointer hover:bg-white/5 px-2 py-1 rounded-xl transition-colors">
+                <Avatar 
+                  size="small" 
+                  className="bg-gradient-to-r from-blue-500 to-purple-500"
+                  icon={<UserOutlined />} 
+                />
+                <SettingOutlined className="text-white/50 ml-2" />
+              </div>
             </Dropdown>
-          </div>
+          </Space>
         </Header>
-        <Content style={{ margin: '24px 24px', padding: 0, minHeight: 280 }}>
-          <div className="animate-fade-in">
+
+        <Content className="p-8 overflow-y-auto h-[calc(100vh-32px)] custom-scrollbar">
+          <div className="animate-fade-in-up max-w-7xl mx-auto">
             <Outlet />
           </div>
         </Content>
