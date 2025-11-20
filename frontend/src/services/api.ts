@@ -4,10 +4,14 @@ import axios from 'axios'
 // 本地開發：使用 proxy (/api/v1)
 // 正式環境：使用環境變數 (VITE_API_URL)
 const getBaseURL = () => {
+  const envUrl = import.meta.env.VITE_API_URL?.trim()
+  if (envUrl) {
+    return envUrl
+  }
   if (import.meta.env.DEV) {
     return '/api/v1'
   }
-  return import.meta.env.VITE_API_URL || 'https://ecom-accounting-backend.onrender.com/api/v1'
+  return 'https://ecom-accounting-backend.onrender.com/api/v1'
 }
 
 export const API_URL = getBaseURL()
