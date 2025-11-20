@@ -10,8 +10,10 @@ const getBaseURL = () => {
   return import.meta.env.VITE_API_URL || 'https://ecom-accounting-backend.onrender.com/api/v1'
 }
 
+export const API_URL = getBaseURL()
+
 const api = axios.create({
-  baseURL: getBaseURL(),
+  baseURL: API_URL,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',

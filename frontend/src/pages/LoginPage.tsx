@@ -4,6 +4,7 @@ import { Form, Input, Button, message, Typography } from 'antd'
 import { UserOutlined, LockOutlined } from '@ant-design/icons'
 import { useAuth } from '../contexts/AuthContext'
 import { LoginRequest } from '../types'
+import { API_URL } from '../services/api'
 
 const { Title, Text } = Typography
 
@@ -14,12 +15,30 @@ const LoginPage: React.FC = () => {
 
   const onFinish = async (values: LoginRequest) => {
     setLoading(true)
+    const cleanValues = {
+      email: values.email.trim(),
+      password: values.password.trim()
+    }
     try {
-      await login(values)
+      await login(cleanValues)
       message.success('登入成功')
       navigate('/dashboard')
     } catch (error: any) {
-      message.error(error.response?.data?.message || '登入失敗')
+      console.error('Login error:', error)
+      let errorMsg = '登入失敗'
+      
+      if (error.response) {
+        // Server responded with a status code out of 2xx range
+        errorMsg = error.response.data?.message || `伺服器錯誤 (${error.response.status})`
+      } else if (error.request) {
+        // The request was made but no response was received
+        errorMsg = '無法連接到伺服器，請檢查網路或後端狀態'
+      } else {
+        // Something happened in setting up the request
+        errorMsg = error.message
+      }
+      
+      message.error(errorMsg)
     } finally {
       setLoading(false)
     }
@@ -87,13 +106,13 @@ const LoginPage: React.FC = () => {
             </Button>
           </Form.Item>
 
-          <div className="text-center space-y-2 mt-8 pt-6 border-t border-white/5">
-            <Text className="text-white/30 text-xs block">
-              © 2025 MOZTECH Company. All rights reserved.
+                    <div className="text-center space-y-2 mt-8 pt-6 border-t border-white/5">
+            <Text className="!text-white/30 text-xs block">
+              API: {API_URL}
             </Text>
-            <div className="text-white/20 text-xs font-mono">
-              Demo: s7896629@gmail.com / @asdf798522
-            </div>
+            <Text className="!text-white/40 text-sm block">
+              © 2024 Ecom Accounting System
+            </Text>
           </div>
         </Form>
       </div>
