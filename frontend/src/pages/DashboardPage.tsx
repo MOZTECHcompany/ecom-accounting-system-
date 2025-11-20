@@ -10,7 +10,8 @@ import {
   FileTextOutlined,
   MoreOutlined,
   CheckCircleFilled,
-  ClockCircleFilled
+  ClockCircleFilled,
+  UserOutlined
 } from '@ant-design/icons'
 
 const { Title, Text } = Typography

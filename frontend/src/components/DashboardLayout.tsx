@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, Avatar, Dropdown, Space, Typography, Input, Badge, Button } from 'antd'
+import { Layout, Menu, Avatar, Dropdown, Space, Typography, Input, Badge, Button, MenuProps } from 'antd'
 import {
   DashboardOutlined,
   FileTextOutlined,
@@ -88,7 +88,7 @@ const DashboardLayout: React.FC = () => {
     },
   ]
 
-  const userMenuItems = [
+  const userMenuItems: MenuProps['items'] = [
     {
       key: 'profile',
       icon: <UserOutlined />,
