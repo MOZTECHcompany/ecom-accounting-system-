@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 // Common modules
 import { ConfigModule } from './common/config/config.module';
 import { PrismaModule } from './common/prisma/prisma.module';
+import { DatabaseModule } from './common/database/database.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
 // Feature modules - 按照指定的 12 個模組順序
@@ -51,12 +52,12 @@ import { ReconciliationModule } from './modules/reconciliation/reconciliation.mo
  */
 @Module({
   imports: [
-    // Common modules
+    // Common
     ConfigModule,
     PrismaModule,
+    DatabaseModule,
     
-    // Feature modules - 按照依賴順序載入
-    // 1. 基礎模組
+    // Features
     AuthModule,
     UsersModule,
     EntitiesModule,

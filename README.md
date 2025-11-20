@@ -173,7 +173,7 @@ docker-compose down
 
 | 角色 | Email | 密碼 | 權限 |
 |------|-------|------|------|
-| 系統管理員 | `admin@example.com` | `Admin@123456` | 所有權限 |
+| 系統管理員 | `s7896629@gmail.com` | `@asdf798522` | 所有權限 |
 
 ---
 

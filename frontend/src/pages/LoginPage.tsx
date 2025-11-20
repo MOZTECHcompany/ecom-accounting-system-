@@ -92,7 +92,7 @@ const LoginPage: React.FC = () => {
               © 2025 MOZTECH Company. All rights reserved.
             </Text>
             <div className="text-white/20 text-xs font-mono">
-              Demo: admin@example.com / Admin@123456
+              Demo: s7896629@gmail.com / @asdf798522
             </div>
           </div>
         </Form>
