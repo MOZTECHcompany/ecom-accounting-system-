@@ -1,5 +1,6 @@
 import React from 'react'
 import { Layout, Menu, Button, Drawer, Avatar, Dropdown, theme } from 'antd'
+import type { MenuProps } from 'antd'
 import { 
   MenuFoldOutlined, 
   MenuUnfoldOutlined,
@@ -38,7 +39,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const location = useLocation()
   const { user } = useAuth()
 
-  const menuItems = [
+  const menuItems: MenuProps['items'] = [
     {
       key: '/dashboard',
       icon: <DashboardOutlined />,

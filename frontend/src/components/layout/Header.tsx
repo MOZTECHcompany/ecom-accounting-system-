@@ -1,5 +1,6 @@
 import React from 'react'
 import { Layout, Button, Avatar, Dropdown, Badge, theme } from 'antd'
+import type { MenuProps } from 'antd'
 import { 
   MenuFoldOutlined, 
   MenuUnfoldOutlined,
@@ -36,7 +37,7 @@ const Header: React.FC<HeaderProps> = ({
     navigate('/login')
   }
 
-  const userMenu = [
+  const userMenu: MenuProps['items'] = [
     {
       key: 'profile',
       label: '個人設定',
