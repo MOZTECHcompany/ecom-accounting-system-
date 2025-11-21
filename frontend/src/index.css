@@ -7,56 +7,36 @@
 body {
   margin: 0;
   min-height: 100vh;
-  /* Deep Space / Apple Dark Mode Gradient */
-  background-color: #000000;
-  background-image: 
-    radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
-    radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), 
-    radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
-  background-attachment: fixed;
-  color: #e2e8f0;
+  background-color: #f5f5f7; /* Apple Light Gray */
+  color: #1d1d1f;
   overflow-x: hidden;
 }
 
-/* Glassmorphism Utilities */
+/* Glassmorphism Utilities - Light Mode */
 .glass {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
 }
 
 .glass-card {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.04);
   border-radius: 24px;
 }
 
-.glass-panel {
-  background: rgba(20, 20, 20, 0.6);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-/* Ant Design Overrides for Dark Glass Theme */
+/* Ant Design Overrides for Light Glass Theme */
 .ant-layout {
   background: transparent !important;
 }
 
-.ant-layout-sider {
-  background: rgba(10, 10, 10, 0.5) !important;
-  backdrop-filter: blur(20px) !important;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-}
-
 .ant-menu {
   background: transparent !important;
-  color: rgba(255, 255, 255, 0.7) !important;
   border-inline-end: none !important;
 }
 
@@ -64,54 +44,123 @@ body {
   border-radius: 12px !important;
   margin: 4px 8px !important;
   width: calc(100% - 16px) !important;
+  color: rgba(255, 255, 255, 0.7) !important; /* Sidebar is dark */
 }
 
 .ant-menu-item-selected {
-  background: rgba(255, 255, 255, 0.15) !important;
+  background: rgba(255, 255, 255, 0.2) !important;
   color: #fff !important;
   font-weight: 600;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
-.ant-menu-submenu-title:hover, .ant-menu-item:hover {
+.ant-menu-item:hover {
   color: #fff !important;
-  background: rgba(255, 255, 255, 0.05) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
 }
 
-.ant-layout-header {
-  background: rgba(10, 10, 10, 0.5) !important;
-  backdrop-filter: blur(20px) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  height: 64px;
-  padding: 0 24px;
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
-.ant-card {
-  background: rgba(30, 30, 30, 0.4) !important;
-  backdrop-filter: blur(24px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  border-radius: 20px !important;
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.ant-card-head {
-  color: rgba(255, 255, 255, 0.9) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
-  font-size: 18px;
-  font-weight: 600;
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
 }
 
 .ant-card-body {
-  color: rgba(255, 255, 255, 0.85) !important;
+  color: #1d1d1f !important;
 }
 
-/* Inputs - 強制覆蓋 Ant Design */
+/* Inputs - Light Glass Theme */
 .ant-input, .ant-input-password, .ant-input-affix-wrapper {
-  background: rgba(255, 255, 255, 0.05) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  color: white !important;
+  background: rgba(255, 255, 255, 0.5) !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  color: #1d1d1f !important;
   border-radius: 12px !important;
   padding: 8px 16px !important;
   backdrop-filter: blur(10px);
+}
+
+.ant-input:hover, .ant-input-affix-wrapper:hover {
+  border-color: #007aff !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+}
+
+.ant-input:focus, .ant-input-affix-wrapper-focused {
+  border-color: #007aff !important;
+  background: #fff !important;
+  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.2) !important;
+}
+
+.ant-input::placeholder {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Buttons */
+.ant-btn-primary {
+  background: #007aff !important;
+  border-radius: 12px !important;
+  height: 40px !important;
+  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3) !important;
+  border: none !important;
+}
+
+.ant-btn-primary:hover {
+  background: #0062cc !important;
+  transform: translateY(-1px);
+}
+
+/* Table */
+.ant-table {
+  background: transparent !important;
+}
+
+.ant-table-thead > tr > th {
+  background: rgba(0, 0, 0, 0.02) !important;
+  color: #86868b !important;
+  font-weight: 600 !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+
+.ant-table-tbody > tr > td {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+  color: #1d1d1f !important;
+}
+
+.ant-table-tbody > tr:hover > td {
+  background: rgba(0, 0, 0, 0.02) !important;
+}
+
+/* Pagination */
+.ant-pagination-item {
+  border-radius: 8px !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  background: transparent !important;
+}
+
+.ant-pagination-item-active {
+  border-color: #007aff !important;
+  background: #007aff !important;
+}
+
+.ant-pagination-item-active a {
+  color: #fff !important;
 }
 
 .ant-input-affix-wrapper > input.ant-input {
