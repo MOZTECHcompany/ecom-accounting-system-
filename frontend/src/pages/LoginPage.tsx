@@ -75,7 +75,7 @@ const LoginPage: React.FC = () => {
             <Input 
               prefix={<UserOutlined className="text-gray-400 text-lg" />} 
               placeholder="電子郵件" 
-              className="!bg-white/50 !border-gray-200 !text-gray-800 hover:!bg-white focus:!bg-white focus:!border-blue-400 !h-12 !rounded-xl transition-all"
+              className="!h-12 !rounded-xl"
             />
           </Form.Item>
 
@@ -87,7 +87,7 @@ const LoginPage: React.FC = () => {
             <Input.Password 
               prefix={<LockOutlined className="text-gray-400 text-lg" />} 
               placeholder="密碼" 
-              className="!bg-white/50 !border-gray-200 !text-gray-800 hover:!bg-white focus:!bg-white focus:!border-blue-400 !h-12 !rounded-xl transition-all"
+              className="!h-12 !rounded-xl"
             />
           </Form.Item>
 
@@ -96,7 +96,7 @@ const LoginPage: React.FC = () => {
               type="primary" 
               htmlType="submit" 
               loading={loading}
-              className="w-full !h-12 !rounded-xl !bg-black hover:!bg-gray-800 !border-none !text-lg !font-medium shadow-lg shadow-gray-200"
+              className="w-full !h-12 !rounded-xl !text-lg !font-medium"
             >
               登入系統
             </Button>
