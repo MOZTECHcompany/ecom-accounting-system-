@@ -4,7 +4,6 @@ import { Form, Input, Button, message, Typography } from 'antd'
 import { UserOutlined, LockOutlined } from '@ant-design/icons'
 import { useAuth } from '../contexts/AuthContext'
 import { LoginRequest } from '../types'
-import { API_URL } from '../services/api'
 
 const { Title, Text } = Typography
 
@@ -28,13 +27,10 @@ const LoginPage: React.FC = () => {
       let errorMsg = '登入失敗'
       
       if (error.response) {
-        // Server responded with a status code out of 2xx range
         errorMsg = error.response.data?.message || `伺服器錯誤 (${error.response.status})`
       } else if (error.request) {
-        // The request was made but no response was received
         errorMsg = '無法連接到伺服器，請檢查網路或後端狀態'
       } else {
-        // Something happened in setting up the request
         errorMsg = error.message
       }
       
@@ -45,18 +41,19 @@ const LoginPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden">
-      {/* 背景裝飾光暈 */}
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-blue-600/20 blur-[120px] pointer-events-none"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-purple-600/20 blur-[120px] pointer-events-none"></div>
+    <div className="min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden bg-[#f5f5f7]">
+      {/* Colorful Background Blobs for Glass Effect */}
+      <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full bg-blue-400/30 blur-[100px] pointer-events-none animate-pulse"></div>
+      <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full bg-purple-400/30 blur-[100px] pointer-events-none animate-pulse" style={{ animationDelay: '1s' }}></div>
+      <div className="absolute top-[40%] left-[40%] w-[40%] h-[40%] rounded-full bg-pink-300/20 blur-[80px] pointer-events-none animate-pulse" style={{ animationDelay: '2s' }}></div>
 
-      <div className="glass-card w-full max-w-[420px] p-10 animate-fade-in relative z-10 border border-white/10 shadow-2xl">
+      <div className="glass-card w-full max-w-[420px] p-10 animate-fade-in relative z-10">
         <div className="text-center mb-10">
-          <div className="w-20 h-20 bg-gradient-to-br from-white/10 to-white/5 rounded-3xl flex items-center justify-center mx-auto mb-6 backdrop-blur-xl border border-white/20 shadow-lg">
-            <span className="text-4xl filter drop-shadow-lg">💎</span>
+          <div className="w-20 h-20 bg-white/50 rounded-3xl flex items-center justify-center mx-auto mb-6 backdrop-blur-xl border border-white/60 shadow-lg">
+            <span className="text-4xl filter drop-shadow-sm">💎</span>
           </div>
-          <Title level={2} style={{ margin: 0, fontWeight: 300, letterSpacing: '1px' }}>電商會計系統</Title>
-          <Text className="text-white/50 mt-3 block font-light">E-Commerce Accounting System</Text>
+          <Title level={2} className="!text-gray-800 !mb-2 !font-light tracking-tight">電商會計系統</Title>
+          <Text className="text-gray-500 font-light">E-Commerce Accounting System</Text>
         </div>
 
         <Form
@@ -76,9 +73,9 @@ const LoginPage: React.FC = () => {
             className="mb-4"
           >
             <Input 
-              prefix={<UserOutlined className="text-white/50 text-lg" />} 
+              prefix={<UserOutlined className="text-gray-400 text-lg" />} 
               placeholder="電子郵件" 
-              className="!bg-white/5 !border-white/10 !text-white hover:!border-white/30 focus:!border-blue-400/50 !h-12 !rounded-xl"
+              className="!bg-white/50 !border-gray-200 !text-gray-800 hover:!bg-white focus:!bg-white focus:!border-blue-400 !h-12 !rounded-xl transition-all"
             />
           </Form.Item>
 
@@ -88,9 +85,9 @@ const LoginPage: React.FC = () => {
             className="mb-8"
           >
             <Input.Password 
-              prefix={<LockOutlined className="text-white/50 text-lg" />} 
+              prefix={<LockOutlined className="text-gray-400 text-lg" />} 
               placeholder="密碼" 
-              className="!bg-white/5 !border-white/10 !text-white hover:!border-white/30 focus:!border-blue-400/50 !h-12 !rounded-xl"
+              className="!bg-white/50 !border-gray-200 !text-gray-800 hover:!bg-white focus:!bg-white focus:!border-blue-400 !h-12 !rounded-xl transition-all"
             />
           </Form.Item>
 
@@ -98,20 +95,16 @@ const LoginPage: React.FC = () => {
             <Button 
               type="primary" 
               htmlType="submit" 
-              loading={loading} 
-              block 
-              className="!h-12 !text-lg !font-medium !rounded-xl !bg-gradient-to-r !from-blue-600 !to-blue-500 hover:!from-blue-500 hover:!to-blue-400 !border-none shadow-lg shadow-blue-500/20 transition-all duration-300 transform hover:-translate-y-0.5"
+              loading={loading}
+              className="w-full !h-12 !rounded-xl !bg-black hover:!bg-gray-800 !border-none !text-lg !font-medium shadow-lg shadow-gray-200"
             >
               登入系統
             </Button>
           </Form.Item>
-
-                    <div className="text-center space-y-2 mt-8 pt-6 border-t border-white/5">
-            <Text className="!text-white/30 text-xs block">
-              API: {API_URL}
-            </Text>
-            <Text className="!text-white/40 text-sm block">
-              © 2024 Ecom Accounting System
+          
+          <div className="text-center">
+            <Text className="text-gray-400 text-xs">
+              © 2025 MOZTECH. All rights reserved.
             </Text>
           </div>
         </Form>

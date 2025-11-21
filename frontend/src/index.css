@@ -44,18 +44,32 @@ body {
   border-radius: 12px !important;
   margin: 4px 8px !important;
   width: calc(100% - 16px) !important;
-  color: rgba(255, 255, 255, 0.7) !important; /* Sidebar is dark */
+  color: #64748b !important; /* Sidebar text is slate-500 */
+  transition: all 0.3s ease !important;
 }
 
 .ant-menu-item-selected {
-  background: rgba(255, 255, 255, 0.2) !important;
+  background: #000000 !important; /* Black active state like Apple sidebar */
   color: #fff !important;
-  font-weight: 600;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.ant-menu-item:hover {
-  color: #fff !important;
-  background: rgba(255, 255, 255, 0.1) !important;
+.ant-menu-item:hover:not(.ant-menu-item-selected) {
+  color: #1e293b !important;
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+.ant-menu-submenu-title {
+  color: #64748b !important;
+  border-radius: 12px !important;
+  margin: 4px 8px !important;
+  width: calc(100% - 16px) !important;
+}
+
+.ant-menu-submenu-title:hover {
+  color: #1e293b !important;
+  background: rgba(0, 0, 0, 0.05) !important;
 }
 
 /* Custom Scrollbar */
