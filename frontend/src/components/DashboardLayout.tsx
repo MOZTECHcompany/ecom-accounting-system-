@@ -17,6 +17,7 @@ import {
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import CommandPalette from './CommandPalette'
+import AICopilotWidget from './AICopilotWidget'
 
 const { Header, Sider, Content } = Layout
 const { Title } = Typography
@@ -116,6 +117,7 @@ const DashboardLayout: React.FC = () => {
   return (
     <Layout style={{ minHeight: '100vh', background: 'transparent' }}>
       <CommandPalette />
+      <AICopilotWidget />
       <Sider 
         collapsible 
         collapsed={collapsed} 
