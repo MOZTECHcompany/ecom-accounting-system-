@@ -421,6 +421,17 @@ CREATE INDEX bank_import_batches_entity_id_imported_at_idx
   - 重構 `index.css` 移除 Hardcoded 顏色值
   - 實現 Glassmorphism (毛玻璃) 效果的動態適應
 
+#### 極致體驗優化 (Extreme UX Polish) [New]
+- ✅ **骨架屏載入 (Skeleton Loading)**：
+  - 新增 `PageSkeleton` 元件，模擬儀表板佈局。
+  - 在資料載入期間展示流暢的脈衝動畫，提升感知效能。
+- ✅ **登入頁面視覺升級**：
+  - 實作動態背景光暈 (Floating Blobs) 動畫。
+  - 登入卡片與 Logo 加入懸浮互動效果。
+- ✅ **細節打磨**：
+  - 自定義全站 Scrollbar 樣式，符合深色/淺色主題。
+  - 優化頁面轉場動畫。
+
 ---
 
 ## 🎓 學習重點

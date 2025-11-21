@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { Row, Col, Statistic, Typography, Tag, Button, Timeline, Card, Avatar } from 'antd'
 import { 
   DollarOutlined, 
@@ -11,10 +11,25 @@ import {
 } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import FinancialHealthWidget from '../components/FinancialHealthWidget'
+import PageSkeleton from '../components/PageSkeleton'
 
 const { Title, Text } = Typography
 
 const DashboardPage: React.FC = () => {
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    // Simulate data loading
+    const timer = setTimeout(() => {
+      setLoading(false)
+    }, 1500)
+    return () => clearTimeout(timer)
+  }, [])
+
+  if (loading) {
+    return <PageSkeleton />
+  }
+
   return (
     <div className="space-y-8">
       <div className="mb-8">
