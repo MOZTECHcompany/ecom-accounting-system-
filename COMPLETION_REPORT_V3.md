@@ -402,6 +402,25 @@ CREATE INDEX bank_import_batches_entity_id_imported_at_idx
   ON bank_import_batches(entity_id, imported_at);
 ```
 
+### 8️⃣ UI/UX 升級 (UI/UX Upgrade) ✅
+
+#### 全域主題系統 (Global Theme System)
+- ✅ **深色模式 (Dark Mode)**：
+  - 支援一鍵切換 Light/Dark 主題
+  - 使用 CSS Variables (`--bg-primary`, `--glass-bg`) 實現無縫切換
+  - 整合 Ant Design `theme.darkAlgorithm` 確保元件樣式一致
+- ✅ **自定義主題色 (Custom Accent Colors)**：
+  - 支援 5 種預設主題色（藍、紫、綠、橘、紅）
+  - 動態更新 Ant Design `colorPrimary` Token
+- ✅ **設定面板 (Settings Drawer)**：
+  - 新增全域設定側邊欄
+  - 整合至 User Menu
+  - 設定自動持久化至 `localStorage`
+- ✅ **架構優化**：
+  - 新增 `ThemeContext` 管理全域樣式狀態
+  - 重構 `index.css` 移除 Hardcoded 顏色值
+  - 實現 Glassmorphism (毛玻璃) 效果的動態適應
+
 ---
 
 ## 🎓 學習重點
