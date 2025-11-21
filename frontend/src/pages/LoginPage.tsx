@@ -52,7 +52,7 @@ const LoginPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden bg-[#f5f5f7]">
+    <div className="min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden">
       {/* Colorful Background Blobs for Glass Effect */}
       <motion.div 
         animate={{ 

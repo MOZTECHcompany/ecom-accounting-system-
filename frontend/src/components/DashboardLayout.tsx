@@ -128,7 +128,6 @@ const DashboardLayout: React.FC = () => {
         collapsed={collapsed} 
         onCollapse={setCollapsed}
         width={260}
-        className="glass-sider"
         style={{
           overflow: 'auto',
           height: '100vh',
@@ -137,15 +136,16 @@ const DashboardLayout: React.FC = () => {
           top: 0,
           bottom: 0,
           zIndex: 100,
+          background: 'transparent', // Handled by CSS
         }}
       >
         <div className="h-16 flex items-center justify-center m-4 mb-8">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center backdrop-blur-md border border-blue-400/30">
+            <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center backdrop-blur-md border border-blue-400/30 shadow-lg shadow-blue-500/20">
               <span className="text-xl">💎</span>
             </div>
             {!collapsed && (
-              <span className="text-lg font-semibold text-white tracking-wide">
+              <span className="text-lg font-semibold tracking-wide" style={{ color: 'var(--text-primary)' }}>
                 E-Accounting
               </span>
             )}
@@ -157,29 +157,29 @@ const DashboardLayout: React.FC = () => {
           defaultSelectedKeys={[location.pathname]} 
           defaultOpenKeys={['accounting', 'sales', 'ar', 'ap']}
           items={menuItems} 
-          className="px-2"
+          className="px-2 bg-transparent border-none"
         />
       </Sider>
-      <Layout style={{ marginLeft: collapsed ? 80 : 260, transition: 'all 0.2s' }}>
-        <Header className="glass-header sticky top-0 z-50 flex justify-between items-center px-8">
+      <Layout style={{ marginLeft: collapsed ? 80 : 260, transition: 'all 0.2s', background: 'transparent' }}>
+        <Header className="sticky top-0 z-50 flex justify-between items-center px-8" style={{ background: 'transparent' }}>
           <div className="flex items-center gap-8">
-            <Title level={4} style={{ margin: 0, fontWeight: 400 }}>
+            <Title level={4} style={{ margin: 0, fontWeight: 500, color: 'var(--text-primary)' }}>
               {menuItems.find(i => i.key === location.pathname)?.label || '儀表板'}
             </Title>
             <div className="hidden md:block">
               <Input 
-                prefix={<SearchOutlined className="text-white/50" />} 
+                prefix={<SearchOutlined style={{ color: 'var(--text-primary)', opacity: 0.5 }} />} 
                 placeholder="搜尋..." 
-                className="!bg-white/10 !border-white/10 !text-white !rounded-full !w-64 hover:!bg-white/20 focus:!bg-white/20 placeholder:!text-white/30"
+                className="glass-input !rounded-full !w-64"
               />
             </div>
           </div>
           <div className="flex items-center gap-6">
             <NotificationCenter />
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
-              <Space className="cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors">
-                <Avatar icon={<UserOutlined />} src={user?.avatar} className="bg-blue-500" />
-                <span className="text-white/90 font-medium">{user?.name || user?.email}</span>
+              <Space className="cursor-pointer hover:bg-black/5 dark:hover:bg-white/10 p-2 rounded-xl transition-colors">
+                <Avatar icon={<UserOutlined />} src={user?.avatar} className="bg-gradient-to-br from-blue-500 to-purple-600" />
+                <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{user?.name || user?.email}</span>
               </Space>
             </Dropdown>
           </div>
@@ -188,10 +188,10 @@ const DashboardLayout: React.FC = () => {
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
+              initial={{ opacity: 0, y: 20, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.98 }}
+              transition={{ duration: 0.4, ease: [0.25, 0.8, 0.25, 1] }}
             >
               <Outlet />
             </motion.div>

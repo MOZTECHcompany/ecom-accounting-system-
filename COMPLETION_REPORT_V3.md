@@ -422,6 +422,10 @@ CREATE INDEX bank_import_batches_entity_id_imported_at_idx
   - 實現 Glassmorphism (毛玻璃) 效果的動態適應
 
 #### 極致體驗優化 (Extreme UX Polish) [New]
+- ✅ **Apple-style Glassmorphism (蘋果風玻璃擬態)**：
+  - 全域背景升級為 **Mesh Gradient (網格漸層)**，營造高科技與深度的視覺感。
+  - 強化 `.glass` 與 `.glass-card` 效果，加入 `backdrop-filter: blur(25px)` 與細緻的內發光邊框 (Inner Border)。
+  - 側邊欄 (Sidebar) 與頂部導航 (Header) 全面透明化，讓背景流動感貫穿全站。
 - ✅ **骨架屏載入 (Skeleton Loading)**：
   - 新增 `PageSkeleton` 元件，模擬儀表板佈局。
   - 在資料載入期間展示流暢的脈衝動畫，提升感知效能。
