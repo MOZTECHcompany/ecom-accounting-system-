@@ -16,6 +16,7 @@ import {
 } from '@ant-design/icons'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
+import CommandPalette from './CommandPalette'
 
 const { Header, Sider, Content } = Layout
 const { Title } = Typography
@@ -114,6 +115,7 @@ const DashboardLayout: React.FC = () => {
 
   return (
     <Layout style={{ minHeight: '100vh', background: 'transparent' }}>
+      <CommandPalette />
       <Sider 
         collapsible 
         collapsed={collapsed} 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Table, Tag, Button, Space, Input, DatePicker, Card, Typography, Dropdown } from 'antd'
+import { Table, Tag, Button, Space, Input, DatePicker, Card, Typography, Dropdown, Segmented } from 'antd'
 import { 
   PlusOutlined, 
   SearchOutlined, 
@@ -9,7 +9,9 @@ import {
   DownloadOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
-  CloseCircleOutlined
+  CloseCircleOutlined,
+  AppstoreOutlined,
+  BarsOutlined
 } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 
@@ -38,8 +40,41 @@ const initialData: Order[] = Array.from({ length: 20 }).map((_, i) => ({
   paymentMethod: ['Credit Card', 'Bank Transfer', 'PayPal'][i % 3],
 }))
 
+const KanbanColumn: React.FC<{ title: string; status: string; orders: Order[]; color: string }> = ({ title, status, orders, color }) => (
+  <div className="flex-1 min-w-[300px] bg-white/40 backdrop-blur-md rounded-2xl p-4 border border-white/60">
+    <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center gap-2">
+        <div className={`w-3 h-3 rounded-full ${color}`} />
+        <span className="font-medium text-gray-700">{title}</span>
+        <span className="bg-white/50 px-2 py-0.5 rounded-full text-xs text-gray-500">{orders.length}</span>
+      </div>
+      <Button type="text" icon={<MoreOutlined />} size="small" />
+    </div>
+    <div className="space-y-3">
+      {orders.map(order => (
+        <motion.div
+          key={order.key}
+          whileHover={{ y: -2 }}
+          className="bg-white/80 p-4 rounded-xl shadow-sm border border-white/50 cursor-pointer hover:shadow-md transition-all"
+        >
+          <div className="flex justify-between items-start mb-2">
+            <span className="text-blue-600 font-medium text-sm">{order.id}</span>
+            <span className="text-xs text-gray-400">{order.date}</span>
+          </div>
+          <div className="font-medium text-gray-800 mb-1">{order.customer}</div>
+          <div className="flex justify-between items-center mt-3">
+            <span className="text-gray-500 text-sm">{order.items} items</span>
+            <span className="font-mono font-medium">NT$ {order.amount.toLocaleString()}</span>
+          </div>
+        </motion.div>
+      ))}
+    </div>
+  </div>
+)
+
 const SalesPage: React.FC = () => {
   const [searchText, setSearchText] = useState('')
+  const [viewMode, setViewMode] = useState<'list' | 'board'>('list')
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
 
   const columns = [
@@ -138,6 +173,15 @@ const SalesPage: React.FC = () => {
           <Text className="text-gray-500">管理所有的客戶訂單與交易記錄</Text>
         </div>
         <Space>
+          <Segmented
+            options={[
+              { value: 'list', icon: <BarsOutlined /> },
+              { value: 'board', icon: <AppstoreOutlined /> },
+            ]}
+            value={viewMode}
+            onChange={(value) => setViewMode(value as 'list' | 'board')}
+            className="glass-segment"
+          />
           <Button icon={<DownloadOutlined />}>匯出報表</Button>
           <Button type="primary" icon={<PlusOutlined />} size="large" className="shadow-lg shadow-blue-500/30">
             新增訂單
@@ -165,21 +209,44 @@ const SalesPage: React.FC = () => {
         </div>
       </Card>
 
-      {/* Data Table */}
-      <Card className="glass-card !border-0 overflow-hidden" bodyStyle={{ padding: 0 }}>
-        <Table
-          rowSelection={rowSelection}
-          columns={columns}
-          dataSource={initialData}
-          pagination={{
-            pageSize: 8,
-            showSizeChanger: false,
-            showTotal: (total) => `共 ${total} 筆`,
-            className: "p-4"
-          }}
-          className="custom-table"
-        />
-      </Card>
+      {/* Content Section */}
+      {viewMode === 'list' ? (
+        <Card className="glass-card !border-0 overflow-hidden" bodyStyle={{ padding: 0 }}>
+          <Table
+            rowSelection={rowSelection}
+            columns={columns}
+            dataSource={initialData}
+            pagination={{
+              pageSize: 8,
+              showSizeChanger: false,
+              showTotal: (total) => `共 ${total} 筆`,
+              className: "p-4"
+            }}
+            className="custom-table"
+          />
+        </Card>
+      ) : (
+        <div className="flex gap-6 overflow-x-auto pb-4 items-start">
+          <KanbanColumn 
+            title="處理中" 
+            status="pending" 
+            orders={initialData.filter(o => o.status === 'pending')} 
+            color="bg-blue-500" 
+          />
+          <KanbanColumn 
+            title="已完成" 
+            status="completed" 
+            orders={initialData.filter(o => o.status === 'completed')} 
+            color="bg-green-500" 
+          />
+          <KanbanColumn 
+            title="已取消" 
+            status="cancelled" 
+            orders={initialData.filter(o => o.status === 'cancelled')} 
+            color="bg-red-500" 
+          />
+        </div>
+      )}
     </motion.div>
   )
 }

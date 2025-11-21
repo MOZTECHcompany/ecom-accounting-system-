@@ -267,4 +267,23 @@ input:-webkit-autofill:active {
   font-size: 12px !important;
 }
 
+/* Segmented Control */
+.glass-segment.ant-segmented {
+  background: rgba(255, 255, 255, 0.4) !important;
+  backdrop-filter: blur(10px);
+  padding: 4px;
+  border-radius: 12px;
+}
+
+.glass-segment .ant-segmented-item {
+  border-radius: 8px;
+  color: #666;
+}
+
+.glass-segment .ant-segmented-item-selected {
+  background: #fff !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+  color: #000 !important;
+}
+
 
