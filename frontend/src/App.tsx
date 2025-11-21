@@ -7,6 +7,7 @@ import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import AccountsPage from './pages/AccountsPage'
 import SalesPage from './pages/SalesPage'
+import ReportsPage from './pages/ReportsPage'
 
 const App: React.FC = () => {
   return (
@@ -21,6 +22,7 @@ const App: React.FC = () => {
               <Route path="dashboard" element={<DashboardPage />} />
               <Route path="accounting/accounts" element={<AccountsPage />} />
               <Route path="sales/orders" element={<SalesPage />} />
+              <Route path="reports" element={<ReportsPage />} />
               
               {/* Placeholder Routes for new sections */}
               <Route path="users" element={<div className="p-4">Users Page (Coming Soon)</div>} />

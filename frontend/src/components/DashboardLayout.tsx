@@ -83,9 +83,10 @@ const DashboardLayout: React.FC = () => {
       label: '薪資管理',
     },
     {
-      key: 'reports',
+      key: '/reports',
       icon: <FileTextOutlined />,
       label: '報表中心',
+      onClick: () => navigate('/reports'),
     },
   ]
 
