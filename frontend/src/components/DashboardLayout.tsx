@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, Avatar, Dropdown, Space, Typography } from 'antd'
+import { Layout, Menu, Avatar, Dropdown, Space, Typography, Input, Badge } from 'antd'
 import {
   DashboardOutlined,
   FileTextOutlined,
@@ -14,6 +14,7 @@ import {
   BellOutlined,
   SearchOutlined
 } from '@ant-design/icons'
+import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 
 const { Header, Sider, Content } = Layout
@@ -47,7 +48,7 @@ const DashboardLayout: React.FC = () => {
       icon: <ShoppingOutlined />,
       label: '銷售管理',
       children: [
-        { key: '/sales/orders', label: '銷售訂單' },
+        { key: '/sales/orders', label: '銷售訂單', onClick: () => navigate('/sales/orders') },
         { key: '/sales/customers', label: '客戶管理' },
       ],
     },
@@ -142,7 +143,7 @@ const DashboardLayout: React.FC = () => {
           </div>
         </div>
         <Menu 
-          theme="dark" 
+          theme="light" 
           mode="inline" 
           defaultSelectedKeys={[location.pathname]} 
           defaultOpenKeys={['accounting', 'sales', 'ar', 'ap']}
@@ -152,18 +153,23 @@ const DashboardLayout: React.FC = () => {
       </Sider>
       <Layout style={{ marginLeft: collapsed ? 80 : 260, transition: 'all 0.2s' }}>
         <Header className="glass-header sticky top-0 z-50 flex justify-between items-center px-8">
-          <div className="flex items-center">
+          <div className="flex items-center gap-8">
             <Title level={4} style={{ margin: 0, fontWeight: 400 }}>
               {menuItems.find(i => i.key === location.pathname)?.label || '儀表板'}
             </Title>
+            <div className="hidden md:block">
+              <Input 
+                prefix={<SearchOutlined className="text-white/50" />} 
+                placeholder="搜尋..." 
+                className="!bg-white/10 !border-white/10 !text-white !rounded-full !w-64 hover:!bg-white/20 focus:!bg-white/20 placeholder:!text-white/30"
+              />
+            </div>
           </div>
           <div className="flex items-center gap-6">
-            <div className="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center cursor-pointer transition-colors">
-              <SearchOutlined className="text-lg text-white/70" />
-            </div>
             <div className="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center cursor-pointer transition-colors relative">
-              <BellOutlined className="text-lg text-white/70" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
+              <Badge dot offset={[-6, 6]} color="red">
+                <BellOutlined className="text-lg text-white/70" />
+              </Badge>
             </div>
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
               <Space className="cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors">
@@ -174,9 +180,17 @@ const DashboardLayout: React.FC = () => {
           </div>
         </Header>
         <Content style={{ margin: '24px 24px', padding: 0, minHeight: 280 }}>
-          <div className="animate-fade-in">
-            <Outlet />
-          </div>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Outlet />
+            </motion.div>
+          </AnimatePresence>
         </Content>
       </Layout>
     </Layout>

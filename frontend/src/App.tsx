@@ -1,11 +1,12 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
-import MainLayout from './components/layout/MainLayout'
+import DashboardLayout from './components/DashboardLayout'
 import ProtectedRoute from './components/ProtectedRoute'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import AccountsPage from './pages/AccountsPage'
+import SalesPage from './pages/SalesPage'
 
 const App: React.FC = () => {
   return (
@@ -15,10 +16,11 @@ const App: React.FC = () => {
           <Route path="/login" element={<LoginPage />} />
           
           <Route path="/" element={<ProtectedRoute />}>
-            <Route element={<MainLayout />}>
+            <Route element={<DashboardLayout />}>
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<DashboardPage />} />
               <Route path="accounting/accounts" element={<AccountsPage />} />
+              <Route path="sales/orders" element={<SalesPage />} />
               
               {/* Placeholder Routes for new sections */}
               <Route path="users" element={<div className="p-4">Users Page (Coming Soon)</div>} />

@@ -45,6 +45,19 @@ body {
   transform: translateY(-2px);
 }
 
+.glass-sider {
+  background: rgba(255, 255, 255, 0.6) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  border-right: 1px solid rgba(0, 0, 0, 0.05) !important;
+}
+
+.glass-header {
+  background: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.03) !important;
+}
+
 /* Ant Design Overrides for Light Glass Theme */
 .ant-layout {
   background: transparent !important;
