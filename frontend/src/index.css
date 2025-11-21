@@ -7,8 +7,8 @@
   
   /* Apple-style Glass Variables */
   --glass-bg: rgba(255, 255, 255, 0.65);
-  --glass-border: rgba(255, 255, 255, 0.4);
-  --glass-card-bg: rgba(255, 255, 255, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.3);
+  --glass-card-bg: rgba(255, 255, 255, 0.65);
   --glass-card-hover: rgba(255, 255, 255, 0.8);
   --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
   --glass-radius: 24px;
@@ -25,8 +25,8 @@ body.dark {
   
   /* Dark Mode Glass */
   --glass-bg: rgba(28, 28, 30, 0.65);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --glass-card-bg: rgba(0, 0, 0, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.15);
+  --glass-card-bg: rgba(20, 20, 20, 0.6);
   --glass-card-hover: rgba(30, 30, 30, 0.8);
   --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
 
@@ -67,16 +67,16 @@ body:not(.dark) {
 /* Enhanced Glassmorphism Utilities */
 .glass {
   background: var(--glass-bg);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(25px) saturate(180%);
+  -webkit-backdrop-filter: blur(25px) saturate(180%);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow);
 }
 
 .glass-panel {
   background: var(--glass-card-bg);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(25px) saturate(180%);
+  -webkit-backdrop-filter: blur(25px) saturate(180%);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow);
   border-radius: var(--glass-radius);
@@ -84,8 +84,8 @@ body:not(.dark) {
 
 .glass-card {
   background: var(--glass-card-bg);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(25px) saturate(180%);
+  -webkit-backdrop-filter: blur(25px) saturate(180%);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow);
   border-radius: var(--glass-radius);
@@ -97,7 +97,7 @@ body:not(.dark) {
   box-shadow: 
     0 20px 40px -5px rgba(0, 0, 0, 0.1),
     0 10px 20px -5px rgba(0, 0, 0, 0.04),
-    0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+    0 0 0 1px rgba(255, 255, 255, 0.5) inset; /* Stronger inner glow on hover */
   transform: scale(1.02);
   z-index: 10;
 }
@@ -105,10 +105,58 @@ body:not(.dark) {
 /* Floating Sidebar */
 .floating-sidebar {
   margin: 16px;
-  border-radius: var(--glass-radius);
+  border-radius: 24px !important;
   height: calc(100vh - 32px) !important;
   box-shadow: var(--glass-shadow);
   border: 1px solid var(--glass-border);
+  backdrop-filter: blur(25px) saturate(180%);
+  -webkit-backdrop-filter: blur(25px) saturate(180%);
+}
+
+/* Floating Table Rows */
+.ant-table-wrapper .ant-table {
+  background: transparent !important;
+}
+
+.ant-table-wrapper .ant-table-thead > tr > th {
+  background: transparent !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
+  color: var(--text-primary) !important;
+  font-weight: 600;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr > td {
+  border-bottom: none !important;
+  transition: all 0.2s ease;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr {
+  transition: all 0.2s ease;
+  border-radius: 12px;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr:hover > td:first-child {
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr:hover > td:last-child {
+  border-top-right-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr:hover > td {
+  background: rgba(255, 255, 255, 0.5) !important;
+  backdrop-filter: blur(10px);
+}
+
+.ant-table-wrapper .ant-table-tbody > tr:hover {
+  transform: scale(1.01);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+body.dark .ant-table-wrapper .ant-table-tbody > tr:hover > td {
+  background: rgba(255, 255, 255, 0.1) !important;
 }
 
 /* Active Menu Item */

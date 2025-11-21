@@ -259,7 +259,7 @@ const SalesPage: React.FC = () => {
 
       {/* Content Section */}
       {viewMode === 'list' ? (
-        <Card className="glass-card !border-0 overflow-hidden" bodyStyle={{ padding: 0 }}>
+        <Card className="glass-card !border-0" bodyStyle={{ padding: 0 }}>
           <Table
             rowSelection={rowSelection}
             columns={columns}

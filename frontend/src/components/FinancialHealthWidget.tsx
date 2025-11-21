@@ -58,11 +58,11 @@ const FinancialHealthWidget: React.FC = () => {
                   <AreaChart data={cashFlowData}>
                     <defs>
                       <linearGradient id="colorActual" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#007AFF" stopOpacity={0.4}/>
+                        <stop offset="5%" stopColor="#007AFF" stopOpacity={0.5}/>
                         <stop offset="95%" stopColor="#007AFF" stopOpacity={0}/>
                       </linearGradient>
                       <linearGradient id="colorProjected" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#34C759" stopOpacity={0.4}/>
+                        <stop offset="5%" stopColor="#34C759" stopOpacity={0.5}/>
                         <stop offset="95%" stopColor="#34C759" stopOpacity={0}/>
                       </linearGradient>
                     </defs>
