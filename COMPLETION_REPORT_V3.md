@@ -452,6 +452,21 @@ CREATE INDEX bank_import_batches_entity_id_imported_at_idx
 - ✅ **完整登入流程 UI**：
   - 補齊「記住我 (Remember Me)」與「忘記密碼 (Forgot Password)」功能入口。
 
+### 4️⃣ UI Refinement (visionOS Style) ✅
+
+#### 視覺風格升級
+- ✅ **Crystal Clear Glass**：
+  - 調整全域 CSS 變數 `--glass-bg` 與 `--glass-border`，降低不透明度並增加模糊度 (Blur 25px)。
+  - 引入「Specular Border」效果，使用 `1px solid rgba(255, 255, 255, 0.3)` 模擬玻璃邊緣反光。
+- ✅ **Floating Sidebar**：
+  - 側邊欄改為懸浮設計，與螢幕邊緣保持 16px 間距。
+  - 增加圓角 (24px) 與獨立陰影，脫離傳統貼邊佈局。
+- ✅ **Floating Table Rows**：
+  - 移除表格傳統格線。
+  - 實作 macOS Finder 風格的懸浮選取效果：Hover 時整行稍微浮起並變亮。
+- ✅ **Gradient Charts**：
+  - 優化圖表漸層填充，由 50% 不透明度漸變至 0%，消除「厚重感」。
+
 ---
 
 ## 🎓 學習重點
