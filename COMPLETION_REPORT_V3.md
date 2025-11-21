@@ -431,6 +431,17 @@ CREATE INDEX bank_import_batches_entity_id_imported_at_idx
 - ✅ **細節打磨**：
   - 自定義全站 Scrollbar 樣式，符合深色/淺色主題。
   - 優化頁面轉場動畫。
+  - **統一圓角設計 (Consistent Border Radius)**：將全站卡片圓角統一調整為 `16px`，解決了 Dashboard 卡片與下方圖表圓角不一致的問題。
+
+#### 登入頁面深度升級 (Login Page Deep Dive) [New]
+- ✅ **社交登入整合 (Social Login)**：
+  - 新增 Google、GitHub、Microsoft 登入按鈕 UI。
+  - 實作懸浮互動效果 (Hover Effects)。
+- ✅ **密碼強度檢測 (Password Strength Meter)**：
+  - 實作即時密碼強度分析條 (紅/黃/綠)。
+  - 提供視覺化反饋，提升帳戶安全性感知。
+- ✅ **完整登入流程 UI**：
+  - 補齊「記住我 (Remember Me)」與「忘記密碼 (Forgot Password)」功能入口。
 
 ---
 

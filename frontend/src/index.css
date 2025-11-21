@@ -49,6 +49,7 @@ body {
   box-shadow: 
     0 20px 40px rgba(0, 0, 0, 0.04),
     0 10px 20px rgba(0, 0, 0, 0.02);
+  border-radius: 16px;
 }
 
 /* Custom Scrollbar */

@@ -1,7 +1,7 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Form, Input, Button, message, Typography } from 'antd'
-import { UserOutlined, LockOutlined } from '@ant-design/icons'
+import { Form, Input, Button, message, Typography, Divider, Checkbox, Space } from 'antd'
+import { UserOutlined, LockOutlined, GoogleOutlined, GithubOutlined, WindowsOutlined } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { LoginRequest } from '../types'
@@ -12,6 +12,16 @@ const LoginPage: React.FC = () => {
   const navigate = useNavigate()
   const { login } = useAuth()
   const [loading, setLoading] = React.useState(false)
+  const [passwordStrength, setPasswordStrength] = React.useState(0)
+
+  const checkPasswordStrength = (password: string) => {
+    let strength = 0
+    if (password.length >= 8) strength += 1
+    if (/[A-Z]/.test(password)) strength += 1
+    if (/[0-9]/.test(password)) strength += 1
+    if (/[^A-Za-z0-9]/.test(password)) strength += 1
+    setPasswordStrength(strength)
+  }
 
   const onFinish = async (values: LoginRequest) => {
     setLoading(true)
@@ -95,6 +105,7 @@ const LoginPage: React.FC = () => {
           layout="vertical"
           size="large"
           className="space-y-4"
+          initialValues={{ remember: true }}
         >
           <Form.Item
             name="email"
@@ -114,25 +125,72 @@ const LoginPage: React.FC = () => {
           <Form.Item 
             name="password" 
             rules={[{ required: true, message: '請輸入密碼' }]}
-            className="mb-8"
+            className="mb-2"
           >
             <Input.Password 
               prefix={<LockOutlined className="text-gray-400 text-lg" />} 
               placeholder="密碼" 
               className="!h-12 !rounded-xl hover:!border-blue-400 focus:!border-blue-500 transition-colors"
+              onChange={(e) => checkPasswordStrength(e.target.value)}
             />
           </Form.Item>
 
-          <Form.Item className="mb-4">
+          {/* Password Strength Indicator */}
+          <div className="flex gap-1 mb-6 h-1">
+            {[1, 2, 3, 4].map((level) => (
+              <div 
+                key={level}
+                className={`flex-1 rounded-full transition-all duration-300 ${
+                  passwordStrength >= level 
+                    ? level <= 2 ? 'bg-red-400' : level === 3 ? 'bg-yellow-400' : 'bg-green-400'
+                    : 'bg-gray-200'
+                }`}
+              />
+            ))}
+          </div>
+
+          <div className="flex justify-between items-center mb-6">
+            <Form.Item name="remember" valuePropName="checked" noStyle>
+              <Checkbox className="text-gray-500">記住我</Checkbox>
+            </Form.Item>
+            <a className="text-blue-500 hover:text-blue-600 text-sm font-medium" href="#">
+              忘記密碼？
+            </a>
+          </div>
+
+          <Form.Item className="mb-6">
             <Button 
               type="primary" 
               htmlType="submit" 
               loading={loading}
-              className="w-full !h-12 !rounded-xl !text-lg !font-medium hover:!scale-[1.02] active:!scale-[0.98] transition-transform"
+              className="w-full !h-12 !rounded-xl !text-lg !font-medium hover:!scale-[1.02] active:!scale-[0.98] transition-transform shadow-lg shadow-blue-500/30"
             >
               登入系統
             </Button>
           </Form.Item>
+
+          <Divider plain className="!text-gray-400 !text-xs !my-6">或使用其他方式登入</Divider>
+
+          <div className="flex justify-center gap-4 mb-6">
+            <Button 
+              shape="circle" 
+              size="large" 
+              icon={<GoogleOutlined />} 
+              className="!flex !items-center !justify-center hover:!text-red-500 hover:!border-red-500 transition-colors"
+            />
+            <Button 
+              shape="circle" 
+              size="large" 
+              icon={<GithubOutlined />} 
+              className="!flex !items-center !justify-center hover:!text-gray-800 hover:!border-gray-800 transition-colors"
+            />
+            <Button 
+              shape="circle" 
+              size="large" 
+              icon={<WindowsOutlined />} 
+              className="!flex !items-center !justify-center hover:!text-blue-500 hover:!border-blue-500 transition-colors"
+            />
+          </div>
           
           <div className="text-center">
             <Text className="text-gray-400 text-xs">

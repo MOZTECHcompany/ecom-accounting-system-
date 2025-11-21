@@ -53,7 +53,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           algorithm: mode === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm,
           token: {
             colorPrimary: COLOR_MAP[primaryColor],
-            borderRadius: 12,
+            borderRadius: 16,
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
           },
           components: {
