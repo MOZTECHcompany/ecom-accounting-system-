@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, Avatar, Dropdown, Space, Typography, Input, Badge } from 'antd'
+import { Layout, Menu, Avatar, Dropdown, Space, Typography, Input } from 'antd'
 import {
   DashboardOutlined,
   FileTextOutlined,
@@ -11,13 +11,13 @@ import {
   SettingOutlined,
   LogoutOutlined,
   UserOutlined,
-  BellOutlined,
   SearchOutlined
 } from '@ant-design/icons'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import CommandPalette from './CommandPalette'
 import AICopilotWidget from './AICopilotWidget'
+import NotificationCenter from './NotificationCenter'
 
 const { Header, Sider, Content } = Layout
 const { Title } = Typography
@@ -170,11 +170,7 @@ const DashboardLayout: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-6">
-            <div className="w-10 h-10 rounded-full hover:bg-white/10 flex items-center justify-center cursor-pointer transition-colors relative">
-              <Badge dot offset={[-6, 6]} color="red">
-                <BellOutlined className="text-lg text-white/70" />
-              </Badge>
-            </div>
+            <NotificationCenter />
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
               <Space className="cursor-pointer hover:bg-white/10 p-2 rounded-xl transition-colors">
                 <Avatar icon={<UserOutlined />} src={user?.avatar} className="bg-blue-500" />

@@ -1,49 +1,38 @@
 import React from 'react'
-import { Row, Col, Statistic, Typography, Tag, Button } from 'antd'
+import { Row, Col, Statistic, Typography, Tag, Button, Timeline, Card, Avatar } from 'antd'
 import { 
   DollarOutlined, 
   ShoppingOutlined, 
   BankOutlined, 
   FileTextOutlined,
-  ClockCircleOutlined
+  ClockCircleOutlined,
+  UserOutlined,
+  CheckCircleOutlined
 } from '@ant-design/icons'
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { motion } from 'framer-motion'
+import FinancialHealthWidget from '../components/FinancialHealthWidget'
 
 const { Title, Text } = Typography
 
 const DashboardPage: React.FC = () => {
-  // Mock Data
-  const upcomingPayments = [
-    { id: 1, title: 'AWS 伺服器費用', amount: 12000, date: '2025-11-25', status: 'pending' },
-    { id: 2, title: '辦公室租金', amount: 45000, date: '2025-12-01', status: 'pending' },
-    { id: 3, title: '供應商貨款 - ABC Corp', amount: 156000, date: '2025-12-05', status: 'urgent' },
-  ]
-
-  const chartData = [
-    { name: '11/15', value: 4000 },
-    { name: '11/16', value: 3000 },
-    { name: '11/17', value: 2000 },
-    { name: '11/18', value: 2780 },
-    { name: '11/19', value: 1890 },
-    { name: '11/20', value: 2390 },
-    { name: '11/21', value: 3490 },
-  ]
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="mb-8">
-        <Title level={2} className="!text-gray-800 font-light tracking-tight">
+        <Title level={2} className="!text-gray-800 font-light tracking-tight !mb-1">
           Dashboard
         </Title>
         <Text className="text-gray-500">
-          歡迎回來，管理員。這是您今天的營運概況。
+          歡迎回來，管理員。這是您今天的財務健康概況。
         </Text>
       </div>
       
-      {/* Key Metrics */}
+      {/* Key Metrics Cards */}
       <Row gutter={[24, 24]}>
         <Col xs={24} sm={12} lg={6}>
-          <div className="glass-card p-6 hover:shadow-lg transition-all duration-300">
+          <motion.div 
+            whileHover={{ y: -5 }}
+            className="glass-card p-6 transition-all duration-300 border-l-4 border-blue-500"
+          >
             <div className="flex items-center justify-between mb-4">
               <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
                 <DollarOutlined className="text-blue-500 text-lg" />
@@ -61,11 +50,14 @@ const DashboardPage: React.FC = () => {
             <div className="mt-2 text-xs text-gray-400">
               最近 7 天: $892,100
             </div>
-          </div>
+          </motion.div>
         </Col>
 
         <Col xs={24} sm={12} lg={6}>
-          <div className="glass-card p-6 hover:shadow-lg transition-all duration-300">
+          <motion.div 
+            whileHover={{ y: -5 }}
+            className="glass-card p-6 transition-all duration-300 border-l-4 border-orange-500"
+          >
             <div className="flex items-center justify-between mb-4">
               <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center">
                 <BankOutlined className="text-orange-500 text-lg" />
@@ -83,11 +75,14 @@ const DashboardPage: React.FC = () => {
             <div className="mt-2 text-xs text-gray-400">
               逾期金額: <span className="text-red-500">$125,000</span>
             </div>
-          </div>
+          </motion.div>
         </Col>
 
         <Col xs={24} sm={12} lg={6}>
-          <div className="glass-card p-6 hover:shadow-lg transition-all duration-300">
+          <motion.div 
+            whileHover={{ y: -5 }}
+            className="glass-card p-6 transition-all duration-300 border-l-4 border-purple-500"
+          >
             <div className="flex items-center justify-between mb-4">
               <div className="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center">
                 <ShoppingOutlined className="text-purple-500 text-lg" />
@@ -100,123 +95,107 @@ const DashboardPage: React.FC = () => {
               valueStyle={{ color: '#1d1d1f', fontWeight: 600, fontSize: '24px' }}
             />
             <div className="mt-2 text-xs text-gray-400">
-              較上月增加 5.2%
+              預算達成率: <span className="text-blue-500">85%</span>
             </div>
-          </div>
+          </motion.div>
         </Col>
 
         <Col xs={24} sm={12} lg={6}>
-          <div className="glass-card p-6 hover:shadow-lg transition-all duration-300">
+          <motion.div 
+            whileHover={{ y: -5 }}
+            className="glass-card p-6 transition-all duration-300 border-l-4 border-teal-500"
+          >
             <div className="flex items-center justify-between mb-4">
-              <div className="w-10 h-10 rounded-full bg-cyan-50 flex items-center justify-center">
-                <ClockCircleOutlined className="text-cyan-500 text-lg" />
+              <div className="w-10 h-10 rounded-full bg-teal-50 flex items-center justify-center">
+                <FileTextOutlined className="text-teal-500 text-lg" />
               </div>
               <Tag color="blue" className="m-0 rounded-full border-none bg-blue-50 text-blue-600 px-2">
-                3 筆即將到期
+                3 筆待簽
               </Tag>
             </div>
             <Statistic
-              title={<span className="text-gray-500 text-sm">待付款提醒</span>}
-              value={3}
-              suffix="筆"
+              title={<span className="text-gray-500 text-sm">待處理單據</span>}
+              value={15}
               valueStyle={{ color: '#1d1d1f', fontWeight: 600, fontSize: '24px' }}
             />
             <div className="mt-2 text-xs text-gray-400">
-              總金額: $213,000
+              包含發票與報銷單
             </div>
-          </div>
+          </motion.div>
         </Col>
       </Row>
 
-      <Row gutter={[24, 24]}>
-        {/* Chart Section */}
-        <Col xs={24} lg={16}>
-          <div className="glass-card p-6 h-full min-h-[400px]">
-            <div className="flex items-center justify-between mb-6">
-              <Title level={4} className="!text-gray-800 !m-0 font-medium">營收趨勢</Title>
-              <div className="flex gap-2">
-                <Tag className="rounded-full px-3 cursor-pointer hover:bg-gray-100 border-none">週</Tag>
-                <Tag className="rounded-full px-3 cursor-pointer bg-black text-white border-none">月</Tag>
-                <Tag className="rounded-full px-3 cursor-pointer hover:bg-gray-100 border-none">年</Tag>
-              </div>
-            </div>
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData}>
-                  <defs>
-                    <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#007aff" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#007aff" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                  <XAxis 
-                    dataKey="name" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: '#9CA3AF', fontSize: 12 }} 
-                    dy={10}
-                  />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: '#9CA3AF', fontSize: 12 }} 
-                  />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'rgba(255, 255, 255, 0.8)', 
-                      backdropFilter: 'blur(10px)',
-                      borderRadius: '12px',
-                      border: 'none',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-                    }}
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="value" 
-                    stroke="#007aff" 
-                    strokeWidth={3}
-                    fillOpacity={1} 
-                    fill="url(#colorValue)" 
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </Col>
+      {/* Financial Health Widget */}
+      <FinancialHealthWidget />
 
-        {/* Upcoming Payments / Notifications */}
-        <Col xs={24} lg={8}>
-          <div className="glass-card p-6 h-full">
-            <Title level={4} className="!text-gray-800 mb-6 font-medium">即將到期付款</Title>
+      {/* Recent Activity & Tasks */}
+      <Row gutter={[24, 24]}>
+        <Col xs={24} lg={12}>
+          <Card title="近期活動 (Recent Activity)" className="glass-card !border-0 h-full">
+            <Timeline
+              items={[
+                {
+                  color: 'green',
+                  children: (
+                    <div className="pb-4">
+                      <div className="font-medium">收到來自 Tech Solutions 的款項</div>
+                      <div className="text-xs text-gray-400">2025-11-21 10:30 AM • NT$ 150,000</div>
+                    </div>
+                  ),
+                },
+                {
+                  color: 'blue',
+                  children: (
+                    <div className="pb-4">
+                      <div className="font-medium">開立發票 #INV-2025089</div>
+                      <div className="text-xs text-gray-400">2025-11-21 09:15 AM • 給 Global Trade Co.</div>
+                    </div>
+                  ),
+                },
+                {
+                  color: 'red',
+                  children: (
+                    <div className="pb-4">
+                      <div className="font-medium">庫存警示：MacBook Pro M3</div>
+                      <div className="text-xs text-gray-400">2025-11-20 16:45 PM • 庫存低於安全水位</div>
+                    </div>
+                  ),
+                },
+                {
+                  color: 'gray',
+                  children: (
+                    <div className="pb-4">
+                      <div className="font-medium">系統自動備份完成</div>
+                      <div className="text-xs text-gray-400">2025-11-20 03:00 AM</div>
+                    </div>
+                  ),
+                },
+              ]}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card title="待辦事項 (Pending Tasks)" className="glass-card !border-0 h-full">
             <div className="space-y-4">
-              {upcomingPayments.map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-4 rounded-2xl bg-white/40 border border-white/60 hover:bg-white/60 transition-all cursor-pointer group">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${item.status === 'urgent' ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>
-                      <FileTextOutlined />
-                    </div>
+              {[
+                { title: '審核 11 月份行銷費用報銷', user: 'Alice', time: '2h ago', tag: 'Approval' },
+                { title: '確認 Q4 財務預測報告', user: 'Bob', time: '4h ago', tag: 'Review' },
+                { title: '更新供應商合約條款', user: 'Charlie', time: '1d ago', tag: 'Legal' },
+              ].map((task, idx) => (
+                <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer">
+                  <div className="flex items-center gap-3">
+                    <Avatar style={{ backgroundColor: idx === 0 ? '#f56a00' : idx === 1 ? '#7265e6' : '#ffbf00' }} icon={<UserOutlined />} />
                     <div>
-                      <div className="text-gray-800 font-medium group-hover:text-blue-600 transition-colors">{item.title}</div>
-                      <div className="text-gray-400 text-xs">{item.date}</div>
+                      <div className="font-medium text-gray-800">{task.title}</div>
+                      <div className="text-xs text-gray-400">{task.user} • {task.time}</div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="font-semibold text-gray-800">${item.amount.toLocaleString()}</div>
-                    <div className={`text-[10px] ${item.status === 'urgent' ? 'text-red-500' : 'text-blue-500'}`}>
-                      {item.status === 'urgent' ? '急件' : '待處理'}
-                    </div>
-                  </div>
+                  <Tag>{task.tag}</Tag>
                 </div>
               ))}
-              
-              <div className="pt-4 text-center">
-                <Button type="link" className="text-gray-500 hover:text-blue-600">
-                  查看全部付款 {'>'}
-                </Button>
-              </div>
+              <Button type="dashed" block className="mt-4">查看更多待辦</Button>
             </div>
-          </div>
+          </Card>
         </Col>
       </Row>
     </div>
