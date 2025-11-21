@@ -125,9 +125,9 @@ const DashboardLayout: React.FC = () => {
       <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       
       {/* Floating Orbs Background */}
-      <div className="orb w-96 h-96 bg-purple-400/30 top-0 left-0 blur-[120px]" />
-      <div className="orb w-96 h-96 bg-blue-400/30 bottom-0 right-0 blur-[120px]" />
-      <div className="orb w-64 h-64 bg-pink-400/30 top-1/2 left-1/2 blur-[100px]" />
+      <div className="orb w-96 h-96 bg-purple-400/30 top-0 left-0 blur-[120px] animate-float" />
+      <div className="orb w-96 h-96 bg-blue-400/30 bottom-0 right-0 blur-[120px] animate-float-delayed" />
+      <div className="orb w-64 h-64 bg-pink-400/30 top-1/2 left-1/2 blur-[100px] animate-float-slow" />
 
       <Sider 
         collapsible 
