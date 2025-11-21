@@ -18,12 +18,14 @@ import { useAuth } from '../contexts/AuthContext'
 import CommandPalette from './CommandPalette'
 import AICopilotWidget from './AICopilotWidget'
 import NotificationCenter from './NotificationCenter'
+import SettingsDrawer from './SettingsDrawer'
 
 const { Header, Sider, Content } = Layout
 const { Title } = Typography
 
 const DashboardLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout } = useAuth()
@@ -100,6 +102,7 @@ const DashboardLayout: React.FC = () => {
       key: 'settings',
       icon: <SettingOutlined />,
       label: '系統設定',
+      onClick: () => setSettingsOpen(true),
     },
     {
       type: 'divider' as const,
@@ -119,6 +122,7 @@ const DashboardLayout: React.FC = () => {
     <Layout style={{ minHeight: '100vh', background: 'transparent' }}>
       <CommandPalette />
       <AICopilotWidget />
+      <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <Sider 
         collapsible 
         collapsed={collapsed} 
