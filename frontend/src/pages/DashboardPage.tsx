@@ -1,15 +1,13 @@
 import React from 'react'
-import { Row, Col, Statistic, Typography, Card, Table, Tag, Button } from 'antd'
+import { Row, Col, Statistic, Typography, Tag, Button } from 'antd'
 import { 
   DollarOutlined, 
   ShoppingOutlined, 
   BankOutlined, 
-  TeamOutlined, 
-  ArrowUpOutlined, 
-  ArrowDownOutlined,
   FileTextOutlined,
   ClockCircleOutlined
 } from '@ant-design/icons'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 const { Title, Text } = Typography
 
@@ -19,6 +17,16 @@ const DashboardPage: React.FC = () => {
     { id: 1, title: 'AWS 伺服器費用', amount: 12000, date: '2025-11-25', status: 'pending' },
     { id: 2, title: '辦公室租金', amount: 45000, date: '2025-12-01', status: 'pending' },
     { id: 3, title: '供應商貨款 - ABC Corp', amount: 156000, date: '2025-12-05', status: 'urgent' },
+  ]
+
+  const chartData = [
+    { name: '11/15', value: 4000 },
+    { name: '11/16', value: 3000 },
+    { name: '11/17', value: 2000 },
+    { name: '11/18', value: 2780 },
+    { name: '11/19', value: 1890 },
+    { name: '11/20', value: 2390 },
+    { name: '11/21', value: 3490 },
   ]
 
   return (
@@ -127,13 +135,52 @@ const DashboardPage: React.FC = () => {
             <div className="flex items-center justify-between mb-6">
               <Title level={4} className="!text-gray-800 !m-0 font-medium">營收趨勢</Title>
               <div className="flex gap-2">
-                <Tag className="rounded-full px-3 cursor-pointer hover:bg-gray-100">週</Tag>
+                <Tag className="rounded-full px-3 cursor-pointer hover:bg-gray-100 border-none">週</Tag>
                 <Tag className="rounded-full px-3 cursor-pointer bg-black text-white border-none">月</Tag>
-                <Tag className="rounded-full px-3 cursor-pointer hover:bg-gray-100">年</Tag>
+                <Tag className="rounded-full px-3 cursor-pointer hover:bg-gray-100 border-none">年</Tag>
               </div>
             </div>
-            <div className="flex items-center justify-center h-[300px] bg-gray-50/50 rounded-2xl border border-dashed border-gray-200 text-gray-400">
-              圖表區域 (Chart.js / Recharts)
+            <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#007aff" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#007aff" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                  <XAxis 
+                    dataKey="name" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fill: '#9CA3AF', fontSize: 12 }} 
+                    dy={10}
+                  />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fill: '#9CA3AF', fontSize: 12 }} 
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'rgba(255, 255, 255, 0.8)', 
+                      backdropFilter: 'blur(10px)',
+                      borderRadius: '12px',
+                      border: 'none',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                    }}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="value" 
+                    stroke="#007aff" 
+                    strokeWidth={3}
+                    fillOpacity={1} 
+                    fill="url(#colorValue)" 
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           </div>
         </Col>
