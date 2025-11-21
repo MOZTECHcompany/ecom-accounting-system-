@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Table, Tag, Button, Space, Input, DatePicker, Card, Typography, Dropdown, Segmented } from 'antd'
+import { Table, Tag, Button, Space, Input, DatePicker, Card, Typography, Dropdown, Segmented, message } from 'antd'
 import { 
   PlusOutlined, 
   SearchOutlined, 
@@ -14,6 +14,10 @@ import {
   BarsOutlined
 } from '@ant-design/icons'
 import { motion } from 'framer-motion'
+import * as XLSX from 'xlsx'
+import OrderDetailsDrawer from '../components/OrderDetailsDrawer'
+import SalesAnalytics from '../components/SalesAnalytics'
+import BulkActionBar from '../components/BulkActionBar'
 
 const { Title, Text } = Typography
 const { RangePicker } = DatePicker
@@ -40,7 +44,7 @@ const initialData: Order[] = Array.from({ length: 20 }).map((_, i) => ({
   paymentMethod: ['Credit Card', 'Bank Transfer', 'PayPal'][i % 3],
 }))
 
-const KanbanColumn: React.FC<{ title: string; status: string; orders: Order[]; color: string }> = ({ title, status, orders, color }) => (
+const KanbanColumn: React.FC<{ title: string; status: string; orders: Order[]; color: string; onClick: (order: Order) => void }> = ({ title, status, orders, color, onClick }) => (
   <div className="flex-1 min-w-[300px] bg-white/40 backdrop-blur-md rounded-2xl p-4 border border-white/60">
     <div className="flex items-center justify-between mb-4">
       <div className="flex items-center gap-2">
@@ -55,6 +59,7 @@ const KanbanColumn: React.FC<{ title: string; status: string; orders: Order[]; c
         <motion.div
           key={order.key}
           whileHover={{ y: -2 }}
+          onClick={() => onClick(order)}
           className="bg-white/80 p-4 rounded-xl shadow-sm border border-white/50 cursor-pointer hover:shadow-md transition-all"
         >
           <div className="flex justify-between items-start mb-2">
@@ -76,6 +81,41 @@ const SalesPage: React.FC = () => {
   const [searchText, setSearchText] = useState('')
   const [viewMode, setViewMode] = useState<'list' | 'board'>('list')
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+
+  const handleExport = () => {
+    const ws = XLSX.utils.json_to_sheet(initialData)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Sales Orders")
+    XLSX.writeFile(wb, "sales_orders_export.xlsx")
+    message.success('報表匯出成功')
+  }
+
+  const handleRowClick = (record: Order) => {
+    setSelectedOrder(record)
+    setDrawerOpen(true)
+  }
+
+  const handleBulkComplete = () => {
+    message.success(`已將 ${selectedRowKeys.length} 筆訂單標記為完成`)
+    setSelectedRowKeys([])
+  }
+
+  const handleBulkDelete = () => {
+    message.success(`已刪除 ${selectedRowKeys.length} 筆訂單`)
+    setSelectedRowKeys([])
+  }
+
+  const handleBulkExport = () => {
+    const selectedData = initialData.filter(item => selectedRowKeys.includes(item.key))
+    const ws = XLSX.utils.json_to_sheet(selectedData)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Selected Orders")
+    XLSX.writeFile(wb, "selected_orders_export.xlsx")
+    message.success(`已匯出 ${selectedRowKeys.length} 筆訂單`)
+    setSelectedRowKeys([])
+  }
 
   const columns = [
     {
@@ -141,8 +181,8 @@ const SalesPage: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      render: () => (
-        <Space size="small">
+      render: (_: any, record: Order) => (
+        <Space size="small" onClick={(e) => e.stopPropagation()}>
           <Button type="text" icon={<PrinterOutlined />} />
           <Dropdown menu={{ items: [{ key: '1', label: '編輯' }, { key: '2', label: '刪除', danger: true }] }}>
             <Button type="text" icon={<MoreOutlined />} />
@@ -166,6 +206,12 @@ const SalesPage: React.FC = () => {
       transition={{ duration: 0.5 }}
       className="space-y-6"
     >
+      <OrderDetailsDrawer 
+        open={drawerOpen} 
+        onClose={() => setDrawerOpen(false)} 
+        order={selectedOrder} 
+      />
+
       {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -182,12 +228,14 @@ const SalesPage: React.FC = () => {
             onChange={(value) => setViewMode(value as 'list' | 'board')}
             className="glass-segment"
           />
-          <Button icon={<DownloadOutlined />}>匯出報表</Button>
+          <Button icon={<DownloadOutlined />} onClick={handleExport}>匯出報表</Button>
           <Button type="primary" icon={<PlusOutlined />} size="large" className="shadow-lg shadow-blue-500/30">
             新增訂單
           </Button>
         </Space>
       </div>
+
+      <SalesAnalytics />
 
       {/* Filter Section */}
       <Card className="glass-card !border-0" bodyStyle={{ padding: '20px' }}>
@@ -216,6 +264,10 @@ const SalesPage: React.FC = () => {
             rowSelection={rowSelection}
             columns={columns}
             dataSource={initialData}
+            onRow={(record) => ({
+              onClick: () => handleRowClick(record),
+              className: 'cursor-pointer'
+            })}
             pagination={{
               pageSize: 8,
               showSizeChanger: false,
@@ -232,21 +284,32 @@ const SalesPage: React.FC = () => {
             status="pending" 
             orders={initialData.filter(o => o.status === 'pending')} 
             color="bg-blue-500" 
+            onClick={handleRowClick}
           />
           <KanbanColumn 
             title="已完成" 
             status="completed" 
             orders={initialData.filter(o => o.status === 'completed')} 
             color="bg-green-500" 
+            onClick={handleRowClick}
           />
           <KanbanColumn 
             title="已取消" 
             status="cancelled" 
             orders={initialData.filter(o => o.status === 'cancelled')} 
             color="bg-red-500" 
+            onClick={handleRowClick}
           />
         </div>
       )}
+
+      <BulkActionBar 
+        selectedCount={selectedRowKeys.length}
+        onClear={() => setSelectedRowKeys([])}
+        onExport={handleBulkExport}
+        onDelete={handleBulkDelete}
+        onComplete={handleBulkComplete}
+      />
     </motion.div>
   )
 }

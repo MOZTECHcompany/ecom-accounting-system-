@@ -94,6 +94,37 @@
 - ✅ 更新 SalesOrder relations（invoices）
 - ✅ 更新 BankTransaction relations（importBatch, reconciliationResult）
 
+### 7️⃣ 前端深度升級 (Frontend Deep Upgrade) ✅
+
+#### 企業級功能增強
+- ✅ **Excel 報表匯出**：
+  - 整合 `xlsx` 套件
+  - 支援一鍵匯出銷售訂單列表
+  - 自動格式化 JSON 數據為 Excel Sheet
+- ✅ **訂單詳情側邊欄 (Drawer)**：
+  - 新增 `OrderDetailsDrawer` 元件
+  - 實作點擊列表列滑出詳情
+  - 包含訂單時間軸 (Timeline)、客戶資訊、商品明細表格
+  - 支援列印與下載 PDF 按鈕（UI 預留）
+
+#### UI/UX 優化
+- ✅ **SalesPage 完整重構**：
+  - 修正重複宣告錯誤
+  - 整合 Kanban 與 List 視圖切換
+  - 優化玻璃擬態 (Glassmorphism) 視覺效果
+  - 強化 Framer Motion 進場動畫
+
+#### 智慧銷售儀表板與批次操作 (Intelligent Sales Dashboard & Batch Ops) ✅
+- ✅ **視覺化銷售分析 (Sales Analytics)**：
+  - 在銷售頁面頂部新增即時數據儀表板
+  - 整合 `recharts` 顯示趨勢圖 (Area Chart) 與長條圖 (Bar Chart)
+  - 關鍵指標：本週總營收、訂單轉換率、平均客單價 (AOV)
+- ✅ **懸浮式批次操作列 (Floating Bulk Action Bar)**：
+  - 實作 Apple Mail 風格的底部懸浮操作列
+  - 支援多選訂單後觸發：批次完成、批次刪除、批次匯出
+  - 整合 Framer Motion 進場/退場動畫
+  - 顯示即時選取數量與操作提示
+
 ---
 
 ## 📊 變更統計
