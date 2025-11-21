@@ -46,23 +46,23 @@ const DashboardPage: React.FC = () => {
         <Col xs={24} sm={12} lg={6}>
           <motion.div 
             whileHover={{ y: -5 }}
-            className="glass-card p-6 transition-all duration-300 border-l-4 border-blue-500"
+            className="glass-card p-6 transition-all duration-300"
           >
             <div className="flex items-center justify-between mb-4">
-              <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
-                <DollarOutlined className="text-blue-500 text-lg" />
+              <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center backdrop-blur-sm">
+                <DollarOutlined className="text-blue-500 text-xl" />
               </div>
-              <Tag color="green" className="m-0 rounded-full border-none bg-green-50 text-green-600 px-2">
+              <Tag color="green" className="m-0 rounded-full border-none bg-green-500/10 text-green-600 px-3 py-1">
                 +12.5%
               </Tag>
             </div>
             <Statistic
-              title={<span className="text-gray-500 text-sm">今日銷售額</span>}
+              title={<span className="text-gray-500 font-medium">今日銷售額</span>}
               value={128930}
               prefix="$"
-              valueStyle={{ color: '#1d1d1f', fontWeight: 600, fontSize: '24px' }}
+              valueStyle={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '28px', fontFamily: 'SF Pro Display, sans-serif' }}
             />
-            <div className="mt-2 text-xs text-gray-400">
+            <div className="mt-2 text-sm text-gray-400">
               最近 7 天: $892,100
             </div>
           </motion.div>
@@ -71,23 +71,23 @@ const DashboardPage: React.FC = () => {
         <Col xs={24} sm={12} lg={6}>
           <motion.div 
             whileHover={{ y: -5 }}
-            className="glass-card p-6 transition-all duration-300 border-l-4 border-orange-500"
+            className="glass-card p-6 transition-all duration-300"
           >
             <div className="flex items-center justify-between mb-4">
-              <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center">
-                <BankOutlined className="text-orange-500 text-lg" />
+              <div className="w-12 h-12 rounded-full bg-orange-500/10 flex items-center justify-center backdrop-blur-sm">
+                <BankOutlined className="text-orange-500 text-xl" />
               </div>
-              <Tag color="red" className="m-0 rounded-full border-none bg-red-50 text-red-600 px-2">
+              <Tag color="red" className="m-0 rounded-full border-none bg-red-500/10 text-red-600 px-3 py-1">
                 12 筆逾期
               </Tag>
             </div>
             <Statistic
-              title={<span className="text-gray-500 text-sm">未收款應收帳款</span>}
+              title={<span className="text-gray-500 font-medium">未收款應收帳款</span>}
               value={456780}
               prefix="$"
-              valueStyle={{ color: '#1d1d1f', fontWeight: 600, fontSize: '24px' }}
+              valueStyle={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '28px', fontFamily: 'SF Pro Display, sans-serif' }}
             />
-            <div className="mt-2 text-xs text-gray-400">
+            <div className="mt-2 text-sm text-gray-400">
               逾期金額: <span className="text-red-500">$125,000</span>
             </div>
           </motion.div>
@@ -96,20 +96,20 @@ const DashboardPage: React.FC = () => {
         <Col xs={24} sm={12} lg={6}>
           <motion.div 
             whileHover={{ y: -5 }}
-            className="glass-card p-6 transition-all duration-300 border-l-4 border-purple-500"
+            className="glass-card p-6 transition-all duration-300"
           >
             <div className="flex items-center justify-between mb-4">
-              <div className="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center">
-                <ShoppingOutlined className="text-purple-500 text-lg" />
+              <div className="w-12 h-12 rounded-full bg-purple-500/10 flex items-center justify-center backdrop-blur-sm">
+                <ShoppingOutlined className="text-purple-500 text-xl" />
               </div>
             </div>
             <Statistic
-              title={<span className="text-gray-500 text-sm">本月費用總額</span>}
+              title={<span className="text-gray-500 font-medium">本月費用總額</span>}
               value={234000}
               prefix="$"
-              valueStyle={{ color: '#1d1d1f', fontWeight: 600, fontSize: '24px' }}
+              valueStyle={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '28px', fontFamily: 'SF Pro Display, sans-serif' }}
             />
-            <div className="mt-2 text-xs text-gray-400">
+            <div className="mt-2 text-sm text-gray-400">
               預算達成率: <span className="text-blue-500">85%</span>
             </div>
           </motion.div>
@@ -118,22 +118,22 @@ const DashboardPage: React.FC = () => {
         <Col xs={24} sm={12} lg={6}>
           <motion.div 
             whileHover={{ y: -5 }}
-            className="glass-card p-6 transition-all duration-300 border-l-4 border-teal-500"
+            className="glass-card p-6 transition-all duration-300"
           >
             <div className="flex items-center justify-between mb-4">
-              <div className="w-10 h-10 rounded-full bg-teal-50 flex items-center justify-center">
-                <FileTextOutlined className="text-teal-500 text-lg" />
+              <div className="w-12 h-12 rounded-full bg-teal-500/10 flex items-center justify-center backdrop-blur-sm">
+                <FileTextOutlined className="text-teal-500 text-xl" />
               </div>
-              <Tag color="blue" className="m-0 rounded-full border-none bg-blue-50 text-blue-600 px-2">
+              <Tag color="blue" className="m-0 rounded-full border-none bg-blue-500/10 text-blue-600 px-3 py-1">
                 3 筆待簽
               </Tag>
             </div>
             <Statistic
-              title={<span className="text-gray-500 text-sm">待處理單據</span>}
+              title={<span className="text-gray-500 font-medium">待處理單據</span>}
               value={15}
-              valueStyle={{ color: '#1d1d1f', fontWeight: 600, fontSize: '24px' }}
+              valueStyle={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '28px', fontFamily: 'SF Pro Display, sans-serif' }}
             />
-            <div className="mt-2 text-xs text-gray-400">
+            <div className="mt-2 text-sm text-gray-400">
               包含發票與報銷單
             </div>
           </motion.div>

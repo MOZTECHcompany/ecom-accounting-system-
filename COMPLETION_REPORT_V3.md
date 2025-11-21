@@ -426,6 +426,11 @@ CREATE INDEX bank_import_batches_entity_id_imported_at_idx
   - 全域背景升級為 **Mesh Gradient (網格漸層)**，營造高科技與深度的視覺感。
   - 強化 `.glass` 與 `.glass-card` 效果，加入 `backdrop-filter: blur(25px)` 與細緻的內發光邊框 (Inner Border)。
   - 側邊欄 (Sidebar) 與頂部導航 (Header) 全面透明化，讓背景流動感貫穿全站。
+- ✅ **macOS / visionOS 風格升級**：
+  - **浮動側邊欄 (Floating Sidebar)**：側邊欄不再貼邊，改為浮動式玻璃面板，選中狀態採用高亮圓角矩形。
+  - **玻璃圖表 (Glass Charts)**：圖表採用垂直漸層淡出效果，Tooltip 升級為玻璃擬態。
+  - **微交互 (Micro-interactions)**：卡片與列表加入 Hover 放大與光影流動效果。
+  - **視覺層次 (Visual Depth)**：背景加入動態漂浮光球 (Orbs)，增強空間感。
 - ✅ **骨架屏載入 (Skeleton Loading)**：
   - 新增 `PageSkeleton` 元件，模擬儀表板佈局。
   - 在資料載入期間展示流暢的脈衝動畫，提升感知效能。

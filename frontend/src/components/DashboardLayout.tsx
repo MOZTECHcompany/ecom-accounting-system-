@@ -123,25 +123,31 @@ const DashboardLayout: React.FC = () => {
       <CommandPalette />
       <AICopilotWidget />
       <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      
+      {/* Floating Orbs Background */}
+      <div className="orb w-96 h-96 bg-purple-400/30 top-0 left-0 blur-[120px]" />
+      <div className="orb w-96 h-96 bg-blue-400/30 bottom-0 right-0 blur-[120px]" />
+      <div className="orb w-64 h-64 bg-pink-400/30 top-1/2 left-1/2 blur-[100px]" />
+
       <Sider 
         collapsible 
         collapsed={collapsed} 
         onCollapse={setCollapsed}
         width={260}
+        className="floating-sidebar"
         style={{
-          overflow: 'auto',
-          height: '100vh',
+          overflow: 'hidden',
+          height: 'calc(100vh - 32px)',
           position: 'fixed',
           left: 0,
           top: 0,
-          bottom: 0,
           zIndex: 100,
-          background: 'transparent', // Handled by CSS
+          background: 'transparent', // Handled by CSS class
         }}
       >
         <div className="h-16 flex items-center justify-center m-4 mb-8">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center backdrop-blur-md border border-blue-400/30 shadow-lg shadow-blue-500/20">
+            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md border border-white/30 shadow-lg">
               <span className="text-xl">💎</span>
             </div>
             {!collapsed && (
@@ -160,8 +166,8 @@ const DashboardLayout: React.FC = () => {
           className="px-2 bg-transparent border-none"
         />
       </Sider>
-      <Layout style={{ marginLeft: collapsed ? 80 : 260, transition: 'all 0.2s', background: 'transparent' }}>
-        <Header className="sticky top-0 z-50 flex justify-between items-center px-8" style={{ background: 'transparent' }}>
+      <Layout style={{ marginLeft: collapsed ? 112 : 292, transition: 'all 0.2s', background: 'transparent' }}>
+        <Header className="sticky top-0 z-50 flex justify-between items-center px-8 my-4 mx-6 rounded-2xl glass-panel" style={{ height: '64px', padding: '0 24px' }}>
           <div className="flex items-center gap-8">
             <Title level={4} style={{ margin: 0, fontWeight: 500, color: 'var(--text-primary)' }}>
               {menuItems.find(i => i.key === location.pathname)?.label || '儀表板'}
@@ -184,7 +190,7 @@ const DashboardLayout: React.FC = () => {
             </Dropdown>
           </div>
         </Header>
-        <Content style={{ margin: '24px 24px', padding: 0, minHeight: 280 }}>
+        <Content style={{ margin: '0 24px 24px', padding: 0, minHeight: 280 }}>
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}

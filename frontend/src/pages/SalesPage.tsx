@@ -45,7 +45,7 @@ const initialData: Order[] = Array.from({ length: 20 }).map((_, i) => ({
 }))
 
 const KanbanColumn: React.FC<{ title: string; status: string; orders: Order[]; color: string; onClick: (order: Order) => void }> = ({ title, status, orders, color, onClick }) => (
-  <div className="flex-1 min-w-[300px] bg-white/40 backdrop-blur-md rounded-2xl p-4 border border-white/60">
+  <div className="flex-1 min-w-[300px] glass-panel p-4">
     <div className="flex items-center justify-between mb-4">
       <div className="flex items-center gap-2">
         <div className={`w-3 h-3 rounded-full ${color}`} />
@@ -58,18 +58,18 @@ const KanbanColumn: React.FC<{ title: string; status: string; orders: Order[]; c
       {orders.map(order => (
         <motion.div
           key={order.key}
-          whileHover={{ y: -2 }}
+          whileHover={{ y: -4, scale: 1.02 }}
           onClick={() => onClick(order)}
-          className="bg-white/80 p-4 rounded-xl shadow-sm border border-white/50 cursor-pointer hover:shadow-md transition-all"
+          className="glass-card p-4 cursor-pointer !bg-white/80 hover:!bg-white/90 dark:!bg-white/10 dark:hover:!bg-white/20"
         >
           <div className="flex justify-between items-start mb-2">
             <span className="text-blue-600 font-medium text-sm">{order.id}</span>
             <span className="text-xs text-gray-400">{order.date}</span>
           </div>
-          <div className="font-medium text-gray-800 mb-1">{order.customer}</div>
+          <div className="font-medium text-gray-800 dark:text-gray-200 mb-1">{order.customer}</div>
           <div className="flex justify-between items-center mt-3">
             <span className="text-gray-500 text-sm">{order.items} items</span>
-            <span className="font-mono font-medium">NT$ {order.amount.toLocaleString()}</span>
+            <span className="font-mono font-medium dark:text-gray-300">NT$ {order.amount.toLocaleString()}</span>
           </div>
         </motion.div>
       ))}

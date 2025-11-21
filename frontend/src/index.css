@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
   --bg-primary: #f5f5f7;
   --text-primary: #1d1d1f;
   
@@ -11,6 +11,7 @@
   --glass-card-bg: rgba(255, 255, 255, 0.6);
   --glass-card-hover: rgba(255, 255, 255, 0.8);
   --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+  --glass-radius: 24px;
   
   /* Mesh Gradient Colors */
   --mesh-c1: #ff9a9e;
@@ -25,8 +26,8 @@ body.dark {
   /* Dark Mode Glass */
   --glass-bg: rgba(28, 28, 30, 0.65);
   --glass-border: rgba(255, 255, 255, 0.1);
-  --glass-card-bg: rgba(30, 30, 32, 0.6);
-  --glass-card-hover: rgba(44, 44, 46, 0.8);
+  --glass-card-bg: rgba(0, 0, 0, 0.6);
+  --glass-card-hover: rgba(30, 30, 30, 0.8);
   --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
 
   /* Dark Mesh Gradient Colors */
@@ -54,10 +55,12 @@ body {
 }
 
 body:not(.dark) {
+  /* Pale Gray-Blue Mesh Gradient */
   background: 
-    radial-gradient(at 0% 0%, hsla(28,100%,74%,1) 0, transparent 50%), 
-    radial-gradient(at 50% 0%, hsla(189,100%,56%,1) 0, transparent 50%), 
-    radial-gradient(at 100% 0%, hsla(355,100%,93%,1) 0, transparent 50%);
+    radial-gradient(at 0% 0%, rgba(235, 240, 255, 0.8) 0, transparent 50%), 
+    radial-gradient(at 50% 0%, rgba(240, 245, 255, 0.8) 0, transparent 50%), 
+    radial-gradient(at 100% 0%, rgba(225, 235, 250, 0.8) 0, transparent 50%);
+  background-color: #f0f4f8; /* Fallback pale blue-gray */
   background-attachment: fixed;
 }
 
@@ -70,16 +73,23 @@ body:not(.dark) {
   box-shadow: var(--glass-shadow);
 }
 
+.glass-panel {
+  background: var(--glass-card-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: var(--glass-radius);
+}
+
 .glass-card {
   background: var(--glass-card-bg);
-  backdrop-filter: blur(25px) saturate(180%);
-  -webkit-backdrop-filter: blur(25px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid var(--glass-border);
-  box-shadow: 
-    0 4px 24px -1px rgba(0, 0, 0, 0.05),
-    0 0 0 1px rgba(255, 255, 255, 0.1) inset; /* Inner light border */
-  border-radius: 16px;
-  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+  box-shadow: var(--glass-shadow);
+  border-radius: var(--glass-radius);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
 .glass-card:hover {
@@ -88,7 +98,62 @@ body:not(.dark) {
     0 20px 40px -5px rgba(0, 0, 0, 0.1),
     0 10px 20px -5px rgba(0, 0, 0, 0.04),
     0 0 0 1px rgba(255, 255, 255, 0.2) inset;
-  transform: translateY(-4px) scale(1.005);
+  transform: scale(1.02);
+  z-index: 10;
+}
+
+/* Floating Sidebar */
+.floating-sidebar {
+  margin: 16px;
+  border-radius: var(--glass-radius);
+  height: calc(100vh - 32px) !important;
+  box-shadow: var(--glass-shadow);
+  border: 1px solid var(--glass-border);
+}
+
+/* Active Menu Item */
+.ant-menu-item-selected {
+  background: rgba(255, 255, 255, 0.9) !important;
+  color: #007AFF !important;
+  font-weight: 600;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+body.dark .ant-menu-item-selected {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #fff !important;
+}
+
+/* Glass Tooltip */
+.glass-tooltip {
+  background: rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(12px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+  color: var(--text-primary) !important;
+}
+
+body.dark .glass-tooltip {
+  background: rgba(30, 30, 30, 0.8) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Orbs */
+.orb {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(80px);
+  z-index: -1;
+  opacity: 0.6;
+  animation: float 20s infinite ease-in-out;
+}
+
+@keyframes float {
+  0% { transform: translate(0, 0); }
+  50% { transform: translate(20px, -20px); }
+  100% { transform: translate(0, 0); }
 }
 
 /* Apple-style Buttons */

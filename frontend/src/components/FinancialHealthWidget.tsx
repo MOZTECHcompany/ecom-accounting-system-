@@ -42,11 +42,12 @@ const FinancialHealthWidget: React.FC = () => {
             className="h-full"
           >
             <Card 
-              className="glass-card !border-0 h-full" 
+              bordered={false}
+              className="glass-card h-full" 
               title={
                 <div className="flex items-center gap-2">
-                  <span className="font-medium">現金流預測 (Cash Flow Forecast)</span>
-                  <Tooltip title="基於歷史數據與 AI 模型預測未來 3 個月的現金流向">
+                  <span className="font-medium text-lg">現金流預測 (Cash Flow Forecast)</span>
+                  <Tooltip title="基於歷史數據與 AI 模型預測未來 3 個月的現金流向" overlayClassName="glass-tooltip">
                     <InfoCircleOutlined className="text-gray-400" />
                   </Tooltip>
                 </div>
@@ -57,39 +58,50 @@ const FinancialHealthWidget: React.FC = () => {
                   <AreaChart data={cashFlowData}>
                     <defs>
                       <linearGradient id="colorActual" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#1890ff" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#1890ff" stopOpacity={0}/>
+                        <stop offset="5%" stopColor="#007AFF" stopOpacity={0.4}/>
+                        <stop offset="95%" stopColor="#007AFF" stopOpacity={0}/>
                       </linearGradient>
                       <linearGradient id="colorProjected" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#52c41a" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#52c41a" stopOpacity={0}/>
+                        <stop offset="5%" stopColor="#34C759" stopOpacity={0.4}/>
+                        <stop offset="95%" stopColor="#34C759" stopOpacity={0}/>
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                    <XAxis dataKey="month" axisLine={false} tickLine={false} />
-                    <YAxis axisLine={false} tickLine={false} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
+                    <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#86868b', fontSize: 12 }} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#86868b', fontSize: 12 }} />
                     <RechartsTooltip 
-                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                      contentStyle={{ 
+                        backgroundColor: 'rgba(255, 255, 255, 0.8)', 
+                        backdropFilter: 'blur(12px)',
+                        borderRadius: '16px', 
+                        border: '1px solid rgba(255,255,255,0.3)', 
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+                        padding: '12px'
+                      }}
+                      itemStyle={{ color: '#1d1d1f', fontWeight: 500 }}
+                      cursor={{ stroke: 'rgba(0,0,0,0.1)', strokeWidth: 2 }}
                     />
-                    <Legend />
+                    <Legend iconType="circle" />
                     <Area 
                       type="monotone" 
                       dataKey="actual" 
                       name="實際現金流" 
-                      stroke="#1890ff" 
+                      stroke="#007AFF" 
                       fillOpacity={1} 
                       fill="url(#colorActual)" 
                       strokeWidth={3}
+                      activeDot={{ r: 6, strokeWidth: 0, fill: '#007AFF' }}
                     />
                     <Area 
                       type="monotone" 
                       dataKey="projected" 
                       name="預測現金流" 
-                      stroke="#52c41a" 
+                      stroke="#34C759" 
                       fillOpacity={1} 
                       fill="url(#colorProjected)" 
                       strokeDasharray="5 5"
                       strokeWidth={3}
+                      activeDot={{ r: 6, strokeWidth: 0, fill: '#34C759' }}
                     />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -108,7 +120,7 @@ const FinancialHealthWidget: React.FC = () => {
               transition={{ delay: 0.2 }}
               className="flex-1"
             >
-              <Card className="glass-card !border-0 h-full" title="本月費用結構">
+              <Card bordered={false} className="glass-card h-full" title="本月費用結構">
                 <div className="h-[200px] relative">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -120,16 +132,27 @@ const FinancialHealthWidget: React.FC = () => {
                         outerRadius={70}
                         paddingAngle={5}
                         dataKey="value"
+                        stroke="none"
                       >
                         {expenseData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} style={{ filter: 'drop-shadow(0px 4px 4px rgba(0,0,0,0.1))' }} />
                         ))}
                       </Pie>
-                      <RechartsTooltip />
+                      <RechartsTooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'rgba(255, 255, 255, 0.8)', 
+                          backdropFilter: 'blur(12px)',
+                          borderRadius: '12px', 
+                          border: '1px solid rgba(255,255,255,0.3)', 
+                          boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+                          padding: '8px'
+                        }}
+                        itemStyle={{ color: '#1d1d1f', fontSize: '12px' }}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
-                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center">
-                    <div className="text-xl font-bold text-gray-700">120K</div>
+                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
+                    <div className="text-xl font-bold text-gray-700 font-sf">120K</div>
                     <div className="text-xs text-gray-400">Total</div>
                   </div>
                 </div>
@@ -137,10 +160,10 @@ const FinancialHealthWidget: React.FC = () => {
                   {expenseData.map((item, index) => (
                     <div key={index} className="flex justify-between items-center text-sm">
                       <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                        <div className="w-2 h-2 rounded-full shadow-sm" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
                         <span className="text-gray-600">{item.name}</span>
                       </div>
-                      <span className="font-medium">{Math.round(item.value / 120000 * 100)}%</span>
+                      <span className="font-medium font-sf">{Math.round(item.value / 120000 * 100)}%</span>
                     </div>
                   ))}
                 </div>
@@ -153,16 +176,16 @@ const FinancialHealthWidget: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
             >
-              <Card className="glass-card !border-0 bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+              <Card bordered={false} className="glass-card !border-0 bg-gradient-to-br from-blue-500/90 to-indigo-600/90 text-white backdrop-blur-xl shadow-lg shadow-blue-500/20">
                 <div className="flex justify-between items-center mb-4">
-                  <span className="text-white/80 font-medium">流動比率 (Current Ratio)</span>
-                  <Tooltip title="流動資產 / 流動負債，建議值 > 1.5">
-                    <InfoCircleOutlined className="text-white/60" />
+                  <span className="text-white/90 font-medium">流動比率 (Current Ratio)</span>
+                  <Tooltip title="流動資產 / 流動負債，建議值 > 1.5" overlayClassName="glass-tooltip">
+                    <InfoCircleOutlined className="text-white/70" />
                   </Tooltip>
                 </div>
                 <div className="flex items-end gap-3 mb-2">
-                  <span className="text-4xl font-bold">2.4</span>
-                  <span className="text-green-300 flex items-center mb-1 text-sm font-medium">
+                  <span className="text-4xl font-bold font-sf">2.4</span>
+                  <span className="text-green-300 flex items-center mb-1 text-sm font-medium bg-white/10 px-2 py-0.5 rounded-full backdrop-blur-md">
                     <ArrowUpOutlined /> 健康
                   </span>
                 </div>
