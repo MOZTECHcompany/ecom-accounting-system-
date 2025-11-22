@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { JournalService } from '../../accounting/services/journal.service';
 import { Decimal } from '@prisma/client/runtime/library';
+import { InventoryService } from '../../inventory/inventory.service';
 
 /**
  * SalesOrderService
@@ -33,6 +34,7 @@ export class SalesOrderService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly journalService: JournalService,
+    private readonly inventoryService: InventoryService,
   ) {}
 
   /**
@@ -44,6 +46,7 @@ export class SalesOrderService {
     data: {
       entityId: string;
       channelId: string;
+      warehouseId?: string; // 出貨倉庫（預留給庫存預留使用）
       customerId?: string;
       externalOrderId?: string;
       orderDate: Date;
@@ -119,6 +122,21 @@ export class SalesOrderService {
     });
 
     this.logger.log(`Created sales order ${order.id}`);
+
+    // 若有提供 warehouseId，建立訂單後預留庫存
+    if (data.warehouseId) {
+      for (const item of data.items) {
+        await this.inventoryService.reserveStock({
+          entityId: data.entityId,
+          warehouseId: data.warehouseId,
+          productId: item.productId,
+          quantity: item.qty,
+          referenceType: 'SALES_ORDER',
+          referenceId: order.id,
+        });
+      }
+      this.logger.log(`Reserved inventory for sales order ${order.id} in warehouse ${data.warehouseId}`);
+    }
 
     return order;
   }

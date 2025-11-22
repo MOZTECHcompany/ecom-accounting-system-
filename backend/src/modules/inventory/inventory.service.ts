@@ -1,0 +1,240 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../../common/prisma/prisma.service';
+import { Prisma } from '@prisma/client';
+
+interface AdjustStockInput {
+  entityId: string;
+  warehouseId: string;
+  productId: string;
+  quantity: Prisma.Decimal | number; // 正數: IN, 負數: OUT
+  direction: 'IN' | 'OUT' | 'ADJUST';
+  referenceType: string; // PURCHASE_ORDER, SALES_ORDER, ADJUSTMENT 等
+  referenceId?: string;
+  reason?: string;
+  occurredAt?: Date;
+}
+
+interface ReserveStockInput {
+  entityId: string;
+  warehouseId: string;
+  productId: string;
+  quantity: Prisma.Decimal | number;
+  referenceType: 'SALES_ORDER';
+  referenceId: string;
+}
+
+@Injectable()
+export class InventoryService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * 取得指定商品在所有倉庫的庫存快照
+   */
+  async getSnapshotsForProduct(entityId: string, productId: string) {
+    return this.prisma.inventorySnapshot.findMany({
+      where: { entityId, productId },
+      include: {
+        warehouse: true,
+        product: true,
+      },
+      orderBy: {
+        warehouse: {
+          code: 'asc',
+        },
+      },
+    });
+  }
+
+  /**
+   * 通用庫存異動（進貨入庫、出貨出庫、盤點調整等）
+   */
+  async adjustStock(input: AdjustStockInput) {
+    const {
+      entityId,
+      warehouseId,
+      productId,
+      quantity,
+      direction,
+      referenceType,
+      referenceId,
+      reason,
+      occurredAt,
+    } = input;
+
+    // 確保倉庫與商品存在
+    const [warehouse, product] = await Promise.all([
+      this.prisma.warehouse.findFirst({ where: { id: warehouseId, entityId, isActive: true } }),
+      this.prisma.product.findFirst({ where: { id: productId, entityId, isActive: true } }),
+    ]);
+
+    if (!warehouse) {
+      throw new NotFoundException('Warehouse not found or inactive');
+    }
+    if (!product) {
+      throw new NotFoundException('Product not found or inactive');
+    }
+
+    const qty = new Prisma.Decimal(quantity as any);
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. 建立異動紀錄
+      const movement = await tx.inventoryTransaction.create({
+        data: {
+          entityId,
+          warehouseId,
+          productId,
+          direction,
+          quantity: qty,
+          referenceType,
+          referenceId,
+          reason,
+          occurredAt: occurredAt ?? new Date(),
+        },
+      });
+
+      // 2. 取得或建立 snapshot
+      const snapshot = await tx.inventorySnapshot.upsert({
+        where: {
+          entityId_warehouseId_productId: {
+            entityId,
+            warehouseId,
+            productId,
+          },
+        },
+        create: {
+          entityId,
+          warehouseId,
+          productId,
+          qtyOnHand: direction === 'IN' ? qty : qty.mul(-1),
+          qtyAllocated: new Prisma.Decimal(0),
+          qtyAvailable: direction === 'IN' ? qty : qty.mul(-1),
+        },
+        update: {
+          qtyOnHand:
+            direction === 'IN'
+              ? { increment: qty }
+              : direction === 'OUT'
+              ? { decrement: qty }
+              : qty, // ADJUST 模式下可視需要改成直接覆寫
+          qtyAvailable:
+            direction === 'IN'
+              ? { increment: qty }
+              : direction === 'OUT'
+              ? { decrement: qty }
+              : qty,
+        },
+      });
+
+      return { movement, snapshot };
+    });
+  }
+
+  /**
+   * 預留庫存（銷售訂單建立時）
+   */
+  async reserveStock(input: ReserveStockInput) {
+    const { entityId, warehouseId, productId, quantity, referenceId, referenceType } = input;
+    const qty = new Prisma.Decimal(quantity as any);
+
+    return this.prisma.$transaction(async (tx) => {
+      // 檢查是否有足夠可用庫存
+      const snapshot = await tx.inventorySnapshot.findUnique({
+        where: {
+          entityId_warehouseId_productId: {
+            entityId,
+            warehouseId,
+            productId,
+          },
+        },
+      });
+
+      if (!snapshot || snapshot.qtyAvailable.lt(qty)) {
+        throw new NotFoundException('Not enough available stock to reserve');
+      }
+
+      // 建立異動紀錄（RESERVE）
+      const movement = await tx.inventoryTransaction.create({
+        data: {
+          entityId,
+          warehouseId,
+          productId,
+          direction: 'RESERVE',
+          quantity: qty,
+          referenceType,
+          referenceId,
+          occurredAt: new Date(),
+        },
+      });
+
+      // 更新 snapshot：Allocated +, Available -
+      const updatedSnapshot = await tx.inventorySnapshot.update({
+        where: {
+          entityId_warehouseId_productId: {
+            entityId,
+            warehouseId,
+            productId,
+          },
+        },
+        data: {
+          qtyAllocated: { increment: qty },
+          qtyAvailable: { decrement: qty },
+        },
+      });
+
+      return { movement, snapshot: updatedSnapshot };
+    });
+  }
+
+  /**
+   * 釋放預留庫存（訂單取消或調整）
+   */
+  async releaseReservedStock(input: ReserveStockInput) {
+    const { entityId, warehouseId, productId, quantity, referenceId, referenceType } = input;
+    const qty = new Prisma.Decimal(quantity as any);
+
+    return this.prisma.$transaction(async (tx) => {
+      const snapshot = await tx.inventorySnapshot.findUnique({
+        where: {
+          entityId_warehouseId_productId: {
+            entityId,
+            warehouseId,
+            productId,
+          },
+        },
+      });
+
+      if (!snapshot || snapshot.qtyAllocated.lt(qty)) {
+        throw new NotFoundException('Not enough allocated stock to release');
+      }
+
+      const movement = await tx.inventoryTransaction.create({
+        data: {
+          entityId,
+          warehouseId,
+          productId,
+          direction: 'RELEASE',
+          quantity: qty,
+          referenceType,
+          referenceId,
+          occurredAt: new Date(),
+        },
+      });
+
+      const updatedSnapshot = await tx.inventorySnapshot.update({
+        where: {
+          entityId_warehouseId_productId: {
+            entityId,
+            warehouseId,
+            productId,
+          },
+        },
+        data: {
+          qtyAllocated: { decrement: qty },
+          qtyAvailable: { increment: qty },
+        },
+      });
+
+      return { movement, snapshot: updatedSnapshot };
+    });
+  }
+}

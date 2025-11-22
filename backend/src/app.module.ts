@@ -25,6 +25,8 @@ import { PayrollModule } from './modules/payroll/payroll.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { InvoicingModule } from './modules/invoicing/invoicing.module';
 import { ReconciliationModule } from './modules/reconciliation/reconciliation.module';
+import { VendorModule } from './modules/vendor/vendor.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
 
 /**
  * AppModule
@@ -61,6 +63,8 @@ import { ReconciliationModule } from './modules/reconciliation/reconciliation.mo
     AuthModule,
     UsersModule,
     EntitiesModule,
+    VendorModule,
+    InventoryModule,
     
     // 2. 核心會計模組（被其他模組依賴）
     AccountingModule,

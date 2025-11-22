@@ -333,10 +333,77 @@ model Product {
   productBatches     ProductBatch[]
   devCosts           DevCost[]
   invoiceLines       InvoiceLine[]
+  inventorySnapshots InventorySnapshot[]
+  inventoryMovements InventoryTransaction[]
 
   @@unique([entityId, sku])
   @@index([entityId])
   @@map("products")
+}
+
+// 倉庫（多倉管理：公司倉、3PL、平台倉等）
+model Warehouse {
+  id        String   @id @default(uuid())
+  entityId  String   @map("entity_id")
+  code      String
+  name      String
+  type      String   @default("INTERNAL") // INTERNAL, 3PL, PLATFORM
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  entity     Entity               @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  snapshots  InventorySnapshot[]
+  movements  InventoryTransaction[]
+
+  @@unique([entityId, code])
+  @@index([entityId])
+  @@map("warehouses")
+}
+
+// 庫存快照（每商品/每倉庫一筆，紀錄 OnHand/Allocated/Available）
+model InventorySnapshot {
+  id           String   @id @default(uuid())
+  entityId     String   @map("entity_id")
+  warehouseId  String   @map("warehouse_id")
+  productId    String   @map("product_id")
+
+  qtyOnHand    Decimal  @default(0) @map("qty_on_hand") @db.Decimal(18, 2)
+  qtyAllocated Decimal  @default(0) @map("qty_allocated") @db.Decimal(18, 2)
+  qtyAvailable Decimal  @default(0) @map("qty_available") @db.Decimal(18, 2)
+
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  entity    Entity    @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  product   Product   @relation(fields: [productId], references: [id])
+
+  @@unique([entityId, warehouseId, productId])
+  @@index([productId])
+  @@map("inventory_snapshots")
+}
+
+// 庫存異動流水（入庫/出庫/預留/釋放/調整）
+model InventoryTransaction {
+  id            String   @id @default(uuid())
+  entityId      String   @map("entity_id")
+  warehouseId   String   @map("warehouse_id")
+  productId     String   @map("product_id")
+  direction     String   // IN, OUT, RESERVE, RELEASE, ADJUST
+  quantity      Decimal  @map("quantity") @db.Decimal(18, 2)
+  referenceType String   // PURCHASE_ORDER, SALES_ORDER, ADJUSTMENT, STOCK_TAKE 等
+  referenceId   String?  @map("reference_id")
+  reason        String?
+  occurredAt    DateTime @map("occurred_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  entity    Entity    @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  product   Product   @relation(fields: [productId], references: [id])
+
+  @@index([entityId, warehouseId, productId])
+  @@index([referenceType, referenceId])
+  @@map("inventory_transactions")
 }
 
 // 銷售訂單

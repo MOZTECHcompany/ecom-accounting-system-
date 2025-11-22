@@ -70,6 +70,7 @@ const DashboardLayout: React.FC = () => {
       icon: <DollarOutlined />,
       label: '應付帳款',
       children: [
+        { key: '/vendors', label: '供應商管理', onClick: () => navigate('/vendors') },
         { key: '/ap/invoices', label: '應付帳款' },
         { key: '/ap/expenses', label: '費用申請' },
       ],

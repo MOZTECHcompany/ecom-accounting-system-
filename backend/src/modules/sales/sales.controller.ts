@@ -3,13 +3,14 @@ import {
   Get,
   Post,
   Body,
-  Query,
+  Post,
   Param,
   UseGuards,
   ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
   ApiOperation,
   ApiBearerAuth,
   ApiQuery,
@@ -20,7 +21,7 @@ import { SalesService } from './sales.service';
 import { SalesOrderService } from './services/sales-order.service';
 import { CreateSalesOrderDto } from './dto/create-sales-order.dto';
 
-/**
+@ApiTags('sales')
  * SalesController
  * 銷售控制器
  */
@@ -95,6 +96,16 @@ export class SalesController {
   @ApiQuery({ name: 'entityId', required: true, description: '公司實體ID' })
   async createMockOrder(
     @Query('entityId', ParseUUIDPipe) entityId: string,
+
+  @Post('orders/:id/fulfill')
+  @ApiOperation({ summary: '銷售訂單出貨並自動更新庫存' })
+  async fulfillOrder(
+    @Query('entityId') entityId: string,
+    @Query('warehouseId') warehouseId: string,
+    @Query('salesOrderId') salesOrderId: string,
+  ) {
+    return this.salesService.fulfillSalesOrder({ entityId, warehouseId, salesOrderId });
+  }
     @CurrentUser('id') userId: string,
   ) {
     return this.salesOrderService.createMockOrder(entityId, userId);

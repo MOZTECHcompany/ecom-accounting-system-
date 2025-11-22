@@ -39,3 +39,34 @@ export interface Account {
     name: string
   }
 }
+
+export interface Vendor {
+  id: string
+  code: string
+  name: string
+  taxId?: string
+  contactPerson?: string
+  email?: string
+  phone?: string
+  address?: string
+  paymentTerms?: string
+  currency: string
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateVendorDto {
+  code: string
+  name: string
+  taxId?: string
+  contactPerson?: string
+  email?: string
+  phone?: string
+  address?: string
+  paymentTerms?: string
+  currency?: string
+  isActive?: boolean
+}
+
+export type UpdateVendorDto = Partial<CreateVendorDto>

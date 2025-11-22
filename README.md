@@ -12,6 +12,16 @@
 ## 📋 目錄
 
 - [系統特色](#-系統特色)
+  - [商業面亮點](#商業面亮點)
+  - [技術架構](#技術架構)
+- [前端 UI/UX 升級總覽](#-前端-uiux-升級總覽)
+  - [Deep Glass Dashboard](#deep-glass-dashboard)
+  - [AI Insights Widget](#ai-insights-widget)
+  - [動態體驗與互動](#動態體驗與互動)
+- [電商 + 庫存整合設計](#-電商--庫存整合設計)
+  - [Inventory 模組與資料模型](#inventory-模組與資料模型)
+  - [銷售流程：訂單 → 預留 → 出貨](#銷售流程訂單--預留--出貨)
+  - [採購流程：PO → 成本 → 入庫掛點](#採購流程po--成本--入庫掛點)
 - [快速開始](#-快速開始)
   - [方式一：GitHub Codespaces（推薦）](#方式一github-codespaces推薦)
   - [方式二：本機開發](#方式二本機開發)
@@ -23,25 +33,53 @@
 - [RBAC 權限系統](#-rbac-權限系統)
 - [種子資料](#-種子資料)
 - [測試](#-測試)
-- [部署到 Render](#-部署到-render)
-- [開發指南](#️-開發指南)
 
 ## 🌟 系統特色
 
-### 核心功能
-- ✅ **多公司實體管理** - 支援跨國營運，每個實體獨立會計帳
-- ✅ **多幣別支援** - 4欄位金額標準（原幣、幣別、匯率、本位幣）
-- ✅ **多平台整合** - Shopify、momo、PChome、Shopee、Amazon 等9個平台
-- ✅ **完整會計循環** - 分錄、過帳、試算、結帳、報表
-- ✅ **RBAC權限控制** - ADMIN、ACCOUNTANT、OPERATOR 三層角色
-- ✅ **審批流程** - 費用申請、薪資發放等需要審批
-- ✅ **銀行對帳** - 自動匹配銀行交易與會計記錄
+### 商業面亮點
+- ✅ **多公司實體管理**：支援跨國營運，每個實體獨立會計帳。
+- ✅ **多幣別支援**：全系統採用 4 欄位金額標準（原幣、幣別、匯率、本位幣）。
+- ✅ **多電商平台整合規劃**：對應 Shopify、momo、PChome、Shopee、Amazon 等 9 個平台的銷售渠道模型。
+- ✅ **完整會計循環**：分錄、過帳、試算、結帳、報表一路打通。
+- ✅ **RBAC 權限控制**：ADMIN / ACCOUNTANT / OPERATOR 三層角色，支援細緻資源權限。
+- ✅ **審批流程**：費用申請、薪資發放等關鍵流程都有審批節點。
+- ✅ **銀行對帳**：支援銀行交易匯入與會計紀錄對應，預留自動匹配規則。
 
 ### 技術架構
-- **Backend**: NestJS 11.x + TypeScript + Prisma ORM
-- **Database**: PostgreSQL 16
-- **Frontend**: React 18 + Vite + Ant Design + TypeScript
-- **部署**: Docker Compose + GitHub Codespaces Ready
+- **Backend**：NestJS 11.x + TypeScript + Prisma ORM
+- **Database**：PostgreSQL 16
+- **Frontend**：React 18 + Vite + Ant Design + TypeScript
+- **部署**：Docker Compose + GitHub Codespaces Ready
+
+---
+
+## 🎨 前端 UI/UX 升級總覽
+
+這個專案的前端不只是管理介面，而是一個「有靈魂的財務操作台」，特別針對財會與電商營運人員的日常使用場景做優化。
+
+### Deep Glass Dashboard
+
+- **半透明玻璃卡片**：Dashboard 主要區塊採用 glassmorphism 設計，搭配柔和邊框與陰影，讓多維度財務資訊在視覺上更有層次。
+- **模組化資訊卡**：營收、毛利、訂單數、庫存風險等卡片模組化，未來可自由增減或替換。
+- **高對比但不刺眼的色彩**：針對長時間閱讀報表/列表優化，減少視覺疲勞。
+
+### AI Insights Widget
+
+- **位置**：放在 `DashboardPage`，作為「右下角的 AI 財務顧問」。
+- **功能定位**：將多張報表與即時數據消化成 2~3 句可讀性高的洞見（例如：平台毛利異常、品類庫存週轉天數拉長等）。
+- **視覺細節**：
+  - Shimmering Border：外框有微光流動效果，暗示「正在思考 / 分析」。
+  - Typewriter Effect：文字逐字打出，讓 AI 洞見感覺像現場生成而非死板數據。
+
+### 動態體驗與互動
+
+- **`DashboardLayout`**：
+  - 左側側邊選單依模組分群（會計 / 銷售 / AR / AP / 銀行 / 薪資 / 報表等）。
+  - 已將「供應商管理 (Vendors)」加入 AP 群組，對應後端 Vendor 模組與前端 `VendorsPage`。
+- **動畫與過場**：使用 Framer Motion 做細微淡入與 hover 動畫，讓使用手感更接近 SaaS 產品而非傳統 MIS。
+- **表單與列表體驗**：
+  - 採用 Ant Design Table + Modal Form 模式（如 `AccountsPage`、`VendorsPage`）。
+  - 針對欄位排版、對齊與 Tag 顏色做精緻調整，提升密集財務資訊的可掃描性。
 
 ---
 
@@ -244,28 +282,32 @@ ecom-accounting-system/
 │   │   └── seed.ts            # 種子資料
 │   ├── src/
 │   │   ├── common/            # 共用模組（Guards、Decorators、Prisma）
-│   │   └── modules/           # 業務模組（12個）
+│   │   └── modules/           # 業務模組
 │   │       ├── auth/          # 認證授權
 │   │       ├── users/         # 使用者管理
 │   │       ├── entities/      # 實體管理
 │   │       ├── accounting/    # 會計核心
-│   │       ├── sales/         # 銷售管理
+│   │       ├── sales/         # 銷售管理（訂單、渠道、客戶）
 │   │       ├── ar/            # 應收帳款
 │   │       ├── ap/            # 應付帳款
 │   │       ├── expense/       # 費用管理
-│   │       ├── cost/          # 成本管理
+│   │       ├── cost/          # 成本與進貨成本
+│   │       ├── inventory/     # 庫存管理（倉庫、快照、庫存異動）
+│   │       ├── vendor/        # 供應商管理 API
 │   │       ├── banking/       # 銀行對帳
 │   │       ├── payroll/       # 薪資管理
 │   │       ├── approvals/     # 審批流程
+│   │       ├── invoicing/     # 電子發票整合
+│   │       ├── reconciliation/# 銀行對帳結果與調節
 │   │       └── reports/       # 財務報表
 │   └── Dockerfile
 ├── frontend/                   # React 前端
 │   ├── src/
-│   │   ├── components/        # UI 元件
-│   │   ├── contexts/          # Context (AuthContext)
-│   │   ├── pages/             # 頁面 (Login, Accounts)
-│   │   ├── services/          # API Services
-│   │   └── App.tsx
+│   │   ├── components/        # UI 元件（DashboardLayout、AIInsightsWidget 等）
+│   │   ├── contexts/          # Context (AuthContext, ThemeContext)
+│   │   ├── pages/             # 頁面 (Login, Dashboard, Accounts, Vendors ...)
+│   │   ├── services/          # API Services（accounting, auth, vendor ...）
+│   │   └── App.tsx            # 路由與整體佈局
 │   └── package.json
 ├── .devcontainer/              # DevContainer 配置
 │   └── devcontainer.json
@@ -278,7 +320,7 @@ ecom-accounting-system/
 
 ## 🧩 資料庫 Schema
 
-### 核心資料表（36個）
+### 核心資料表（> 36 個，包含電商與庫存）
 
 #### 系統核心
 - `users` - 使用者
@@ -304,6 +346,11 @@ ecom-accounting-system/
 - `sales_order_items` - 訂單明細
 - `shipments` - 出貨記錄
 - `payments` - 付款記錄
+
+#### 庫存模組（Inventory）
+- `warehouses` - 倉庫（公司倉、3PL、平台倉等）
+- `inventory_snapshots` - 庫存快照（每實體 × 倉庫 × 商品一筆，紀錄 OnHand / Allocated / Available）
+- `inventory_transactions` - 庫存異動流水（入庫 / 出庫 / 預留 / 釋放 / 調整）
 
 #### AR/AP
 - `ar_invoices` - 應收發票
@@ -828,4 +875,67 @@ curl -X POST http://localhost:3000/reconciliation/bank/unmatch \
 5. 開啟 Pull Request
 
 ---
+
+### 8️⃣ 前端深度升級 (Frontend Deep Upgrade) ✅
+
+我們將前端從傳統的後台管理介面，升級為現代化、高互動性的 SaaS 產品體驗。
+
+#### 🎨 視覺與設計語言 (Visual & Design Language)
+- **Deep Glass UI (深層玻璃擬態)**：
+  - 捨棄平面的白色背景，改用 **Mesh Gradient (網格漸層)** 作為全域背景，營造空間深度。
+  - 實作 **Apple-style Glassmorphism**：
+    - `backdrop-filter: blur(40px) saturate(200%)` 創造極致通透感。
+    - 引入 **Specular Border (鏡面邊框)**，模擬真實玻璃邊緣的光線折射。
+    - 側邊欄與頂部導航完全透明化，讓背景流動感貫穿全站。
+- **Dark Mode (深色模式)**：
+  - 完整支援一鍵切換深色/淺色主題。
+  - 使用 CSS Variables (`--glass-bg`, `--text-primary`) 確保切換流暢無閃爍。
+  - 針對深色模式優化了玻璃材質的透明度與光澤感。
+
+#### 🎬 動態設計 (Motion Design)
+- **Staggered Entry (交錯進場)**：
+  - 頁面載入時，卡片與元件採用 `stagger` 策略依序滑入，消除資訊轟炸的壓迫感。
+- **Ambient Background (環境氛圍)**：
+  - 背景中的彩色光球 (Orbs) 會緩慢漂浮與變形 (`float` animation)，賦予畫面生命力，避免死板。
+- **Micro-interactions (微交互)**：
+  - 按鈕、卡片懸浮時的細微放大與光影變化。
+  - 點擊回饋與轉場動畫。
+
+#### ⚡️ 生產力與互動 (Productivity & Interaction)
+- **Living Data (即時數據模擬)**：
+  - 儀表板不再是靜態圖片。數字會模擬即時跳動，並在變動時觸發 **Flash Text** 視覺脈衝。
+  - 新增 "Live Updates" 呼吸燈指示器，強化系統運作中的感知。
+- **Command Palette (全域指令面板)**：
+  - 按下 `Cmd + K` (Mac) 或 `Ctrl + K` (Win) 喚起。
+  - 支援鍵盤優先導航：快速跳轉頁面、執行系統指令 (登出、切換主題)。
+  - 介面採用 Deep Glass 風格，與整體 UI 完美融合。
+- **Floating Bulk Action Bar (懸浮批次操作)**：
+  - 類似 Apple Mail 的設計，當選取列表項目時，底部自動浮現操作列。
+  - 支援批次刪除、匯出、審核等動作。
+
+#### 🤖 AI 整合 (AI Integration)
+- **AI Insights Widget (智慧洞察元件)**：
+  - 儀表板頂部的主動式 AI 分析區塊。
+  - **Shimmering Border (流光邊框)**：使用流動的極光邊框暗示 AI 運算能量。
+  - **Typewriter Effect (打字機效果)**：模擬 AI 逐字生成報告的過程。
+- **AI Copilot Widget (懸浮助理)**：
+  - 右下角的常駐 AI 助手，支援自然語言問答。
+  - 提供快捷指令 (Suggested Prompts) 引導使用者探索數據。
+
+#### 📊 數據視覺化 (Data Visualization)
+- **Sales Analytics (銷售分析)**：
+  - 整合 `recharts` 繪製高質感圖表。
+  - 支援 Area Chart (趨勢)、Bar Chart (比較)、Composed Chart (複合分析)。
+  - 圖表配色自動適應深色/淺色主題。
+- **Excel Export (報表匯出)**：
+  - 前端直接生成 Excel 檔案，支援自定義欄位與格式。
+
+#### 🛠️ 系統功能 (System Features)
+- **Order Details Drawer (訂單詳情側邊欄)**：
+  - 點擊列表不跳頁，直接滑出詳情側邊欄，保持工作流暢。
+  - 包含訂單時間軸 (Timeline) 與商品明細。
+- **Login Page Upgrade (登入頁升級)**：
+  - 動態背景光暈。
+  - 密碼強度即時檢測。
+  - 社交登入 UI 整合。
 

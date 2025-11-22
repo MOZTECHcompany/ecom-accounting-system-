@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { InventoryService } from '../inventory/inventory.service';
 
 /**
  * 成本管理服務
@@ -11,12 +12,15 @@ import { Injectable } from '@nestjs/common';
  */
 @Injectable()
 export class CostService {
+  constructor(private readonly inventoryService: InventoryService) {}
+
   /**
    * 記錄進貨成本
    */
   async recordPurchaseCost(purchaseOrderId: string) {
     // TODO: 計算進貨總成本（含運費、關稅等）
     // TODO: 產生進貨成本分錄
+    // TODO: 呼叫 InventoryService.adjustStock 依進貨明細入庫
   }
 
   /**
