@@ -1,4 +1,4 @@
-import { api } from './api'
+import api from './api'
 import { Vendor, CreateVendorDto, UpdateVendorDto } from '../types'
 
 export const vendorService = {
