@@ -8,8 +8,7 @@ import {
   ShoppingOutlined, 
   UserOutlined,
   SettingOutlined,
-  LogoutOutlined,
-  RightOutlined
+  LogoutOutlined
 } from '@ant-design/icons'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -30,11 +29,11 @@ const CommandPalette: React.FC = () => {
   }, [])
 
   const pages = [
-    { id: 'dashboard', name: '儀表板', icon: <DashboardOutlined />, path: '/dashboard' },
-    { id: 'sales', name: '銷售訂單', icon: <ShoppingOutlined />, path: '/sales/orders' },
-    { id: 'customers', name: '客戶管理', icon: <UserOutlined />, path: '/sales/customers' },
-    { id: 'accounting', name: '會計科目', icon: <FileTextOutlined />, path: '/accounting/accounts' },
-    { id: 'settings', name: '系統設定', icon: <SettingOutlined />, path: '/settings' },
+    { id: 'dashboard', name: 'Dashboard', icon: <DashboardOutlined />, path: '/dashboard' },
+    { id: 'sales', name: 'Sales Orders', icon: <ShoppingOutlined />, path: '/sales/orders' },
+    { id: 'customers', name: 'Customers', icon: <UserOutlined />, path: '/sales/customers' },
+    { id: 'accounting', name: 'Chart of Accounts', icon: <FileTextOutlined />, path: '/accounting/accounts' },
+    { id: 'settings', name: 'Settings', icon: <SettingOutlined />, path: '/settings' },
   ]
 
   const runCommand = (command: () => void) => {
@@ -60,62 +59,108 @@ const CommandPalette: React.FC = () => {
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             className="w-full max-w-2xl relative z-10"
           >
-            <Command className="w-full bg-white/80 backdrop-blur-xl border border-white/40 shadow-2xl rounded-2xl overflow-hidden">
-              <div className="flex items-center border-b border-gray-200/50 px-4">
+            <Command className="w-full bg-[var(--glass-bg)] backdrop-blur-[40px] border border-[var(--glass-border)] shadow-2xl rounded-2xl overflow-hidden">
+              <div className="flex items-center border-b border-white/10 px-4">
                 <SearchOutlined className="text-gray-400 text-lg mr-3" />
                 <Command.Input 
-                  placeholder="搜尋頁面、功能或指令..." 
-                  className="w-full h-14 bg-transparent outline-none text-lg text-gray-800 placeholder:text-gray-400"
+                  placeholder="Type a command or search..." 
+                  className="w-full h-14 bg-transparent outline-none text-lg text-[var(--text-primary)] placeholder:text-gray-500 font-light"
                 />
                 <div className="flex gap-2">
-                  <kbd className="hidden sm:inline-flex h-6 items-center gap-1 rounded border border-gray-200 bg-gray-50 px-2 text-[10px] font-medium text-gray-500 opacity-100">
+                  <kbd className="hidden sm:inline-flex h-6 items-center gap-1 rounded border border-white/10 bg-white/5 px-2 text-[10px] font-medium text-gray-400">
                     <span className="text-xs">ESC</span>
                   </kbd>
                 </div>
               </div>
 
-              <Command.List className="max-h-[300px] overflow-y-auto p-2 custom-scrollbar">
-                <Command.Empty className="py-6 text-center text-sm text-gray-500">
-                  找不到相關結果
+              <Command.List className="max-h-[400px] overflow-y-auto p-2 custom-scrollbar">
+                <Command.Empty className="py-12 text-center text-sm text-gray-500">
+                  No results found.
                 </Command.Empty>
 
-                <Command.Group heading="快速導航" className="text-xs font-medium text-gray-400 px-2 py-1.5 mb-1">
+                <Command.Group heading="Navigation" className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2 mb-1">
                   {pages.map((page) => (
                     <Command.Item
                       key={page.id}
                       onSelect={() => runCommand(() => navigate(page.path))}
-                      className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-gray-700 cursor-pointer hover:bg-blue-500/10 hover:text-blue-600 transition-colors aria-selected:bg-blue-500/10 aria-selected:text-blue-600 group"
+                      className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-[var(--text-primary)] cursor-pointer transition-all aria-selected:bg-white/10 aria-selected:backdrop-blur-md group data-[selected=true]:bg-white/10"
                     >
-                      <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                      <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 group-aria-selected:bg-blue-500 group-aria-selected:text-white group-aria-selected:border-blue-400 transition-all shadow-sm">
                         {page.icon}
                       </div>
                       <span className="flex-1 font-medium">{page.name}</span>
-                      <RightOutlined className="text-xs opacity-0 group-hover:opacity-50" />
+                      <div className="flex items-center gap-2 opacity-0 group-aria-selected:opacity-100 transition-opacity">
+                        <span className="text-xs text-gray-400">Jump to</span>
+                        <kbd className="h-5 w-5 flex items-center justify-center rounded bg-white/10 text-[10px] text-gray-300">↵</kbd>
+                      </div>
                     </Command.Item>
                   ))}
                 </Command.Group>
 
-                <Command.Group heading="系統指令" className="text-xs font-medium text-gray-400 px-2 py-1.5 mt-2 mb-1">
+                <Command.Group heading="Actions" className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2 mt-2 mb-1">
+                  <Command.Item
+                    onSelect={() => runCommand(() => console.log('Create Invoice'))}
+                    className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-[var(--text-primary)] cursor-pointer transition-all aria-selected:bg-white/10 aria-selected:backdrop-blur-md group data-[selected=true]:bg-white/10"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 group-aria-selected:bg-green-500 group-aria-selected:text-white group-aria-selected:border-green-400 transition-all shadow-sm">
+                      <FileTextOutlined />
+                    </div>
+                    <span className="flex-1 font-medium">Create New Invoice</span>
+                    <div className="flex items-center gap-2 opacity-0 group-aria-selected:opacity-100 transition-opacity">
+                        <kbd className="h-5 px-1.5 flex items-center justify-center rounded bg-white/10 text-[10px] text-gray-300">C</kbd>
+                    </div>
+                  </Command.Item>
+                  
+                  <Command.Item
+                    onSelect={() => runCommand(() => console.log('Export Report'))}
+                    className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-[var(--text-primary)] cursor-pointer transition-all aria-selected:bg-white/10 aria-selected:backdrop-blur-md group data-[selected=true]:bg-white/10"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 group-aria-selected:bg-purple-500 group-aria-selected:text-white group-aria-selected:border-purple-400 transition-all shadow-sm">
+                      <ShoppingOutlined />
+                    </div>
+                    <span className="flex-1 font-medium">Export Monthly Report</span>
+                  </Command.Item>
+                </Command.Group>
+
+                <Command.Group heading="System" className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-2 py-2 mt-2 mb-1">
                   <Command.Item
                     onSelect={() => runCommand(() => console.log('Toggle Theme'))}
-                    className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-gray-700 cursor-pointer hover:bg-blue-500/10 hover:text-blue-600 transition-colors aria-selected:bg-blue-500/10 aria-selected:text-blue-600 group"
+                    className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-[var(--text-primary)] cursor-pointer transition-all aria-selected:bg-white/10 aria-selected:backdrop-blur-md group data-[selected=true]:bg-white/10"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                    <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 group-aria-selected:bg-gray-500 group-aria-selected:text-white group-aria-selected:border-gray-400 transition-all shadow-sm">
                       <SettingOutlined />
                     </div>
-                    <span className="flex-1 font-medium">切換深色模式 (Coming Soon)</span>
+                    <span className="flex-1 font-medium">Toggle Dark/Light Mode</span>
                   </Command.Item>
+                  
                   <Command.Item
-                    onSelect={() => runCommand(() => navigate('/login'))}
-                    className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-gray-700 cursor-pointer hover:bg-red-500/10 hover:text-red-600 transition-colors aria-selected:bg-red-500/10 aria-selected:text-red-600 group"
+                    onSelect={() => runCommand(() => console.log('Logout'))}
+                    className="flex items-center gap-3 px-3 py-3 rounded-xl text-sm text-[var(--text-primary)] cursor-pointer transition-all aria-selected:bg-white/10 aria-selected:backdrop-blur-md group data-[selected=true]:bg-white/10"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 group-hover:bg-red-500 group-hover:text-white transition-colors">
+                    <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 group-aria-selected:bg-red-500 group-aria-selected:text-white group-aria-selected:border-red-400 transition-all shadow-sm">
                       <LogoutOutlined />
                     </div>
-                    <span className="flex-1 font-medium">登出系統</span>
+                    <span className="flex-1 font-medium">Log Out</span>
                   </Command.Item>
                 </Command.Group>
               </Command.List>
+              
+              <div className="border-t border-white/10 px-4 py-2 flex items-center justify-between bg-white/5 backdrop-blur-md">
+                <div className="flex gap-4 text-[10px] text-gray-500 font-medium">
+                    <span className="flex items-center gap-1">
+                        <kbd className="h-4 w-4 flex items-center justify-center rounded bg-white/10 text-gray-400">↑</kbd>
+                        <kbd className="h-4 w-4 flex items-center justify-center rounded bg-white/10 text-gray-400">↓</kbd>
+                        to navigate
+                    </span>
+                    <span className="flex items-center gap-1">
+                        <kbd className="h-4 w-6 flex items-center justify-center rounded bg-white/10 text-gray-400">↵</kbd>
+                        to select
+                    </span>
+                </div>
+                <div className="text-[10px] text-gray-600 font-medium">
+                    Pro Tip: Type <span className="text-blue-400">#</span> to search orders
+                </div>
+              </div>
             </Command>
           </motion.div>
         </div>
