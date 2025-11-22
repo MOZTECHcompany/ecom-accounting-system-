@@ -17,6 +17,13 @@ const { Title, Text } = Typography
 
 const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true)
+  
+  // Living Data State
+  const [revenue, setRevenue] = useState(128930)
+  const [receivables, setReceivables] = useState(456780)
+  const [expenses, setExpenses] = useState(234000)
+  const [pendingDocs, setPendingDocs] = useState(15)
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null)
 
   useEffect(() => {
     // Simulate data loading
@@ -26,19 +33,61 @@ const DashboardPage: React.FC = () => {
     return () => clearTimeout(timer)
   }, [])
 
+  // Living Data Simulation
+  useEffect(() => {
+    if (loading) return
+
+    const interval = setInterval(() => {
+      const rand = Math.random()
+      
+      if (rand < 0.3) {
+        setRevenue(prev => prev + Math.floor(Math.random() * 500))
+        setLastUpdated('revenue')
+      } else if (rand < 0.5) {
+        setReceivables(prev => prev + Math.floor(Math.random() * 200))
+        setLastUpdated('receivables')
+      } else if (rand < 0.7) {
+        setExpenses(prev => prev + Math.floor(Math.random() * 150))
+        setLastUpdated('expenses')
+      } else {
+        // Occasionally change pending docs
+        if (Math.random() > 0.5) {
+             setPendingDocs(prev => prev + (Math.random() > 0.5 ? 1 : -1))
+             setLastUpdated('pendingDocs')
+        }
+      }
+
+      // Reset highlight after animation
+      setTimeout(() => setLastUpdated(null), 1000)
+    }, 2500)
+
+    return () => clearInterval(interval)
+  }, [loading])
+
   if (loading) {
     return <PageSkeleton />
   }
 
   return (
     <div className="space-y-8">
-      <div className="mb-8">
-        <Title level={2} className="!text-gray-800 font-light tracking-tight !mb-1">
-          Dashboard
-        </Title>
-        <Text className="text-gray-500">
-          歡迎回來，管理員。這是您今天的財務健康概況。
-        </Text>
+      <div className="mb-8 flex justify-between items-end">
+        <div>
+          <div className="flex items-center gap-3 mb-1">
+            <Title level={2} className="!text-gray-800 font-light tracking-tight !mb-0">
+              Dashboard
+            </Title>
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20">
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse-green"></div>
+              <span className="text-xs font-medium text-green-600 uppercase tracking-wider">Live Updates</span>
+            </div>
+          </div>
+          <Text className="text-gray-500">
+            歡迎回來，管理員。這是您今天的財務健康概況。
+          </Text>
+        </div>
+        <div className="text-right hidden sm:block">
+          <Text className="text-gray-400 text-xs">System Status: Operational</Text>
+        </div>
       </div>
       
       {/* Key Metrics Cards */}
@@ -59,9 +108,9 @@ const DashboardPage: React.FC = () => {
             </div>
             <Statistic
               title={<span className="label-text font-medium">今日銷售額</span>}
-              value={128930}
+              value={revenue}
               prefix="$"
-              className="kpi-number"
+              className={`kpi-number transition-colors duration-300 ${lastUpdated === 'revenue' ? 'animate-flash-text' : ''}`}
               valueStyle={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '28px' }}
             />
             <div className="mt-2 text-sm text-gray-400">
@@ -86,9 +135,9 @@ const DashboardPage: React.FC = () => {
             </div>
             <Statistic
               title={<span className="label-text font-medium">未收款應收帳款</span>}
-              value={456780}
+              value={receivables}
               prefix="$"
-              className="kpi-number"
+              className={`kpi-number transition-colors duration-300 ${lastUpdated === 'receivables' ? 'animate-flash-text' : ''}`}
               valueStyle={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '28px' }}
             />
             <div className="mt-2 text-sm text-gray-400">
@@ -110,9 +159,9 @@ const DashboardPage: React.FC = () => {
             </div>
             <Statistic
               title={<span className="label-text font-medium">本月費用總額</span>}
-              value={234000}
+              value={expenses}
               prefix="$"
-              className="kpi-number"
+              className={`kpi-number transition-colors duration-300 ${lastUpdated === 'expenses' ? 'animate-flash-text' : ''}`}
               valueStyle={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '28px' }}
             />
             <div className="mt-2 text-sm text-gray-400">
@@ -137,8 +186,8 @@ const DashboardPage: React.FC = () => {
             </div>
             <Statistic
               title={<span className="label-text font-medium">待處理單據</span>}
-              value={15}
-              className="kpi-number"
+              value={pendingDocs}
+              className={`kpi-number transition-colors duration-300 ${lastUpdated === 'pendingDocs' ? 'animate-flash-text' : ''}`}
               valueStyle={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '28px' }}
             />
             <div className="mt-2 text-sm text-gray-400">
