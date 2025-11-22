@@ -12,6 +12,7 @@ import {
 import { motion } from 'framer-motion'
 import FinancialHealthWidget from '../components/FinancialHealthWidget'
 import PageSkeleton from '../components/PageSkeleton'
+import AIInsightsWidget from '../components/AIInsightsWidget'
 
 const { Title, Text } = Typography
 
@@ -70,6 +71,9 @@ const DashboardPage: React.FC = () => {
 
   return (
     <div className="space-y-8">
+      {/* AI Insights Widget */}
+      <AIInsightsWidget />
+
       <div className="mb-8 flex justify-between items-end">
         <div>
           <div className="flex items-center gap-3 mb-1">
