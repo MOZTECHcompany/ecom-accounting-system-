@@ -171,6 +171,7 @@ model Account {
   type       String   // asset, liability, equity, revenue, expense
   parentId   String?  @map("parent_id")
   isActive   Boolean  @default(true) @map("is_active")
+  isReimbursable Boolean @default(false) @map("is_reimbursable")
   description String?
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
@@ -730,6 +731,30 @@ model ExpenseItem {
 
   @@index([expenseId])
   @@map("expense_items")
+}
+
+// 費用報銷模板（員工看到的「選項」，對應實際會計科目）
+model ReimbursementItem {
+  id          String   @id @default(uuid())
+  entityId    String   @map("entity_id")
+  name        String   // 給員工看的名稱，例如：出差旅費、樣品採購（內部）
+  description String?
+  accountId   String   @map("account_id") // 對應 accounts 表的實際科目
+  isActive    Boolean  @default(true) @map("is_active")
+  // 權限與使用限制（簡化版，後續可再拆角色／部門對照表）
+  allowedRoles      String?  @map("allowed_roles") // 逗號分隔角色代碼，例如 "ADMIN,ACCOUNTANT"
+  allowedDepartments String? @map("allowed_departments") // 逗號分隔部門 Id 或代碼
+  // 憑證要求：TAX_INVOICE, RECEIPT, BANK_SLIP, INTERNAL_ONLY
+  allowedReceiptTypes String? @map("allowed_receipt_types")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  entity  Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id])
+
+  @@index([entityId, isActive])
+  @@index([accountId])
+  @@map("reimbursement_items")
 }
 
 // 審核流程紀錄

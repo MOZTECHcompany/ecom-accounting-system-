@@ -114,6 +114,9 @@ npm run prisma:seed
 - [ ] 4 個 Roles 建立（SUPER_ADMIN、ADMIN、ACCOUNTANT、OPERATOR）
 - [ ] 1 個 Admin 使用者建立（Email 來源：`SUPER_ADMIN_EMAIL`）
 - [ ] 64 個會計科目建立（資產/負債/權益/收入/費用）
+- [ ] 會計科目 `6111 薪資支出` 存在，`type = expense` 且 `is_reimbursable = false`
+- [ ] 會計科目 `6114 旅費` 存在，`type = expense` 且 `is_reimbursable = true`
+- [ ] 會計科目 `7111 利息收入` 存在，`type = revenue`（避免被歸類為費用）
 - [ ] 9 個銷售渠道建立
 - [ ] 24 個會計期間建立（2025年 × 2實體）
 

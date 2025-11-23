@@ -315,101 +315,136 @@ async function main() {
   // ============================================
   // 5. 建立會計科目表（台灣公司）
   // ============================================
-  console.log('📊 Creating chart of accounts for Taiwan...');
+  console.log('📊 Creating chart of accounts for Taiwan (official 112+ standard)...');
+
+  type AccountType = 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
+
+  const determineType = (code: string): AccountType => {
+    const first = code[0];
+    if (first === '1') return 'asset';
+    if (first === '2') return 'liability';
+    if (first === '3') return 'equity';
+    if (first === '4') return 'revenue';
+    if (first === '5' || first === '6' || first === '8') return 'expense';
+    if (first === '7') {
+      // 7xxx: 依實際科目判斷
+      if (code === '7111' || code === '7181' || code === '7191') return 'revenue';
+      return 'expense';
+    }
+    return 'asset';
+  };
+
+  const reimbursableOverrideFalse = new Set<string>(['6111', '6125']);
 
   const twAccounts = [
-    // 資產類 (1xxx)
-    { code: '1000', name: '資產', type: 'asset', parentId: null },
-    { code: '1100', name: '流動資產', type: 'asset', parentId: '1000' },
-    { code: '1101', name: '現金', type: 'asset', parentId: '1100' },
-    { code: '1102', name: '銀行存款', type: 'asset', parentId: '1100' },
-    { code: '1120', name: '應收帳款', type: 'asset', parentId: '1100' },
-    { code: '1121', name: '備抵呆帳', type: 'asset', parentId: '1100' },
-    { code: '1130', name: '存貨', type: 'asset', parentId: '1100' },
-    { code: '1140', name: '預付費用', type: 'asset', parentId: '1100' },
-    { code: '1200', name: '非流動資產', type: 'asset', parentId: '1000' },
-    { code: '1201', name: '固定資產', type: 'asset', parentId: '1200' },
-    { code: '1202', name: '累計折舊', type: 'asset', parentId: '1200' },
-    
-    // 負債類 (2xxx)
-    { code: '2000', name: '負債', type: 'liability', parentId: null },
-    { code: '2100', name: '流動負債', type: 'liability', parentId: '2000' },
-    { code: '2101', name: '應付帳款', type: 'liability', parentId: '2100' },
-    { code: '2102', name: '應付費用', type: 'liability', parentId: '2100' },
-    { code: '2103', name: '應付薪資', type: 'liability', parentId: '2100' },
-    { code: '2104', name: '應付勞保', type: 'liability', parentId: '2100' },
-    { code: '2105', name: '應付健保', type: 'liability', parentId: '2100' },
-    { code: '2106', name: '應付所得稅', type: 'liability', parentId: '2100' },
-    { code: '2107', name: '預收款項', type: 'liability', parentId: '2100' },
-    
-    // 權益類 (3xxx)
-    { code: '3000', name: '權益', type: 'equity', parentId: null },
-    { code: '3101', name: '股本', type: 'equity', parentId: '3000' },
-    { code: '3102', name: '資本公積', type: 'equity', parentId: '3000' },
-    { code: '3103', name: '保留盈餘', type: 'equity', parentId: '3000' },
-    { code: '3104', name: '本期損益', type: 'equity', parentId: '3000' },
-    
-    // 收入類 (4xxx)
-    { code: '4000', name: '營業收入', type: 'revenue', parentId: null },
-    { code: '4101', name: '銷貨收入', type: 'revenue', parentId: '4000' },
-    { code: '4102', name: '平台補貼收入', type: 'revenue', parentId: '4000' },
-    { code: '4103', name: '其他收入', type: 'revenue', parentId: '4000' },
-    { code: '4201', name: '銷貨折讓', type: 'revenue', parentId: '4000' },
-    
-    // 費用類 (5xxx, 6xxx, 7xxx)
-    { code: '5000', name: '營業成本', type: 'expense', parentId: null },
-    { code: '5101', name: '銷貨成本', type: 'expense', parentId: '5000' },
-    { code: '5102', name: '進貨成本', type: 'expense', parentId: '5000' },
-    
-    { code: '6000', name: '營業費用', type: 'expense', parentId: null },
-    { code: '6101', name: '薪資費用', type: 'expense', parentId: '6000' },
-    { code: '6102', name: '勞保費用', type: 'expense', parentId: '6000' },
-    { code: '6103', name: '健保費用', type: 'expense', parentId: '6000' },
-    { code: '6104', name: '勞退費用', type: 'expense', parentId: '6000' },
-    { code: '6105', name: '租金費用', type: 'expense', parentId: '6000' },
-    { code: '6106', name: '水電費用', type: 'expense', parentId: '6000' },
-    { code: '6107', name: '廣告費用', type: 'expense', parentId: '6000' },
-    { code: '6108', name: '平台費用', type: 'expense', parentId: '6000' },
-    { code: '6109', name: '刷卡手續費', type: 'expense', parentId: '6000' },
-    { code: '6110', name: '金流手續費', type: 'expense', parentId: '6000' },
-    { code: '6111', name: '運費', type: 'expense', parentId: '6000' },
-    { code: '6112', name: '差旅費', type: 'expense', parentId: '6000' },
-    { code: '6113', name: '辦公用品', type: 'expense', parentId: '6000' },
-    { code: '6114', name: 'KOL分潤費用', type: 'expense', parentId: '6000' },
-    { code: '6115', name: '折舊費用', type: 'expense', parentId: '6000' },
-    
-    { code: '7000', name: '營業外收支', type: 'expense', parentId: null },
-    { code: '7101', name: '呆帳損失', type: 'expense', parentId: '7000' },
-    { code: '7102', name: '匯兌損失', type: 'expense', parentId: '7000' },
-    { code: '7103', name: '匯兌利益', type: 'expense', parentId: '7000' },
-    { code: '7104', name: '利息收入', type: 'expense', parentId: '7000' },
-    { code: '7105', name: '利息費用', type: 'expense', parentId: '7000' },
+    // 1. 資產
+    { code: '1111', name: '庫存現金' },
+    { code: '1113', name: '銀行存款' },
+    { code: '1191', name: '應收帳款' },
+    { code: '1261', name: '預付薪資' },
+    { code: '1262', name: '預付租金' },
+    { code: '1263', name: '預付保險費' },
+    { code: '1265', name: '其他預付費用' },
+    { code: '1231', name: '商品存貨' },
+    { code: '1421', name: '機器設備' },
+    { code: '1431', name: '辦公設備' },
+    { code: '1441', name: '租賃資產' },
+    { code: '1541', name: '商譽' },
+    { code: '1583', name: '存出保證金' },
+
+    // 2. 負債
+    { code: '2111', name: '銀行透支' },
+    { code: '2112', name: '銀行借款' },
+    { code: '2161', name: '應付票據' },
+    { code: '2171', name: '應付帳款' },
+    { code: '2191', name: '應付薪資' },
+    { code: '2192', name: '應付租金' },
+    { code: '2194', name: '應付營業稅' },
+    { code: '2261', name: '預收貨款' },
+    { code: '2252', name: '代收款' },
+    { code: '2392', name: '存入保證金' },
+
+    // 3. 權益
+    { code: '3111', name: '普通股股本' },
+    { code: '3211', name: '資本公積—普通股股票溢價' },
+    { code: '3311', name: '法定盈餘公積' },
+    { code: '3351', name: '累積盈虧' },
+    { code: '3353', name: '本期損益' },
+
+    // 4. 營業收入
+    { code: '4111', name: '銷貨收入' },
+    { code: '4113', name: '銷貨退回' },
+    { code: '4114', name: '銷貨折讓' },
+    { code: '4121', name: '勞務收入' },
+
+    // 5. 營業成本
+    { code: '5111', name: '銷貨成本' },
+    { code: '5151', name: '間接人工' },
+    { code: '5121', name: '進貨' },
+    { code: '5122', name: '進貨費用' },
+
+    // 6. 營業費用
+    { code: '6111', name: '薪資支出' },
+    { code: '6112', name: '租金支出' },
+    { code: '6113', name: '文具用品' },
+    { code: '6114', name: '旅費' },
+    { code: '6115', name: '運費' },
+    { code: '6116', name: '郵電費' },
+    { code: '6117', name: '修繕費' },
+    { code: '6118', name: '廣告費' },
+    { code: '6119', name: '水電瓦斯費' },
+    { code: '6120', name: '保險費' },
+    { code: '6121', name: '交際費' },
+    { code: '6122', name: '捐贈' },
+    { code: '6123', name: '稅捐' },
+    { code: '6125', name: '折舊' },
+    { code: '6128', name: '伙食費' },
+    { code: '6129', name: '職工福利' },
+    { code: '6131', name: '佣金支出' },
+    { code: '6132', name: '訓練費' },
+    { code: '6133', name: '勞務費' },
+    { code: '6134', name: '其他營業費用' },
+
+    // 7. 營業外收支
+    { code: '7111', name: '利息收入' },
+    { code: '7151', name: '利息費用' },
+    { code: '7181', name: '兌換利益' },
+    { code: '7182', name: '兌換損失' },
+    { code: '7191', name: '投資利益' },
+
+    // 8. 所得稅
+    { code: '8211', name: '所得稅費用' },
   ];
 
-  // 建立科目（需要先建立父科目）
-  const accountMap: Record<string, string> = {};
-  
   for (const account of twAccounts) {
-    const created = await prisma.account.upsert({
+    const type = determineType(account.code);
+    const isExpenseCategory = account.code.startsWith('6');
+    const isReimbursable =
+      isExpenseCategory && !reimbursableOverrideFalse.has(account.code);
+
+    await prisma.account.upsert({
       where: {
         entityId_code: {
           entityId: taiwanEntity.id,
           code: account.code,
         },
       },
-      update: {},
+      update: {
+        name: account.name,
+        type,
+        isReimbursable,
+      },
       create: {
         entityId: taiwanEntity.id,
         code: account.code,
         name: account.name,
-        type: account.type,
-        parentId: account.parentId ? accountMap[account.parentId] : null,
+        type,
+        isReimbursable,
       },
     });
-    accountMap[account.code] = created.id;
   }
 
-  console.log(`✅ Created ${twAccounts.length} accounts for Taiwan\n`);
+  console.log(`✅ Created/updated ${twAccounts.length} official accounts for Taiwan (112+ standard)\n`);
 
   // ============================================
   // 5. 建立會計科目表（大陸公司 - 簡化版）

@@ -351,7 +351,7 @@ ecom-accounting-system/
 
 #### 會計核心
 - `entities` - 公司實體
-- `accounts` - 會計科目表
+- `accounts` - 會計科目表（採用台灣商業會計法 112 年度後「商業會計項目表」為主，並加上系統用輔助欄位）
 - `periods` - 會計期間
 - `journal_entries` - 會計分錄主檔
 - `journal_lines` - 會計分錄明細
@@ -443,6 +443,12 @@ async getSensitiveData() {
 - ✅ **4個角色**：SUPER_ADMIN、ADMIN、ACCOUNTANT、OPERATOR
 - ✅ **1個管理員**：Email 來源 `SUPER_ADMIN_EMAIL`
 - ✅ **64個會計科目**：完整 IFRS + 台灣常用科目表
+  - 台灣實體採用官方「商業會計項目表（112 年度及以後）」核心子集合，並配合電商實務選取常用科目
+  - 依科目代碼自動推導 `type`：1/2/3/4/5/6/8 開頭分別對應資產/負債/權益/收入/成本與費用，7 開頭再依實際科目（如利息收入、兌換利益）區分收入或費用
+  - `accounts` 上新增 `isReimbursable` 欄位：
+    - 預設所有 6 開頭營業費用科目視為「可以作為員工報支選項」
+    - 對薪資、折舊等純會計或人事類科目（例如 `6111 薪資支出`、`6125 折舊`）設為 `false`，避免員工直接選用
+    - 這個欄位是未來「員工費用申請 / 報銷流程」的基礎，前端會只顯示 `isReimbursable = true` 的科目供選擇
 - ✅ **9個銷售渠道**：
   - SHOPIFY - Shopify 官網
   - 1SHOP - 1shop 團購
