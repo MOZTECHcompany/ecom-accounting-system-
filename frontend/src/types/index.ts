@@ -112,3 +112,85 @@ export interface CreateVendorDto {
 }
 
 export type UpdateVendorDto = Partial<CreateVendorDto>
+
+export interface ArInvoice {
+  id: string
+  invoiceNo: string
+  customerId: string
+  customerName?: string
+  amountOriginal: number
+  amountCurrency: string
+  paidAmountOriginal: number
+  status: string
+  issueDate: string
+  dueDate: string
+}
+
+export interface ApInvoice {
+  id: string
+  invoiceNo: string
+  vendorId: string
+  vendorName?: string
+  amountOriginal: number
+  amountCurrency: string
+  paidAmountOriginal: number
+  status: string
+  invoiceDate: string
+  dueDate: string
+}
+
+export interface ExpenseRequest {
+  id: string
+  description: string
+  amountOriginal: number
+  amountCurrency: string
+  status: string
+  createdBy: string
+  createdByName?: string
+  createdAt: string
+}
+
+export interface BankAccount {
+  id: string
+  bankName: string
+  accountNo: string
+  currency: string
+  balance?: number
+  isActive: boolean
+}
+
+export interface BankTransaction {
+  id: string
+  txnDate: string
+  amountOriginal: number
+  amountCurrency: string
+  descriptionRaw: string
+  reconcileStatus: string
+}
+
+export interface Department {
+  id: string
+  name: string
+  costCenterId?: string
+  isActive: boolean
+}
+
+export interface Employee {
+  id: string
+  employeeNo: string
+  name: string
+  departmentId?: string
+  departmentName?: string
+  salaryBaseOriginal: number
+  isActive: boolean
+  hireDate: string
+}
+
+export interface PayrollRun {
+  id: string
+  periodStart: string
+  periodEnd: string
+  payDate: string
+  status: string
+  totalAmount?: number
+}

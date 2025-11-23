@@ -69,7 +69,7 @@ const DashboardLayout: React.FC = () => {
       icon: <DollarOutlined />,
       label: '應收帳款',
       children: [
-        { key: '/ar/invoices', label: '應收帳款' },
+        { key: '/ar/invoices', label: '應收帳款', onClick: () => navigate('/sales/invoices') },
         { key: '/ar/payments', label: '收款記錄' },
       ],
     },
@@ -79,7 +79,7 @@ const DashboardLayout: React.FC = () => {
       label: '應付帳款',
       children: [
         { key: '/vendors', label: '供應商管理', onClick: () => navigate('/vendors') },
-        { key: '/ap/invoices', label: '應付帳款' },
+        { key: '/ap/invoices', label: '應付帳款', onClick: () => navigate('/purchasing/invoices') },
         { key: '/ap/expenses', label: '費用申請' },
       ],
     },
@@ -87,11 +87,16 @@ const DashboardLayout: React.FC = () => {
       key: 'banking',
       icon: <BankOutlined />,
       label: '銀行管理',
+      onClick: () => navigate('/banking'),
     },
     {
       key: 'payroll',
       icon: <TeamOutlined />,
       label: '薪資管理',
+      children: [
+        { key: '/payroll/runs', label: '薪資計算', onClick: () => navigate('/payroll/runs') },
+        { key: '/payroll/employees', label: '員工與部門', onClick: () => navigate('/payroll/employees') },
+      ],
     },
     {
       key: '/reports',

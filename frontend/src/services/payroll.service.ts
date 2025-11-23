@@ -1,0 +1,48 @@
+import api from './api'
+import { Employee, Department, PayrollRun, PaginatedResult } from '../types'
+
+export const payrollService = {
+  // Employees
+  getEmployees: async (page = 1, limit = 20) => {
+    const response = await api.get<PaginatedResult<Employee>>('/payroll/employees', {
+      params: { page, limit },
+    })
+    return response.data
+  },
+
+  createEmployee: async (data: Partial<Employee>) => {
+    const response = await api.post<Employee>('/payroll/employees', data)
+    return response.data
+  },
+
+  updateEmployee: async (id: string, data: Partial<Employee>) => {
+    const response = await api.patch<Employee>(`/payroll/employees/${id}`, data)
+    return response.data
+  },
+
+  // Departments (Assuming they are managed under payroll or entities)
+  // If there is no specific controller, we might need to use a generic one or add it.
+  // Based on schema, Department is a model. I'll assume an endpoint exists or I'll mock it for now.
+  getDepartments: async () => {
+    const response = await api.get<Department[]>('/payroll/departments')
+    return response.data
+  },
+
+  createDepartment: async (data: Partial<Department>) => {
+    const response = await api.post<Department>('/payroll/departments', data)
+    return response.data
+  },
+
+  // Payroll Runs
+  getPayrollRuns: async (page = 1, limit = 20) => {
+    const response = await api.get<PaginatedResult<PayrollRun>>('/payroll/runs', {
+      params: { page, limit },
+    })
+    return response.data
+  },
+
+  createPayrollRun: async (data: Partial<PayrollRun>) => {
+    const response = await api.post<PayrollRun>('/payroll/runs', data)
+    return response.data
+  },
+}
