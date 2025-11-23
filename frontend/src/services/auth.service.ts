@@ -1,18 +1,52 @@
 import api from './api'
-import { LoginRequest, LoginResponse, User } from '../types'
+import { LoginRequest, LoginResponse, ManagedUser, User } from '../types'
+
+const mapManagedUserToUser = (managed: ManagedUser): User => {
+  const roleSet = new Set<string>()
+  const permissionSet = new Set<string>()
+
+  managed.roles?.forEach((userRole) => {
+    const roleCode = userRole.role?.code
+    if (roleCode) {
+      roleSet.add(roleCode)
+    }
+
+    userRole.role?.permissions?.forEach((rolePermission) => {
+      const permission = rolePermission.permission
+      if (permission) {
+        permissionSet.add(`${permission.resource}:${permission.action}`)
+      }
+    })
+  })
+
+  return {
+    id: managed.id,
+    email: managed.email,
+    name: managed.name,
+    roles: Array.from(roleSet),
+    permissions: Array.from(permissionSet),
+  }
+}
 
 export const authService = {
   async login(data: LoginRequest): Promise<LoginResponse> {
-    const response = await api.post<LoginResponse>('/auth/login', data)
-    if (response.data.access_token) {
-      localStorage.setItem('access_token', response.data.access_token)
+    const response = await api.post<{ access_token: string; user: { id: string; email: string; name: string } }>('/auth/login', data)
+    const token = response.data.access_token
+    if (token) {
+      localStorage.setItem('access_token', token)
     }
-    return response.data
+
+    const currentUser = await this.getCurrentUser()
+
+    return {
+      access_token: token,
+      user: currentUser,
+    }
   },
 
   async getCurrentUser(): Promise<User> {
-    const response = await api.get<User>('/users/me')
-    return response.data
+    const response = await api.get<ManagedUser>('/users/me')
+    return mapManagedUserToUser(response.data)
   },
 
   logout() {

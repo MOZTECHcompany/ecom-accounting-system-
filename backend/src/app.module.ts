@@ -12,6 +12,8 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 // Feature modules - 按照指定的 12 個模組順序
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
+import { RolesModule } from './modules/roles/roles.module';
+import { PermissionsModule } from './modules/permissions/permissions.module';
 import { EntitiesModule } from './modules/entities/entities.module';
 import { AccountingModule } from './modules/accounting/accounting.module';
 import { SalesModule } from './modules/sales/sales.module';
@@ -62,6 +64,8 @@ import { InventoryModule } from './modules/inventory/inventory.module';
     // Features
     AuthModule,
     UsersModule,
+    RolesModule,
+    PermissionsModule,
     EntitiesModule,
     VendorModule,
     InventoryModule,

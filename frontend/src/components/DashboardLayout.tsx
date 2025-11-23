@@ -91,7 +91,36 @@ const DashboardLayout: React.FC = () => {
       label: '報表中心',
       onClick: () => navigate('/reports'),
     },
+    {
+      key: 'admin',
+      icon: <SettingOutlined />,
+      label: '系統管理',
+      children: [
+        {
+          key: '/admin/access-control',
+          label: '帳號與權限',
+          onClick: () => navigate('/admin/access-control'),
+        },
+      ],
+    },
   ]
+
+  const resolveMenuLabel = (items: any[], path: string): string | undefined => {
+    for (const item of items) {
+      if (item?.key === path) {
+        return typeof item.label === 'string' ? item.label : undefined
+      }
+      if (item?.children) {
+        const childLabel = resolveMenuLabel(item.children, path)
+        if (childLabel) {
+          return childLabel
+        }
+      }
+    }
+    return undefined
+  }
+
+  const currentMenuLabel = resolveMenuLabel(menuItems, location.pathname) ?? '儀表板'
 
   const userMenuItems = [
     {
@@ -161,12 +190,12 @@ const DashboardLayout: React.FC = () => {
             )}
           </div>
         </div>
-        <Menu 
-          theme="light" 
-          mode="inline" 
-          defaultSelectedKeys={[location.pathname]} 
-          defaultOpenKeys={['accounting', 'sales', 'ar', 'ap']}
-          items={menuItems} 
+        <Menu
+          theme="light"
+          mode="inline"
+          selectedKeys={[location.pathname]}
+          defaultOpenKeys={['accounting', 'sales', 'ar', 'ap', 'admin']}
+          items={menuItems}
           className="px-2 bg-transparent border-none"
         />
       </Sider>
@@ -174,7 +203,7 @@ const DashboardLayout: React.FC = () => {
         <Header className="sticky top-0 z-50 flex justify-between items-center px-8 my-4 mx-6 rounded-2xl glass-panel" style={{ height: '64px', padding: '0 24px' }}>
           <div className="flex items-center gap-8">
             <Title level={4} style={{ margin: 0, fontWeight: 500, color: 'var(--text-primary)' }}>
-              {menuItems.find(i => i.key === location.pathname)?.label || '儀表板'}
+              {currentMenuLabel}
             </Title>
             <div className="hidden md:block">
               <Input 

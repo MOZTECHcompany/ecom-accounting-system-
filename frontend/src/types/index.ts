@@ -1,10 +1,14 @@
-export interface User {
+export interface Permission {
   id: string
-  email: string
-  name: string
-  avatar?: string
-  roles: Role[]
-  permissions: string[]
+  resource: string
+  action: string
+  description?: string
+}
+
+export interface RolePermissionLink {
+  roleId: string
+  permissionId: string
+  permission: Permission
 }
 
 export interface Role {
@@ -13,6 +17,42 @@ export interface Role {
   name: string
   description?: string
   hierarchyLevel: number
+  permissions?: RolePermissionLink[]
+}
+
+export interface UserRoleLink {
+  userId: string
+  roleId: string
+  role: Role
+}
+
+export interface ManagedUser {
+  id: string
+  email: string
+  name: string
+  isActive: boolean
+  createdAt?: string
+  updatedAt?: string
+  roles: UserRoleLink[]
+}
+
+export interface PaginatedResult<T> {
+  items: T[]
+  meta: {
+    total: number
+    page: number
+    limit: number
+    totalPages: number
+  }
+}
+
+export interface User {
+  id: string
+  email: string
+  name: string
+  avatar?: string
+  roles: string[]
+  permissions: string[]
 }
 
 export interface LoginRequest {

@@ -1,5 +1,38 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
+import { Prisma } from '@prisma/client';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+
+const USER_INCLUDE = {
+  roles: {
+    include: {
+      role: {
+        include: {
+          permissions: {
+            include: {
+              permission: true,
+            },
+          },
+        },
+      },
+    },
+  },
+} as const satisfies Prisma.UserInclude;
+
+type UserWithRelations = Prisma.UserGetPayload<{
+  include: typeof USER_INCLUDE;
+}>;
+
+type PrismaClientOrTx = PrismaService | Prisma.TransactionClient;
 
 /**
  * UsersService
@@ -8,8 +41,22 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
+  private readonly SALT_ROUNDS = 10;
 
   constructor(private readonly prisma: PrismaService) {}
+
+  private sanitizeUser(user: UserWithRelations | null) {
+    if (!user) {
+      return null;
+    }
+
+    const { passwordHash, ...rest } = user;
+    return rest;
+  }
+
+  private sanitizeUsers(users: UserWithRelations[]) {
+    return users.map((user) => this.sanitizeUser(user));
+  }
 
   /**
    * 根據 Email 查詢使用者
@@ -17,21 +64,7 @@ export class UsersService {
   async findByEmail(email: string) {
     return this.prisma.user.findUnique({
       where: { email },
-      include: {
-        roles: {
-          include: {
-            role: {
-              include: {
-                permissions: {
-                  include: {
-                    permission: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
+      include: USER_INCLUDE,
     });
   }
 
@@ -41,28 +74,41 @@ export class UsersService {
   async findById(id: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      include: {
-        roles: {
-          include: {
-            role: {
-              include: {
-                permissions: {
-                  include: {
-                    permission: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
+      include: USER_INCLUDE,
     });
 
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
-    return user;
+    return this.sanitizeUser(user);
+  }
+
+  /**
+   * 分頁取得使用者清單
+   */
+  async findAll(page: number, limit: number) {
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.user.findMany({
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: USER_INCLUDE,
+      }),
+      this.prisma.user.count(),
+    ]);
+
+    return {
+      items: this.sanitizeUsers(items as UserWithRelations[]),
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
   }
 
   /**
@@ -73,9 +119,162 @@ export class UsersService {
     name: string;
     passwordHash: string;
   }) {
-    return this.prisma.user.create({
-      data,
-    });
+    try {
+      const user = await this.prisma.user.create({
+        data,
+        include: USER_INCLUDE,
+      });
+
+      return this.sanitizeUser(user);
+    } catch (error) {
+      this.handlePrismaError(error, `create user with email ${data.email}`);
+    }
+  }
+
+  /**
+   * 管理員建立使用者（含角色指派）
+   */
+  async createUser(dto: CreateUserDto) {
+    const { email, password, name, roleIds = [] } = dto;
+
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      throw new ConflictException(`Email ${email} already exists`);
+    }
+
+    const passwordHash = await bcrypt.hash(password, this.SALT_ROUNDS);
+
+    try {
+      const result = await this.prisma.$transaction(async (tx) => {
+        if (roleIds.length > 0) {
+          await this.ensureRoleIdsExist(roleIds, tx);
+        }
+
+        const user = await tx.user.create({
+          data: {
+            email,
+            name,
+            passwordHash,
+          },
+        });
+
+        if (roleIds.length > 0) {
+          await tx.userRole.createMany({
+            data: roleIds.map((roleId) => ({ userId: user.id, roleId })),
+            skipDuplicates: true,
+          });
+        }
+
+        const created = await tx.user.findUnique({
+          where: { id: user.id },
+          include: USER_INCLUDE,
+        });
+
+        return this.sanitizeUser(created as UserWithRelations);
+      });
+
+      this.logger.log(`Created user ${email}`);
+      return result;
+    } catch (error) {
+      this.handlePrismaError(error, `create user with email ${email}`);
+    }
+  }
+
+  /**
+   * 更新使用者資訊
+   */
+  async updateUser(id: string, dto: UpdateUserDto) {
+    const { name, isActive, password } = dto;
+
+    if (
+      typeof name === 'undefined' &&
+      typeof isActive === 'undefined' &&
+      typeof password === 'undefined'
+    ) {
+      throw new BadRequestException('No updates provided');
+    }
+
+    const data: Prisma.UserUpdateInput = {};
+
+    if (typeof name !== 'undefined') {
+      data.name = name;
+    }
+
+    if (typeof isActive !== 'undefined') {
+      data.isActive = isActive;
+    }
+
+    if (typeof password !== 'undefined') {
+      data.passwordHash = await bcrypt.hash(password, this.SALT_ROUNDS);
+    }
+
+    try {
+      const updated = await this.prisma.user.update({
+        where: { id },
+        data,
+        include: USER_INCLUDE,
+      });
+
+      this.logger.log(`Updated user ${id}`);
+      return this.sanitizeUser(updated as UserWithRelations);
+    } catch (error) {
+      this.handlePrismaError(error, `update user ${id}`);
+    }
+  }
+
+  /**
+   * 停用使用者帳號
+   */
+  async deactivateUser(id: string) {
+    try {
+      const updated = await this.prisma.user.update({
+        where: { id },
+        data: { isActive: false },
+        include: USER_INCLUDE,
+      });
+
+      this.logger.log(`Deactivated user ${id}`);
+      return this.sanitizeUser(updated as UserWithRelations);
+    } catch (error) {
+      this.handlePrismaError(error, `deactivate user ${id}`);
+    }
+  }
+
+  /**
+   * 設定使用者角色
+   */
+  async setUserRoles(userId: string, roleIds: string[]) {
+    try {
+      const result = await this.prisma.$transaction(async (tx) => {
+        const user = await tx.user.findUnique({ where: { id: userId } });
+        if (!user) {
+          throw new NotFoundException(`User with ID ${userId} not found`);
+        }
+
+        await this.ensureRoleIdsExist(roleIds, tx);
+
+        await tx.userRole.deleteMany({ where: { userId } });
+
+        if (roleIds.length > 0) {
+          await tx.userRole.createMany({
+            data: roleIds.map((roleId) => ({ userId, roleId })),
+            skipDuplicates: true,
+          });
+        }
+
+        const updated = await tx.user.findUnique({
+          where: { id: userId },
+          include: USER_INCLUDE,
+        });
+
+        return this.sanitizeUser(updated as UserWithRelations);
+      });
+
+      this.logger.log(`Updated roles for user ${userId}`);
+      return result;
+    } catch (error) {
+      this.handlePrismaError(error, `update roles for user ${userId}`);
+    }
   }
 
   /**
@@ -84,12 +283,12 @@ export class UsersService {
   async getUserPermissions(userId: string) {
     const user = await this.findById(userId);
 
-    const permissions = user.roles.flatMap((userRole) =>
+    const permissions = user?.roles?.flatMap((userRole) =>
       userRole.role.permissions.map((rolePermission) => ({
         resource: rolePermission.permission.resource,
         action: rolePermission.permission.action,
       })),
-    );
+    ) ?? [];
 
     return permissions;
   }
@@ -103,20 +302,66 @@ export class UsersService {
     action: string,
   ): Promise<boolean> {
     const permissions = await this.getUserPermissions(userId);
-    return permissions.some(
-      (p) => p.resource === resource && p.action === action,
-    );
+    return permissions.some((p) => p.resource === resource && p.action === action);
   }
 
   /**
    * 為使用者指派角色
    */
   async assignRole(userId: string, roleId: string) {
-    return this.prisma.userRole.create({
-      data: {
+    await this.ensureRoleIdsExist([roleId], this.prisma);
+
+    await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+
+    await this.prisma.userRole.upsert({
+      where: {
+        userId_roleId: {
+          userId,
+          roleId,
+        },
+      },
+      update: {},
+      create: {
         userId,
         roleId,
       },
     });
+
+    return this.findById(userId);
+  }
+
+  private async ensureRoleIdsExist(roleIds: string[], db: PrismaClientOrTx) {
+    if (!roleIds.length) {
+      return;
+    }
+
+    const uniqueRoleIds = Array.from(new Set(roleIds));
+    const roles = await db.role.findMany({
+      where: { id: { in: uniqueRoleIds } },
+      select: { id: true },
+    });
+
+    const foundIds = new Set(roles.map((role) => role.id));
+    const missing = uniqueRoleIds.filter((id) => !foundIds.has(id));
+
+    if (missing.length > 0) {
+      throw new BadRequestException(`Roles not found: ${missing.join(', ')}`);
+    }
+  }
+
+  private handlePrismaError(error: unknown, context: string): never {
+    if (error instanceof PrismaClientKnownRequestError) {
+      if (error.code === 'P2002') {
+        throw new ConflictException(`Duplicate value detected while trying to ${context}`);
+      }
+
+      if (error.code === 'P2025') {
+        throw new NotFoundException(`Record not found while trying to ${context}`);
+      }
+    }
+
+    const err = error as Error;
+    this.logger.error(`Unhandled error while trying to ${context}`, err?.stack);
+    throw error;
   }
 }

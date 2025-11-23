@@ -10,6 +10,7 @@ import AccountsPage from './pages/AccountsPage'
 import SalesPage from './pages/SalesPage'
 import ReportsPage from './pages/ReportsPage'
 import VendorsPage from './pages/VendorsPage'
+import AccessControlPage from './pages/AccessControlPage'
 
 const App: React.FC = () => {
   return (
@@ -29,9 +30,8 @@ const App: React.FC = () => {
                 <Route path="vendors" element={<VendorsPage />} />
                 
                 {/* Placeholder Routes for new sections */}
-                <Route path="users" element={<div className="p-4">Users Page (Coming Soon)</div>} />
+                <Route path="admin/access-control" element={<AccessControlPage />} />
                 <Route path="customers" element={<div className="p-4">Customers Page (Coming Soon)</div>} />
-                <Route path="vendors" element={<VendorsPage />} />
                 <Route path="sales" element={<div className="p-4">Sales Page (Coming Soon)</div>} />
                 <Route path="expenses" element={<div className="p-4">Expenses Page (Coming Soon)</div>} />
                 <Route path="payroll" element={<div className="p-4">Payroll Page (Coming Soon)</div>} />
