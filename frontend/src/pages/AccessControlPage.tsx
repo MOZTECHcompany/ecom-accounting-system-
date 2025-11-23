@@ -180,7 +180,7 @@ const UsersTab = ({ availableRoles }: UsersTabProps) => {
 
   const columns: TableColumn<ManagedUser>[] = [
     { title: '姓名', dataIndex: 'name', key: 'name' },
-    { title: 'Email', dataIndex: 'email', key: 'email' },
+    { title: '電子郵件', dataIndex: 'email', key: 'email' },
     {
       title: '角色',
       key: 'roles',
@@ -295,10 +295,10 @@ const UsersTab = ({ availableRoles }: UsersTabProps) => {
           </Form.Item>
           <Form.Item
             name="email"
-            label="Email"
-            rules={[{ required: true, message: '請輸入 Email' }, { type: 'email', message: 'Email 格式不正確' }]}
+            label="電子郵件"
+            rules={[{ required: true, message: '請輸入電子郵件' }, { type: 'email', message: '電子郵件格式不正確' }]}
           >
-            <Input placeholder="user@example.com" />
+            <Input placeholder="例如 user@example.com" />
           </Form.Item>
           <Form.Item
             name="password"
@@ -674,8 +674,8 @@ const PermissionsTab = ({
   }
 
   const columns: TableColumn<Permission>[] = [
-    { title: 'Resource', dataIndex: 'resource', key: 'resource' },
-    { title: 'Action', dataIndex: 'action', key: 'action' },
+    { title: '資源', dataIndex: 'resource', key: 'resource' },
+    { title: '操作', dataIndex: 'action', key: 'action' },
     { title: '描述', dataIndex: 'description', key: 'description' },
     {
       title: '操作',
@@ -713,7 +713,7 @@ const PermissionsTab = ({
           <Title level={4} style={{ margin: 0 }}>
             權限管理
           </Title>
-          <Text type="secondary">維護 resource/action 清單</Text>
+          <Text type="secondary">維護資源／操作清單</Text>
         </div>
         <Button type="primary" onClick={() => setCreateOpen(true)}>
           新增權限
@@ -736,10 +736,10 @@ const PermissionsTab = ({
         okText="建立"
       >
         <Form layout="vertical" form={createForm}>
-          <Form.Item name="resource" label="Resource" rules={[{ required: true, message: '請輸入 resource' }]}>
+          <Form.Item name="resource" label="資源" rules={[{ required: true, message: '請輸入資源名稱' }]}>
             <Input placeholder="例如 users" />
           </Form.Item>
-          <Form.Item name="action" label="Action" rules={[{ required: true, message: '請輸入 action' }]}>
+          <Form.Item name="action" label="操作" rules={[{ required: true, message: '請輸入操作名稱' }]}>
             <Input placeholder="例如 create" />
           </Form.Item>
           <Form.Item name="description" label="描述">
@@ -756,10 +756,10 @@ const PermissionsTab = ({
         okText="儲存"
       >
         <Form layout="vertical" form={editForm}>
-          <Form.Item name="resource" label="Resource" rules={[{ required: true, message: '請輸入 resource' }]}>
+          <Form.Item name="resource" label="資源" rules={[{ required: true, message: '請輸入資源名稱' }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="action" label="Action" rules={[{ required: true, message: '請輸入 action' }]}>
+          <Form.Item name="action" label="操作" rules={[{ required: true, message: '請輸入操作名稱' }]}>
             <Input />
           </Form.Item>
           <Form.Item name="description" label="描述">
