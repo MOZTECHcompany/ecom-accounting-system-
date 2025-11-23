@@ -155,6 +155,9 @@ model Entity {
   approvalRequests ApprovalRequest[]
   invoices         Invoice[]
   bankImportBatches BankImportBatch[]
+  warehouses       Warehouse[]
+  inventorySnapshots InventorySnapshot[]
+  inventoryTransactions InventoryTransaction[]
 
   @@map("entities")
 }
