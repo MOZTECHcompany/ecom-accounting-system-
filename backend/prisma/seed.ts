@@ -446,6 +446,85 @@ async function main() {
 
   console.log(`✅ Created/updated ${twAccounts.length} official accounts for Taiwan (112+ standard)\n`);
 
+  console.log('🧾 Creating reimbursement item templates for Taiwan (TW Entity)...');
+
+  const twReimbursementItems = [
+    {
+      name: '出差旅費',
+      accountCode: '6114',
+      description: '員工國內外出差相關交通與住宿費用',
+      allowedReceiptTypes: 'TAX_INVOICE,RECEIPT,BANK_SLIP',
+    },
+    {
+      name: '交際費',
+      accountCode: '6121',
+      description: '客戶餐敘、應酬等交際支出',
+      allowedReceiptTypes: 'TAX_INVOICE,RECEIPT',
+    },
+    {
+      name: '餐費／加班餐',
+      accountCode: '6128',
+      description: '員工值班、加班、部門聚餐等餐飲支出',
+      allowedReceiptTypes: 'RECEIPT,BANK_SLIP',
+    },
+    {
+      name: '辦公用品',
+      accountCode: '6113',
+      description: '文具、影印紙、簡易辦公耗材等',
+      allowedReceiptTypes: 'TAX_INVOICE,RECEIPT',
+    },
+    {
+      name: '樣品採購（內部）',
+      accountCode: '6133',
+      description: '產品打樣、送測樣品等，主要供內部評估使用',
+      allowedReceiptTypes: 'BANK_SLIP,INTERNAL_ONLY',
+      allowedRoles: 'ADMIN,ACCOUNTANT',
+    },
+  ];
+
+  for (const item of twReimbursementItems) {
+    const account = await prisma.account.findUnique({
+      where: {
+        entityId_code: {
+          entityId: taiwanEntity.id,
+          code: item.accountCode,
+        },
+      },
+    });
+
+    if (!account) {
+      console.warn(
+        `⚠️ Skipping reimbursement item "${item.name}" because account code ${item.accountCode} was not found for TW entity`,
+      );
+      continue;
+    }
+
+    await prisma.reimbursementItem.upsert({
+      where: {
+        entityId_name: {
+          entityId: taiwanEntity.id,
+          name: item.name,
+        },
+      },
+      update: {
+        description: item.description,
+        accountId: account.id,
+        allowedReceiptTypes: item.allowedReceiptTypes,
+        allowedRoles: (item as any).allowedRoles ?? null,
+      },
+      create: {
+        entityId: taiwanEntity.id,
+        name: item.name,
+        description: item.description,
+        accountId: account.id,
+        allowedReceiptTypes: item.allowedReceiptTypes,
+        allowedRoles: (item as any).allowedRoles ?? null,
+      },
+    });
+  }
+
+  console.log(`✅ Created/updated ${twReimbursementItems.length} reimbursement item templates for TW Entity\n`);
+
   // ============================================
   // 5. 建立會計科目表（大陸公司 - 簡化版）
   // ============================================

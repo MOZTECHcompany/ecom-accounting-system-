@@ -754,6 +754,7 @@ model ReimbursementItem {
 
   @@index([entityId, isActive])
   @@index([accountId])
+  @@unique([entityId, name])
   @@map("reimbursement_items")
 }
 

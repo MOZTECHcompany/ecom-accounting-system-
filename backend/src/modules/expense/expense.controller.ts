@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Body, Param, UseGuards, Query, Put } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ExpenseService } from './expense.service';
 
@@ -57,5 +57,33 @@ export class ExpenseController {
   @ApiResponse({ status: 200, description: '成功取得個人費用請款列表' })
   async getMyExpenseRequests(@Query('userId') userId: string) {
     throw new Error('Not implemented');
+  }
+
+  @Get('reimbursement-items')
+  @ApiOperation({ summary: '取得可用的費用報銷項目（Reimbursement Items）' })
+  @ApiResponse({ status: 200, description: '成功取得報銷項目清單' })
+  @ApiQuery({ name: 'entityId', required: true })
+  @ApiQuery({
+    name: 'roles',
+    required: false,
+    description: '以逗號分隔的角色代碼（例如：ADMIN,ACCOUNTANT）',
+  })
+  @ApiQuery({ name: 'departmentId', required: false })
+  async getReimbursementItems(
+    @Query('entityId') entityId: string,
+    @Query('roles') roles?: string,
+    @Query('departmentId') departmentId?: string,
+  ) {
+    const roleList = roles
+      ? roles
+          .split(',')
+          .map((r) => r.trim())
+          .filter(Boolean)
+      : undefined;
+
+    return this.expenseService.getReimbursementItems(entityId, {
+      roles: roleList,
+      departmentId,
+    });
   }
 }

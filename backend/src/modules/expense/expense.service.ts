@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ExpenseRepository } from './expense.repository';
 
 /**
  * 費用管理服務
@@ -12,6 +13,7 @@ import { Injectable, Logger } from '@nestjs/common';
 @Injectable()
 export class ExpenseService {
   private readonly logger = new Logger(ExpenseService.name);
+  constructor(private readonly expenseRepository: ExpenseRepository) {}
   /**
    * 建立費用申請單
    */
@@ -90,5 +92,18 @@ export class ExpenseService {
   async getExpensesByCategory(entityId: string, startDate: Date, endDate: Date) {
     this.logger.log(`Getting expenses by category for entity ${entityId}, period: ${startDate} - ${endDate}`);
     throw new Error('Not implemented: getExpensesByCategory');
+  }
+
+  /**
+   * 取得可用的報銷項目（ReimbursementItem）清單
+   * 會根據 entity / 角色 / 部門過濾
+   */
+  async getReimbursementItems(entityId: string, options?: { roles?: string[]; departmentId?: string }) {
+    this.logger.log(
+      `Fetching reimbursement items for entity ${entityId} with roles=${options?.roles?.join(',') ?? 'N/A'} department=${
+        options?.departmentId ?? 'N/A'
+      }`,
+    );
+    return this.expenseRepository.findActiveReimbursementItems(entityId, options);
   }
 }
