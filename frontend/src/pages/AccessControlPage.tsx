@@ -728,7 +728,6 @@ const PermissionsTab = ({
         loading={loading}
         scroll={{ x: 800 }}
         pagination={false}
-      />pagination={false}
       />
 
       <Modal
