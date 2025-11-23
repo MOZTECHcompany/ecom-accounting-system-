@@ -252,7 +252,7 @@ const UsersTab = ({ availableRoles }: UsersTabProps) => {
 
   return (
     <Card bordered={false} className="shadow-sm">
-      <Space style={{ width: '100%', marginBottom: 16, justifyContent: 'space-between' }}>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
         <div>
           <Title level={4} style={{ margin: 0 }}>
             使用者管理
@@ -262,7 +262,7 @@ const UsersTab = ({ availableRoles }: UsersTabProps) => {
         <Button type="primary" onClick={() => setCreateOpen(true)}>
           新增使用者
         </Button>
-      </Space>
+      </div>
 
       <Table
         rowKey="id"
@@ -519,7 +519,7 @@ const RolesTab = ({
 
   return (
     <Card bordered={false} className="shadow-sm">
-      <Space style={{ width: '100%', marginBottom: 16, justifyContent: 'space-between' }}>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
         <div>
           <Title level={4} style={{ margin: 0 }}>
             角色管理
@@ -529,7 +529,7 @@ const RolesTab = ({
         <Button type="primary" onClick={() => setCreateOpen(true)}>
           新增角色
         </Button>
-      </Space>
+      </div>
 
       <Table
         rowKey="id"
@@ -710,7 +710,7 @@ const PermissionsTab = ({
 
   return (
     <Card bordered={false} className="shadow-sm">
-      <Space style={{ width: '100%', marginBottom: 16, justifyContent: 'space-between' }}>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
         <div>
           <Title level={4} style={{ margin: 0 }}>
             權限管理
@@ -720,7 +720,7 @@ const PermissionsTab = ({
         <Button type="primary" onClick={() => setCreateOpen(true)}>
           新增權限
         </Button>
-      </Space>
+      </div>
       <Table
         rowKey="id"
         columns={columns}

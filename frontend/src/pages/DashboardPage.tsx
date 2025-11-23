@@ -74,7 +74,7 @@ const DashboardPage: React.FC = () => {
       {/* AI Insights Widget */}
       <AIInsightsWidget />
 
-      <div className="mb-8 flex justify-between items-end">
+      <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
             <Title level={2} className="!text-gray-800 font-light tracking-tight !mb-0">
@@ -95,7 +95,7 @@ const DashboardPage: React.FC = () => {
       </div>
       
       {/* Key Metrics Cards */}
-      <Row gutter={[24, 24]}>
+      <Row gutter={[{ xs: 16, sm: 24 }, { xs: 16, sm: 24 }]}>
         <Col xs={24} sm={12} lg={6}>
           <motion.div 
             whileHover={{ y: -5 }}
@@ -207,7 +207,7 @@ const DashboardPage: React.FC = () => {
       </div>
 
       {/* Recent Activity & Tasks */}
-      <Row gutter={[24, 24]}>
+      <Row gutter={[{ xs: 16, sm: 24 }, { xs: 16, sm: 24 }]}>
         <Col xs={24} lg={12}>
           <div className="h-full animate-slide-up" style={{ animationDelay: '500ms' }}>
             <Card title="近期活動 (Recent Activity)" className="glass-card !border-0 h-full">

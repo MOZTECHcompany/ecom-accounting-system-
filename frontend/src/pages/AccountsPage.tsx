@@ -117,7 +117,7 @@ const AccountsPage: React.FC = () => {
             管理您的會計科目表與餘額
           </Text>
         </div>
-        <Space>
+        <Space wrap>
           <Button icon={<ReloadOutlined />} onClick={loadAccounts} className="hover:bg-gray-50">
             重新載入
           </Button>

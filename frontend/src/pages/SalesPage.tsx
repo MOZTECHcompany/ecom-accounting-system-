@@ -218,7 +218,7 @@ const SalesPage: React.FC = () => {
           <Title level={2} className="!mb-1 !font-light">銷售訂單</Title>
           <Text className="text-gray-500">管理所有的客戶訂單與交易記錄</Text>
         </div>
-        <Space>
+        <Space wrap>
           <Segmented
             options={[
               { value: 'list', icon: <BarsOutlined /> },
@@ -240,15 +240,15 @@ const SalesPage: React.FC = () => {
       {/* Filter Section */}
       <Card className="glass-card !border-0" bodyStyle={{ padding: '20px' }}>
         <div className="flex flex-wrap gap-4 justify-between items-center">
-          <Space size="middle" className="flex-1">
+          <Space size="middle" className="flex-1 w-full" wrap>
             <Input 
               prefix={<SearchOutlined className="text-gray-400" />} 
               placeholder="搜尋訂單編號或客戶..." 
-              className="!w-64 !rounded-lg"
+              className="!w-full md:!w-64 !rounded-lg"
               value={searchText}
               onChange={e => setSearchText(e.target.value)}
             />
-            <RangePicker className="!rounded-lg" />
+            <RangePicker className="!w-full md:!w-auto !rounded-lg" />
             <Button icon={<FilterOutlined />}>篩選</Button>
           </Space>
           <div className="text-gray-500 text-sm">

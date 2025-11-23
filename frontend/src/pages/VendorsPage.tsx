@@ -153,7 +153,7 @@ const VendorsPage: React.FC = () => {
           <Title level={2} className="!mb-1">供應商管理</Title>
           <Text type="secondary">管理所有供應商資料與聯絡資訊</Text>
         </div>
-        <Space>
+        <Space wrap>
           <Button icon={<ReloadOutlined />} onClick={loadVendors}>重新整理</Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增供應商</Button>
         </Space>

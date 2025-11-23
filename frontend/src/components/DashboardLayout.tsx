@@ -275,7 +275,7 @@ const DashboardLayout: React.FC = () => {
             </Dropdown>
           </div>
         </Header>
-        <Content style={{ margin: isMobile ? '0 12px 24px' : '0 24px 24px', padding: 0, minHeight: 280 }}>
+        <Content style={{ margin: isMobile ? '0 8px 16px' : '0 24px 24px', padding: 0, minHeight: 280 }}>
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
