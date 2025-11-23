@@ -17,6 +17,16 @@ import {
   Typography,
   message,
 } from 'antd'
+import { 
+  UserOutlined, 
+  SafetyCertificateOutlined, 
+  KeyOutlined, 
+  PlusOutlined, 
+  EditOutlined, 
+  DeleteOutlined,
+  SettingOutlined
+} from '@ant-design/icons'
+import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { usersService, CreateUserPayload, UpdateUserPayload } from '../services/users.service'
 import { rolesService, CreateRolePayload, UpdateRolePayload } from '../services/roles.service'
@@ -206,7 +216,8 @@ const UsersTab = ({ availableRoles }: UsersTabProps) => {
       render: (_value: unknown, record: ManagedUser) => (
         <Space size="small">
           <Button
-            type="link"
+            type="text"
+            icon={<SettingOutlined />}
             onClick={() => {
               setSelectedUser(record)
               assignForm.setFieldsValue({
@@ -218,7 +229,8 @@ const UsersTab = ({ availableRoles }: UsersTabProps) => {
             設定角色
           </Button>
           <Button
-            type="link"
+            type="text"
+            icon={<EditOutlined />}
             onClick={() => {
               setSelectedUser(record)
               editForm.setFieldsValue({
@@ -236,12 +248,12 @@ const UsersTab = ({ availableRoles }: UsersTabProps) => {
               title="確認停用此使用者？"
               onConfirm={() => toggleActive(record, false)}
             >
-              <Button type="link" danger>
+              <Button type="text" danger icon={<DeleteOutlined />}>
                 停用
               </Button>
             </Popconfirm>
           ) : (
-            <Button type="link" onClick={() => toggleActive(record, true)}>
+            <Button type="text" onClick={() => toggleActive(record, true)}>
               啟用
             </Button>
           )}
@@ -251,15 +263,15 @@ const UsersTab = ({ availableRoles }: UsersTabProps) => {
   ]
 
   return (
-    <Card bordered={false} className="shadow-sm">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+    <div className="glass-card p-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div>
-          <Title level={4} style={{ margin: 0 }}>
+          <Title level={4} className="!mb-1 !font-light">
             使用者管理
           </Title>
-          <Text type="secondary">新增、停用或調整使用者角色</Text>
+          <Text className="text-gray-500">新增、停用或調整使用者角色</Text>
         </div>
-        <Button type="primary" onClick={() => setCreateOpen(true)}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)} className="shadow-lg shadow-blue-500/30">
           新增使用者
         </Button>
       </div>
@@ -275,11 +287,13 @@ const UsersTab = ({ availableRoles }: UsersTabProps) => {
           pageSize: meta.limit,
           total: meta.total,
           showSizeChanger: false,
+          className: 'p-4'
         }}
         onChange={(pagination: SimplePagination) => {
           const currentPage = pagination.current ?? 1
           fetchUsers(currentPage)
         }}
+        className="custom-table"
       />
 
       <Modal
@@ -367,7 +381,7 @@ const UsersTab = ({ availableRoles }: UsersTabProps) => {
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+    </div>
   )
 }
 
@@ -475,7 +489,8 @@ const RolesTab = ({
       render: (_value: unknown, record: Role) => (
         <Space size="small">
           <Button
-            type="link"
+            type="text"
+            icon={<EditOutlined />}
             onClick={() => {
               setSelectedRole(record)
               editForm.setFieldsValue({
@@ -490,7 +505,8 @@ const RolesTab = ({
             編輯
           </Button>
           <Button
-            type="link"
+            type="text"
+            icon={<SettingOutlined />}
             onClick={() => {
               setSelectedRole(record)
               permissionsForm.setFieldsValue({
@@ -508,7 +524,7 @@ const RolesTab = ({
             }
             disabled={record.code === 'SUPER_ADMIN'}
           >
-            <Button type="link" danger disabled={record.code === 'SUPER_ADMIN'}>
+            <Button type="text" danger disabled={record.code === 'SUPER_ADMIN'} icon={<DeleteOutlined />}>
               刪除
             </Button>
           </Popconfirm>
@@ -518,15 +534,15 @@ const RolesTab = ({
   ]
 
   return (
-    <Card bordered={false} className="shadow-sm">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+    <div className="glass-card p-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div>
-          <Title level={4} style={{ margin: 0 }}>
+          <Title level={4} className="!mb-1 !font-light">
             角色管理
           </Title>
-          <Text type="secondary">建立角色並維護對應權限</Text>
+          <Text className="text-gray-500">建立角色並維護對應權限</Text>
         </div>
-        <Button type="primary" onClick={() => setCreateOpen(true)}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)} className="shadow-lg shadow-blue-500/30">
           新增角色
         </Button>
       </div>
@@ -538,6 +554,7 @@ const RolesTab = ({
         loading={loadingRoles}
         scroll={{ x: 800 }}
         pagination={false}
+        className="custom-table"
       />
 
       <Modal
@@ -613,7 +630,7 @@ const RolesTab = ({
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+    </div>
   )
 }
 
@@ -685,7 +702,8 @@ const PermissionsTab = ({
       render: (_value: unknown, record: Permission) => (
         <Space size="small">
           <Button
-            type="link"
+            type="text"
+            icon={<EditOutlined />}
             onClick={() => {
               setSelectedPermission(record)
               editForm.setFieldsValue({
@@ -699,7 +717,7 @@ const PermissionsTab = ({
             編輯
           </Button>
           <Popconfirm title="確認刪除此權限？" onConfirm={() => handleDelete(record)}>
-            <Button type="link" danger>
+            <Button type="text" danger icon={<DeleteOutlined />}>
               刪除
             </Button>
           </Popconfirm>
@@ -709,15 +727,15 @@ const PermissionsTab = ({
   ]
 
   return (
-    <Card bordered={false} className="shadow-sm">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+    <div className="glass-card p-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div>
-          <Title level={4} style={{ margin: 0 }}>
+          <Title level={4} className="!mb-1 !font-light">
             權限管理
           </Title>
-          <Text type="secondary">維護資源／操作清單</Text>
+          <Text className="text-gray-500">維護資源／操作清單</Text>
         </div>
-        <Button type="primary" onClick={() => setCreateOpen(true)}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)} className="shadow-lg shadow-blue-500/30">
           新增權限
         </Button>
       </div>
@@ -728,6 +746,7 @@ const PermissionsTab = ({
         loading={loading}
         scroll={{ x: 800 }}
         pagination={false}
+        className="custom-table"
       />
 
       <Modal
@@ -769,7 +788,7 @@ const PermissionsTab = ({
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+    </div>
   )
 }
 
@@ -824,19 +843,40 @@ const AccessControlPage: React.FC = () => {
   }
 
   return (
-    <div className="p-6 space-y-4">
-      <Title level={3}>帳號與權限管理</Title>
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-6"
+    >
+      <div>
+        <Title level={2} className="!mb-1 !font-light">帳號與權限管理</Title>
+        <Text className="text-gray-500">管理系統使用者、角色與權限設定</Text>
+      </div>
+
       <Tabs
         defaultActiveKey="users"
+        type="card"
+        className="custom-tabs"
         items={[
           {
             key: 'users',
-            label: '使用者',
+            label: (
+              <span>
+                <UserOutlined />
+                使用者
+              </span>
+            ),
             children: <UsersTab availableRoles={roles} />,
           },
           {
             key: 'roles',
-            label: '角色',
+            label: (
+              <span>
+                <SafetyCertificateOutlined />
+                角色
+              </span>
+            ),
             children: (
               <RolesTab
                 roles={roles}
@@ -850,7 +890,12 @@ const AccessControlPage: React.FC = () => {
           },
           {
             key: 'permissions',
-            label: '權限',
+            label: (
+              <span>
+                <KeyOutlined />
+                權限
+              </span>
+            ),
             children: (
               <PermissionsTab
                 permissions={permissions}
@@ -862,7 +907,7 @@ const AccessControlPage: React.FC = () => {
           },
         ]}
       />
-    </div>
+    </motion.div>
   )
 }
 
