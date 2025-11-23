@@ -26,6 +26,14 @@ const AccountsPage: React.FC = () => {
     loadAccounts()
   }, [])
 
+  const typeLabelMap: Record<string, string> = {
+    ASSET: '資產',
+    LIABILITY: '負債',
+    EQUITY: '權益',
+    REVENUE: '收入',
+    EXPENSE: '費用',
+  }
+
   const columns = [
     {
       title: '科目代碼',
@@ -59,7 +67,11 @@ const AccountsPage: React.FC = () => {
           REVENUE: 'cyan',
           EXPENSE: 'red',
         }
-        return <Tag color={colorMap[type] || 'default'} className="rounded-full px-2 border-none">{type}</Tag>
+        return (
+          <Tag color={colorMap[type] || 'default'} className="rounded-full px-2 border-none">
+            {typeLabelMap[type] || type}
+          </Tag>
+        )
       },
     },
     {
@@ -99,7 +111,7 @@ const AccountsPage: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <Title level={2} className="!text-gray-800 font-light tracking-tight !mb-1">
-            Chart of Accounts
+            會計科目表
           </Title>
           <Text className="text-gray-500">
             管理您的會計科目表與餘額
