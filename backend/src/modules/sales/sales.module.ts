@@ -4,6 +4,7 @@ import { SalesService } from './sales.service';
 import { SalesOrderService } from './services/sales-order.service';
 import { PrismaModule } from '../../common/prisma/prisma.module';
 import { AccountingModule } from '../accounting/accounting.module'; // 依賴：產生會計分錄
+import { InventoryModule } from '../inventory/inventory.module';
 
 /**
  * SalesModule
@@ -26,7 +27,7 @@ import { AccountingModule } from '../accounting/accounting.module'; // 依賴：
  * - 退款時：沖回收入與費用
  */
 @Module({
-  imports: [AccountingModule],
+  imports: [PrismaModule, AccountingModule, InventoryModule],
   controllers: [SalesController],
   providers: [SalesService, SalesOrderService],
   exports: [SalesService, SalesOrderService],
