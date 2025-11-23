@@ -44,8 +44,10 @@ model User {
 
 model Role {
   id          String   @id @default(uuid())
+  code        String   @unique
   name        String   @unique // ADMIN, ACCOUNTANT, OPERATOR
   description String?
+  hierarchyLevel Int    @default(3) @map("hierarchy_level")
   createdAt   DateTime @default(now()) @map("created_at")
 
   // Relations

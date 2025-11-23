@@ -11,6 +11,8 @@ export interface Role {
   id: string
   code: string
   name: string
+  description?: string
+  hierarchyLevel: number
 }
 
 export interface LoginRequest {

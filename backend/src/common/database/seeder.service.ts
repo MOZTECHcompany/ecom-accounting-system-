@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
+import { Role } from '@prisma/client';
 
 @Injectable()
 export class SeederService implements OnModuleInit {
@@ -19,10 +20,13 @@ export class SeederService implements OnModuleInit {
       await this.createEntities();
 
       // 2. Create Roles and Permissions
-      const adminRole = await this.createRolesAndPermissions();
+      const roles = await this.createRolesAndPermissions();
 
-      // 3. Create Admin User
-      await this.createAdminUser(adminRole);
+      // 3. Create Departments
+      await this.createDepartments();
+
+      // 4. Create Admin User
+      await this.createAdminUser(roles);
 
       this.logger.log('✅ Database seeding completed successfully.');
     } catch (error) {
@@ -62,7 +66,7 @@ export class SeederService implements OnModuleInit {
     });
   }
 
-  private async createRolesAndPermissions() {
+  private async createRolesAndPermissions(): Promise<Record<string, Role>> {
     // Create Permissions (Simplified for critical ones)
     const resources = ['users', 'accounts', 'journal_entries', 'sales_orders'];
     const actions = ['read', 'create', 'update', 'delete', 'approve'];
@@ -83,85 +87,193 @@ export class SeederService implements OnModuleInit {
       }
     }
 
-    // Create Roles
-    const adminRole = await this.prisma.role.upsert({
-      where: { name: 'ADMIN' },
-      update: {},
-      create: {
+    const roleDefinitions = [
+      {
+        code: 'SUPER_ADMIN',
+        name: 'SUPER_ADMIN',
+        description: '最高管理員，擁有完整系統權限',
+        hierarchyLevel: 1,
+        permissions: 'ALL' as const,
+      },
+      {
+        code: 'ADMIN',
         name: 'ADMIN',
-        description: '系統最高管理員，擁有所有權限',
+        description: '公司管理員，可管理大部分模組',
+        hierarchyLevel: 2,
+        permissions: 'ALL' as const,
       },
-    });
-
-    await this.prisma.role.upsert({
-      where: { name: 'ACCOUNTANT' },
-      update: {},
-      create: {
+      {
+        code: 'ACCOUNTANT',
         name: 'ACCOUNTANT',
-        description: '會計人員',
+        description: '財會部門成員，可處理會計與報表作業',
+        hierarchyLevel: 3,
+        permissions: [
+          'accounts:read',
+          'journal_entries:read',
+          'journal_entries:create',
+          'journal_entries:approve',
+          'sales_orders:read',
+        ],
       },
-    });
-
-    await this.prisma.role.upsert({
-      where: { name: 'OPERATOR' },
-      update: {},
-      create: {
+      {
+        code: 'OPERATOR',
         name: 'OPERATOR',
-        description: '一般操作人員',
+        description: '一般操作成員，可進行基礎作業',
+        hierarchyLevel: 4,
+        permissions: ['sales_orders:read', 'sales_orders:create'],
       },
-    });
+    ];
 
-    // Assign permissions to ADMIN
-    for (const permission of permissions) {
-      await this.prisma.rolePermission.upsert({
-        where: {
-          roleId_permissionId: {
-            roleId: adminRole.id,
-            permissionId: permission.id,
-          },
+    const roles: Record<string, Role> = {};
+
+    for (const roleDef of roleDefinitions) {
+      const role = await this.prisma.role.upsert({
+        where: { code: roleDef.code },
+        update: {
+          name: roleDef.name,
+          description: roleDef.description,
+          hierarchyLevel: roleDef.hierarchyLevel,
         },
-        update: {},
         create: {
-          roleId: adminRole.id,
-          permissionId: permission.id,
+          code: roleDef.code,
+          name: roleDef.name,
+          description: roleDef.description,
+          hierarchyLevel: roleDef.hierarchyLevel,
         },
       });
+
+      roles[roleDef.code] = role;
     }
 
-    return adminRole;
+    const permissionIndex = new Map(
+      permissions.map((permission) => [`${permission.resource}:${permission.action}`, permission]),
+    );
+
+    for (const roleDef of roleDefinitions) {
+      const role = roles[roleDef.code];
+      if (!role) {
+        continue;
+      }
+
+      const targetPermissions =
+        roleDef.permissions === 'ALL'
+          ? permissions
+          : roleDef.permissions
+              .map((key) => permissionIndex.get(key))
+              .filter((permission): permission is (typeof permissions)[number] => Boolean(permission));
+
+      for (const permission of targetPermissions) {
+        await this.prisma.rolePermission.upsert({
+          where: {
+            roleId_permissionId: {
+              roleId: role.id,
+              permissionId: permission.id,
+            },
+          },
+          update: {},
+          create: {
+            roleId: role.id,
+            permissionId: permission.id,
+          },
+        });
+      }
+    }
+
+    return roles;
   }
 
-  private async createAdminUser(adminRole: any) {
-    const email = 's7896629@gmail.com';
-    const password = '@asdf798522';
+  private async createDepartments() {
+    const departmentTemplates = [
+      { key: 'mgmt', name: '管理部' },
+      { key: 'procurement', name: '採購部' },
+      { key: 'logistics', name: '儲運部' },
+      { key: 'product', name: '產品部' },
+      { key: 'design', name: '設計部' },
+      { key: 'customer-success', name: '客服部' },
+      { key: 'finance', name: '財會部' },
+    ];
+
+    const entities = await this.prisma.entity.findMany();
+
+    for (const entity of entities) {
+      for (const template of departmentTemplates) {
+        await this.prisma.department.upsert({
+          where: { id: `${entity.id}-${template.key}` },
+          update: {
+            name: template.name,
+            isActive: true,
+          },
+          create: {
+            id: `${entity.id}-${template.key}`,
+            entityId: entity.id,
+            name: template.name,
+          },
+        });
+      }
+    }
+  }
+
+  private async createAdminUser(roles: Record<string, Role>) {
+    const email = process.env.SUPER_ADMIN_EMAIL;
+    const password = process.env.SUPER_ADMIN_PASSWORD;
+    const name = process.env.SUPER_ADMIN_NAME ?? '系統管理員';
+
+    if (!email || !password) {
+      this.logger.warn(
+        'Skipping admin user seeding because SUPER_ADMIN_EMAIL or SUPER_ADMIN_PASSWORD is not set. Please configure these environment variables to seed the super admin account.',
+      );
+      return;
+    }
     const passwordHash = await bcrypt.hash(password, 10);
 
     const user = await this.prisma.user.upsert({
       where: { email },
       update: {
         passwordHash, // Ensure password is updated
+        name,
       },
       create: {
         email,
-        name: '系統管理員',
+        name,
         passwordHash,
       },
     });
 
-    await this.prisma.userRole.upsert({
-      where: {
-        userId_roleId: {
+    const superAdminRole = roles['SUPER_ADMIN'];
+    const adminRole = roles['ADMIN'];
+
+    if (superAdminRole) {
+      await this.prisma.userRole.upsert({
+        where: {
+          userId_roleId: {
+            userId: user.id,
+            roleId: superAdminRole.id,
+          },
+        },
+        update: {},
+        create: {
+          userId: user.id,
+          roleId: superAdminRole.id,
+        },
+      });
+    }
+
+    if (adminRole) {
+      await this.prisma.userRole.upsert({
+        where: {
+          userId_roleId: {
+            userId: user.id,
+            roleId: adminRole.id,
+          },
+        },
+        update: {},
+        create: {
           userId: user.id,
           roleId: adminRole.id,
         },
-      },
-      update: {},
-      create: {
-        userId: user.id,
-        roleId: adminRole.id,
-      },
-    });
+      });
+    }
 
-    this.logger.log(`Admin user ensured: ${email}`);
+    this.logger.log(`Admin user ensured: ${email} (${name})`);
   }
 }

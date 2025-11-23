@@ -4,6 +4,7 @@ import {
   IsNumber,
   IsEnum,
   IsBoolean,
+  IsOptional,
   validateSync,
 } from 'class-validator';
 
@@ -45,6 +46,18 @@ class EnvironmentVariables {
 
   @IsString()
   TZ: string = 'Asia/Taipei';
+
+  @IsOptional()
+  @IsString()
+  SUPER_ADMIN_EMAIL?: string;
+
+  @IsOptional()
+  @IsString()
+  SUPER_ADMIN_PASSWORD?: string;
+
+  @IsOptional()
+  @IsString()
+  SUPER_ADMIN_NAME?: string;
 }
 
 /**

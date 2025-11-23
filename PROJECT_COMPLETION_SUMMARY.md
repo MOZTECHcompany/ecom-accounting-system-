@@ -260,13 +260,14 @@
 - ✅ **2 個 Entities**:
   - 台灣實體 (tw-entity-001, TWD)
   - 大陸實體 (cn-entity-001, CNY)
-- ✅ **3 個 Roles**:
+- ✅ **4 個 Roles**:
+  - SUPER_ADMIN (最高管理員)
   - ADMIN (系統管理員)
   - ACCOUNTANT (會計人員)
   - OPERATOR (操作員)
 - ✅ **1 個 Admin 使用者**:
-  - Email: admin@example.com
-  - Password: Admin@123456
+  - Email: 來自 `SUPER_ADMIN_EMAIL`
+  - Password: 透過 `SUPER_ADMIN_PASSWORD`（不紀錄於程式碼）
 - ✅ **64 個會計科目**:
   - 資產 (ASSET): 20個
   - 負債 (LIABILITY): 12個
@@ -327,7 +328,7 @@
    - 方式一：GitHub Codespaces（推薦）
    - 方式二：本機開發
    - 方式三：完整 Docker Compose
-2. ✅ **預設帳號** - admin@example.com / Admin@123456
+2. ✅ **預設帳號** - 透過環境變數 `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD`
 3. ✅ **API 文件** - Swagger UI 和 4 個範例 API curl 指令
 4. ✅ **專案結構** - 完整目錄樹狀圖
 5. ✅ **資料庫 Schema** - 36 個 Models 說明和 4 欄位金額標準

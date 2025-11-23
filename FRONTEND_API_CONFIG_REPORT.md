@@ -179,10 +179,12 @@ https://ecom-accounting-backend.onrender.com/api-docs
 curl -X POST https://ecom-accounting-backend.onrender.com/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "admin@example.com",
-    "password": "Admin@123456"
+    "email": "${SUPER_ADMIN_EMAIL}",
+    "password": "<SUPER_ADMIN_PASSWORD>"
   }'
 ```
+
+> 在正式環境請透過 Render 環境變數設定 `SUPER_ADMIN_EMAIL` 與 `SUPER_ADMIN_PASSWORD`，並將指令中的佔位符替換為實際值。
 
 ### 4. 測試前端訪問
 開啟瀏覽器：

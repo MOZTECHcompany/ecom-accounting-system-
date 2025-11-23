@@ -207,12 +207,17 @@ docker-compose down
 
 ## 👤 預設帳號
 
-系統種子資料會自動建立以下帳號：
+系統種子資料會依照環境變數建立 SUPER_ADMIN 帳號。
 
-| 角色 | Email | 密碼 | 權限 |
-|------|-------|------|------|
-| 系統管理員 | `s7896629@gmail.com` | `@asdf798522` | 所有權限 |
+請在啟動或執行 `prisma db seed` 前設定以下環境變數（建議寫入 `.env`）：
 
+```bash
+SUPER_ADMIN_EMAIL="admin@example.com"
+SUPER_ADMIN_PASSWORD="ChangeMeToAStrongSecret"
+SUPER_ADMIN_NAME="系統管理員"
+```
+
+> ⚠️ **重要**：密碼只應透過環境變數提供，請勿將真實帳密寫入程式碼或版本控制。
 ---
 
 ## 📚 API 文件
@@ -234,10 +239,12 @@ docker-compose down
 curl -X POST http://localhost:3000/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "admin@example.com",
-    "password": "Admin@123456"
+    "email": "${SUPER_ADMIN_EMAIL}",
+    "password": "<SUPER_ADMIN_PASSWORD>"
   }'
 ```
+
+> 在終端機中預先設定 `SUPER_ADMIN_EMAIL` 與 `SUPER_ADMIN_PASSWORD`，或在指令中以實際帳密取代佔位符號。
 
 回應：
 ```json
@@ -245,7 +252,7 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
   "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "user": {
     "id": "...",
-    "email": "admin@example.com",
+    "email": "${SUPER_ADMIN_EMAIL}",
     "name": "系統管理員"
   }
 }
@@ -397,7 +404,8 @@ amountBase      Decimal  // 本位幣金額
 
 | 角色 | 代碼 | 權限範圍 |
 |------|------|----------|
-| 系統管理員 | `ADMIN` | 所有權限，包含使用者管理、系統設定 |
+| 最高管理員 | `SUPER_ADMIN` | 全系統權限與設定管理 |
+| 系統管理員 | `ADMIN` | 使用者管理、系統設定、多數模組操作 |
 | 會計人員 | `ACCOUNTANT` | 查看、建立、審核會計相關資料 |
 | 操作員 | `OPERATOR` | 查看、建立訂單等基本操作 |
 
@@ -420,8 +428,8 @@ async getSensitiveData() {
 執行 `npm run prisma:seed` 會建立：
 
 - ✅ **2個實體**：台灣公司（TWD）、大陸公司（CNY）
-- ✅ **3個角色**：ADMIN、ACCOUNTANT、OPERATOR
-- ✅ **1個管理員**：admin@example.com
+- ✅ **4個角色**：SUPER_ADMIN、ADMIN、ACCOUNTANT、OPERATOR
+- ✅ **1個管理員**：Email 來源 `SUPER_ADMIN_EMAIL`
 - ✅ **64個會計科目**：完整 IFRS + 台灣常用科目表
 - ✅ **9個銷售渠道**：
   - SHOPIFY - Shopify 官網
@@ -581,10 +589,12 @@ https://ecom-accounting-backend.onrender.com/api-docs
 curl -X POST https://ecom-accounting-backend.onrender.com/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "admin@example.com",
-    "password": "Admin@123456"
+    "email": "${SUPER_ADMIN_EMAIL}",
+    "password": "<SUPER_ADMIN_PASSWORD>"
   }'
 ```
+
+> 建議於 Render 控制台設定對應的環境變數，再使用上述指令測試登入。
 
 #### 測試前端訪問
 開啟瀏覽器：

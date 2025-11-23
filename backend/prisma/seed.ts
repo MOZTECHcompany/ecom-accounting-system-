@@ -112,91 +112,208 @@ async function main() {
     }),
   ]);
 
-  // 建立角色
-  const adminRole = await prisma.role.upsert({
-    where: { name: 'ADMIN' },
-    update: {},
-    create: {
+  // 建立角色（四層級）
+  const roleDefinitions = [
+    {
+      code: 'SUPER_ADMIN',
+      name: 'SUPER_ADMIN',
+      description: '最高管理員，擁有完整系統權限',
+      hierarchyLevel: 1,
+    },
+    {
+      code: 'ADMIN',
       name: 'ADMIN',
-      description: '系統最高管理員，擁有所有權限',
+      description: '公司管理員，可管理大部分模組',
+      hierarchyLevel: 2,
     },
-  });
-
-  const accountantRole = await prisma.role.upsert({
-    where: { name: 'ACCOUNTANT' },
-    update: {},
-    create: {
+    {
+      code: 'ACCOUNTANT',
       name: 'ACCOUNTANT',
-      description: '會計人員，可處理會計相關業務',
+      description: '財會部門成員，可處理會計與報表作業',
+      hierarchyLevel: 3,
     },
-  });
-
-  const operatorRole = await prisma.role.upsert({
-    where: { name: 'OPERATOR' },
-    update: {},
-    create: {
+    {
+      code: 'OPERATOR',
       name: 'OPERATOR',
-      description: '一般操作人員，可建立訂單與基本查詢',
+      description: '一般操作成員，可進行基礎作業',
+      hierarchyLevel: 4,
     },
-  });
+  ];
 
-  // 為 ADMIN 角色指派所有權限
-  for (const permission of permissions) {
-    await prisma.rolePermission.upsert({
-      where: {
-        roleId_permissionId: {
-          roleId: adminRole.id,
-          permissionId: permission.id,
-        },
+  const roles: Record<string, { id: string }> = {};
+
+  for (const roleDef of roleDefinitions) {
+    const role = await prisma.role.upsert({
+      where: { code: roleDef.code },
+      update: {
+        name: roleDef.name,
+        description: roleDef.description,
+        hierarchyLevel: roleDef.hierarchyLevel,
       },
-      update: {},
       create: {
-        roleId: adminRole.id,
-        permissionId: permission.id,
+        code: roleDef.code,
+        name: roleDef.name,
+        description: roleDef.description,
+        hierarchyLevel: roleDef.hierarchyLevel,
       },
     });
+
+    roles[roleDef.code] = role;
   }
 
-  console.log(`✅ Created roles: ADMIN, ACCOUNTANT, OPERATOR\n`);
+  const permissionIndex = new Map(
+    permissions.map((permission) => [`${permission.resource}:${permission.action}`, permission]),
+  );
+
+  const ensureRolePermissions = async (roleCode: string, keys: string[] | 'ALL') => {
+    const role = roles[roleCode];
+    if (!role) {
+      return;
+    }
+
+    const targetPermissions =
+      keys === 'ALL'
+        ? permissions
+        : keys
+            .map((key) => permissionIndex.get(key))
+            .filter((permission): permission is (typeof permissions)[number] => Boolean(permission));
+
+    for (const permission of targetPermissions) {
+      await prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId: role.id,
+            permissionId: permission.id,
+          },
+        },
+        update: {},
+        create: {
+          roleId: role.id,
+          permissionId: permission.id,
+        },
+      });
+    }
+  };
+
+  await ensureRolePermissions('SUPER_ADMIN', 'ALL');
+  await ensureRolePermissions('ADMIN', 'ALL');
+  await ensureRolePermissions('ACCOUNTANT', [
+    'accounts:read',
+    'journal_entries:read',
+    'journal_entries:create',
+    'journal_entries:approve',
+    'sales_orders:read',
+  ]);
+  await ensureRolePermissions('OPERATOR', ['sales_orders:read', 'sales_orders:create']);
+
+  console.log(`✅ Created roles with hierarchy: SUPER_ADMIN, ADMIN, ACCOUNTANT, OPERATOR\n`);
+
+  const superAdminRole = roles['SUPER_ADMIN'];
+  const adminRole = roles['ADMIN'];
 
   // ============================================
-  // 3. 建立預設管理員
+  // 3. 建立部門（每個公司）
+  // ============================================
+  console.log('🏢 Creating departments...');
+
+  const departmentTemplates = [
+    { key: 'mgmt', name: '管理部' },
+    { key: 'procurement', name: '採購部' },
+    { key: 'logistics', name: '儲運部' },
+    { key: 'product', name: '產品部' },
+    { key: 'design', name: '設計部' },
+    { key: 'customer-success', name: '客服部' },
+    { key: 'finance', name: '財會部' },
+  ];
+
+  const entities = [taiwanEntity, chinaEntity];
+
+  for (const entity of entities) {
+    for (const template of departmentTemplates) {
+      await prisma.department.upsert({
+        where: { id: `${entity.id}-${template.key}` },
+        update: {
+          name: template.name,
+          isActive: true,
+        },
+        create: {
+          id: `${entity.id}-${template.key}`,
+          entityId: entity.id,
+          name: template.name,
+        },
+      });
+    }
+  }
+
+  console.log(`✅ Created departments for entities: ${entities.map((entity) => entity.name).join(', ')}\n`);
+
+  // ============================================
+  // 4. 建立預設管理員
   // ============================================
   console.log('👤 Creating default admin user...');
 
-  const passwordHash = await bcrypt.hash('@asdf798522', 10);
-  
+  const adminEmail = process.env.SUPER_ADMIN_EMAIL;
+  const adminPassword = process.env.SUPER_ADMIN_PASSWORD;
+  const adminName = process.env.SUPER_ADMIN_NAME ?? '系統管理員';
+
+  if (!adminEmail || !adminPassword) {
+    throw new Error(
+      'SUPER_ADMIN_EMAIL and SUPER_ADMIN_PASSWORD must be set in environment variables before running the seed script.',
+    );
+  }
+
+  const passwordHash = await bcrypt.hash(adminPassword, 10);
+
   const adminUser = await prisma.user.upsert({
-    where: { email: 's7896629@gmail.com' },
+    where: { email: adminEmail },
     update: {
       passwordHash, // Update password if user exists
+      name: adminName,
     },
     create: {
-      email: 's7896629@gmail.com',
-      name: '系統管理員',
+      email: adminEmail,
+      name: adminName,
       passwordHash,
     },
   });
 
-  // 指派 ADMIN 角色
-  await prisma.userRole.upsert({
-    where: {
-      userId_roleId: {
+  // 指派 SUPER_ADMIN 與 ADMIN 角色
+  if (superAdminRole) {
+    await prisma.userRole.upsert({
+      where: {
+        userId_roleId: {
+          userId: adminUser.id,
+          roleId: superAdminRole.id,
+        },
+      },
+      update: {},
+      create: {
+        userId: adminUser.id,
+        roleId: superAdminRole.id,
+      },
+    });
+  }
+
+  if (adminRole) {
+    await prisma.userRole.upsert({
+      where: {
+        userId_roleId: {
+          userId: adminUser.id,
+          roleId: adminRole.id,
+        },
+      },
+      update: {},
+      create: {
         userId: adminUser.id,
         roleId: adminRole.id,
       },
-    },
-    update: {},
-    create: {
-      userId: adminUser.id,
-      roleId: adminRole.id,
-    },
-  });
+    });
+  }
 
-  console.log(`✅ Created admin user: ${adminUser.email} (password: @asdf798522)\n`);
+  console.log(`✅ Ensured admin user: ${adminUser.email} (name: ${adminUser.name}, roles: SUPER_ADMIN, ADMIN)\n`);
 
   // ============================================
-  // 4. 建立會計科目表（台灣公司）
+  // 5. 建立會計科目表（台灣公司）
   // ============================================
   console.log('📊 Creating chart of accounts for Taiwan...');
 
@@ -475,8 +592,8 @@ async function main() {
   console.log('✨ Database seeding completed successfully!\n');
   console.log('📝 Summary:');
   console.log(`   - Entities: 2 (台灣公司, 大陸公司)`);
-  console.log(`   - Users: 1 admin (s7896629@gmail.com / @asdf798522)`);
-  console.log(`   - Roles: 3 (ADMIN, ACCOUNTANT, OPERATOR)`);
+  console.log('   - Users: 1 admin (credentials sourced from SUPER_ADMIN_* environment variables)');
+  console.log('   - Roles: 4 (SUPER_ADMIN, ADMIN, ACCOUNTANT, OPERATOR)');
   console.log(`   - Permissions: ${permissions.length}`);
   console.log(`   - Accounts: ${twAccounts.length + cnAccounts.length}`);
   console.log(`   - Sales Channels: ${channels.length}`);

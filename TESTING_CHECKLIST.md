@@ -76,12 +76,13 @@ npm run prisma:seed
   - TW Entity (tw-entity-001) - Base currency: TWD
   - CN Entity (cn-entity-001) - Base currency: CNY
 
-✅ Created 3 roles:
+✅ Created 4 roles:
+  - SUPER_ADMIN: Full system access
   - ADMIN: System Administrator
   - ACCOUNTANT: Accounting Staff
   - OPERATOR: Operations Staff
 
-✅ Created admin user: admin@example.com
+✅ Created admin user (email from `SUPER_ADMIN_EMAIL`)
 
 ✅ Created 64 accounts:
   - Assets: 20 accounts
@@ -110,8 +111,8 @@ npm run prisma:seed
 
 **驗證點**:
 - [ ] 2 個 Entities 建立（台灣TWD、大陸CNY）
-- [ ] 3 個 Roles 建立（ADMIN、ACCOUNTANT、OPERATOR）
-- [ ] 1 個 Admin 使用者建立（admin@example.com）
+- [ ] 4 個 Roles 建立（SUPER_ADMIN、ADMIN、ACCOUNTANT、OPERATOR）
+- [ ] 1 個 Admin 使用者建立（Email 來源：`SUPER_ADMIN_EMAIL`）
 - [ ] 64 個會計科目建立（資產/負債/權益/收入/費用）
 - [ ] 9 個銷售渠道建立
 - [ ] 24 個會計期間建立（2025年 × 2實體）
@@ -192,10 +193,12 @@ VITE v5.x ready in xxx ms
 curl -X POST http://localhost:3000/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "admin@example.com",
-    "password": "Admin@123456"
+    "email": "${SUPER_ADMIN_EMAIL}",
+    "password": "<SUPER_ADMIN_PASSWORD>"
   }'
 ```
+
+> 提示：請先在終端機設定 `SUPER_ADMIN_EMAIL` 與 `SUPER_ADMIN_PASSWORD` 環境變數，或手動以實際帳密替換範例中的佔位符號。
 
 **預期回應**:
 ```json
@@ -203,9 +206,9 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
   "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxx.xxx",
   "user": {
     "id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-    "email": "admin@example.com",
+    "email": "${SUPER_ADMIN_EMAIL}",
     "name": "系統管理員",
-    "roles": ["ADMIN"]
+    "roles": ["SUPER_ADMIN", "ADMIN"]
   }
 }
 ```
