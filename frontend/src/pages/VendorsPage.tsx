@@ -165,6 +165,7 @@ const VendorsPage: React.FC = () => {
           dataSource={vendors} 
           rowKey="id" 
           loading={loading}
+          scroll={{ x: 1000 }}
           pagination={{ pageSize: 10 }}
         />
       </div>

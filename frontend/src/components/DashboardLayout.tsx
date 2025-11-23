@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, Avatar, Dropdown, Space, Typography, Input } from 'antd'
+import { Layout, Menu, Avatar, Dropdown, Space, Typography, Input, Drawer, Button, Grid } from 'antd'
 import {
   DashboardOutlined,
   FileTextOutlined,
@@ -11,7 +11,8 @@ import {
   SettingOutlined,
   LogoutOutlined,
   UserOutlined,
-  SearchOutlined
+  SearchOutlined,
+  MenuOutlined
 } from '@ant-design/icons'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
@@ -22,13 +23,20 @@ import SettingsDrawer from './SettingsDrawer'
 
 const { Header, Sider, Content } = Layout
 const { Title } = Typography
+const { useBreakpoint } = Grid
 
 const DashboardLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout } = useAuth()
+  const screens = useBreakpoint()
+
+  // Determine if we are on a mobile screen (xs or sm, but not md or larger)
+  // Note: screens.md is true for >= 768px. So !screens.md means < 768px.
+  const isMobile = !screens.md
 
   const menuItems = [
     {
@@ -162,47 +170,91 @@ const DashboardLayout: React.FC = () => {
       <div className="orb fixed w-[600px] h-[600px] rounded-full blur-[100px] -z-10 animate-float-slow" 
            style={{ bottom: '-10%', left: '20%', background: '#FFDEE9' }} />
 
-      <Sider 
-        collapsible 
-        collapsed={collapsed} 
-        onCollapse={setCollapsed}
-        width={260}
-        className="floating-sidebar"
-        style={{
-          overflow: 'hidden',
-          height: 'calc(100vh - 32px)',
-          position: 'fixed',
-          left: 0,
-          top: 0,
-          zIndex: 100,
-          background: 'transparent', // Handled by CSS class
-        }}
-      >
-        <div className="h-16 flex items-center justify-center m-4 mb-8">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md border border-white/30 shadow-lg">
-              <span className="text-xl">💎</span>
+      {!isMobile ? (
+        <Sider 
+          collapsible 
+          collapsed={collapsed} 
+          onCollapse={setCollapsed}
+          width={260}
+          className="floating-sidebar"
+          style={{
+            overflow: 'hidden',
+            height: 'calc(100vh - 32px)',
+            position: 'fixed',
+            left: 0,
+            top: 0,
+            zIndex: 100,
+            background: 'transparent', // Handled by CSS class
+          }}
+        >
+          <div className="h-16 flex items-center justify-center m-4 mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md border border-white/30 shadow-lg">
+                <span className="text-xl">💎</span>
+              </div>
+              {!collapsed && (
+                <span className="text-lg font-semibold tracking-wide" style={{ color: 'var(--text-primary)' }}>
+                  E-Accounting
+                </span>
+              )}
             </div>
-            {!collapsed && (
+          </div>
+          <Menu
+            theme="light"
+            mode="inline"
+            selectedKeys={[location.pathname]}
+            defaultOpenKeys={['accounting', 'sales', 'ar', 'ap', 'admin']}
+            items={menuItems}
+            className="px-2 bg-transparent border-none"
+          />
+        </Sider>
+      ) : (
+        <Drawer
+          placement="left"
+          onClose={() => setMobileMenuOpen(false)}
+          open={mobileMenuOpen}
+          width={280}
+          styles={{ body: { padding: 0, background: 'var(--glass-bg)', backdropFilter: 'blur(20px)' } }}
+          closable={false}
+        >
+          <div className="h-16 flex items-center justify-center m-4 mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md border border-white/30 shadow-lg">
+                <span className="text-xl">💎</span>
+              </div>
               <span className="text-lg font-semibold tracking-wide" style={{ color: 'var(--text-primary)' }}>
                 E-Accounting
               </span>
-            )}
+            </div>
           </div>
-        </div>
-        <Menu
-          theme="light"
-          mode="inline"
-          selectedKeys={[location.pathname]}
-          defaultOpenKeys={['accounting', 'sales', 'ar', 'ap', 'admin']}
-          items={menuItems}
-          className="px-2 bg-transparent border-none"
-        />
-      </Sider>
-      <Layout style={{ marginLeft: collapsed ? 112 : 292, transition: 'all 0.2s', background: 'transparent' }}>
-        <Header className="sticky top-0 z-50 flex justify-between items-center px-8 my-4 mx-6 rounded-2xl glass-panel" style={{ height: '64px', padding: '0 24px' }}>
-          <div className="flex items-center gap-8">
-            <Title level={4} style={{ margin: 0, fontWeight: 500, color: 'var(--text-primary)' }}>
+          <Menu
+            theme="light"
+            mode="inline"
+            selectedKeys={[location.pathname]}
+            defaultOpenKeys={['accounting', 'sales', 'ar', 'ap', 'admin']}
+            items={menuItems}
+            className="px-2 bg-transparent border-none"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+        </Drawer>
+      )}
+
+      <Layout style={{ 
+        marginLeft: isMobile ? 0 : (collapsed ? 112 : 292), 
+        transition: 'all 0.2s', 
+        background: 'transparent' 
+      }}>
+        <Header className="sticky top-0 z-50 flex justify-between items-center px-4 md:px-8 my-2 md:my-4 mx-2 md:mx-6 rounded-2xl glass-panel" style={{ height: '64px', padding: isMobile ? '0 16px' : '0 24px' }}>
+          <div className="flex items-center gap-4 md:gap-8">
+            {isMobile && (
+              <Button 
+                type="text" 
+                icon={<MenuOutlined />} 
+                onClick={() => setMobileMenuOpen(true)}
+                style={{ fontSize: '18px', width: 40, height: 40 }}
+              />
+            )}
+            <Title level={4} style={{ margin: 0, fontWeight: 500, color: 'var(--text-primary)', fontSize: isMobile ? '1.1rem' : undefined }}>
               {currentMenuLabel}
             </Title>
             <div className="hidden md:block">
@@ -213,17 +265,17 @@ const DashboardLayout: React.FC = () => {
               />
             </div>
           </div>
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3 md:gap-6">
             <NotificationCenter />
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
               <Space className="cursor-pointer hover:bg-black/5 dark:hover:bg-white/10 p-2 rounded-xl transition-colors">
                 <Avatar icon={<UserOutlined />} src={user?.avatar} className="bg-gradient-to-br from-blue-500 to-purple-600" />
-                <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{user?.name || user?.email}</span>
+                {!isMobile && <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{user?.name || user?.email}</span>}
               </Space>
             </Dropdown>
           </div>
         </Header>
-        <Content style={{ margin: '0 24px 24px', padding: 0, minHeight: 280 }}>
+        <Content style={{ margin: isMobile ? '0 12px 24px' : '0 24px 24px', padding: 0, minHeight: 280 }}>
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}

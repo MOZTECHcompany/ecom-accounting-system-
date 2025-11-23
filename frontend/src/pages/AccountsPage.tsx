@@ -141,6 +141,7 @@ const AccountsPage: React.FC = () => {
           dataSource={accounts}
           rowKey="id"
           loading={loading}
+          scroll={{ x: 800 }}
           pagination={{ 
             pageSize: 20,
             showSizeChanger: true,

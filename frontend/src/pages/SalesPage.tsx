@@ -264,6 +264,7 @@ const SalesPage: React.FC = () => {
             rowSelection={rowSelection}
             columns={columns}
             dataSource={initialData}
+            scroll={{ x: 1000 }}
             onRow={(record) => ({
               onClick: () => handleRowClick(record),
               className: 'cursor-pointer'

@@ -269,6 +269,7 @@ const UsersTab = ({ availableRoles }: UsersTabProps) => {
         loading={loading}
         columns={columns}
         dataSource={users}
+        scroll={{ x: 800 }}
         pagination={{
           current: meta.page,
           pageSize: meta.limit,
@@ -535,6 +536,7 @@ const RolesTab = ({
         columns={columns}
         dataSource={roles}
         loading={loadingRoles}
+        scroll={{ x: 800 }}
         pagination={false}
       />
 
@@ -719,13 +721,14 @@ const PermissionsTab = ({
           新增權限
         </Button>
       </Space>
-
       <Table
         rowKey="id"
         columns={columns}
         dataSource={permissions}
         loading={loading}
+        scroll={{ x: 800 }}
         pagination={false}
+      />pagination={false}
       />
 
       <Modal
