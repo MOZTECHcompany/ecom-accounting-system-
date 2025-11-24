@@ -14,6 +14,10 @@ import { ApproveExpenseRequestDto } from './dto/approve-expense-request.dto';
 import { RejectExpenseRequestDto } from './dto/reject-expense-request.dto';
 import { SubmitExpenseFeedbackDto } from './dto/submit-feedback.dto';
 import { AccountingClassifierService } from './accounting-classifier.service';
+import {
+  CreateReimbursementItemDto,
+  UpdateReimbursementItemDto,
+} from './dto/manage-reimbursement-item.dto';
 
 interface UserContext {
   id: string;
@@ -225,6 +229,46 @@ export class ExpenseService {
     );
   }
 
+  async listReimbursementItemsAdmin(
+    entityId?: string,
+    includeInactive?: boolean,
+  ) {
+    return this.expenseRepository.listReimbursementItemsAdmin({
+      entityId,
+      includeInactive,
+    });
+  }
+
+  async getReimbursementItemAdmin(id: string) {
+    return this.ensureReimbursementItem(id);
+  }
+
+  async createReimbursementItemAdmin(dto: CreateReimbursementItemDto) {
+    return this.expenseRepository.createReimbursementItem(
+      this.buildReimbursementItemCreatePayload(dto),
+    );
+  }
+
+  async updateReimbursementItemAdmin(
+    id: string,
+    dto: UpdateReimbursementItemDto,
+  ) {
+    await this.ensureReimbursementItem(id);
+    return this.expenseRepository.updateReimbursementItem(
+      id,
+      this.buildReimbursementItemUpdatePayload(dto),
+    );
+  }
+
+  async archiveReimbursementItemAdmin(id: string) {
+    await this.ensureReimbursementItem(id);
+    return this.expenseRepository.archiveReimbursementItem(id);
+  }
+
+  async listApprovalPolicies(entityId?: string) {
+    return this.expenseRepository.listApprovalPolicies(entityId);
+  }
+
   async submitIntelligentExpenseRequest(
     dto: CreateExpenseRequestDto,
     requestedBy: UserContext,
@@ -354,6 +398,14 @@ export class ExpenseService {
     return request as ExpenseRequestWithGraph;
   }
 
+  private async ensureReimbursementItem(id: string) {
+    const item = await this.expenseRepository.getReimbursementItemDetail(id);
+    if (!item) {
+      throw new NotFoundException(`Reimbursement item ${id} not found`);
+    }
+    return item;
+  }
+
   private toDecimal(value: number) {
     if (Number.isNaN(value)) {
       throw new BadRequestException('Amount must be a valid number');
@@ -480,5 +532,94 @@ export class ExpenseService {
     }
 
     return merged as Prisma.JsonObject;
+  }
+
+  private buildReimbursementItemCreatePayload(
+    dto: CreateReimbursementItemDto,
+  ): Prisma.ReimbursementItemUncheckedCreateInput {
+    return {
+      entityId: dto.entityId,
+      name: dto.name,
+      accountId: dto.accountId,
+      description: dto.description ?? null,
+      keywords: this.stringifyList(dto.keywords),
+      amountLimit:
+        typeof dto.amountLimit === 'number'
+          ? this.toDecimal(dto.amountLimit)
+          : undefined,
+      requiresDepartmentHead: dto.requiresDepartmentHead ?? false,
+      approverRoleCodes: this.stringifyList(dto.approverRoleCodes),
+      approvalPolicyId: dto.approvalPolicyId ?? null,
+      defaultReceiptType: dto.defaultReceiptType ?? null,
+      allowedReceiptTypes: this.stringifyList(dto.allowedReceiptTypes),
+      allowedRoles: this.stringifyList(dto.allowedRoles),
+      allowedDepartments: this.stringifyList(dto.allowedDepartments),
+      isActive: dto.isActive ?? true,
+    } as Prisma.ReimbursementItemUncheckedCreateInput;
+  }
+
+  private buildReimbursementItemUpdatePayload(
+    dto: UpdateReimbursementItemDto,
+  ): Prisma.ReimbursementItemUncheckedUpdateInput {
+    const payload: Prisma.ReimbursementItemUncheckedUpdateInput = {};
+
+    if (typeof dto.entityId !== 'undefined') {
+      payload.entityId = dto.entityId;
+    }
+    if (typeof dto.name !== 'undefined') {
+      payload.name = dto.name;
+    }
+    if (typeof dto.accountId !== 'undefined') {
+      payload.accountId = dto.accountId;
+    }
+    if (typeof dto.description !== 'undefined') {
+      payload.description = dto.description ?? null;
+    }
+    if (typeof dto.keywords !== 'undefined') {
+      payload.keywords = this.stringifyList(dto.keywords);
+    }
+    if (typeof dto.amountLimit !== 'undefined') {
+      payload.amountLimit = this.toDecimal(dto.amountLimit);
+    }
+    if (typeof dto.requiresDepartmentHead !== 'undefined') {
+      payload.requiresDepartmentHead = dto.requiresDepartmentHead;
+    }
+    if (typeof dto.approverRoleCodes !== 'undefined') {
+      payload.approverRoleCodes = this.stringifyList(dto.approverRoleCodes);
+    }
+    if (typeof dto.approvalPolicyId !== 'undefined') {
+      payload.approvalPolicyId = dto.approvalPolicyId ?? null;
+    }
+    if (typeof dto.defaultReceiptType !== 'undefined') {
+      payload.defaultReceiptType = dto.defaultReceiptType ?? null;
+    }
+    if (typeof dto.allowedReceiptTypes !== 'undefined') {
+      payload.allowedReceiptTypes = this.stringifyList(
+        dto.allowedReceiptTypes,
+      );
+    }
+    if (typeof dto.allowedRoles !== 'undefined') {
+      payload.allowedRoles = this.stringifyList(dto.allowedRoles);
+    }
+    if (typeof dto.allowedDepartments !== 'undefined') {
+      payload.allowedDepartments = this.stringifyList(
+        dto.allowedDepartments,
+      );
+    }
+    if (typeof dto.isActive !== 'undefined') {
+      payload.isActive = dto.isActive;
+    }
+
+    return payload;
+  }
+
+  private stringifyList(values?: string[]) {
+    if (!values) {
+      return null;
+    }
+    const normalized = values
+      .map((value) => value.trim())
+      .filter((value) => value.length);
+    return normalized.length ? normalized.join(',') : null;
   }
 }

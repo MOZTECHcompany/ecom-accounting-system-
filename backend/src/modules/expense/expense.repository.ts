@@ -36,6 +36,17 @@ const EXPENSE_REQUEST_INCLUDE = {
   },
 } as const satisfies Prisma.ExpenseRequestInclude;
 
+const REIMBURSEMENT_ITEM_INCLUDE = {
+  account: true,
+  approvalPolicy: {
+    include: {
+      steps: {
+        orderBy: { stepOrder: 'asc' },
+      },
+    },
+  },
+} as const satisfies Prisma.ReimbursementItemInclude;
+
 export type ExpenseRequestWithGraph = Prisma.ExpenseRequestGetPayload<{
   include: typeof EXPENSE_REQUEST_INCLUDE;
 }>;
@@ -96,19 +107,62 @@ export class ExpenseRepository {
     });
   }
 
+  async listReimbursementItemsAdmin(options?: {
+    entityId?: string;
+    includeInactive?: boolean;
+  }) {
+    return this.prisma.reimbursementItem.findMany({
+      where: {
+        entityId: options?.entityId,
+        ...(options?.includeInactive ? {} : { isActive: true }),
+      },
+      orderBy: { name: 'asc' },
+      include: REIMBURSEMENT_ITEM_INCLUDE,
+    });
+  }
+
+  async createReimbursementItem(
+    data: Prisma.ReimbursementItemUncheckedCreateInput,
+  ) {
+    return this.prisma.reimbursementItem.create({
+      data,
+      include: REIMBURSEMENT_ITEM_INCLUDE,
+    });
+  }
+
+  async updateReimbursementItem(
+    id: string,
+    data: Prisma.ReimbursementItemUncheckedUpdateInput,
+  ) {
+    return this.prisma.reimbursementItem.update({
+      where: { id },
+      data,
+      include: REIMBURSEMENT_ITEM_INCLUDE,
+    });
+  }
+
+  async archiveReimbursementItem(id: string) {
+    return this.prisma.reimbursementItem.update({
+      where: { id },
+      data: { isActive: false },
+      include: REIMBURSEMENT_ITEM_INCLUDE,
+    });
+  }
+
+  async listApprovalPolicies(entityId?: string) {
+    return this.prisma.approvalPolicy.findMany({
+      where: {
+        entityId,
+        isActive: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+  }
+
   async getReimbursementItemDetail(id: string) {
     return this.prisma.reimbursementItem.findUnique({
       where: { id },
-      include: {
-        account: true,
-        approvalPolicy: {
-          include: {
-            steps: {
-              orderBy: { stepOrder: 'asc' },
-            },
-          },
-        },
-      },
+      include: REIMBURSEMENT_ITEM_INCLUDE,
     });
   }
 

@@ -22,7 +22,13 @@ import { CreateExpenseRequestDto } from './dto/create-expense-request.dto';
 import { ApproveExpenseRequestDto } from './dto/approve-expense-request.dto';
 import { RejectExpenseRequestDto } from './dto/reject-expense-request.dto';
 import { SubmitExpenseFeedbackDto } from './dto/submit-feedback.dto';
+import {
+  CreateReimbursementItemDto,
+  UpdateReimbursementItemDto,
+} from './dto/manage-reimbursement-item.dto';
 import type { Request } from 'express';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 
 /**
  * 費用控制器
@@ -164,6 +170,74 @@ export class ExpenseController {
       roles: roleList,
       departmentId,
     });
+  }
+
+  @Get('admin/reimbursement-items')
+  @ApiOperation({ summary: '管理端：查詢報銷項目' })
+  @ApiResponse({ status: 200, description: '成功取得報銷項目列表' })
+  @ApiQuery({ name: 'entityId', required: false })
+  @ApiQuery({ name: 'includeInactive', required: false, type: Boolean })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  async listReimbursementItemsAdmin(
+    @Query('entityId') entityId?: string,
+    @Query('includeInactive') includeInactive?: string,
+  ) {
+    return this.expenseService.listReimbursementItemsAdmin(
+      entityId,
+      includeInactive === 'true',
+    );
+  }
+
+  @Get('admin/reimbursement-items/:id')
+  @ApiOperation({ summary: '管理端：查詢單一報銷項目' })
+  @ApiResponse({ status: 200, description: '成功取得報銷項目詳情' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  async getReimbursementItemAdmin(@Param('id') id: string) {
+    return this.expenseService.getReimbursementItemAdmin(id);
+  }
+
+  @Post('admin/reimbursement-items')
+  @ApiOperation({ summary: '管理端：建立報銷項目' })
+  @ApiResponse({ status: 201, description: '成功建立報銷項目' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  async createReimbursementItemAdmin(
+    @Body() dto: CreateReimbursementItemDto,
+  ) {
+    return this.expenseService.createReimbursementItemAdmin(dto);
+  }
+
+  @Put('admin/reimbursement-items/:id')
+  @ApiOperation({ summary: '管理端：更新報銷項目' })
+  @ApiResponse({ status: 200, description: '成功更新報銷項目' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  async updateReimbursementItemAdmin(
+    @Param('id') id: string,
+    @Body() dto: UpdateReimbursementItemDto,
+  ) {
+    return this.expenseService.updateReimbursementItemAdmin(id, dto);
+  }
+
+  @Put('admin/reimbursement-items/:id/archive')
+  @ApiOperation({ summary: '管理端：停用報銷項目' })
+  @ApiResponse({ status: 200, description: '成功停用報銷項目' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  async archiveReimbursementItemAdmin(@Param('id') id: string) {
+    return this.expenseService.archiveReimbursementItemAdmin(id);
+  }
+
+  @Get('admin/approval-policies')
+  @ApiOperation({ summary: '管理端：查詢審批政策' })
+  @ApiResponse({ status: 200, description: '成功取得審批政策列表' })
+  @ApiQuery({ name: 'entityId', required: false })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  async listApprovalPolicies(@Query('entityId') entityId?: string) {
+    return this.expenseService.listApprovalPolicies(entityId);
   }
 
   private extractRoleCodes(user: any): string[] {

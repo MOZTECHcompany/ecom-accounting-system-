@@ -30,7 +30,7 @@ export class EvidenceFileDto {
 
 export class CreateExpenseRequestDto {
   @ApiProperty({ description: '公司實體 ID' })
-  @IsUUID()
+  @IsString()
   entityId!: string;
 
   @ApiPropertyOptional({ description: '供應商 ID' })
