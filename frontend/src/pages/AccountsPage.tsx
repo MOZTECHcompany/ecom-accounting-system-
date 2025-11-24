@@ -87,14 +87,13 @@ const AccountsPage: React.FC = () => {
       key: 'balance',
       width: 150,
       align: 'right' as const,
-      render: (balance: number | undefined, record: Account) => {
-        const safeBalance = typeof balance === 'number' ? balance : 0
-        const currency = record.currency || 'TWD'
-        return (
-          <span className="font-mono font-medium">
-            {safeBalance.toLocaleString()} <span className="text-xs text-gray-400">{currency}</span>
-          </span>
-        )
+        render: (balance: number | null | undefined, record: Account) => {
+          const safeBalance = balance ?? 0
+          return (
+            <span className="font-mono font-medium">
+              {safeBalance.toLocaleString()} <span className="text-xs text-gray-400">{record.currency || 'TWD'}</span>
+            </span>
+          )
       },
     },
     {
