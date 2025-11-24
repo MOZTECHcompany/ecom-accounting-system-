@@ -16,6 +16,7 @@ import ApInvoicesPage from './pages/ApInvoicesPage'
 import BankingPage from './pages/BankingPage'
 import PayrollPage from './pages/PayrollPage'
 import EmployeesPage from './pages/EmployeesPage'
+import ExpenseRequestsPage from './pages/ExpenseRequestsPage'
 
 const App: React.FC = () => {
   return (
@@ -40,6 +41,7 @@ const App: React.FC = () => {
                 <Route path="banking" element={<BankingPage />} />
                 <Route path="payroll/runs" element={<PayrollPage />} />
                 <Route path="payroll/employees" element={<EmployeesPage />} />
+                <Route path="ap/expenses" element={<ExpenseRequestsPage />} />
                 <Route path="admin/access-control" element={<AccessControlPage />} />
                 
                 {/* Placeholder Routes */}
