@@ -80,7 +80,7 @@ const DashboardLayout: React.FC = () => {
       children: [
         { key: '/vendors', label: '供應商管理', onClick: () => navigate('/vendors') },
         { key: '/ap/invoices', label: '應付帳款', onClick: () => navigate('/purchasing/invoices') },
-        { key: '/ap/expenses', label: '費用申請' },
+        { key: '/ap/expenses', label: '費用申請', onClick: () => navigate('/ap/expenses') },
       ],
     },
     {
