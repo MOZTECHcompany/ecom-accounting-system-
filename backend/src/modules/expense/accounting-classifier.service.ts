@@ -141,21 +141,34 @@ export class AccountingClassifierService {
   }
 
   private async findFrequentAccountForItem(reimbursementItemId: string) {
-    const [grouped] = await this.prisma.expenseRequest
-      .groupBy({
-        by: ['finalAccountId'],
+    try {
+      const records = await this.prisma.expenseRequest.findMany({
         where: {
           reimbursementItemId,
           finalAccountId: { not: null },
         },
-        _count: { _all: true },
-        orderBy: {
-          _count: { _all: 'desc' },
-        },
-        take: 1,
-      })
-      .catch(() => []);
+        select: { finalAccountId: true },
+      });
 
-    return grouped?.finalAccountId ?? undefined;
+      if (!records.length) {
+        return undefined;
+      }
+
+      const frequency = records.reduce<Record<string, number>>((acc, record) => {
+        if (!record.finalAccountId) {
+          return acc;
+        }
+        acc[record.finalAccountId] = (acc[record.finalAccountId] ?? 0) + 1;
+        return acc;
+      }, {});
+
+      const [topAccount] = Object.entries(frequency).sort((a, b) => b[1] - a[1]);
+      return topAccount?.[0];
+    } catch (error) {
+      this.logger.warn(
+        `Failed to compute frequent account for reimbursement item ${reimbursementItemId}: ${(error as Error).message}`,
+      );
+      return undefined;
+    }
   }
 }

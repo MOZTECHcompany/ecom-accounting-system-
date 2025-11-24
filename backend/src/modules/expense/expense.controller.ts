@@ -22,7 +22,7 @@ import { CreateExpenseRequestDto } from './dto/create-expense-request.dto';
 import { ApproveExpenseRequestDto } from './dto/approve-expense-request.dto';
 import { RejectExpenseRequestDto } from './dto/reject-expense-request.dto';
 import { SubmitExpenseFeedbackDto } from './dto/submit-feedback.dto';
-import { Request } from 'express';
+import type { Request } from 'express';
 
 /**
  * 費用控制器

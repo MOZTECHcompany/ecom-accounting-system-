@@ -92,8 +92,8 @@ export class ExpenseService {
           actorId: approver.id,
           actorRoleCode: approver.roleCodes?.[0],
           note: payload.remark,
-          metadata: payload.metadata,
-          attachments: payload.attachments,
+          metadata: this.toJsonObject(payload.metadata),
+          attachments: this.toJsonArray(payload.attachments),
           suggestedAccountId: request.suggestedAccountId ?? undefined,
           finalAccountId: finalAccountId ?? undefined,
         },
@@ -140,8 +140,8 @@ export class ExpenseService {
         actorId: approver.id,
         actorRoleCode: approver.roleCodes?.[0],
         note: payload.reason,
-        metadata: payload.metadata,
-        attachments: payload.attachments,
+        metadata: this.toJsonObject(payload.metadata),
+        attachments: this.toJsonArray(payload.attachments),
         suggestedAccountId: request.suggestedAccountId ?? undefined,
         finalAccountId: request.finalAccountId ?? undefined,
       },
@@ -274,7 +274,7 @@ export class ExpenseService {
       description: dto.description,
       priority: dto.priority ?? 'normal',
       attachmentUrl: dto.attachmentUrl ?? null,
-      evidenceFiles: dto.evidenceFiles ?? undefined,
+      evidenceFiles: this.toJsonArray(dto.evidenceFiles),
       departmentId: dto.departmentId ?? null,
       receiptType:
         dto.receiptType ?? reimbursementItem?.defaultReceiptType ?? null,
@@ -283,10 +283,9 @@ export class ExpenseService {
       suggestedAccountId: suggestion.accountId ?? null,
       finalAccountId: null,
       suggestionConfidence: this.toDecimal(suggestion.confidence),
-      metadata: {
-        ...(dto.metadata ?? {}),
+      metadata: this.buildJsonObject(dto.metadata, {
         classifierFeatures: suggestion.features,
-      },
+      }),
     };
 
     const history = {
@@ -296,7 +295,7 @@ export class ExpenseService {
       actorId: requestedBy.id,
       actorRoleCode: requestedBy.roleCodes?.[0],
       note: dto.description,
-      metadata: suggestion.features,
+      metadata: this.toJsonObject(suggestion.features),
       suggestedAccountId: suggestion.accountId ?? undefined,
     };
 
@@ -305,7 +304,7 @@ export class ExpenseService {
           suggestedAccountId: suggestion.accountId,
           confidence: this.toDecimal(suggestion.confidence),
           label: 'pending',
-          features: suggestion.features,
+          features: this.toJsonObject(suggestion.features),
           createdBy: requestedBy.id,
         }
       : undefined;
@@ -340,7 +339,7 @@ export class ExpenseService {
       chosenAccountId: dto.chosenAccountId ?? null,
       confidence: dto.confidence ? this.toDecimal(dto.confidence) : undefined,
       label: dto.label,
-      features: dto.features,
+      features: this.toJsonObject(dto.features),
       createdBy: user.id,
     });
   }
@@ -417,17 +416,69 @@ export class ExpenseService {
     return true;
   }
 
+  private buildJsonObject(
+    base?: Record<string, unknown> | null,
+    extra?: Record<string, unknown>,
+  ): Prisma.JsonObject | undefined {
+    if (!base && !extra) {
+      return undefined;
+    }
+
+    const merged: Record<string, unknown> = {
+      ...(base ?? {}),
+      ...(extra ?? {}),
+    };
+
+    if (!Object.keys(merged).length) {
+      return undefined;
+    }
+
+    return merged as Prisma.JsonObject;
+  }
+
+  private toJsonObject(
+    value?: Record<string, unknown> | null,
+  ): Prisma.JsonObject | undefined {
+    if (!value) {
+      return undefined;
+    }
+    return { ...value } as Prisma.JsonObject;
+  }
+
+  private toJsonArray<T>(value?: T[] | null): Prisma.JsonArray | undefined {
+    if (!value) {
+      return undefined;
+    }
+    return value as unknown as Prisma.JsonArray;
+  }
+
+  private jsonValueToObject(
+    value: Prisma.JsonValue | null | undefined,
+  ): Record<string, unknown> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return {};
+    }
+    return { ...(value as Record<string, unknown>) };
+  }
+
   private mergeMetadata(
     existing: Prisma.JsonValue | null | undefined,
     incoming?: Record<string, unknown>,
-  ) {
+  ): Prisma.JsonObject | undefined {
     if (!existing && !incoming) {
       return undefined;
     }
 
-    return {
-      ...(typeof existing === 'object' && existing !== null ? existing : {}),
+    const current = this.jsonValueToObject(existing);
+    const merged: Record<string, unknown> = {
+      ...current,
       ...(incoming ?? {}),
     };
+
+    if (!Object.keys(merged).length) {
+      return undefined;
+    }
+
+    return merged as Prisma.JsonObject;
   }
 }
