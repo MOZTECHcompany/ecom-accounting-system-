@@ -9,6 +9,13 @@ const { Title, Text } = Typography
 const AccountsPage: React.FC = () => {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading] = useState(false)
+  
+  const normalizeBalance = (rawBalance: Account['balance']) => {
+    if (typeof rawBalance === 'number' && Number.isFinite(rawBalance)) {
+      return rawBalance
+    }
+    return 0
+  }
 
   const loadAccounts = async () => {
     setLoading(true)
@@ -88,7 +95,7 @@ const AccountsPage: React.FC = () => {
       width: 150,
       align: 'right' as const,
         render: (balance: number | null | undefined, record: Account) => {
-          const safeBalance = balance ?? 0
+          const safeBalance = normalizeBalance(balance ?? undefined)
           return (
             <span className="font-mono font-medium">
               {safeBalance.toLocaleString()} <span className="text-xs text-gray-400">{record.currency || 'TWD'}</span>

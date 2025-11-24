@@ -1,4 +1,10 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -23,6 +29,14 @@ export class AccountingController {
     private readonly reportService: ReportService,
   ) {}
 
+  private ensureEntityId(entityId?: string) {
+    const trimmed = entityId?.trim();
+    if (!trimmed) {
+      throw new BadRequestException('entityId is required');
+    }
+    return trimmed;
+  }
+
   /**
    * 取得會計科目表
    */
@@ -38,7 +52,8 @@ export class AccountingController {
     @Query('entityId') entityId: string,
     @Query('type') type?: string,
   ) {
-    return this.accountingService.getAccountsByEntity(entityId, type);
+    const safeEntityId = this.ensureEntityId(entityId);
+    return this.accountingService.getAccountsByEntity(safeEntityId, type);
   }
 
   /**
@@ -56,7 +71,8 @@ export class AccountingController {
     @Query('entityId') entityId: string,
     @Query('status') status?: string,
   ) {
-    return this.accountingService.getPeriods(entityId, status);
+    const safeEntityId = this.ensureEntityId(entityId);
+    return this.accountingService.getPeriods(safeEntityId, status);
   }
 
   /**
@@ -80,8 +96,9 @@ export class AccountingController {
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
   ) {
+    const safeEntityId = this.ensureEntityId(entityId);
     return this.reportService.getIncomeStatement(
-      entityId,
+      safeEntityId,
       new Date(startDate),
       new Date(endDate),
     );
@@ -102,6 +119,7 @@ export class AccountingController {
     @Query('entityId') entityId: string,
     @Query('asOfDate') asOfDate: string,
   ) {
-    return this.reportService.getBalanceSheet(entityId, new Date(asOfDate));
+    const safeEntityId = this.ensureEntityId(entityId);
+    return this.reportService.getBalanceSheet(safeEntityId, new Date(asOfDate));
   }
 }
