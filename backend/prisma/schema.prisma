@@ -158,6 +158,7 @@ model Entity {
   warehouses       Warehouse[]
   inventorySnapshots InventorySnapshot[]
   inventoryTransactions InventoryTransaction[]
+  reimbursementItems ReimbursementItem[]
 
   @@map("entities")
 }
@@ -180,6 +181,7 @@ model Account {
   parent       Account?       @relation("AccountHierarchy", fields: [parentId], references: [id])
   children     Account[]      @relation("AccountHierarchy")
   journalLines JournalLine[]
+  reimbursementItems ReimbursementItem[]
 
   @@unique([entityId, code])
   @@index([entityId, type])
