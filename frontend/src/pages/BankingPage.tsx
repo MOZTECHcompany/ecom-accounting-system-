@@ -67,13 +67,13 @@ const AccountsTab = () => {
 
   const columns = [
     { title: '銀行名稱', dataIndex: 'bankName', key: 'bankName' },
-    { title: '帳號', dataIndex: 'accountNumber', key: 'accountNumber' },
+    { title: '帳號', dataIndex: 'accountNo', key: 'accountNo' },
     { title: '幣別', dataIndex: 'currency', key: 'currency' },
-    { 
-      title: '餘額', 
-      dataIndex: 'balance', 
+    {
+      title: '餘額',
+      dataIndex: 'balance',
       key: 'balance',
-      render: (val: number) => <Text strong>${val.toLocaleString()}</Text>
+      render: (val?: number) => <Text strong>${(val ?? 0).toLocaleString()}</Text>,
     },
     {
       title: '狀態',
@@ -100,12 +100,12 @@ const AccountsTab = () => {
             <Card className="glass-card mb-4">
               <Statistic
                 title={acc.bankName}
-                value={acc.balance}
+                value={acc.balance ?? 0}
                 precision={2}
                 prefix={<DollarOutlined />}
                 suffix={acc.currency}
               />
-              <Text type="secondary">{acc.accountNumber}</Text>
+              <Text type="secondary">{acc.accountNo}</Text>
             </Card>
           </Col>
         ))}
@@ -168,32 +168,31 @@ const TransactionsTab = () => {
   }, [])
 
   const columns = [
-    { 
-      title: '日期', 
-      dataIndex: 'transactionDate', 
-      key: 'transactionDate',
-      render: (date: string) => dayjs(date).format('YYYY-MM-DD')
+    {
+      title: '日期',
+      dataIndex: 'txnDate',
+      key: 'txnDate',
+      render: (date: string) => dayjs(date).format('YYYY-MM-DD'),
     },
-    { title: '摘要', dataIndex: 'description', key: 'description' },
-    { 
-      title: '金額', 
-      dataIndex: 'amount', 
-      key: 'amount',
-      render: (val: number) => (
+    { title: '摘要', dataIndex: 'descriptionRaw', key: 'descriptionRaw' },
+    {
+      title: '金額',
+      dataIndex: 'amountOriginal',
+      key: 'amountOriginal',
+      render: (val: number, record: BankTransaction) => (
         <Text type={val >= 0 ? 'success' : 'danger'}>
-          {val > 0 ? '+' : ''}{val.toLocaleString()}
+          {val >= 0 ? '+' : ''}{Math.abs(val).toLocaleString()} {record.amountCurrency}
         </Text>
-      )
+      ),
     },
     {
       title: '狀態',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => (
-        <Tag color={status === 'RECONCILED' ? 'green' : 'orange'}>
-          {status === 'RECONCILED' ? '已調節' : '未調節'}
-        </Tag>
-      ),
+      dataIndex: 'reconcileStatus',
+      key: 'reconcileStatus',
+      render: (status: string) => {
+        const isMatched = status?.toLowerCase() === 'matched'
+        return <Tag color={isMatched ? 'green' : 'orange'}>{isMatched ? '已調節' : '未調節'}</Tag>
+      },
     },
   ]
 

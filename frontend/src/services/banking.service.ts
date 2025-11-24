@@ -17,9 +17,14 @@ export const bankingService = {
     return response.data
   },
 
-  getTransactions: async (accountId: string, page = 1, limit = 20) => {
-    const response = await api.get<PaginatedResult<BankTransaction>>(`/banking/accounts/${accountId}/transactions`, {
-      params: { page, limit },
+  getTransactions: async (options: { accountId?: string; page?: number; limit?: number } = {}) => {
+    const { accountId, page = 1, limit = 20 } = options
+    const response = await api.get<PaginatedResult<BankTransaction>>('/banking/transactions', {
+      params: {
+        bankAccountId: accountId,
+        page,
+        limit,
+      },
     })
     return response.data
   },

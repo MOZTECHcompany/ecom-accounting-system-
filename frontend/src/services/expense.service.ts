@@ -1,4 +1,4 @@
-import { apiClient } from './api'
+import api from './api'
 
 export interface ReimbursementItem {
   id: string
@@ -29,12 +29,12 @@ export const expenseService = {
     if (departmentId) {
       params.departmentId = departmentId
     }
-    const response = await apiClient.get<ReimbursementItem[]>('/expense/reimbursement-items', { params })
+    const response = await api.get<ReimbursementItem[]>('/expense/reimbursement-items', { params })
     return response.data
   },
 
   async createExpenseRequest(payload: CreateExpenseRequestPayload) {
-    const response = await apiClient.post('/expense/requests', payload)
+    const response = await api.post('/expense/requests', payload)
     return response.data
   },
 }

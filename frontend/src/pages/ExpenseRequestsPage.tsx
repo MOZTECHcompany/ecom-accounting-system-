@@ -219,12 +219,16 @@ const ExpenseRequestsPage: React.FC = () => {
             name="amount"
             rules={[{ required: true, message: '請輸入金額' }]}
           >
-            <InputNumber
+            <InputNumber<number>
               min={0}
               precision={0}
               className="w-full"
               formatter={(value) => (value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '')}
-              parser={(value) => (value ? value.replace(/,/g, '') : '')}
+              parser={(value) => {
+                if (!value) return 0
+                const numeric = Number(value.replace(/,/g, ''))
+                return Number.isNaN(numeric) ? 0 : numeric
+              }}
             />
           </Form.Item>
 
