@@ -5,7 +5,7 @@ export const IS_PUBLIC_KEY = 'isPublic';
 /**
  * Public 裝飾器
  * 標記不需要驗證的公開路由
- * 
+ *
  * @example
  * ```typescript
  * @Public()

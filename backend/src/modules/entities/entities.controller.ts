@@ -1,5 +1,20 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, UseGuards, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Put,
+  Delete,
+  UseGuards,
+  Query,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { EntitiesService } from './entities.service';
 import { CreateEntityDto } from './dto/create-entity.dto';
@@ -41,7 +56,10 @@ export class EntitiesController {
   @Put(':id')
   @ApiOperation({ summary: '更新公司實體' })
   @ApiResponse({ status: 200, description: '實體更新成功' })
-  async update(@Param('id') id: string, @Body() updateEntityDto: UpdateEntityDto) {
+  async update(
+    @Param('id') id: string,
+    @Body() updateEntityDto: UpdateEntityDto,
+  ) {
     return this.entitiesService.update(id, updateEntityDto);
   }
 

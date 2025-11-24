@@ -22,12 +22,21 @@ export class CreateEntityDto {
   @IsNotEmpty()
   country: string;
 
-  @ApiProperty({ example: '12345678', description: '統一編號', required: false })
+  @ApiProperty({
+    example: '12345678',
+    description: '統一編號',
+    required: false,
+  })
   @IsString()
   @IsOptional()
   taxId?: string;
 
-  @ApiProperty({ example: true, description: '是否啟用', required: false, default: true })
+  @ApiProperty({
+    example: true,
+    description: '是否啟用',
+    required: false,
+    default: true,
+  })
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;

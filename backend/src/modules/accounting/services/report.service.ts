@@ -4,13 +4,13 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 /**
  * ReportService
  * 財務報表服務
- * 
+ *
  * 功能：
  * - 損益表（Income Statement）
  * - 資產負債表（Balance Sheet）
  * - 現金流量表（Cash Flow Statement）- 簡化版
  * - 權益變動表（Statement of Changes in Equity）
- * 
+ *
  * 設計原則：
  * - 所有報表資料來源於 journal_lines
  * - 支援多公司實體
@@ -29,17 +29,13 @@ export class ReportService {
    * @param startDate - 開始日期
    * @param endDate - 結束日期
    * @returns 損益表資料
-   * 
+   *
    * 邏輯：
    * - 收入類科目：credit - debit
    * - 費用類科目：debit - credit
    * - 淨利 = 總收入 - 總費用
    */
-  async getIncomeStatement(
-    entityId: string,
-    startDate: Date,
-    endDate: Date,
-  ) {
+  async getIncomeStatement(entityId: string, startDate: Date, endDate: Date) {
     this.logger.log(
       `Generating income statement for entity ${entityId} from ${startDate} to ${endDate}`,
     );
@@ -71,8 +67,7 @@ export class ReportService {
 
     for (const line of journalLines) {
       const account = line.account;
-      const amount =
-        Number(line.credit) - Number(line.debit); // revenue 通常在 credit
+      const amount = Number(line.credit) - Number(line.debit); // revenue 通常在 credit
 
       if (account.type === 'revenue') {
         if (!revenues[account.code]) {
@@ -126,7 +121,7 @@ export class ReportService {
    * @param entityId - 公司實體 ID
    * @param asOfDate - 截止日期
    * @returns 資產負債表資料
-   * 
+   *
    * 邏輯：
    * - 資產類：debit - credit
    * - 負債類：credit - debit

@@ -59,7 +59,9 @@ export class InvoicingService {
     // 計算未稅金額（假設含稅總額，稅率 5%）
     const taxRate = new Decimal(0.05);
     const totalAmountOriginal = new Decimal(order.totalGrossOriginal);
-    const amountOriginal = totalAmountOriginal.div(new Decimal(1).plus(taxRate));
+    const amountOriginal = totalAmountOriginal.div(
+      new Decimal(1).plus(taxRate),
+    );
     const taxAmountOriginal = totalAmountOriginal.minus(amountOriginal);
 
     // 本位幣換算
@@ -74,8 +76,12 @@ export class InvoicingService {
         new Decimal(item.qty),
       );
       const itemTaxAmountOriginal = itemAmountOriginal.mul(taxRate);
-      const itemAmountBase = itemAmountOriginal.mul(new Decimal(item.unitPriceFxRate));
-      const itemTaxAmountBase = itemTaxAmountOriginal.mul(new Decimal(item.unitPriceFxRate));
+      const itemAmountBase = itemAmountOriginal.mul(
+        new Decimal(item.unitPriceFxRate),
+      );
+      const itemTaxAmountBase = itemTaxAmountOriginal.mul(
+        new Decimal(item.unitPriceFxRate),
+      );
 
       return {
         productId: item.productId,
@@ -103,10 +109,7 @@ export class InvoicingService {
       totalAmountBase: totalAmountBase.toFixed(2),
       invoiceLines,
       estimatedInvoiceNumber: this.generateInvoiceNumber(),
-      warnings:
-        order.hasInvoice
-          ? ['此訂單已開立過發票']
-          : [],
+      warnings: order.hasInvoice ? ['此訂單已開立過發票'] : [],
     };
   }
 
@@ -144,7 +147,9 @@ export class InvoicingService {
     // 2. 計算發票金額
     const taxRate = new Decimal(0.05);
     const totalAmountOriginal = new Decimal(order.totalGrossOriginal);
-    const amountOriginal = totalAmountOriginal.div(new Decimal(1).plus(taxRate));
+    const amountOriginal = totalAmountOriginal.div(
+      new Decimal(1).plus(taxRate),
+    );
     const taxAmountOriginal = totalAmountOriginal.minus(amountOriginal);
     const fxRate = new Decimal(order.totalGrossFxRate);
     const currency = order.totalGrossCurrency;
@@ -361,7 +366,11 @@ export class InvoicingService {
       throw new BadRequestException(`折讓金額必須大於 0`);
     }
 
-    if (allowanceAmountDecimal.gte(new Decimal(originalInvoice.totalAmountOriginal))) {
+    if (
+      allowanceAmountDecimal.gte(
+        new Decimal(originalInvoice.totalAmountOriginal),
+      )
+    ) {
       throw new BadRequestException(`折讓金額不能大於原發票金額`);
     }
 
@@ -383,7 +392,9 @@ export class InvoicingService {
           amountOriginal: allowanceAmountDecimal.neg(),
           currency: originalInvoice.currency,
           fxRate: originalInvoice.fxRate,
-          amountBase: allowanceAmountDecimal.mul(new Decimal(originalInvoice.fxRate)).neg(),
+          amountBase: allowanceAmountDecimal
+            .mul(new Decimal(originalInvoice.fxRate))
+            .neg(),
           taxAmountOriginal: new Decimal(0),
           taxAmountCurrency: originalInvoice.currency,
           taxAmountFxRate: originalInvoice.fxRate,
@@ -391,7 +402,9 @@ export class InvoicingService {
           totalAmountOriginal: allowanceAmountDecimal.neg(),
           totalAmountCurrency: originalInvoice.currency,
           totalAmountFxRate: originalInvoice.fxRate,
-          totalAmountBase: allowanceAmountDecimal.mul(new Decimal(originalInvoice.fxRate)).neg(),
+          totalAmountBase: allowanceAmountDecimal
+            .mul(new Decimal(originalInvoice.fxRate))
+            .neg(),
           notes: `折讓單：${reason}`,
         },
       });

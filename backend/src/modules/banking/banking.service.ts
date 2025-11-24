@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 /**
  * 銀行管理服務
- * 
+ *
  * 核心功能：
  * 1. 銀行帳戶管理
  * 2. 虛擬帳號管理
@@ -28,7 +28,11 @@ export class BankingService {
   /**
    * 查詢銀行交易
    */
-  async getBankTransactions(bankAccountId: string, startDate?: Date, endDate?: Date) {
+  async getBankTransactions(
+    bankAccountId: string,
+    startDate?: Date,
+    endDate?: Date,
+  ) {
     // TODO: 查詢銀行交易流水
   }
 
@@ -79,7 +83,10 @@ export class BankingService {
   /**
    * 虛擬帳號收款自動對帳
    */
-  async matchVirtualAccountPayment(virtualAccountNumber: string, amount: number) {
+  async matchVirtualAccountPayment(
+    virtualAccountNumber: string,
+    amount: number,
+  ) {
     // TODO: 依虛擬帳號自動對應客戶與訂單
     // TODO: 自動標記訂單為已付款
   }

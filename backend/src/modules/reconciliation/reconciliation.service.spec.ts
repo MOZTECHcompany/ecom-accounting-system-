@@ -61,7 +61,9 @@ describe('ReconciliationService - autoMatchTransactions', () => {
         paymentDate: new Date('2025-11-18'),
       };
 
-      mockPrismaService.bankTransaction.findMany.mockResolvedValue(mockBankTransactions);
+      mockPrismaService.bankTransaction.findMany.mockResolvedValue(
+        mockBankTransactions,
+      );
       mockPrismaService.payment.findFirst.mockResolvedValue(mockPayment);
 
       // Act
@@ -70,7 +72,9 @@ describe('ReconciliationService - autoMatchTransactions', () => {
       // Assert
       expect(result.exactMatched).toBe(1);
       expect(result.unmatched).toBe(0);
-      expect(mockPrismaService.reconciliationResult.create).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.reconciliationResult.create,
+      ).toHaveBeenCalledWith({
         data: expect.objectContaining({
           bankTransactionId: 'bank-tx-1',
           matchedType: 'payment',
@@ -97,16 +101,22 @@ describe('ReconciliationService - autoMatchTransactions', () => {
         totalGrossOriginal: '2000.00',
       };
 
-      mockPrismaService.bankTransaction.findMany.mockResolvedValue(mockBankTransactions);
+      mockPrismaService.bankTransaction.findMany.mockResolvedValue(
+        mockBankTransactions,
+      );
       mockPrismaService.payment.findFirst.mockResolvedValue(null); // 精準匹配失敗
       mockPrismaService.salesOrder.findFirst.mockResolvedValue(mockOrder);
 
       // Act
-      const result = await service.autoMatchTransactions('batch-1', { useFuzzyMatch: true });
+      const result = await service.autoMatchTransactions('batch-1', {
+        useFuzzyMatch: true,
+      });
 
       // Assert
       expect(result.fuzzyMatched).toBe(1);
-      expect(mockPrismaService.reconciliationResult.create).toHaveBeenCalledWith({
+      expect(
+        mockPrismaService.reconciliationResult.create,
+      ).toHaveBeenCalledWith({
         data: expect.objectContaining({
           matchedType: 'sales_order',
           matchedId: 'order-abc-123',
@@ -127,18 +137,24 @@ describe('ReconciliationService - autoMatchTransactions', () => {
         },
       ];
 
-      mockPrismaService.bankTransaction.findMany.mockResolvedValue(mockBankTransactions);
+      mockPrismaService.bankTransaction.findMany.mockResolvedValue(
+        mockBankTransactions,
+      );
       mockPrismaService.payment.findFirst.mockResolvedValue(null);
       mockPrismaService.salesOrder.findFirst.mockResolvedValue(null);
 
       // Act
-      const result = await service.autoMatchTransactions('batch-1', { useFuzzyMatch: false });
+      const result = await service.autoMatchTransactions('batch-1', {
+        useFuzzyMatch: false,
+      });
 
       // Assert
       expect(result.exactMatched).toBe(0);
       expect(result.fuzzyMatched).toBe(0);
       expect(result.unmatched).toBe(1);
-      expect(mockPrismaService.reconciliationResult.create).not.toHaveBeenCalled();
+      expect(
+        mockPrismaService.reconciliationResult.create,
+      ).not.toHaveBeenCalled();
     });
   });
 });

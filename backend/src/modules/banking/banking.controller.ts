@@ -1,5 +1,19 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Query, Put } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  UseGuards,
+  Query,
+  Put,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { BankingService } from './banking.service';
 
@@ -43,7 +57,11 @@ export class BankingController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
-    return this.bankingService.getBankTransactions(bankAccountId || '', startDate ? new Date(startDate) : undefined, endDate ? new Date(endDate) : undefined);
+    return this.bankingService.getBankTransactions(
+      bankAccountId || '',
+      startDate ? new Date(startDate) : undefined,
+      endDate ? new Date(endDate) : undefined,
+    );
   }
 
   @Post('transactions')

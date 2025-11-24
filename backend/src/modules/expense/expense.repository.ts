@@ -1,5 +1,44 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
+
+const EXPENSE_REQUEST_INCLUDE = {
+  creator: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+    },
+  },
+  approver: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+    },
+  },
+  reimbursementItem: {
+    include: {
+      account: true,
+      approvalPolicy: {
+        include: {
+          steps: {
+            orderBy: { stepOrder: 'asc' },
+          },
+        },
+      },
+    },
+  },
+  suggestedAccount: true,
+  finalAccount: true,
+  approvalSteps: {
+    orderBy: { stepOrder: 'asc' },
+  },
+} as const satisfies Prisma.ExpenseRequestInclude;
+
+export type ExpenseRequestWithGraph = Prisma.ExpenseRequestGetPayload<{
+  include: typeof EXPENSE_REQUEST_INCLUDE;
+}>;
 
 @Injectable()
 export class ExpenseRepository {
@@ -20,7 +59,10 @@ export class ExpenseRepository {
     return this.prisma.expenseRequest.update({ where: { id }, data });
   }
 
-  async findActiveReimbursementItems(entityId: string, options?: { roles?: string[]; departmentId?: string }) {
+  async findActiveReimbursementItems(
+    entityId: string,
+    options?: { roles?: string[]; departmentId?: string },
+  ) {
     const { roles, departmentId } = options || {};
 
     return this.prisma.reimbursementItem.findMany({
@@ -33,7 +75,9 @@ export class ExpenseRepository {
                 OR: [
                   { allowedRoles: null },
                   { allowedRoles: '' },
-                  ...roles.map((role) => ({ allowedRoles: { contains: role } })),
+                  ...roles.map((role) => ({
+                    allowedRoles: { contains: role },
+                  })),
                 ],
               }
             : {},
@@ -50,5 +94,171 @@ export class ExpenseRepository {
       },
       orderBy: { name: 'asc' },
     });
+  }
+
+  async getReimbursementItemDetail(id: string) {
+    return this.prisma.reimbursementItem.findUnique({
+      where: { id },
+      include: {
+        account: true,
+        approvalPolicy: {
+          include: {
+            steps: {
+              orderBy: { stepOrder: 'asc' },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  async createExpenseRequestGraph(input: {
+    requestData: Prisma.ExpenseRequestUncheckedCreateInput;
+    history?: Omit<
+      Prisma.ExpenseRequestHistoryUncheckedCreateInput,
+      'expenseRequestId'
+    >;
+    approvalSteps?: Array<
+      Omit<Prisma.ApprovalStepUncheckedCreateInput, 'expenseRequestId'>
+    >;
+    classifierFeedback?: Omit<
+      Prisma.AccountingClassifierFeedbackUncheckedCreateInput,
+      'expenseRequestId'
+    >;
+  }): Promise<ExpenseRequestWithGraph> {
+    return this.prisma.$transaction(async (tx) => {
+      const expenseRequest = await tx.expenseRequest.create({
+        data: input.requestData,
+        include: EXPENSE_REQUEST_INCLUDE,
+      });
+
+      if (input.history) {
+        await tx.expenseRequestHistory.create({
+          data: {
+            ...input.history,
+            expenseRequestId: expenseRequest.id,
+          },
+        });
+      }
+
+      if (input.approvalSteps?.length) {
+        await tx.approvalStep.createMany({
+          data: input.approvalSteps.map((step) => ({
+            ...step,
+            expenseRequestId: expenseRequest.id,
+          })),
+        });
+      }
+
+      if (input.classifierFeedback) {
+        await tx.accountingClassifierFeedback.create({
+          data: {
+            ...input.classifierFeedback,
+            expenseRequestId: expenseRequest.id,
+          },
+        });
+      }
+
+      return expenseRequest;
+    });
+  }
+
+  async updateExpenseRequestWithHistory(
+    id: string,
+    data: Prisma.ExpenseRequestUncheckedUpdateInput,
+    history: Omit<
+      Prisma.ExpenseRequestHistoryUncheckedCreateInput,
+      'expenseRequestId'
+    >,
+    feedback?: Omit<
+      Prisma.AccountingClassifierFeedbackUncheckedCreateInput,
+      'expenseRequestId'
+    >,
+  ): Promise<ExpenseRequestWithGraph> {
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.expenseRequest.update({
+        where: { id },
+        data,
+        include: EXPENSE_REQUEST_INCLUDE,
+      });
+
+      await tx.expenseRequestHistory.create({
+        data: {
+          ...history,
+          expenseRequestId: id,
+        },
+      });
+
+      if (feedback) {
+        await tx.accountingClassifierFeedback.create({
+          data: {
+            ...feedback,
+            expenseRequestId: id,
+          },
+        });
+      }
+
+      return updated;
+    });
+  }
+
+  async findRequestById(id: string) {
+    return this.prisma.expenseRequest.findUnique({
+      where: { id },
+      include: {
+        ...EXPENSE_REQUEST_INCLUDE,
+        histories: {
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+  }
+
+  async listExpenseRequests(filters: {
+    entityId?: string;
+    status?: string;
+    createdBy?: string;
+    approverId?: string;
+  }) {
+    return this.prisma.expenseRequest.findMany({
+      where: {
+        entityId: filters.entityId,
+        status: filters.status,
+        createdBy: filters.createdBy,
+        approvalUserId: filters.approverId,
+      },
+      orderBy: { createdAt: 'desc' },
+      include: EXPENSE_REQUEST_INCLUDE,
+    });
+  }
+
+  async listHistories(expenseRequestId: string) {
+    return this.prisma.expenseRequestHistory.findMany({
+      where: { expenseRequestId },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        actor: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        suggestedAccount: true,
+        finalAccount: true,
+      },
+    });
+  }
+
+  async createHistoryEntry(
+    history: Prisma.ExpenseRequestHistoryUncheckedCreateInput,
+  ) {
+    return this.prisma.expenseRequestHistory.create({ data: history });
+  }
+
+  async createFeedbackEntry(
+    data: Prisma.AccountingClassifierFeedbackUncheckedCreateInput,
+  ) {
+    return this.prisma.accountingClassifierFeedback.create({ data });
   }
 }

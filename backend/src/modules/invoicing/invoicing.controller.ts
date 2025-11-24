@@ -197,8 +197,7 @@ export class InvoicingController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: '開立折讓單',
-    description:
-      '對已開立的發票開立折讓單（負項發票），用於部分退款或價格調整',
+    description: '對已開立的發票開立折讓單（負項發票），用於部分退款或價格調整',
   })
   @ApiParam({
     name: 'invoiceId',

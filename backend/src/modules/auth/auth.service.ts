@@ -13,7 +13,7 @@ import { LoginDto } from './dto/login.dto';
 /**
  * AuthService
  * 認證服務，處理所有與身份驗證相關的業務邏輯
- * 
+ *
  * 主要功能：
  * - 使用者註冊（密碼加密）
  * - 使用者登入（密碼驗證 + JWT 產生）

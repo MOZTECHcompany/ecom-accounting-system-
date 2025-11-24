@@ -1,4 +1,9 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
 import { PrismaService } from '../prisma/prisma.service';
@@ -6,7 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 /**
  * PermissionsGuard
  * 檢查使用者是否擁有所需的權限
- * 
+ *
  * 權限格式: resource:action
  * 範例:
  * - accounts:read
@@ -22,10 +27,10 @@ export class PermissionsGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     // 取得 @RequirePermissions() decorator 設定的權限
-    const requiredPermissions = this.reflector.getAllAndOverride<string[]>(PERMISSIONS_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const requiredPermissions = this.reflector.getAllAndOverride<string[]>(
+      PERMISSIONS_KEY,
+      [context.getHandler(), context.getClass()],
+    );
 
     // 如果沒有設定權限要求，直接通過
     if (!requiredPermissions || requiredPermissions.length === 0) {

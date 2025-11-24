@@ -23,7 +23,9 @@ export class PermissionsService {
   }
 
   async findById(id: string) {
-    const permission = await this.prisma.permission.findUnique({ where: { id } });
+    const permission = await this.prisma.permission.findUnique({
+      where: { id },
+    });
     if (!permission) {
       throw new NotFoundException(`Permission with ID ${id} not found`);
     }
@@ -43,7 +45,10 @@ export class PermissionsService {
       this.logger.log(`Created permission ${dto.resource}:${dto.action}`);
       return permission;
     } catch (error) {
-      this.handlePrismaError(error, `create permission ${dto.resource}:${dto.action}`);
+      this.handlePrismaError(
+        error,
+        `create permission ${dto.resource}:${dto.action}`,
+      );
     }
   }
 
@@ -78,11 +83,15 @@ export class PermissionsService {
   private handlePrismaError(error: unknown, context: string): never {
     if (error instanceof PrismaClientKnownRequestError) {
       if (error.code === 'P2002') {
-        throw new ConflictException(`Duplicate value detected while trying to ${context}`);
+        throw new ConflictException(
+          `Duplicate value detected while trying to ${context}`,
+        );
       }
 
       if (error.code === 'P2025') {
-        throw new NotFoundException(`Record not found while trying to ${context}`);
+        throw new NotFoundException(
+          `Record not found while trying to ${context}`,
+        );
       }
     }
 

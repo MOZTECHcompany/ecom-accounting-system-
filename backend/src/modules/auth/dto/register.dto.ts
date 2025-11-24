@@ -6,7 +6,10 @@ export class RegisterDto {
   @IsEmail()
   email!: string;
 
-  @ApiProperty({ example: 'SecureP@ssw0rd', description: '密碼（至少 8 個字元）' })
+  @ApiProperty({
+    example: 'SecureP@ssw0rd',
+    description: '密碼（至少 8 個字元）',
+  })
   @IsString()
   @MinLength(8)
   @MaxLength(100)

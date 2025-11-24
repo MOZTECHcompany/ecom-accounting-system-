@@ -3,7 +3,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 
 /**
  * 報表服務
- * 
+ *
  * 核心功能：
  * 1. 財務報表（損益表、資產負債表、現金流量表、權益變動表）
  * 2. 管理報表（銷售分析、成本分析、費用分析）
@@ -48,7 +48,11 @@ export class ReportsService {
   /**
    * 銷售分析報表
    */
-  async getSalesAnalysis(entityId: string, groupBy: 'channel' | 'product' | 'customer', period: { start: Date; end: Date }) {
+  async getSalesAnalysis(
+    entityId: string,
+    groupBy: 'channel' | 'product' | 'customer',
+    period: { start: Date; end: Date },
+  ) {
     // TODO: 依渠道、商品、客戶分組分析銷售
   }
 
@@ -62,14 +66,22 @@ export class ReportsService {
   /**
    * 費用分析報表
    */
-  async getExpenseAnalysis(entityId: string, groupBy: 'category' | 'department', period: { start: Date; end: Date }) {
+  async getExpenseAnalysis(
+    entityId: string,
+    groupBy: 'category' | 'department',
+    period: { start: Date; end: Date },
+  ) {
     // TODO: 依類別或部門分析費用
   }
 
   /**
    * 毛利分析
    */
-  async getGrossMarginAnalysis(entityId: string, groupBy: 'product' | 'channel', period: { start: Date; end: Date }) {
+  async getGrossMarginAnalysis(
+    entityId: string,
+    groupBy: 'product' | 'channel',
+    period: { start: Date; end: Date },
+  ) {
     // TODO: 計算各商品或渠道的毛利率
   }
 

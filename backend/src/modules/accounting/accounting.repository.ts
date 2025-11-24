@@ -4,7 +4,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 /**
  * AccountingRepository
  * 會計資料存取層
- * 
+ *
  * 職責：
  * - 封裝所有與會計相關的資料庫操作
  * - 提供可重用的查詢方法
@@ -17,7 +17,10 @@ export class AccountingRepository {
   /**
    * 查詢會計科目
    */
-  async findAccountsByEntity(entityId: string, filters?: { type?: string; isActive?: boolean }) {
+  async findAccountsByEntity(
+    entityId: string,
+    filters?: { type?: string; isActive?: boolean },
+  ) {
     return this.prisma.account.findMany({
       where: {
         entityId,
@@ -155,7 +158,10 @@ export class AccountingRepository {
         account: true,
         journalEntry: true,
       },
-      orderBy: [{ journalEntry: { date: 'asc' } }, { account: { code: 'asc' } }],
+      orderBy: [
+        { journalEntry: { date: 'asc' } },
+        { account: { code: 'asc' } },
+      ],
     });
   }
 }

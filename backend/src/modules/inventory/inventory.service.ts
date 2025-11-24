@@ -63,8 +63,12 @@ export class InventoryService {
 
     // 確保倉庫與商品存在
     const [warehouse, product] = await Promise.all([
-      this.prisma.warehouse.findFirst({ where: { id: warehouseId, entityId, isActive: true } }),
-      this.prisma.product.findFirst({ where: { id: productId, entityId, isActive: true } }),
+      this.prisma.warehouse.findFirst({
+        where: { id: warehouseId, entityId, isActive: true },
+      }),
+      this.prisma.product.findFirst({
+        where: { id: productId, entityId, isActive: true },
+      }),
     ]);
 
     if (!warehouse) {
@@ -114,14 +118,14 @@ export class InventoryService {
             direction === 'IN'
               ? { increment: qty }
               : direction === 'OUT'
-              ? { decrement: qty }
-              : qty, // ADJUST 模式下可視需要改成直接覆寫
+                ? { decrement: qty }
+                : qty, // ADJUST 模式下可視需要改成直接覆寫
           qtyAvailable:
             direction === 'IN'
               ? { increment: qty }
               : direction === 'OUT'
-              ? { decrement: qty }
-              : qty,
+                ? { decrement: qty }
+                : qty,
         },
       });
 
@@ -133,7 +137,14 @@ export class InventoryService {
    * 預留庫存（銷售訂單建立時）
    */
   async reserveStock(input: ReserveStockInput) {
-    const { entityId, warehouseId, productId, quantity, referenceId, referenceType } = input;
+    const {
+      entityId,
+      warehouseId,
+      productId,
+      quantity,
+      referenceId,
+      referenceType,
+    } = input;
     const qty = new Prisma.Decimal(quantity as any);
 
     return this.prisma.$transaction(async (tx) => {
@@ -189,7 +200,14 @@ export class InventoryService {
    * 釋放預留庫存（訂單取消或調整）
    */
   async releaseReservedStock(input: ReserveStockInput) {
-    const { entityId, warehouseId, productId, quantity, referenceId, referenceType } = input;
+    const {
+      entityId,
+      warehouseId,
+      productId,
+      quantity,
+      referenceId,
+      referenceType,
+    } = input;
     const qty = new Prisma.Decimal(quantity as any);
 
     return this.prisma.$transaction(async (tx) => {

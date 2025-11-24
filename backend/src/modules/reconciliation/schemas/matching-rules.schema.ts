@@ -1,9 +1,9 @@
 // @ts-nocheck
 /**
  * MatchingRulesSchema
- * 
+ *
  * 銀行對帳匹配規則
- * 
+ *
  * 說明：
  * - 定義多層級匹配邏輯
  * - 計算匹配信心度
@@ -56,14 +56,16 @@ export class MatchingRulesSchema {
     weight: 0.2,
     matcher: (bankTx, journalEntry) => {
       // TODO: 實作日期範圍匹配
-      const daysDiff = Math.abs(
-        new Date(bankTx.date).getTime() -
-          new Date(journalEntry.date).getTime(),
-      ) / (1000 * 60 * 60 * 24);
-      
+      const daysDiff =
+        Math.abs(
+          new Date(bankTx.date).getTime() -
+            new Date(journalEntry.date).getTime(),
+        ) /
+        (1000 * 60 * 60 * 24);
+
       const matched = daysDiff <= 3; // 3天內
       const score = matched ? 1.0 - daysDiff / 10 : 0; // 距離越遠分數越低
-      
+
       return { matched, score };
     },
   };
@@ -96,17 +98,17 @@ export class MatchingRulesSchema {
       if (!bankTx.counterpartyName || !journalEntry.customerName) {
         return { matched: false, score: 0 };
       }
-      
+
       const similarity = 0.8; // Mock similarity
       const matched = similarity > 0.7;
-      
+
       return { matched, score: similarity };
     },
   };
 
   /**
    * 計算整體匹配信心度
-   * 
+   *
    * @param bankTx - 銀行交易
    * @param journalEntry - 會計分錄
    * @returns 信心度 (0~1)
@@ -142,7 +144,7 @@ export class MatchingRulesSchema {
 
   /**
    * 判斷是否為有效匹配
-   * 
+   *
    * @param confidence - 信心度
    * @returns 是否有效
    */
@@ -152,7 +154,7 @@ export class MatchingRulesSchema {
 
   /**
    * 取得匹配類型
-   * 
+   *
    * @param confidence - 信心度
    * @returns 匹配類型
    */

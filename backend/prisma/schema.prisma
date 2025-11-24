@@ -25,30 +25,34 @@ model User {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   // Relations
-  roles               UserRole[]
-  createdJournalEntries JournalEntry[] @relation("CreatedBy")
-  approvedJournalEntries JournalEntry[] @relation("ApprovedBy")
-  createdExpenseRequests ExpenseRequest[] @relation("RequestedBy")
-  approvedExpenseRequests ExpenseRequest[] @relation("ApprovedBy")
-  approvalRequests ApprovalRequest[] @relation("RequesterUser")
-  approvalsGiven   ApprovalRequest[] @relation("ApproverUser")
-  auditLogs        AuditLog[]
-  payrollRunsCreated PayrollRun[] @relation("CreatedBy")
-  payrollRunsApproved PayrollRun[] @relation("ApprovedBy")
-  invoiceLogs      InvoiceLog[]
-  bankImportBatches BankImportBatch[]
-  reconciliationResults ReconciliationResult[]
+  roles                         UserRole[]
+  createdJournalEntries         JournalEntry[]                 @relation("CreatedBy")
+  approvedJournalEntries        JournalEntry[]                 @relation("ApprovedBy")
+  createdExpenseRequests        ExpenseRequest[]               @relation("RequestedBy")
+  approvedExpenseRequests       ExpenseRequest[]               @relation("ApprovedBy")
+  approvalRequests              ApprovalRequest[]              @relation("RequesterUser")
+  approvalsGiven                ApprovalRequest[]              @relation("ApproverUser")
+  auditLogs                     AuditLog[]
+  payrollRunsCreated            PayrollRun[]                   @relation("CreatedBy")
+  payrollRunsApproved           PayrollRun[]                   @relation("ApprovedBy")
+  invoiceLogs                   InvoiceLog[]
+  bankImportBatches             BankImportBatch[]
+  reconciliationResults         ReconciliationResult[]
+  approvalPolicySteps           ApprovalPolicyStep[]
+  approvalSteps                 ApprovalStep[]
+  expenseRequestHistories       ExpenseRequestHistory[]
+  accountingClassifierFeedbacks AccountingClassifierFeedback[]
 
   @@map("users")
 }
 
 model Role {
-  id          String   @id @default(uuid())
-  code        String   @unique
-  name        String   @unique // ADMIN, ACCOUNTANT, OPERATOR
-  description String?
-  hierarchyLevel Int    @default(3) @map("hierarchy_level")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id             String   @id @default(uuid())
+  code           String   @unique
+  name           String   @unique // ADMIN, ACCOUNTANT, OPERATOR
+  description    String?
+  hierarchyLevel Int      @default(3) @map("hierarchy_level")
+  createdAt      DateTime @default(now()) @map("created_at")
 
   // Relations
   users       UserRole[]
@@ -59,8 +63,8 @@ model Role {
 
 model Permission {
   id          String   @id @default(uuid())
-  resource    String   // users, accounts, journal_entries, sales_orders, etc.
-  action      String   // create, read, update, delete, approve
+  resource    String // users, accounts, journal_entries, sales_orders, etc.
+  action      String // create, read, update, delete, approve
   description String?
   createdAt   DateTime @default(now()) @map("created_at")
 
@@ -95,16 +99,16 @@ model RolePermission {
 
 // 審計軌跡：記錄所有重要操作
 model AuditLog {
-  id         String   @id @default(uuid())
-  userId     String?  @map("user_id")
-  tableName  String   @map("table_name")
-  recordId   String   @map("record_id")
-  action     String   // CREATE, UPDATE, DELETE, APPROVE
-  oldData    Json?    @map("old_data")
-  newData    Json?    @map("new_data")
-  ipAddress  String?  @map("ip_address")
-  userAgent  String?  @map("user_agent")
-  createdAt  DateTime @default(now()) @map("created_at")
+  id        String   @id @default(uuid())
+  userId    String?  @map("user_id")
+  tableName String   @map("table_name")
+  recordId  String   @map("record_id")
+  action    String // CREATE, UPDATE, DELETE, APPROVE
+  oldData   Json?    @map("old_data")
+  newData   Json?    @map("new_data")
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
 
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
@@ -122,7 +126,7 @@ model AuditLog {
 model Entity {
   id           String  @id @default(uuid())
   name         String
-  country      String  // TW, CN, US, etc.
+  country      String // TW, CN, US, etc.
   baseCurrency String  @map("base_currency") // TWD, CNY, USD
   isActive     Boolean @default(true) @map("is_active")
   taxId        String? @map("tax_id")
@@ -131,57 +135,66 @@ model Entity {
   contactPhone String? @map("contact_phone")
 
   // Relations
-  accounts         Account[]
-  journalEntries   JournalEntry[]
-  periods          Period[]
-  customers        Customer[]
-  vendors          Vendor[]
-  products         Product[]
-  salesChannels    SalesChannel[]
-  salesOrders      SalesOrder[]
-  arInvoices       ArInvoice[]
-  apInvoices       ApInvoice[]
-  bankAccounts     BankAccount[]
-  departments      Department[]
-  employees        Employee[]
-  payrollRuns      PayrollRun[]
-  expenseRequests  ExpenseRequest[]
-  expenses         Expense[]
-  purchaseOrders   PurchaseOrder[]
-  productBatches   ProductBatch[]
-  devCosts         DevCost[]
-  shipments        Shipment[]
-  payments         Payment[]
-  approvalRequests ApprovalRequest[]
-  invoices         Invoice[]
-  bankImportBatches BankImportBatch[]
-  warehouses       Warehouse[]
-  inventorySnapshots InventorySnapshot[]
+  accounts              Account[]
+  journalEntries        JournalEntry[]
+  periods               Period[]
+  customers             Customer[]
+  vendors               Vendor[]
+  products              Product[]
+  salesChannels         SalesChannel[]
+  salesOrders           SalesOrder[]
+  arInvoices            ArInvoice[]
+  apInvoices            ApInvoice[]
+  bankAccounts          BankAccount[]
+  departments           Department[]
+  employees             Employee[]
+  payrollRuns           PayrollRun[]
+  expenseRequests       ExpenseRequest[]
+  expenses              Expense[]
+  purchaseOrders        PurchaseOrder[]
+  productBatches        ProductBatch[]
+  devCosts              DevCost[]
+  shipments             Shipment[]
+  payments              Payment[]
+  approvalRequests      ApprovalRequest[]
+  invoices              Invoice[]
+  bankImportBatches     BankImportBatch[]
+  warehouses            Warehouse[]
+  inventorySnapshots    InventorySnapshot[]
   inventoryTransactions InventoryTransaction[]
-  reimbursementItems ReimbursementItem[]
+  reimbursementItems    ReimbursementItem[]
+  approvalPolicies      ApprovalPolicy[]
+  paymentTasks          PaymentTask[]
 
   @@map("entities")
 }
 
 // 會計科目表
 model Account {
-  id         String   @id @default(uuid())
-  entityId   String   @map("entity_id")
-  code       String   // 科目代號，例如 1101, 4101
-  name       String   // 科目名稱，例如 現金、銷貨收入
-  type       String   // asset, liability, equity, revenue, expense
-  parentId   String?  @map("parent_id")
-  isActive   Boolean  @default(true) @map("is_active")
-  isReimbursable Boolean @default(false) @map("is_reimbursable")
-  description String?
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(uuid())
+  entityId       String   @map("entity_id")
+  code           String // 科目代號，例如 1101, 4101
+  name           String // 科目名稱，例如 現金、銷貨收入
+  type           String // asset, liability, equity, revenue, expense
+  parentId       String?  @map("parent_id")
+  isActive       Boolean  @default(true) @map("is_active")
+  isReimbursable Boolean  @default(false) @map("is_reimbursable")
+  description    String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
-  entity       Entity         @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  parent       Account?       @relation("AccountHierarchy", fields: [parentId], references: [id])
-  children     Account[]      @relation("AccountHierarchy")
-  journalLines JournalLine[]
-  reimbursementItems ReimbursementItem[]
+  entity                       Entity                         @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  parent                       Account?                       @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children                     Account[]                      @relation("AccountHierarchy")
+  journalLines                 JournalLine[]
+  reimbursementItems           ReimbursementItem[]
+  suggestedExpenseRequests     ExpenseRequest[]               @relation("ExpenseRequestSuggestedAccount")
+  finalExpenseRequests         ExpenseRequest[]               @relation("ExpenseRequestFinalAccount")
+  historySuggestedAccounts     ExpenseRequestHistory[]        @relation("HistorySuggestedAccount")
+  historyFinalAccounts         ExpenseRequestHistory[]        @relation("HistoryFinalAccount")
+  classifierSuggestedFeedbacks AccountingClassifierFeedback[] @relation("ClassifierSuggestedAccount")
+  classifierChosenFeedbacks    AccountingClassifierFeedback[] @relation("ClassifierChosenAccount")
+  paymentTasks                 PaymentTask[]
 
   @@unique([entityId, code])
   @@index([entityId, type])
@@ -192,7 +205,7 @@ model Account {
 model Period {
   id        String   @id @default(uuid())
   entityId  String   @map("entity_id")
-  name      String   // 2025-01
+  name      String // 2025-01
   startDate DateTime @map("start_date")
   endDate   DateTime @map("end_date")
   status    String   @default("open") // open, closed, locked
@@ -222,11 +235,11 @@ model JournalEntry {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
-  entity        Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  period        Period?       @relation(fields: [periodId], references: [id])
-  creator       User          @relation("CreatedBy", fields: [createdBy], references: [id])
-  approver      User?         @relation("ApprovedBy", fields: [approvedBy], references: [id])
-  journalLines  JournalLine[]
+  entity       Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  period       Period?       @relation(fields: [periodId], references: [id])
+  creator      User          @relation("CreatedBy", fields: [createdBy], references: [id])
+  approver     User?         @relation("ApprovedBy", fields: [approvedBy], references: [id])
+  journalLines JournalLine[]
 
   @@index([entityId, date])
   @@index([sourceModule, sourceId])
@@ -261,9 +274,9 @@ model JournalLine {
 model SalesChannel {
   id              String  @id @default(uuid())
   entityId        String  @map("entity_id")
-  name            String  // Shopify 官網、1shop、momo 等
-  code            String  // SHOPIFY, 1SHOP, MOMO, PCHOME, SHOPEE, COUPANG, SHOPLINE, AMAZON, TTSHOP
-  type            String  // own_site, marketplace, group_buy, distributor, social_commerce
+  name            String // Shopify 官網、1shop、momo 等
+  code            String // SHOPIFY, 1SHOP, MOMO, PCHOME, SHOPEE, COUPANG, SHOPLINE, AMAZON, TTSHOP
+  type            String // own_site, marketplace, group_buy, distributor, social_commerce
   defaultCurrency String  @default("TWD") @map("default_currency")
   configJson      Json?   @map("config_json") // 儲存 API keys, webhook URLs 等
   isActive        Boolean @default(true) @map("is_active")
@@ -318,6 +331,7 @@ model Vendor {
   entity         Entity          @relation(fields: [entityId], references: [id], onDelete: Cascade)
   purchaseOrders PurchaseOrder[]
   apInvoices     ApInvoice[]
+  paymentTasks   PaymentTask[]
 
   @@index([entityId])
   @@map("vendors")
@@ -325,17 +339,17 @@ model Vendor {
 
 // 商品
 model Product {
-  id             String   @id @default(uuid())
-  entityId       String   @map("entity_id")
-  sku            String
-  name           String
-  category       String?
-  description    String?
-  isActive       Boolean  @default(true) @map("is_active")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id          String   @id @default(uuid())
+  entityId    String   @map("entity_id")
+  sku         String
+  name        String
+  category    String?
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  entity             Entity              @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  entity             Entity                 @relation(fields: [entityId], references: [id], onDelete: Cascade)
   salesOrderItems    SalesOrderItem[]
   purchaseOrderItems PurchaseOrderItem[]
   productBatches     ProductBatch[]
@@ -360,9 +374,9 @@ model Warehouse {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  entity     Entity               @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  snapshots  InventorySnapshot[]
-  movements  InventoryTransaction[]
+  entity    Entity                 @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  snapshots InventorySnapshot[]
+  movements InventoryTransaction[]
 
   @@unique([entityId, code])
   @@index([entityId])
@@ -371,16 +385,16 @@ model Warehouse {
 
 // 庫存快照（每商品/每倉庫一筆，紀錄 OnHand/Allocated/Available）
 model InventorySnapshot {
-  id           String   @id @default(uuid())
-  entityId     String   @map("entity_id")
-  warehouseId  String   @map("warehouse_id")
-  productId    String   @map("product_id")
+  id          String @id @default(uuid())
+  entityId    String @map("entity_id")
+  warehouseId String @map("warehouse_id")
+  productId   String @map("product_id")
 
-  qtyOnHand    Decimal  @default(0) @map("qty_on_hand") @db.Decimal(18, 2)
-  qtyAllocated Decimal  @default(0) @map("qty_allocated") @db.Decimal(18, 2)
-  qtyAvailable Decimal  @default(0) @map("qty_available") @db.Decimal(18, 2)
+  qtyOnHand    Decimal @default(0) @map("qty_on_hand") @db.Decimal(18, 2)
+  qtyAllocated Decimal @default(0) @map("qty_allocated") @db.Decimal(18, 2)
+  qtyAvailable Decimal @default(0) @map("qty_available") @db.Decimal(18, 2)
 
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   entity    Entity    @relation(fields: [entityId], references: [id], onDelete: Cascade)
   warehouse Warehouse @relation(fields: [warehouseId], references: [id])
@@ -397,9 +411,9 @@ model InventoryTransaction {
   entityId      String   @map("entity_id")
   warehouseId   String   @map("warehouse_id")
   productId     String   @map("product_id")
-  direction     String   // IN, OUT, RESERVE, RELEASE, ADJUST
+  direction     String // IN, OUT, RESERVE, RELEASE, ADJUST
   quantity      Decimal  @map("quantity") @db.Decimal(18, 2)
-  referenceType String   // PURCHASE_ORDER, SALES_ORDER, ADJUSTMENT, STOCK_TAKE 等
+  referenceType String // PURCHASE_ORDER, SALES_ORDER, ADJUSTMENT, STOCK_TAKE 等
   referenceId   String?  @map("reference_id")
   reason        String?
   occurredAt    DateTime @map("occurred_at")
@@ -416,42 +430,42 @@ model InventoryTransaction {
 
 // 銷售訂單
 model SalesOrder {
-  id              String    @id @default(uuid())
-  entityId        String    @map("entity_id")
-  channelId       String    @map("channel_id")
-  customerId      String?   @map("customer_id")
-  externalOrderId String?   @map("external_order_id") // 平台訂單編號
-  orderDate              DateTime  @map("order_date")
-  
+  id              String   @id @default(uuid())
+  entityId        String   @map("entity_id")
+  channelId       String   @map("channel_id")
+  customerId      String?  @map("customer_id")
+  externalOrderId String?  @map("external_order_id") // 平台訂單編號
+  orderDate       DateTime @map("order_date")
+
   // 訂單總額（符合四欄位標準）
-  totalGrossOriginal     Decimal   @map("total_gross_original") @db.Decimal(18, 2)
-  totalGrossCurrency     String    @map("total_gross_currency") @default("TWD")
-  totalGrossFxRate       Decimal   @map("total_gross_fx_rate") @default(1) @db.Decimal(18, 6)
-  totalGrossBase         Decimal   @map("total_gross_base") @db.Decimal(18, 2)
-  
+  totalGrossOriginal Decimal @map("total_gross_original") @db.Decimal(18, 2)
+  totalGrossCurrency String  @default("TWD") @map("total_gross_currency")
+  totalGrossFxRate   Decimal @default(1) @map("total_gross_fx_rate") @db.Decimal(18, 6)
+  totalGrossBase     Decimal @map("total_gross_base") @db.Decimal(18, 2)
+
   // 稅額（符合四欄位標準）
-  taxAmountOriginal      Decimal   @default(0) @map("tax_amount_original") @db.Decimal(18, 2)
-  taxAmountCurrency      String    @map("tax_amount_currency") @default("TWD")
-  taxAmountFxRate        Decimal   @map("tax_amount_fx_rate") @default(1) @db.Decimal(18, 6)
-  taxAmountBase          Decimal   @default(0) @map("tax_amount_base") @db.Decimal(18, 2)
-  
+  taxAmountOriginal Decimal @default(0) @map("tax_amount_original") @db.Decimal(18, 2)
+  taxAmountCurrency String  @default("TWD") @map("tax_amount_currency")
+  taxAmountFxRate   Decimal @default(1) @map("tax_amount_fx_rate") @db.Decimal(18, 6)
+  taxAmountBase     Decimal @default(0) @map("tax_amount_base") @db.Decimal(18, 2)
+
   // 折扣金額（符合四欄位標準）
-  discountAmountOriginal Decimal   @default(0) @map("discount_amount_original") @db.Decimal(18, 2)
-  discountAmountCurrency String    @map("discount_amount_currency") @default("TWD")
-  discountAmountFxRate   Decimal   @map("discount_amount_fx_rate") @default(1) @db.Decimal(18, 6)
-  discountAmountBase     Decimal   @default(0) @map("discount_amount_base") @db.Decimal(18, 2)
-  
+  discountAmountOriginal Decimal @default(0) @map("discount_amount_original") @db.Decimal(18, 2)
+  discountAmountCurrency String  @default("TWD") @map("discount_amount_currency")
+  discountAmountFxRate   Decimal @default(1) @map("discount_amount_fx_rate") @db.Decimal(18, 6)
+  discountAmountBase     Decimal @default(0) @map("discount_amount_base") @db.Decimal(18, 2)
+
   // 運費（符合四欄位標準）
-  shippingFeeOriginal    Decimal   @default(0) @map("shipping_fee_original") @db.Decimal(18, 2)
-  shippingFeeCurrency    String    @map("shipping_fee_currency") @default("TWD")
-  shippingFeeFxRate      Decimal   @map("shipping_fee_fx_rate") @default(1) @db.Decimal(18, 6)
-  shippingFeeBase        Decimal   @default(0) @map("shipping_fee_base") @db.Decimal(18, 2)
-  status          String    @default("pending") // pending, shipped, completed, cancelled, refunded
-  hasInvoice      Boolean   @default(false) @map("has_invoice")
-  invoiceId       String?   @map("invoice_id")
-  notes           String?
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  shippingFeeOriginal Decimal  @default(0) @map("shipping_fee_original") @db.Decimal(18, 2)
+  shippingFeeCurrency String   @default("TWD") @map("shipping_fee_currency")
+  shippingFeeFxRate   Decimal  @default(1) @map("shipping_fee_fx_rate") @db.Decimal(18, 6)
+  shippingFeeBase     Decimal  @default(0) @map("shipping_fee_base") @db.Decimal(18, 2)
+  status              String   @default("pending") // pending, shipped, completed, cancelled, refunded
+  hasInvoice          Boolean  @default(false) @map("has_invoice")
+  invoiceId           String?  @map("invoice_id")
+  notes               String?
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
 
   entity    Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
   channel   SalesChannel     @relation(fields: [channelId], references: [id])
@@ -470,26 +484,26 @@ model SalesOrder {
 // 銷售訂單明細
 model SalesOrderItem {
   id           String  @id @default(uuid())
-  salesOrderId      String  @map("sales_order_id")
-  productId         String  @map("product_id")
-  qty               Decimal @db.Decimal(18, 2)
-  
+  salesOrderId String  @map("sales_order_id")
+  productId    String  @map("product_id")
+  qty          Decimal @db.Decimal(18, 2)
+
   // 單價（符合四欄位標準）
   unitPriceOriginal Decimal @map("unit_price_original") @db.Decimal(18, 2)
-  unitPriceCurrency String  @map("unit_price_currency") @default("TWD")
-  unitPriceFxRate   Decimal @map("unit_price_fx_rate") @default(1) @db.Decimal(18, 6)
+  unitPriceCurrency String  @default("TWD") @map("unit_price_currency")
+  unitPriceFxRate   Decimal @default(1) @map("unit_price_fx_rate") @db.Decimal(18, 6)
   unitPriceBase     Decimal @map("unit_price_base") @db.Decimal(18, 2)
-  
+
   // 折扣（符合四欄位標準）
-  discountOriginal  Decimal @default(0) @map("discount_original") @db.Decimal(18, 2)
-  discountCurrency  String  @map("discount_currency") @default("TWD")
-  discountFxRate    Decimal @map("discount_fx_rate") @default(1) @db.Decimal(18, 6)
-  discountBase      Decimal @default(0) @map("discount_base") @db.Decimal(18, 2)
-  
+  discountOriginal Decimal @default(0) @map("discount_original") @db.Decimal(18, 2)
+  discountCurrency String  @default("TWD") @map("discount_currency")
+  discountFxRate   Decimal @default(1) @map("discount_fx_rate") @db.Decimal(18, 6)
+  discountBase     Decimal @default(0) @map("discount_base") @db.Decimal(18, 2)
+
   // 稅額（符合四欄位標準）
   taxAmountOriginal Decimal @default(0) @map("tax_amount_original") @db.Decimal(18, 2)
-  taxAmountCurrency String  @map("tax_amount_currency") @default("TWD")
-  taxAmountFxRate   Decimal @map("tax_amount_fx_rate") @default(1) @db.Decimal(18, 6)
+  taxAmountCurrency String  @default("TWD") @map("tax_amount_currency")
+  taxAmountFxRate   Decimal @default(1) @map("tax_amount_fx_rate") @db.Decimal(18, 6)
   taxAmountBase     Decimal @default(0) @map("tax_amount_base") @db.Decimal(18, 2)
 
   salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
@@ -520,53 +534,53 @@ model Shipment {
 
 // 收款紀錄（平台撥款／金流實收）
 model Payment {
-  id              String   @id @default(uuid())
-  entityId        String   @map("entity_id")
-  salesOrderId    String?  @map("sales_order_id")
-  channelId       String?  @map("channel_id")
-  payoutBatchId   String?  @map("payout_batch_id") // 平台批次撥款 ID
-  channel         String   // ECPAY, SHOPIFY_PAYOUT, MOMO_PAYOUT, BANK_TRANSFER, etc.
-  payoutDate      DateTime @map("payout_date")
-  
-  // 總收款（符合四欄位標準）
-  amountGrossOriginal     Decimal  @map("amount_gross_original") @db.Decimal(18, 2)
-  amountGrossCurrency     String   @map("amount_gross_currency") @default("TWD")
-  amountGrossFxRate       Decimal  @map("amount_gross_fx_rate") @default(1) @db.Decimal(18, 6)
-  amountGrossBase         Decimal  @map("amount_gross_base") @db.Decimal(18, 2)
-  
-  // 平台費（符合四欄位標準）
-  feePlatformOriginal     Decimal  @default(0) @map("fee_platform_original") @db.Decimal(18, 2)
-  feePlatformCurrency     String   @map("fee_platform_currency") @default("TWD")
-  feePlatformFxRate       Decimal  @map("fee_platform_fx_rate") @default(1) @db.Decimal(18, 6)
-  feePlatformBase         Decimal  @default(0) @map("fee_platform_base") @db.Decimal(18, 2)
-  
-  // 金流手續費（符合四欄位標準）
-  feeGatewayOriginal      Decimal  @default(0) @map("fee_gateway_original") @db.Decimal(18, 2)
-  feeGatewayCurrency      String   @map("fee_gateway_currency") @default("TWD")
-  feeGatewayFxRate        Decimal  @map("fee_gateway_fx_rate") @default(1) @db.Decimal(18, 6)
-  feeGatewayBase          Decimal  @default(0) @map("fee_gateway_base") @db.Decimal(18, 2)
-  
-  // 運費（符合四欄位標準）
-  shippingFeePaidOriginal Decimal  @default(0) @map("shipping_fee_paid_original") @db.Decimal(18, 2)
-  shippingFeePaidCurrency String   @map("shipping_fee_paid_currency") @default("TWD")
-  shippingFeePaidFxRate   Decimal  @map("shipping_fee_paid_fx_rate") @default(1) @db.Decimal(18, 6)
-  shippingFeePaidBase     Decimal  @default(0) @map("shipping_fee_paid_base") @db.Decimal(18, 2)
-  
-  // 實收淨額（符合四欄位標準）
-  amountNetOriginal       Decimal  @map("amount_net_original") @db.Decimal(18, 2)
-  amountNetCurrency       String   @map("amount_net_currency") @default("TWD")
-  amountNetFxRate         Decimal  @map("amount_net_fx_rate") @default(1) @db.Decimal(18, 6)
-  amountNetBase           Decimal  @map("amount_net_base") @db.Decimal(18, 2)
-  bankAccountId   String?  @map("bank_account_id")
-  reconciledFlag  Boolean  @default(false) @map("reconciled_flag")
-  status          String   @default("pending") // pending, completed, failed
-  notes           String?
-  createdAt       DateTime @default(now()) @map("created_at")
+  id            String   @id @default(uuid())
+  entityId      String   @map("entity_id")
+  salesOrderId  String?  @map("sales_order_id")
+  channelId     String?  @map("channel_id")
+  payoutBatchId String?  @map("payout_batch_id") // 平台批次撥款 ID
+  channel       String // ECPAY, SHOPIFY_PAYOUT, MOMO_PAYOUT, BANK_TRANSFER, etc.
+  payoutDate    DateTime @map("payout_date")
 
-  entity        Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  salesOrder    SalesOrder?   @relation(fields: [salesOrderId], references: [id])
-  salesChannel  SalesChannel? @relation(fields: [channelId], references: [id])
-  bankAccount   BankAccount?  @relation(fields: [bankAccountId], references: [id])
+  // 總收款（符合四欄位標準）
+  amountGrossOriginal Decimal @map("amount_gross_original") @db.Decimal(18, 2)
+  amountGrossCurrency String  @default("TWD") @map("amount_gross_currency")
+  amountGrossFxRate   Decimal @default(1) @map("amount_gross_fx_rate") @db.Decimal(18, 6)
+  amountGrossBase     Decimal @map("amount_gross_base") @db.Decimal(18, 2)
+
+  // 平台費（符合四欄位標準）
+  feePlatformOriginal Decimal @default(0) @map("fee_platform_original") @db.Decimal(18, 2)
+  feePlatformCurrency String  @default("TWD") @map("fee_platform_currency")
+  feePlatformFxRate   Decimal @default(1) @map("fee_platform_fx_rate") @db.Decimal(18, 6)
+  feePlatformBase     Decimal @default(0) @map("fee_platform_base") @db.Decimal(18, 2)
+
+  // 金流手續費（符合四欄位標準）
+  feeGatewayOriginal Decimal @default(0) @map("fee_gateway_original") @db.Decimal(18, 2)
+  feeGatewayCurrency String  @default("TWD") @map("fee_gateway_currency")
+  feeGatewayFxRate   Decimal @default(1) @map("fee_gateway_fx_rate") @db.Decimal(18, 6)
+  feeGatewayBase     Decimal @default(0) @map("fee_gateway_base") @db.Decimal(18, 2)
+
+  // 運費（符合四欄位標準）
+  shippingFeePaidOriginal Decimal @default(0) @map("shipping_fee_paid_original") @db.Decimal(18, 2)
+  shippingFeePaidCurrency String  @default("TWD") @map("shipping_fee_paid_currency")
+  shippingFeePaidFxRate   Decimal @default(1) @map("shipping_fee_paid_fx_rate") @db.Decimal(18, 6)
+  shippingFeePaidBase     Decimal @default(0) @map("shipping_fee_paid_base") @db.Decimal(18, 2)
+
+  // 實收淨額（符合四欄位標準）
+  amountNetOriginal Decimal  @map("amount_net_original") @db.Decimal(18, 2)
+  amountNetCurrency String   @default("TWD") @map("amount_net_currency")
+  amountNetFxRate   Decimal  @default(1) @map("amount_net_fx_rate") @db.Decimal(18, 6)
+  amountNetBase     Decimal  @map("amount_net_base") @db.Decimal(18, 2)
+  bankAccountId     String?  @map("bank_account_id")
+  reconciledFlag    Boolean  @default(false) @map("reconciled_flag")
+  status            String   @default("pending") // pending, completed, failed
+  notes             String?
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  entity       Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  salesOrder   SalesOrder?   @relation(fields: [salesOrderId], references: [id])
+  salesChannel SalesChannel? @relation(fields: [channelId], references: [id])
+  bankAccount  BankAccount?  @relation(fields: [bankAccountId], references: [id])
 
   @@index([entityId, payoutDate])
   @@index([salesOrderId])
@@ -579,32 +593,32 @@ model Payment {
 
 // 應收帳款
 model ArInvoice {
-  id           String    @id @default(uuid())
-  entityId     String    @map("entity_id")
-  customerId   String?   @map("customer_id")
-  invoiceNo       String?   @map("invoice_no")
-  
+  id         String  @id @default(uuid())
+  entityId   String  @map("entity_id")
+  customerId String? @map("customer_id")
+  invoiceNo  String? @map("invoice_no")
+
   // 應收金額（符合四欄位標準）
-  amountOriginal  Decimal   @map("amount_original") @db.Decimal(18, 2)
-  amountCurrency  String    @map("amount_currency") @default("TWD")
-  amountFxRate    Decimal   @map("amount_fx_rate") @default(1) @db.Decimal(18, 6)
-  amountBase      Decimal   @map("amount_base") @db.Decimal(18, 2)
-  
+  amountOriginal Decimal @map("amount_original") @db.Decimal(18, 2)
+  amountCurrency String  @default("TWD") @map("amount_currency")
+  amountFxRate   Decimal @default(1) @map("amount_fx_rate") @db.Decimal(18, 6)
+  amountBase     Decimal @map("amount_base") @db.Decimal(18, 2)
+
   // 已收金額（符合四欄位標準）
   paidAmountOriginal Decimal @default(0) @map("paid_amount_original") @db.Decimal(18, 2)
-  paidAmountCurrency String  @map("paid_amount_currency") @default("TWD")
-  paidAmountFxRate   Decimal @map("paid_amount_fx_rate") @default(1) @db.Decimal(18, 6)
+  paidAmountCurrency String  @default("TWD") @map("paid_amount_currency")
+  paidAmountFxRate   Decimal @default(1) @map("paid_amount_fx_rate") @db.Decimal(18, 6)
   paidAmountBase     Decimal @default(0) @map("paid_amount_base") @db.Decimal(18, 2)
-  
-  issueDate    DateTime  @map("issue_date")
-  dueDate      DateTime  @map("due_date")
-  status       String    @default("unpaid") // unpaid, partial, paid, overdue, written_off
-  priority     String    @default("normal") // normal, urgent
-  sourceModule String?   @map("source_module")
-  sourceId     String?   @map("source_id")
+
+  issueDate    DateTime @map("issue_date")
+  dueDate      DateTime @map("due_date")
+  status       String   @default("unpaid") // unpaid, partial, paid, overdue, written_off
+  priority     String   @default("normal") // normal, urgent
+  sourceModule String?  @map("source_module")
+  sourceId     String?  @map("source_id")
   notes        String?
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   entity   Entity    @relation(fields: [entityId], references: [id], onDelete: Cascade)
   customer Customer? @relation(fields: [customerId], references: [id])
@@ -616,33 +630,33 @@ model ArInvoice {
 
 // 應付帳款
 model ApInvoice {
-  id             String    @id @default(uuid())
-  entityId       String    @map("entity_id")
-  vendorId       String?   @map("vendor_id")
-  invoiceNo       String?   @map("invoice_no")
-  
+  id        String  @id @default(uuid())
+  entityId  String  @map("entity_id")
+  vendorId  String? @map("vendor_id")
+  invoiceNo String? @map("invoice_no")
+
   // 應付金額（符合四欄位標準）
-  amountOriginal  Decimal   @map("amount_original") @db.Decimal(18, 2)
-  amountCurrency  String    @map("amount_currency") @default("TWD")
-  amountFxRate    Decimal   @map("amount_fx_rate") @default(1) @db.Decimal(18, 6)
-  amountBase      Decimal   @map("amount_base") @db.Decimal(18, 2)
-  
-  invoiceDate DateTime  @map("invoice_date")
-  dueDate     DateTime  @map("due_date")
-  
+  amountOriginal Decimal @map("amount_original") @db.Decimal(18, 2)
+  amountCurrency String  @default("TWD") @map("amount_currency")
+  amountFxRate   Decimal @default(1) @map("amount_fx_rate") @db.Decimal(18, 6)
+  amountBase     Decimal @map("amount_base") @db.Decimal(18, 2)
+
+  invoiceDate DateTime @map("invoice_date")
+  dueDate     DateTime @map("due_date")
+
   // 已付金額（符合四欄位標準）
-  paidAmountOriginal Decimal @default(0) @map("paid_amount_original") @db.Decimal(18, 2)
-  paidAmountCurrency String  @map("paid_amount_currency") @default("TWD")
-  paidAmountFxRate   Decimal @map("paid_amount_fx_rate") @default(1) @db.Decimal(18, 6)
-  paidAmountBase     Decimal @default(0) @map("paid_amount_base") @db.Decimal(18, 2)
-  status         String    @default("pending") // pending, partial, paid, overdue
-  priority       String    @default("normal") // normal, urgent
-  sourceModule   String?   @map("source_module")
-  sourceId       String?   @map("source_id")
-  approvalStatus String    @default("pending") @map("approval_status") // pending, approved, rejected
-  notes          String?
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  paidAmountOriginal Decimal  @default(0) @map("paid_amount_original") @db.Decimal(18, 2)
+  paidAmountCurrency String   @default("TWD") @map("paid_amount_currency")
+  paidAmountFxRate   Decimal  @default(1) @map("paid_amount_fx_rate") @db.Decimal(18, 6)
+  paidAmountBase     Decimal  @default(0) @map("paid_amount_base") @db.Decimal(18, 2)
+  status             String   @default("pending") // pending, partial, paid, overdue
+  priority           String   @default("normal") // normal, urgent
+  sourceModule       String?  @map("source_module")
+  sourceId           String?  @map("source_id")
+  approvalStatus     String   @default("pending") @map("approval_status") // pending, approved, rejected
+  notes              String?
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   entity Entity  @relation(fields: [entityId], references: [id], onDelete: Cascade)
   vendor Vendor? @relation(fields: [vendorId], references: [id])
@@ -659,35 +673,52 @@ model ApInvoice {
 
 // 費用申請單
 model ExpenseRequest {
-  id            String    @id @default(uuid())
-  entityId      String    @map("entity_id")
-  vendorId        String?   @map("vendor_id")
-  
-  // 費用金額（符合四欄位標準）
-  amountOriginal  Decimal   @map("amount_original") @db.Decimal(18, 2)
-  amountCurrency  String    @map("amount_currency") @default("TWD")
-  amountFxRate    Decimal   @map("amount_fx_rate") @default(1) @db.Decimal(18, 6)
-  amountBase      Decimal   @map("amount_base") @db.Decimal(18, 2)
-  
-  dueDate       DateTime? @map("due_date")
-  description   String
-  priority      String    @default("normal") // normal, urgent
-  attachmentUrl String?   @map("attachment_url")
-  departmentId  String?   @map("department_id")
-  createdBy     String    @map("created_by")
-  status        String    @default("pending") // pending, approved, rejected
-  approvalUserId String?  @map("approval_user_id")
-  approvedAt    DateTime? @map("approved_at")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  id                  String  @id @default(uuid())
+  entityId            String  @map("entity_id")
+  vendorId            String? @map("vendor_id")
+  reimbursementItemId String? @map("reimbursement_item_id")
 
-  entity     Entity      @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  creator    User        @relation("RequestedBy", fields: [createdBy], references: [id])
-  approver   User?       @relation("ApprovedBy", fields: [approvalUserId], references: [id])
-  department Department? @relation(fields: [departmentId], references: [id])
+  // 費用金額（符合四欄位標準）
+  amountOriginal Decimal @map("amount_original") @db.Decimal(18, 2)
+  amountCurrency String  @default("TWD") @map("amount_currency")
+  amountFxRate   Decimal @default(1) @map("amount_fx_rate") @db.Decimal(18, 6)
+  amountBase     Decimal @map("amount_base") @db.Decimal(18, 2)
+
+  dueDate              DateTime? @map("due_date")
+  description          String
+  priority             String    @default("normal") // normal, urgent
+  attachmentUrl        String?   @map("attachment_url")
+  evidenceFiles        Json?     @map("evidence_files")
+  departmentId         String?   @map("department_id")
+  receiptType          String?   @map("receipt_type")
+  createdBy            String    @map("created_by")
+  status               String    @default("pending") // draft, pending, approved, rejected, paid
+  approvalUserId       String?   @map("approval_user_id")
+  approvedAt           DateTime? @map("approved_at")
+  suggestedAccountId   String?   @map("suggested_account_id")
+  finalAccountId       String?   @map("final_account_id")
+  suggestionConfidence Decimal   @default(0) @map("suggestion_confidence") @db.Decimal(5, 2)
+  metadata             Json?     @map("metadata")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  entity              Entity                         @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  creator             User                           @relation("RequestedBy", fields: [createdBy], references: [id])
+  approver            User?                          @relation("ApprovedBy", fields: [approvalUserId], references: [id])
+  department          Department?                    @relation(fields: [departmentId], references: [id])
+  reimbursementItem   ReimbursementItem?             @relation(fields: [reimbursementItemId], references: [id], onDelete: SetNull)
+  suggestedAccount    Account?                       @relation("ExpenseRequestSuggestedAccount", fields: [suggestedAccountId], references: [id], onDelete: SetNull)
+  finalAccount        Account?                       @relation("ExpenseRequestFinalAccount", fields: [finalAccountId], references: [id], onDelete: SetNull)
+  histories           ExpenseRequestHistory[]
+  approvalSteps       ApprovalStep[]
+  paymentTasks        PaymentTask[]
+  classifierFeedbacks AccountingClassifierFeedback[]
 
   @@index([entityId, status])
   @@index([createdBy])
+  @@index([reimbursementItemId])
+  @@index([suggestedAccountId])
+  @@index([finalAccountId])
   @@map("expense_requests")
 }
 
@@ -696,17 +727,17 @@ model Expense {
   id          String   @id @default(uuid())
   entityId    String   @map("entity_id")
   expenseDate DateTime @map("expense_date")
-  
+
   // 總費用（符合四欄位標準）
   totalAmountOriginal Decimal @map("total_amount_original") @db.Decimal(18, 2)
-  totalAmountCurrency String  @map("total_amount_currency") @default("TWD")
-  totalAmountFxRate   Decimal @map("total_amount_fx_rate") @default(1) @db.Decimal(18, 6)
+  totalAmountCurrency String  @default("TWD") @map("total_amount_currency")
+  totalAmountFxRate   Decimal @default(1) @map("total_amount_fx_rate") @db.Decimal(18, 6)
   totalAmountBase     Decimal @map("total_amount_base") @db.Decimal(18, 2)
-  
-  description String
-  sourceModule String? @map("source_module")
-  sourceId     String? @map("source_id")
-  createdAt   DateTime @default(now()) @map("created_at")
+
+  description  String
+  sourceModule String?  @map("source_module")
+  sourceId     String?  @map("source_id")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   entity Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
   items  ExpenseItem[]
@@ -720,13 +751,13 @@ model ExpenseItem {
   id          String  @id @default(uuid())
   expenseId   String  @map("expense_id")
   accountCode String? @map("account_code") // 費用科目代號
-  
+
   // 費用金額（符合四欄位標準）
   amountOriginal Decimal @map("amount_original") @db.Decimal(18, 2)
-  amountCurrency String  @map("amount_currency") @default("TWD")
-  amountFxRate   Decimal @map("amount_fx_rate") @default(1) @db.Decimal(18, 6)
+  amountCurrency String  @default("TWD") @map("amount_currency")
+  amountFxRate   Decimal @default(1) @map("amount_fx_rate") @db.Decimal(18, 6)
   amountBase     Decimal @map("amount_base") @db.Decimal(18, 2)
-  
+
   description String?
 
   expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
@@ -737,34 +768,183 @@ model ExpenseItem {
 
 // 費用報銷模板（員工看到的「選項」，對應實際會計科目）
 model ReimbursementItem {
+  id                     String   @id @default(uuid())
+  entityId               String   @map("entity_id")
+  name                   String // 給員工看的名稱，例如：出差旅費、樣品採購（內部）
+  description            String?
+  accountId              String   @map("account_id") // 對應 accounts 表的實際科目
+  isActive               Boolean  @default(true) @map("is_active")
+  keywords               String?  @map("keywords")
+  amountLimit            Decimal? @map("amount_limit") @db.Decimal(18, 2)
+  requiresDepartmentHead Boolean  @default(false) @map("requires_department_head")
+  approverRoleCodes      String?  @map("approver_role_codes")
+  approvalPolicyId       String?  @map("approval_policy_id")
+  defaultReceiptType     String?  @map("default_receipt_type")
+  // 權限與使用限制（簡化版，後續可再拆角色／部門對照表）
+  allowedRoles           String?  @map("allowed_roles") // 逗號分隔角色代碼，例如 "ADMIN,ACCOUNTANT"
+  allowedDepartments     String?  @map("allowed_departments") // 逗號分隔部門 Id 或代碼
+  // 憑證要求：TAX_INVOICE, RECEIPT, BANK_SLIP, INTERNAL_ONLY
+  allowedReceiptTypes    String?  @map("allowed_receipt_types")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  entity          Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  account         Account          @relation(fields: [accountId], references: [id])
+  approvalPolicy  ApprovalPolicy?  @relation(fields: [approvalPolicyId], references: [id], onDelete: SetNull)
+  expenseRequests ExpenseRequest[]
+
+  @@unique([entityId, name])
+  @@index([entityId, isActive])
+  @@index([accountId])
+  @@index([approvalPolicyId])
+  @@map("reimbursement_items")
+}
+
+// 審批政策：定義金額門檻與簽核層級
+model ApprovalPolicy {
   id          String   @id @default(uuid())
   entityId    String   @map("entity_id")
-  name        String   // 給員工看的名稱，例如：出差旅費、樣品採購（內部）
+  name        String
   description String?
-  accountId   String   @map("account_id") // 對應 accounts 表的實際科目
+  policyType  String   @default("amount_threshold") @map("policy_type")
   isActive    Boolean  @default(true) @map("is_active")
-  // 權限與使用限制（簡化版，後續可再拆角色／部門對照表）
-  allowedRoles      String?  @map("allowed_roles") // 逗號分隔角色代碼，例如 "ADMIN,ACCOUNTANT"
-  allowedDepartments String? @map("allowed_departments") // 逗號分隔部門 Id 或代碼
-  // 憑證要求：TAX_INVOICE, RECEIPT, BANK_SLIP, INTERNAL_ONLY
-  allowedReceiptTypes String? @map("allowed_receipt_types")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  entity  Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  account Account @relation(fields: [accountId], references: [id])
+  entity Entity               @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  steps  ApprovalPolicyStep[]
+  items  ReimbursementItem[]
 
   @@index([entityId, isActive])
-  @@index([accountId])
-  @@unique([entityId, name])
-  @@map("reimbursement_items")
+  @@map("approval_policies")
+}
+
+// 審批政策的每個步驟定義
+model ApprovalPolicyStep {
+  id                     String   @id @default(uuid())
+  approvalPolicyId       String   @map("approval_policy_id")
+  stepOrder              Int      @map("step_order")
+  minAmount              Decimal? @map("min_amount") @db.Decimal(18, 2)
+  maxAmount              Decimal? @map("max_amount") @db.Decimal(18, 2)
+  approverRoleCode       String?  @map("approver_role_code")
+  requiresDepartmentHead Boolean  @default(false) @map("requires_department_head")
+  fallbackUserId         String?  @map("fallback_user_id")
+  note                   String?
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  approvalPolicy ApprovalPolicy @relation(fields: [approvalPolicyId], references: [id], onDelete: Cascade)
+  fallbackUser   User?          @relation(fields: [fallbackUserId], references: [id])
+
+  @@index([approvalPolicyId])
+  @@map("approval_policy_steps")
+}
+
+// 實際費用申請的審批節點
+model ApprovalStep {
+  id               String    @id @default(uuid())
+  expenseRequestId String    @map("expense_request_id")
+  stepOrder        Int       @map("step_order")
+  status           String    @default("pending")
+  approverRoleCode String?   @map("approver_role_code")
+  approverUserId   String?   @map("approver_user_id")
+  departmentId     String?   @map("department_id")
+  amountThreshold  Decimal?  @map("amount_threshold") @db.Decimal(18, 2)
+  assignedAt       DateTime? @map("assigned_at")
+  decidedAt        DateTime? @map("decided_at")
+  remark           String?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  expenseRequest ExpenseRequest @relation(fields: [expenseRequestId], references: [id], onDelete: Cascade)
+  approverUser   User?          @relation(fields: [approverUserId], references: [id])
+  department     Department?    @relation(fields: [departmentId], references: [id])
+
+  @@index([expenseRequestId, stepOrder])
+  @@index([status])
+  @@map("approval_steps")
+}
+
+// 費用申請歷程紀錄
+model ExpenseRequestHistory {
+  id                 String   @id @default(uuid())
+  expenseRequestId   String   @map("expense_request_id")
+  action             String
+  fromStatus         String?  @map("from_status")
+  toStatus           String?  @map("to_status")
+  actorId            String?  @map("actor_id")
+  actorRoleCode      String?  @map("actor_role_code")
+  note               String?
+  metadata           Json?
+  attachments        Json?
+  suggestedAccountId String?  @map("suggested_account_id")
+  finalAccountId     String?  @map("final_account_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  expenseRequest   ExpenseRequest @relation(fields: [expenseRequestId], references: [id], onDelete: Cascade)
+  actor            User?          @relation(fields: [actorId], references: [id])
+  suggestedAccount Account?       @relation("HistorySuggestedAccount", fields: [suggestedAccountId], references: [id])
+  finalAccount     Account?       @relation("HistoryFinalAccount", fields: [finalAccountId], references: [id])
+
+  @@index([expenseRequestId])
+  @@index([createdAt])
+  @@map("expense_request_histories")
+}
+
+// 付款排程任務
+model PaymentTask {
+  id               String    @id @default(uuid())
+  entityId         String    @map("entity_id")
+  expenseRequestId String?   @map("expense_request_id")
+  accountId        String?   @map("account_id")
+  vendorId         String?   @map("vendor_id")
+  status           String    @default("pending")
+  scheduledDate    DateTime? @map("scheduled_date")
+  dueDate          DateTime? @map("due_date")
+  paidDate         DateTime? @map("paid_date")
+  amountOriginal   Decimal   @map("amount_original") @db.Decimal(18, 2)
+  amountCurrency   String    @default("TWD") @map("amount_currency")
+  amountFxRate     Decimal   @default(1) @map("amount_fx_rate") @db.Decimal(18, 6)
+  amountBase       Decimal   @map("amount_base") @db.Decimal(18, 2)
+  notes            String?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  entity         Entity          @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  expenseRequest ExpenseRequest? @relation(fields: [expenseRequestId], references: [id], onDelete: SetNull)
+  account        Account?        @relation(fields: [accountId], references: [id])
+  vendor         Vendor?         @relation(fields: [vendorId], references: [id])
+
+  @@index([entityId, status])
+  @@map("payment_tasks")
+}
+
+// 智能科目建議的回饋紀錄
+model AccountingClassifierFeedback {
+  id                 String   @id @default(uuid())
+  expenseRequestId   String   @map("expense_request_id")
+  suggestedAccountId String?  @map("suggested_account_id")
+  chosenAccountId    String?  @map("chosen_account_id")
+  confidence         Decimal? @map("confidence") @db.Decimal(5, 2)
+  label              String?
+  features           Json?
+  createdBy          String?  @map("created_by")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  expenseRequest   ExpenseRequest @relation(fields: [expenseRequestId], references: [id], onDelete: Cascade)
+  createdByUser    User?          @relation(fields: [createdBy], references: [id])
+  suggestedAccount Account?       @relation("ClassifierSuggestedAccount", fields: [suggestedAccountId], references: [id])
+  chosenAccount    Account?       @relation("ClassifierChosenAccount", fields: [chosenAccountId], references: [id])
+
+  @@index([expenseRequestId])
+  @@map("accounting_classifier_feedbacks")
 }
 
 // 審核流程紀錄
 model ApprovalRequest {
   id          String    @id @default(uuid())
   entityId    String    @map("entity_id")
-  type        String    // expense_request, payment, journal_entry, payroll_run
+  type        String // expense_request, payment, journal_entry, payroll_run
   refId       String    @map("ref_id") // 對應的單據 ID
   status      String    @default("pending") // pending, approved, rejected
   requestedBy String    @map("requested_by")
@@ -789,21 +969,21 @@ model ApprovalRequest {
 
 // 進貨訂單
 model PurchaseOrder {
-  id          String    @id @default(uuid())
-  entityId    String    @map("entity_id")
-  vendorId    String    @map("vendor_id")
-  orderDate   DateTime  @map("order_date")
-  
+  id        String   @id @default(uuid())
+  entityId  String   @map("entity_id")
+  vendorId  String   @map("vendor_id")
+  orderDate DateTime @map("order_date")
+
   // 訂單總額（符合四欄位標準）
   totalAmountOriginal Decimal @map("total_amount_original") @db.Decimal(18, 2)
-  totalAmountCurrency String  @map("total_amount_currency") @default("TWD")
-  totalAmountFxRate   Decimal @map("total_amount_fx_rate") @default(1) @db.Decimal(18, 6)
+  totalAmountCurrency String  @default("TWD") @map("total_amount_currency")
+  totalAmountFxRate   Decimal @default(1) @map("total_amount_fx_rate") @db.Decimal(18, 6)
   totalAmountBase     Decimal @map("total_amount_base") @db.Decimal(18, 2)
-  
-  status      String    @default("pending") // pending, received, completed, cancelled
-  notes       String?
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  status    String   @default("pending") // pending, received, completed, cancelled
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   entity         Entity              @relation(fields: [entityId], references: [id], onDelete: Cascade)
   vendor         Vendor              @relation(fields: [vendorId], references: [id])
@@ -820,11 +1000,11 @@ model PurchaseOrderItem {
   purchaseOrderId String  @map("purchase_order_id")
   productId       String  @map("product_id")
   qty             Decimal @db.Decimal(18, 2)
-  
+
   // 單位成本（符合四欄位標準）
   unitCostOriginal Decimal @map("unit_cost_original") @db.Decimal(18, 2)
-  unitCostCurrency String  @map("unit_cost_currency") @default("TWD")
-  unitCostFxRate   Decimal @map("unit_cost_fx_rate") @default(1) @db.Decimal(18, 6)
+  unitCostCurrency String  @default("TWD") @map("unit_cost_currency")
+  unitCostFxRate   Decimal @default(1) @map("unit_cost_fx_rate") @db.Decimal(18, 6)
   unitCostBase     Decimal @map("unit_cost_base") @db.Decimal(18, 2)
 
   purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
@@ -836,21 +1016,21 @@ model PurchaseOrderItem {
 
 // 進貨批次（用於成本追蹤）
 model ProductBatch {
-  id              String   @id @default(uuid())
-  entityId        String   @map("entity_id")
-  productId       String   @map("product_id")
-  purchaseOrderId String?  @map("purchase_order_id")
-  batchCode       String   @map("batch_code")
-  qtyReceived     Decimal  @map("qty_received") @db.Decimal(18, 2)
-  
+  id              String  @id @default(uuid())
+  entityId        String  @map("entity_id")
+  productId       String  @map("product_id")
+  purchaseOrderId String? @map("purchase_order_id")
+  batchCode       String  @map("batch_code")
+  qtyReceived     Decimal @map("qty_received") @db.Decimal(18, 2)
+
   // 單位成本（符合四欄位標準）
   unitCostOriginal Decimal @map("unit_cost_original") @db.Decimal(18, 6)
-  unitCostCurrency String  @map("unit_cost_currency") @default("TWD")
-  unitCostFxRate   Decimal @map("unit_cost_fx_rate") @default(1) @db.Decimal(18, 6)
+  unitCostCurrency String  @default("TWD") @map("unit_cost_currency")
+  unitCostFxRate   Decimal @default(1) @map("unit_cost_fx_rate") @db.Decimal(18, 6)
   unitCostBase     Decimal @map("unit_cost_base") @db.Decimal(18, 6)
-  
-  receivedDate    DateTime @map("received_date")
-  createdAt       DateTime @default(now()) @map("created_at")
+
+  receivedDate DateTime @map("received_date")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   entity        Entity         @relation(fields: [entityId], references: [id], onDelete: Cascade)
   product       Product        @relation(fields: [productId], references: [id])
@@ -863,17 +1043,17 @@ model ProductBatch {
 
 // 開發成本（模具費、開發費、檢驗費攤提）
 model DevCost {
-  id                String   @id @default(uuid())
-  entityId          String   @map("entity_id")
-  productId         String?  @map("product_id")
-  type              String   // development, mold, certification
-  
+  id        String  @id @default(uuid())
+  entityId  String  @map("entity_id")
+  productId String? @map("product_id")
+  type      String // development, mold, certification
+
   // 開發成本金額（符合四欄位標準）
-  amountOriginal    Decimal  @map("amount_original") @db.Decimal(18, 2)
-  amountCurrency    String   @map("amount_currency") @default("TWD")
-  amountFxRate      Decimal  @map("amount_fx_rate") @default(1) @db.Decimal(18, 6)
-  amountBase        Decimal  @map("amount_base") @db.Decimal(18, 2)
-  
+  amountOriginal Decimal @map("amount_original") @db.Decimal(18, 2)
+  amountCurrency String  @default("TWD") @map("amount_currency")
+  amountFxRate   Decimal @default(1) @map("amount_fx_rate") @db.Decimal(18, 6)
+  amountBase     Decimal @map("amount_base") @db.Decimal(18, 2)
+
   allocationQty     Decimal  @map("allocation_qty") @db.Decimal(18, 2) // 預計攤提數量
   allocatedPerUnit  Decimal  @map("allocated_per_unit") @db.Decimal(18, 6) // 每單位攤提金額
   allocatedQtySoFar Decimal  @default(0) @map("allocated_qty_so_far") @db.Decimal(18, 2)
@@ -894,20 +1074,20 @@ model DevCost {
 
 // 銀行帳戶
 model BankAccount {
-  id                String  @id @default(uuid())
-  entityId          String  @map("entity_id")
-  bankName          String  @map("bank_name")
-  branch            String?
-  accountNo         String  @map("account_no")
-  currency          String  @default("TWD")
-  isVirtualSupport  Boolean @default(false) @map("is_virtual_support") // 是否支援虛擬帳號
-  metaJson          Json?   @map("meta_json")
-  isActive          Boolean @default(true) @map("is_active")
+  id               String  @id @default(uuid())
+  entityId         String  @map("entity_id")
+  bankName         String  @map("bank_name")
+  branch           String?
+  accountNo        String  @map("account_no")
+  currency         String  @default("TWD")
+  isVirtualSupport Boolean @default(false) @map("is_virtual_support") // 是否支援虛擬帳號
+  metaJson         Json?   @map("meta_json")
+  isActive         Boolean @default(true) @map("is_active")
 
-  entity            Entity             @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  virtualAccounts   VirtualAccount[]
-  bankTransactions  BankTransaction[]
-  payments          Payment[]
+  entity           Entity            @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  virtualAccounts  VirtualAccount[]
+  bankTransactions BankTransaction[]
+  payments         Payment[]
 
   @@unique([entityId, accountNo])
   @@map("bank_accounts")
@@ -930,25 +1110,25 @@ model VirtualAccount {
 
 // 銀行交易流水（用於對帳）
 model BankTransaction {
-  id                String   @id @default(uuid())
-  bankAccountId     String   @map("bank_account_id")
-  txnDate           DateTime @map("txn_date")
-  valueDate         DateTime @map("value_date")
-  
+  id            String   @id @default(uuid())
+  bankAccountId String   @map("bank_account_id")
+  txnDate       DateTime @map("txn_date")
+  valueDate     DateTime @map("value_date")
+
   // 交易金額（符合四欄位標準）
-  amountOriginal    Decimal  @map("amount_original") @db.Decimal(18, 2)
-  amountCurrency    String   @map("amount_currency") @default("TWD")
-  amountFxRate      Decimal  @map("amount_fx_rate") @default(1) @db.Decimal(18, 6)
-  amountBase        Decimal  @map("amount_base") @db.Decimal(18, 2)
-  
-  descriptionRaw    String   @map("description_raw")
-  referenceNo       String?  @map("reference_no")
-  virtualAccountNo  String?  @map("virtual_account_no")
-  batchId           String?  @map("batch_id") // 關聯匯入批次
-  matchedType       String?  @map("matched_type") // payment, ar_invoice, ap_invoice
-  matchedId         String?  @map("matched_id")
-  reconcileStatus   String   @default("unmatched") @map("reconcile_status") // unmatched, matched, partial, suspicious
-  createdAt         DateTime @default(now()) @map("created_at")
+  amountOriginal Decimal @map("amount_original") @db.Decimal(18, 2)
+  amountCurrency String  @default("TWD") @map("amount_currency")
+  amountFxRate   Decimal @default(1) @map("amount_fx_rate") @db.Decimal(18, 6)
+  amountBase     Decimal @map("amount_base") @db.Decimal(18, 2)
+
+  descriptionRaw   String   @map("description_raw")
+  referenceNo      String?  @map("reference_no")
+  virtualAccountNo String?  @map("virtual_account_no")
+  batchId          String?  @map("batch_id") // 關聯匯入批次
+  matchedType      String?  @map("matched_type") // payment, ar_invoice, ap_invoice
+  matchedId        String?  @map("matched_id")
+  reconcileStatus  String   @default("unmatched") @map("reconcile_status") // unmatched, matched, partial, suspicious
+  createdAt        DateTime @default(now()) @map("created_at")
 
   bankAccount          BankAccount           @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
   importBatch          BankImportBatch?      @relation(fields: [batchId], references: [id])
@@ -965,42 +1145,43 @@ model BankTransaction {
 
 // 部門
 model Department {
-  id             String   @id @default(uuid())
-  entityId       String   @map("entity_id")
-  name           String
-  costCenterId   String?  @map("cost_center_id")
-  isActive       Boolean  @default(true) @map("is_active")
-  createdAt      DateTime @default(now()) @map("created_at")
+  id           String   @id @default(uuid())
+  entityId     String   @map("entity_id")
+  name         String
+  costCenterId String?  @map("cost_center_id")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   entity          Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
   employees       Employee[]
   expenseRequests ExpenseRequest[]
+  approvalSteps   ApprovalStep[]
 
   @@map("departments")
 }
 
 // 員工
 model Employee {
-  id           String    @id @default(uuid())
-  entityId     String    @map("entity_id")
-  employeeNo   String    @map("employee_no")
-  name         String
-  country      String    // TW, CN
-  location     String?
-  departmentId String?   @map("department_id")
-  hireDate     DateTime  @map("hire_date")
+  id            String    @id @default(uuid())
+  entityId      String    @map("entity_id")
+  employeeNo    String    @map("employee_no")
+  name          String
+  country       String // TW, CN
+  location      String?
+  departmentId  String?   @map("department_id")
+  hireDate      DateTime  @map("hire_date")
   terminateDate DateTime? @map("terminate_date")
-  
+
   // 薪資基數（符合四欄位標準）
   salaryBaseOriginal Decimal @map("salary_base_original") @db.Decimal(18, 2)
-  salaryBaseCurrency String  @map("salary_base_currency") @default("TWD")
-  salaryBaseFxRate   Decimal @map("salary_base_fx_rate") @default(1) @db.Decimal(18, 6)
+  salaryBaseCurrency String  @default("TWD") @map("salary_base_currency")
+  salaryBaseFxRate   Decimal @default(1) @map("salary_base_fx_rate") @db.Decimal(18, 6)
   salaryBaseBase     Decimal @map("salary_base_base") @db.Decimal(18, 2)
-  
-  bankInfo     Json?     @map("bank_info")
-  isActive     Boolean   @default(true) @map("is_active")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  bankInfo  Json?    @map("bank_info")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   entity       Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
   department   Department?   @relation(fields: [departmentId], references: [id])
@@ -1015,7 +1196,7 @@ model Employee {
 model PayrollRun {
   id          String    @id @default(uuid())
   entityId    String    @map("entity_id")
-  country     String    // TW, CN
+  country     String // TW, CN
   periodStart DateTime  @map("period_start")
   periodEnd   DateTime  @map("period_end")
   payDate     DateTime  @map("pay_date")
@@ -1037,18 +1218,18 @@ model PayrollRun {
 
 // 薪資明細
 model PayrollItem {
-  id           String  @id @default(uuid())
-  payrollRunId String  @map("payroll_run_id")
-  employeeId   String  @map("employee_id")
-  type         String  // BASE_SALARY, BONUS, ALLOWANCE, OVERTIME, INS_EMP_LABOR, INS_EMP_HEALTH, INS_COM_LABOR, INS_COM_HEALTH, INS_COM_PENSION, TAX_WITHHOLD
-  
+  id           String @id @default(uuid())
+  payrollRunId String @map("payroll_run_id")
+  employeeId   String @map("employee_id")
+  type         String // BASE_SALARY, BONUS, ALLOWANCE, OVERTIME, INS_EMP_LABOR, INS_EMP_HEALTH, INS_COM_LABOR, INS_COM_HEALTH, INS_COM_PENSION, TAX_WITHHOLD
+
   // 薪資項目金額（符合四欄位標準）
   amountOriginal Decimal @map("amount_original") @db.Decimal(18, 2)
-  amountCurrency String  @map("amount_currency") @default("TWD")
-  amountFxRate   Decimal @map("amount_fx_rate") @default(1) @db.Decimal(18, 6)
+  amountCurrency String  @default("TWD") @map("amount_currency")
+  amountFxRate   Decimal @default(1) @map("amount_fx_rate") @db.Decimal(18, 6)
   amountBase     Decimal @map("amount_base") @db.Decimal(18, 2)
-  currency     String  @default("TWD")
-  remark       String?
+  currency       String  @default("TWD")
+  remark         String?
 
   payrollRun PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
   employee   Employee   @relation(fields: [employeeId], references: [id])
@@ -1073,40 +1254,40 @@ model Invoice {
   issuedAt      DateTime? @map("issued_at")
   voidAt        DateTime? @map("void_at")
   voidReason    String?   @map("void_reason")
-  
+
   // 買方資訊
-  buyerName     String?   @map("buyer_name")
-  buyerTaxId    String?   @map("buyer_tax_id") // 統一編號（B2B 必填）
-  buyerEmail    String?   @map("buyer_email")
-  buyerPhone    String?   @map("buyer_phone")
-  buyerAddress  String?   @map("buyer_address")
-  
+  buyerName    String? @map("buyer_name")
+  buyerTaxId   String? @map("buyer_tax_id") // 統一編號（B2B 必填）
+  buyerEmail   String? @map("buyer_email")
+  buyerPhone   String? @map("buyer_phone")
+  buyerAddress String? @map("buyer_address")
+
   // 發票金額（符合四欄位標準）
-  amountOriginal    Decimal @map("amount_original") @db.Decimal(18, 2) // 未稅金額
-  currency          String  @default("TWD")
-  fxRate            Decimal @map("fx_rate") @default(1) @db.Decimal(18, 6)
-  amountBase        Decimal @map("amount_base") @db.Decimal(18, 2) // 未稅本位幣
-  
+  amountOriginal Decimal @map("amount_original") @db.Decimal(18, 2) // 未稅金額
+  currency       String  @default("TWD")
+  fxRate         Decimal @default(1) @map("fx_rate") @db.Decimal(18, 6)
+  amountBase     Decimal @map("amount_base") @db.Decimal(18, 2) // 未稅本位幣
+
   // 稅額（符合四欄位標準）
   taxAmountOriginal Decimal @default(0) @map("tax_amount_original") @db.Decimal(18, 2)
-  taxAmountCurrency String  @map("tax_amount_currency") @default("TWD")
-  taxAmountFxRate   Decimal @map("tax_amount_fx_rate") @default(1) @db.Decimal(18, 6)
+  taxAmountCurrency String  @default("TWD") @map("tax_amount_currency")
+  taxAmountFxRate   Decimal @default(1) @map("tax_amount_fx_rate") @db.Decimal(18, 6)
   taxAmountBase     Decimal @default(0) @map("tax_amount_base") @db.Decimal(18, 2)
-  
+
   // 總計（含稅）
   totalAmountOriginal Decimal @map("total_amount_original") @db.Decimal(18, 2)
-  totalAmountCurrency String  @map("total_amount_currency") @default("TWD")
-  totalAmountFxRate   Decimal @map("total_amount_fx_rate") @default(1) @db.Decimal(18, 6)
+  totalAmountCurrency String  @default("TWD") @map("total_amount_currency")
+  totalAmountFxRate   Decimal @default(1) @map("total_amount_fx_rate") @db.Decimal(18, 6)
   totalAmountBase     Decimal @map("total_amount_base") @db.Decimal(18, 2)
-  
+
   // 外部平台資訊
   externalInvoiceId String? @map("external_invoice_id") // 綠界/藍新等平台的發票 ID
   externalPlatform  String? @map("external_platform") // ecpay, newebpay, gov
   externalPayload   Json?   @map("external_payload") // 外部平台回傳的完整 payload
-  
-  notes       String?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
   entity       Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
@@ -1128,25 +1309,25 @@ model InvoiceLine {
   productId   String? @map("product_id") // 可為 null（如運費、手續費）
   description String
   qty         Decimal @db.Decimal(18, 2)
-  
+
   // 單價（符合四欄位標準）
   unitPriceOriginal Decimal @map("unit_price_original") @db.Decimal(18, 2)
-  unitPriceCurrency String  @map("unit_price_currency") @default("TWD")
-  unitPriceFxRate   Decimal @map("unit_price_fx_rate") @default(1) @db.Decimal(18, 6)
+  unitPriceCurrency String  @default("TWD") @map("unit_price_currency")
+  unitPriceFxRate   Decimal @default(1) @map("unit_price_fx_rate") @db.Decimal(18, 6)
   unitPriceBase     Decimal @map("unit_price_base") @db.Decimal(18, 2)
-  
+
   // 明細金額（符合四欄位標準）
   amountOriginal Decimal @map("amount_original") @db.Decimal(18, 2)
   currency       String  @default("TWD")
-  fxRate         Decimal @map("fx_rate") @default(1) @db.Decimal(18, 6)
+  fxRate         Decimal @default(1) @map("fx_rate") @db.Decimal(18, 6)
   amountBase     Decimal @map("amount_base") @db.Decimal(18, 2)
-  
+
   // 稅額（符合四欄位標準）
   taxAmountOriginal Decimal @default(0) @map("tax_amount_original") @db.Decimal(18, 2)
-  taxAmountCurrency String  @map("tax_amount_currency") @default("TWD")
-  taxAmountFxRate   Decimal @map("tax_amount_fx_rate") @default(1) @db.Decimal(18, 6)
+  taxAmountCurrency String  @default("TWD") @map("tax_amount_currency")
+  taxAmountFxRate   Decimal @default(1) @map("tax_amount_fx_rate") @db.Decimal(18, 6)
   taxAmountBase     Decimal @default(0) @map("tax_amount_base") @db.Decimal(18, 2)
-  
+
   createdAt DateTime @default(now()) @map("created_at")
 
   // Relations
@@ -1161,7 +1342,7 @@ model InvoiceLine {
 model InvoiceLog {
   id        String   @id @default(cuid())
   invoiceId String   @map("invoice_id")
-  action    String   // issue, void, allowance, update
+  action    String // issue, void, allowance, update
   userId    String   @map("user_id")
   payload   Json? // 操作時的資料快照
   createdAt DateTime @default(now()) @map("created_at")
@@ -1181,14 +1362,14 @@ model InvoiceLog {
 
 // 銀行匯入批次
 model BankImportBatch {
-  id         String   @id @default(cuid())
-  entityId   String   @map("entity_id")
-  source     String   // csv, json, bank-api (esun, ctbc, line-bank)
-  importedBy String   @map("imported_by")
-  importedAt DateTime @default(now()) @map("imported_at")
-  fileName   String?  @map("file_name") // CSV 檔案名稱
-  recordCount Int     @default(0) @map("record_count")
-  notes      String?
+  id          String   @id @default(cuid())
+  entityId    String   @map("entity_id")
+  source      String // csv, json, bank-api (esun, ctbc, line-bank)
+  importedBy  String   @map("imported_by")
+  importedAt  DateTime @default(now()) @map("imported_at")
+  fileName    String?  @map("file_name") // CSV 檔案名稱
+  recordCount Int      @default(0) @map("record_count")
+  notes       String?
 
   // Relations
   entity       Entity            @relation(fields: [entityId], references: [id], onDelete: Cascade)

@@ -159,18 +159,24 @@ export class RolesService {
     const missing = uniqueIds.filter((id) => !foundIds.has(id));
 
     if (missing.length > 0) {
-      throw new BadRequestException(`Permissions not found: ${missing.join(', ')}`);
+      throw new BadRequestException(
+        `Permissions not found: ${missing.join(', ')}`,
+      );
     }
   }
 
   private handlePrismaError(error: unknown, context: string): never {
     if (error instanceof PrismaClientKnownRequestError) {
       if (error.code === 'P2002') {
-        throw new ConflictException(`Duplicate value detected while trying to ${context}`);
+        throw new ConflictException(
+          `Duplicate value detected while trying to ${context}`,
+        );
       }
 
       if (error.code === 'P2025') {
-        throw new NotFoundException(`Record not found while trying to ${context}`);
+        throw new NotFoundException(
+          `Record not found while trying to ${context}`,
+        );
       }
     }
 

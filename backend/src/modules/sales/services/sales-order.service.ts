@@ -7,20 +7,20 @@ import { InventoryService } from '../../inventory/inventory.service';
 /**
  * SalesOrderService
  * 銷售訂單服務
- * 
+ *
  * 核心功能：
  * - 建立銷售訂單
  * - 訂單完成時自動產生會計分錄
  * - 計算平台費、金流費
  * - 處理退款與退貨
- * 
+ *
  * 分錄邏輯示範：
  * 假設訂單金額 10,000，平台費 500，金流費 200
- * 
+ *
  * 訂單完成時：
  * 借：應收帳款 10,000
  * 　貸：銷貨收入 10,000
- * 
+ *
  * 實際收款時（扣除費用）：
  * 借：銀行存款 9,300
  * 借：平台費用 500
@@ -135,7 +135,9 @@ export class SalesOrderService {
           referenceId: order.id,
         });
       }
-      this.logger.log(`Reserved inventory for sales order ${order.id} in warehouse ${data.warehouseId}`);
+      this.logger.log(
+        `Reserved inventory for sales order ${order.id} in warehouse ${data.warehouseId}`,
+      );
     }
 
     return order;
@@ -145,7 +147,7 @@ export class SalesOrderService {
    * 完成訂單並產生收入分錄
    * @param orderId - 訂單 ID
    * @param createdBy - 操作者 ID
-   * 
+   *
    * 此方法示範如何在訂單完成時自動產生會計分錄
    */
   async completeSalesOrder(orderId: string, createdBy: string) {
@@ -172,7 +174,7 @@ export class SalesOrderService {
 
     // TODO: 實際環境中，科目 ID 應該從設定檔或資料庫取得
     // 這裡示範邏輯：需要先建立預設科目，然後依照科目代號查詢
-    
+
     // 產生收入分錄
     // 簡化版：假設全額記應收，實際應依付款狀態決定
     const totalAmount = Number(order.totalGrossOriginal);
@@ -218,7 +220,9 @@ export class SalesOrderService {
     });
     */
 
-    this.logger.log(`Completed sales order ${orderId} and created journal entry`);
+    this.logger.log(
+      `Completed sales order ${orderId} and created journal entry`,
+    );
 
     return order;
   }
@@ -226,12 +230,15 @@ export class SalesOrderService {
   /**
    * 查詢銷售訂單
    */
-  async getSalesOrders(entityId: string, filters?: {
-    channelId?: string;
-    status?: string;
-    startDate?: Date;
-    endDate?: Date;
-  }) {
+  async getSalesOrders(
+    entityId: string,
+    filters?: {
+      channelId?: string;
+      status?: string;
+      startDate?: Date;
+      endDate?: Date;
+    },
+  ) {
     return this.prisma.salesOrder.findMany({
       where: {
         entityId,
@@ -274,7 +281,9 @@ export class SalesOrderService {
     // 1. 更新訂單狀態為 refunded
     // 2. 產生沖回分錄（紅字分錄）
     // 3. 記錄退款記錄
-    this.logger.log(`Applying refund for order ${orderId}, amount: ${refundAmount}`);
+    this.logger.log(
+      `Applying refund for order ${orderId}, amount: ${refundAmount}`,
+    );
     throw new Error('Not implemented: applyRefund');
   }
 

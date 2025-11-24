@@ -1,4 +1,12 @@
-import { IsArray, IsEmail, IsOptional, IsString, IsUUID, MinLength, ArrayUnique } from 'class-validator';
+import {
+  IsArray,
+  IsEmail,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MinLength,
+  ArrayUnique,
+} from 'class-validator';
 
 /**
  * DTO: CreateUserDto

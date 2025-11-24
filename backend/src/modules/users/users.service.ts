@@ -114,11 +114,7 @@ export class UsersService {
   /**
    * 建立新使用者
    */
-  async create(data: {
-    email: string;
-    name: string;
-    passwordHash: string;
-  }) {
+  async create(data: { email: string; name: string; passwordHash: string }) {
     try {
       const user = await this.prisma.user.create({
         data,
@@ -283,12 +279,13 @@ export class UsersService {
   async getUserPermissions(userId: string) {
     const user = await this.findById(userId);
 
-    const permissions = user?.roles?.flatMap((userRole) =>
-      userRole.role.permissions.map((rolePermission) => ({
-        resource: rolePermission.permission.resource,
-        action: rolePermission.permission.action,
-      })),
-    ) ?? [];
+    const permissions =
+      user?.roles?.flatMap((userRole) =>
+        userRole.role.permissions.map((rolePermission) => ({
+          resource: rolePermission.permission.resource,
+          action: rolePermission.permission.action,
+        })),
+      ) ?? [];
 
     return permissions;
   }
@@ -302,7 +299,9 @@ export class UsersService {
     action: string,
   ): Promise<boolean> {
     const permissions = await this.getUserPermissions(userId);
-    return permissions.some((p) => p.resource === resource && p.action === action);
+    return permissions.some(
+      (p) => p.resource === resource && p.action === action,
+    );
   }
 
   /**
@@ -352,11 +351,15 @@ export class UsersService {
   private handlePrismaError(error: unknown, context: string): never {
     if (error instanceof PrismaClientKnownRequestError) {
       if (error.code === 'P2002') {
-        throw new ConflictException(`Duplicate value detected while trying to ${context}`);
+        throw new ConflictException(
+          `Duplicate value detected while trying to ${context}`,
+        );
       }
 
       if (error.code === 'P2025') {
-        throw new NotFoundException(`Record not found while trying to ${context}`);
+        throw new NotFoundException(
+          `Record not found while trying to ${context}`,
+        );
       }
     }
 

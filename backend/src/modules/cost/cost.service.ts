@@ -3,7 +3,7 @@ import { InventoryService } from '../inventory/inventory.service';
 
 /**
  * 成本管理服務
- * 
+ *
  * 核心功能：
  * 1. 進貨成本管理
  * 2. 開發成本攤提（模具費、檢驗費等）
@@ -46,7 +46,10 @@ export class CostService {
   /**
    * 計算銷貨成本（COGS）
    */
-  async calculateCOGS(salesOrderId: string, method: 'FIFO' | 'LIFO' | 'WEIGHTED_AVG') {
+  async calculateCOGS(
+    salesOrderId: string,
+    method: 'FIFO' | 'LIFO' | 'WEIGHTED_AVG',
+  ) {
     // TODO: 根據方法計算COGS
     // TODO: 產生COGS分錄（借：銷貨成本 / 貸：存貨）
   }
@@ -62,7 +65,10 @@ export class CostService {
   /**
    * 成本差異分析
    */
-  async analyzeCostVariance(productId: string, period: { start: Date; end: Date }) {
+  async analyzeCostVariance(
+    productId: string,
+    period: { start: Date; end: Date },
+  ) {
     // TODO: 比較標準成本與實際成本
   }
 }

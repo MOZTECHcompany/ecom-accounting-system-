@@ -36,18 +36,23 @@ export class ReportsRepository {
     });
   }
 
-  async getTransactionsByAccount(accountId: string, startDate?: Date, endDate?: Date) {
+  async getTransactionsByAccount(
+    accountId: string,
+    startDate?: Date,
+    endDate?: Date,
+  ) {
     return this.prisma.journalLine.findMany({
       where: {
         accountId,
-        ...(startDate && endDate && {
-          entry: {
-            date: {
-              gte: startDate,
-              lte: endDate,
+        ...(startDate &&
+          endDate && {
+            entry: {
+              date: {
+                gte: startDate,
+                lte: endDate,
+              },
             },
-          },
-        }),
+          }),
       },
       include: {
         entry: true,

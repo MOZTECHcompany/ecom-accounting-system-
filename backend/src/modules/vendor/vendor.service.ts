@@ -12,9 +12,9 @@ export class VendorService {
 
   async findAll(entityId?: string) {
     const where: Prisma.VendorWhereInput = entityId ? { entityId } : {};
-    return this.prisma.vendor.findMany({ 
+    return this.prisma.vendor.findMany({
       where,
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
   }
 

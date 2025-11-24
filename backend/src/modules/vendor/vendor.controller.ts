@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  Query,
+} from '@nestjs/common';
 import { VendorService } from './vendor.service';
 import { Prisma } from '@prisma/client';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -31,7 +41,10 @@ export class VendorController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update a vendor' })
-  update(@Param('id') id: string, @Body() updateVendorDto: Prisma.VendorUpdateInput) {
+  update(
+    @Param('id') id: string,
+    @Body() updateVendorDto: Prisma.VendorUpdateInput,
+  ) {
     return this.vendorService.update(id, updateVendorDto);
   }
 

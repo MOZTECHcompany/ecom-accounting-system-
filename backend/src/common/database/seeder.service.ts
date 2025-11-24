@@ -70,7 +70,7 @@ export class SeederService implements OnModuleInit {
     // Create Permissions (Simplified for critical ones)
     const resources = ['users', 'accounts', 'journal_entries', 'sales_orders'];
     const actions = ['read', 'create', 'update', 'delete', 'approve'];
-    
+
     const permissions = [];
     for (const resource of resources) {
       for (const action of actions) {
@@ -146,7 +146,10 @@ export class SeederService implements OnModuleInit {
     }
 
     const permissionIndex = new Map(
-      permissions.map((permission) => [`${permission.resource}:${permission.action}`, permission]),
+      permissions.map((permission) => [
+        `${permission.resource}:${permission.action}`,
+        permission,
+      ]),
     );
 
     for (const roleDef of roleDefinitions) {
@@ -160,7 +163,10 @@ export class SeederService implements OnModuleInit {
           ? permissions
           : roleDef.permissions
               .map((key) => permissionIndex.get(key))
-              .filter((permission): permission is (typeof permissions)[number] => Boolean(permission));
+              .filter(
+                (permission): permission is (typeof permissions)[number] =>
+                  Boolean(permission),
+              );
 
       for (const permission of targetPermissions) {
         await this.prisma.rolePermission.upsert({

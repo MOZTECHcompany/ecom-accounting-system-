@@ -1,4 +1,11 @@
-import { IsInt, IsOptional, IsString, Matches, Min, MinLength } from 'class-validator';
+import {
+  IsInt,
+  IsOptional,
+  IsString,
+  Matches,
+  Min,
+  MinLength,
+} from 'class-validator';
 
 /**
  * DTO: CreateRoleDto

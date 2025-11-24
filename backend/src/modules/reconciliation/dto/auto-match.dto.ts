@@ -1,4 +1,10 @@
-import { IsString, IsDateString, IsUUID, IsOptional, IsNumber } from 'class-validator';
+import {
+  IsString,
+  IsDateString,
+  IsUUID,
+  IsOptional,
+  IsNumber,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class AutoMatchDto {

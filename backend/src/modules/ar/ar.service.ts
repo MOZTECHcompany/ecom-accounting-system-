@@ -3,7 +3,7 @@ import { ArRepository } from './ar.repository';
 
 /**
  * 應收帳款服務
- * 
+ *
  * 核心功能：
  * 1. AR 發票管理
  * 2. 收款記錄
@@ -87,8 +87,14 @@ export class ArService {
    * @param paymentDate - 收款日期
    * @returns 更新後的發票資訊
    */
-  async applyPayment(invoiceId: string, paymentAmount: number, paymentDate: Date) {
-    this.logger.log(`Applying payment of ${paymentAmount} to invoice ${invoiceId}`);
+  async applyPayment(
+    invoiceId: string,
+    paymentAmount: number,
+    paymentDate: Date,
+  ) {
+    this.logger.log(
+      `Applying payment of ${paymentAmount} to invoice ${invoiceId}`,
+    );
     throw new Error('Not implemented: applyPayment');
   }
 
@@ -99,7 +105,9 @@ export class ArService {
    * @returns 帳齡分析報表
    */
   async getAgingReport(entityId: string, asOfDate: Date) {
-    this.logger.log(`Generating aging report for entity ${entityId} as of ${asOfDate}`);
+    this.logger.log(
+      `Generating aging report for entity ${entityId} as of ${asOfDate}`,
+    );
     throw new Error('Not implemented: getAgingReport');
   }
 
@@ -111,7 +119,9 @@ export class ArService {
    * @returns 沖銷記錄
    */
   async writeOffBadDebt(invoiceId: string, amount: number, reason: string) {
-    this.logger.log(`Writing off bad debt for invoice ${invoiceId}, amount: ${amount}, reason: ${reason}`);
+    this.logger.log(
+      `Writing off bad debt for invoice ${invoiceId}, amount: ${amount}, reason: ${reason}`,
+    );
     throw new Error('Not implemented: writeOffBadDebt');
   }
 }

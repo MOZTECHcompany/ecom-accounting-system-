@@ -3,7 +3,7 @@ import { ApRepository } from './ap.repository';
 
 /**
  * 應付帳款服務
- * 
+ *
  * 核心功能：
  * 1. AP 發票管理
  * 2. 付款記錄
@@ -75,7 +75,9 @@ export class ApService {
    * @returns 建立的應付發票
    */
   async createApFromExpenseRequest(expenseRequestId: string) {
-    this.logger.log(`Creating AP invoice from expense request: ${expenseRequestId}`);
+    this.logger.log(
+      `Creating AP invoice from expense request: ${expenseRequestId}`,
+    );
     throw new Error('Not implemented: createApFromExpenseRequest');
   }
 
@@ -86,8 +88,14 @@ export class ApService {
    * @param bankAccountId - 銀行帳戶ID
    * @returns 更新後的發票資訊
    */
-  async markAsPaid(invoiceId: string, paymentDate: Date, bankAccountId: string) {
-    this.logger.log(`Marking invoice ${invoiceId} as paid, payment date: ${paymentDate}`);
+  async markAsPaid(
+    invoiceId: string,
+    paymentDate: Date,
+    bankAccountId: string,
+  ) {
+    this.logger.log(
+      `Marking invoice ${invoiceId} as paid, payment date: ${paymentDate}`,
+    );
     throw new Error('Not implemented: markAsPaid');
   }
 
@@ -98,7 +106,9 @@ export class ApService {
    * @returns 到期報表
    */
   async getDueReport(entityId: string, asOfDate: Date) {
-    this.logger.log(`Generating due report for entity ${entityId} as of ${asOfDate}`);
+    this.logger.log(
+      `Generating due report for entity ${entityId} as of ${asOfDate}`,
+    );
     throw new Error('Not implemented: getDueReport');
   }
 
@@ -109,7 +119,9 @@ export class ApService {
    * @returns 更新後的發票資訊
    */
   async applyDiscount(invoiceId: string, discountAmount: number) {
-    this.logger.log(`Applying discount of ${discountAmount} to invoice ${invoiceId}`);
+    this.logger.log(
+      `Applying discount of ${discountAmount} to invoice ${invoiceId}`,
+    );
     throw new Error('Not implemented: applyDiscount');
   }
 }

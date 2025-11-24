@@ -1,9 +1,28 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ExpenseRepository } from './expense.repository';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import {
+  ExpenseRepository,
+  ExpenseRequestWithGraph,
+} from './expense.repository';
+import { CreateExpenseRequestDto } from './dto/create-expense-request.dto';
+import { ApproveExpenseRequestDto } from './dto/approve-expense-request.dto';
+import { RejectExpenseRequestDto } from './dto/reject-expense-request.dto';
+import { SubmitExpenseFeedbackDto } from './dto/submit-feedback.dto';
+import { AccountingClassifierService } from './accounting-classifier.service';
+
+interface UserContext {
+  id: string;
+  roleCodes?: string[];
+}
 
 /**
  * 費用管理服務
- * 
+ *
  * 核心功能：
  * 1. 費用申請單管理
  * 2. 費用分類與科目對應
@@ -13,36 +32,130 @@ import { ExpenseRepository } from './expense.repository';
 @Injectable()
 export class ExpenseService {
   private readonly logger = new Logger(ExpenseService.name);
-  constructor(private readonly expenseRepository: ExpenseRepository) {}
+  constructor(
+    private readonly expenseRepository: ExpenseRepository,
+    private readonly classifierService: AccountingClassifierService,
+  ) {}
   /**
    * 建立費用申請單
    */
-  async createExpenseRequest(data: any) {
-    // TODO: 建立費用申請
-    // TODO: 啟動審核流程
+  async createExpenseRequest(
+    data: CreateExpenseRequestDto,
+    requestedBy: UserContext,
+  ) {
+    return this.submitIntelligentExpenseRequest(data, requestedBy);
   }
 
   /**
    * 查詢費用申請單列表
    */
-  async getExpenseRequests(entityId?: string, status?: string) {
-    // TODO: 查詢費用申請單
+  async getExpenseRequests(
+    entityId?: string,
+    status?: string,
+    createdBy?: string,
+  ) {
+    return this.expenseRepository.listExpenseRequests({
+      entityId,
+      status,
+      createdBy,
+    });
   }
 
   /**
    * 審核費用申請
    */
-  async approveExpenseRequest(requestId: string, approverId: string) {
-    // TODO: 更新審核狀態
-    // TODO: 如果審核通過，建立AP發票
+  async approveExpenseRequest(
+    requestId: string,
+    approver: UserContext,
+    payload: ApproveExpenseRequestDto,
+  ) {
+    const request = await this.ensureExpenseRequest(requestId);
+    const finalAccountId =
+      payload.finalAccountId ||
+      request.finalAccountId ||
+      request.suggestedAccountId;
+
+    const updated =
+      await this.expenseRepository.updateExpenseRequestWithHistory(
+        requestId,
+        {
+          status: 'approved',
+          approvalUserId: approver.id,
+          approvedAt: payload.decidedAt ?? new Date(),
+          finalAccountId: finalAccountId ?? null,
+          metadata: this.mergeMetadata(request.metadata, payload.metadata),
+        },
+        {
+          action: 'approved',
+          fromStatus: request.status,
+          toStatus: 'approved',
+          actorId: approver.id,
+          actorRoleCode: approver.roleCodes?.[0],
+          note: payload.remark,
+          metadata: payload.metadata,
+          attachments: payload.attachments,
+          suggestedAccountId: request.suggestedAccountId ?? undefined,
+          finalAccountId: finalAccountId ?? undefined,
+        },
+        request.suggestedAccountId
+          ? {
+              suggestedAccountId: request.suggestedAccountId,
+              chosenAccountId: finalAccountId ?? request.suggestedAccountId,
+              confidence: request.suggestionConfidence ?? new Prisma.Decimal(0),
+              label:
+                finalAccountId && request.suggestedAccountId !== finalAccountId
+                  ? 'incorrect'
+                  : 'correct',
+              features: request.metadata ?? undefined,
+              createdBy: approver.id,
+            }
+          : undefined,
+      );
+
+    return updated;
   }
 
   /**
    * 拒絕費用申請
    */
-  async rejectExpenseRequest(requestId: string, reason: string) {
-    // TODO: 更新狀態為拒絕
-    // TODO: 通知申請人
+  async rejectExpenseRequest(
+    requestId: string,
+    approver: UserContext,
+    payload: RejectExpenseRequestDto,
+  ) {
+    const request = await this.ensureExpenseRequest(requestId);
+
+    return this.expenseRepository.updateExpenseRequestWithHistory(
+      requestId,
+      {
+        status: 'rejected',
+        approvalUserId: approver.id,
+        approvedAt: payload.decidedAt ?? new Date(),
+        metadata: this.mergeMetadata(request.metadata, payload.metadata),
+      },
+      {
+        action: 'rejected',
+        fromStatus: request.status,
+        toStatus: 'rejected',
+        actorId: approver.id,
+        actorRoleCode: approver.roleCodes?.[0],
+        note: payload.reason,
+        metadata: payload.metadata,
+        attachments: payload.attachments,
+        suggestedAccountId: request.suggestedAccountId ?? undefined,
+        finalAccountId: request.finalAccountId ?? undefined,
+      },
+      request.suggestedAccountId
+        ? {
+            suggestedAccountId: request.suggestedAccountId,
+            chosenAccountId: request.finalAccountId ?? null,
+            confidence: request.suggestionConfidence ?? new Prisma.Decimal(0),
+            label: 'rejected',
+            features: request.metadata ?? undefined,
+            createdBy: approver.id,
+          }
+        : undefined,
+    );
   }
 
   /**
@@ -60,16 +173,7 @@ export class ExpenseService {
     // TODO: 依費用類別統計
   }
 
-  /**
-   * 提交費用申請
-   * @param data - 費用申請資料
-   * @param requestedBy - 申請人ID
-   * @returns 建立的費用申請單
-   */
-  async submitExpenseRequest(data: any, requestedBy: string) {
-    this.logger.log(`Submitting expense request by user: ${requestedBy}`);
-    throw new Error('Not implemented: submitExpenseRequest');
-  }
+  // submitExpenseRequest 已由 submitIntelligentExpenseRequest 取代
 
   /**
    * 連結至應付發票
@@ -78,7 +182,9 @@ export class ExpenseService {
    * @returns 更新後的費用申請單
    */
   async linkToApInvoice(expenseRequestId: string, apInvoiceId: string) {
-    this.logger.log(`Linking expense request ${expenseRequestId} to AP invoice ${apInvoiceId}`);
+    this.logger.log(
+      `Linking expense request ${expenseRequestId} to AP invoice ${apInvoiceId}`,
+    );
     throw new Error('Not implemented: linkToApInvoice');
   }
 
@@ -89,8 +195,14 @@ export class ExpenseService {
    * @param endDate - 結束日期
    * @returns 費用統計報表
    */
-  async getExpensesByCategory(entityId: string, startDate: Date, endDate: Date) {
-    this.logger.log(`Getting expenses by category for entity ${entityId}, period: ${startDate} - ${endDate}`);
+  async getExpensesByCategory(
+    entityId: string,
+    startDate: Date,
+    endDate: Date,
+  ) {
+    this.logger.log(
+      `Getting expenses by category for entity ${entityId}, period: ${startDate} - ${endDate}`,
+    );
     throw new Error('Not implemented: getExpensesByCategory');
   }
 
@@ -98,12 +210,224 @@ export class ExpenseService {
    * 取得可用的報銷項目（ReimbursementItem）清單
    * 會根據 entity / 角色 / 部門過濾
    */
-  async getReimbursementItems(entityId: string, options?: { roles?: string[]; departmentId?: string }) {
+  async getReimbursementItems(
+    entityId: string,
+    options?: { roles?: string[]; departmentId?: string },
+  ) {
     this.logger.log(
       `Fetching reimbursement items for entity ${entityId} with roles=${options?.roles?.join(',') ?? 'N/A'} department=${
         options?.departmentId ?? 'N/A'
       }`,
     );
-    return this.expenseRepository.findActiveReimbursementItems(entityId, options);
+    return this.expenseRepository.findActiveReimbursementItems(
+      entityId,
+      options,
+    );
+  }
+
+  async submitIntelligentExpenseRequest(
+    dto: CreateExpenseRequestDto,
+    requestedBy: UserContext,
+  ) {
+    const amountCurrency = dto.amountCurrency ?? 'TWD';
+    const amountFxRate = dto.amountFxRate ?? 1;
+    const amountBase = this.toDecimal(dto.amountOriginal * amountFxRate);
+
+    const reimbursementItem = dto.reimbursementItemId
+      ? await this.expenseRepository.getReimbursementItemDetail(
+          dto.reimbursementItemId,
+        )
+      : null;
+
+    const suggestion = await this.classifierService.suggestAccount({
+      entityId: dto.entityId,
+      description: dto.description,
+      amountOriginal: dto.amountOriginal,
+      amountCurrency,
+      reimbursementItemId: dto.reimbursementItemId,
+      reimbursementItemKeywords: this.parseKeywords(
+        reimbursementItem?.keywords,
+      ),
+      reimbursementItemAccountId: reimbursementItem?.accountId,
+      vendorId: dto.vendorId,
+      departmentId: dto.departmentId,
+      receiptType:
+        dto.receiptType ?? reimbursementItem?.defaultReceiptType ?? undefined,
+      metadata: dto.metadata,
+    });
+
+    const approvalSteps = this.buildApprovalSteps(
+      reimbursementItem?.approvalPolicy?.steps ?? [],
+      dto.amountOriginal,
+      dto.departmentId,
+    );
+
+    const requestData: Prisma.ExpenseRequestUncheckedCreateInput = {
+      entityId: dto.entityId,
+      vendorId: dto.vendorId ?? null,
+      reimbursementItemId: dto.reimbursementItemId ?? null,
+      amountOriginal: this.toDecimal(dto.amountOriginal),
+      amountCurrency,
+      amountFxRate: this.toDecimal(amountFxRate),
+      amountBase,
+      dueDate: dto.dueDate ?? null,
+      description: dto.description,
+      priority: dto.priority ?? 'normal',
+      attachmentUrl: dto.attachmentUrl ?? null,
+      evidenceFiles: dto.evidenceFiles ?? undefined,
+      departmentId: dto.departmentId ?? null,
+      receiptType:
+        dto.receiptType ?? reimbursementItem?.defaultReceiptType ?? null,
+      createdBy: requestedBy.id,
+      status: 'pending',
+      suggestedAccountId: suggestion.accountId ?? null,
+      finalAccountId: null,
+      suggestionConfidence: this.toDecimal(suggestion.confidence),
+      metadata: {
+        ...(dto.metadata ?? {}),
+        classifierFeatures: suggestion.features,
+      },
+    };
+
+    const history = {
+      action: 'submitted',
+      fromStatus: 'draft',
+      toStatus: 'pending',
+      actorId: requestedBy.id,
+      actorRoleCode: requestedBy.roleCodes?.[0],
+      note: dto.description,
+      metadata: suggestion.features,
+      suggestedAccountId: suggestion.accountId ?? undefined,
+    };
+
+    const classifierFeedback = suggestion.accountId
+      ? {
+          suggestedAccountId: suggestion.accountId,
+          confidence: this.toDecimal(suggestion.confidence),
+          label: 'pending',
+          features: suggestion.features,
+          createdBy: requestedBy.id,
+        }
+      : undefined;
+
+    return this.expenseRepository.createExpenseRequestGraph({
+      requestData,
+      history,
+      approvalSteps,
+      classifierFeedback,
+    });
+  }
+
+  async getExpenseRequestHistory(id: string) {
+    await this.ensureExpenseRequest(id);
+    return this.expenseRepository.listHistories(id);
+  }
+
+  async getExpenseRequest(id: string) {
+    return this.ensureExpenseRequest(id);
+  }
+
+  async submitFeedback(
+    requestId: string,
+    user: UserContext,
+    dto: SubmitExpenseFeedbackDto,
+  ) {
+    await this.ensureExpenseRequest(requestId);
+
+    return this.expenseRepository.createFeedbackEntry({
+      expenseRequestId: requestId,
+      suggestedAccountId: dto.suggestedAccountId ?? null,
+      chosenAccountId: dto.chosenAccountId ?? null,
+      confidence: dto.confidence ? this.toDecimal(dto.confidence) : undefined,
+      label: dto.label,
+      features: dto.features,
+      createdBy: user.id,
+    });
+  }
+
+  private async ensureExpenseRequest(
+    id: string,
+  ): Promise<ExpenseRequestWithGraph> {
+    const request = await this.expenseRepository.findRequestById(id);
+    if (!request) {
+      throw new NotFoundException(`Expense request ${id} not found`);
+    }
+    return request as ExpenseRequestWithGraph;
+  }
+
+  private toDecimal(value: number) {
+    if (Number.isNaN(value)) {
+      throw new BadRequestException('Amount must be a valid number');
+    }
+    return new Prisma.Decimal(Number(value.toFixed(2)));
+  }
+
+  private parseKeywords(value?: string | null) {
+    return value
+      ? value
+          .split(',')
+          .map((keyword) => keyword.trim())
+          .filter(Boolean)
+      : [];
+  }
+
+  private buildApprovalSteps(
+    steps: Array<{
+      stepOrder: number;
+      approverRoleCode: string | null;
+      requiresDepartmentHead: boolean;
+      minAmount: Prisma.Decimal | null;
+      maxAmount: Prisma.Decimal | null;
+    }> = [],
+    amountOriginal: number,
+    departmentId?: string,
+  ) {
+    if (!steps.length) {
+      return [];
+    }
+
+    return steps
+      .filter((step) => this.withinThreshold(step, amountOriginal))
+      .map((step) => ({
+        stepOrder: step.stepOrder,
+        status: 'pending',
+        approverRoleCode: step.approverRoleCode ?? undefined,
+        departmentId: step.requiresDepartmentHead
+          ? (departmentId ?? null)
+          : null,
+        amountThreshold: this.toDecimal(amountOriginal),
+      }));
+  }
+
+  private withinThreshold(
+    step: {
+      minAmount?: Prisma.Decimal | null;
+      maxAmount?: Prisma.Decimal | null;
+    },
+    amount: number,
+  ) {
+    const min = step.minAmount ? Number(step.minAmount) : undefined;
+    const max = step.maxAmount ? Number(step.maxAmount) : undefined;
+    if (typeof min !== 'undefined' && amount < min) {
+      return false;
+    }
+    if (typeof max !== 'undefined' && amount > max) {
+      return false;
+    }
+    return true;
+  }
+
+  private mergeMetadata(
+    existing: Prisma.JsonValue | null | undefined,
+    incoming?: Record<string, unknown>,
+  ) {
+    if (!existing && !incoming) {
+      return undefined;
+    }
+
+    return {
+      ...(typeof existing === 'object' && existing !== null ? existing : {}),
+      ...(incoming ?? {}),
+    };
   }
 }

@@ -19,7 +19,9 @@ export class ReconciliationService {
    * 匯入銀行交易明細
    */
   async importBankTransactions(dto: ImportBankTransactionsDto, userId: string) {
-    this.logger.log(`匯入銀行交易 - 來源: ${dto.source}, 筆數: ${dto.transactions.length}`);
+    this.logger.log(
+      `匯入銀行交易 - 來源: ${dto.source}, 筆數: ${dto.transactions.length}`,
+    );
 
     // 建立匯入批次
     const batch = await this.prisma.bankImportBatch.create({
@@ -88,17 +90,31 @@ export class ReconciliationService {
         where: {
           amountOriginal: tx.amountOriginal,
           paymentDate: {
-            gte: new Date(tx.txnDate.getTime() - dateTolerance * 24 * 60 * 60 * 1000),
-            lte: new Date(tx.txnDate.getTime() + dateTolerance * 24 * 60 * 60 * 1000),
+            gte: new Date(
+              tx.txnDate.getTime() - dateTolerance * 24 * 60 * 60 * 1000,
+            ),
+            lte: new Date(
+              tx.txnDate.getTime() + dateTolerance * 24 * 60 * 60 * 1000,
+            ),
           },
         },
       });
 
       if (exactMatch) {
-        await this.createReconciliationResult(tx.id, 'payment', exactMatch.id, 100, 'exact_amount');
+        await this.createReconciliationResult(
+          tx.id,
+          'payment',
+          exactMatch.id,
+          100,
+          'exact_amount',
+        );
         await this.prisma.bankTransaction.update({
           where: { id: tx.id },
-          data: { reconcileStatus: 'matched', matchedType: 'payment', matchedId: exactMatch.id },
+          data: {
+            reconcileStatus: 'matched',
+            matchedType: 'payment',
+            matchedId: exactMatch.id,
+          },
         });
         matchedCount++;
         continue;
@@ -114,10 +130,20 @@ export class ReconciliationService {
           });
 
           if (order) {
-            await this.createReconciliationResult(tx.id, 'sales_order', order.id, 70, 'keyword');
+            await this.createReconciliationResult(
+              tx.id,
+              'sales_order',
+              order.id,
+              70,
+              'keyword',
+            );
             await this.prisma.bankTransaction.update({
               where: { id: tx.id },
-              data: { reconcileStatus: 'matched', matchedType: 'sales_order', matchedId: order.id },
+              data: {
+                reconcileStatus: 'matched',
+                matchedType: 'sales_order',
+                matchedId: order.id,
+              },
             });
             fuzzyMatchedCount++;
           }
@@ -125,7 +151,9 @@ export class ReconciliationService {
       }
     }
 
-    this.logger.log(`對帳完成 - 精準: ${matchedCount}, 模糊: ${fuzzyMatchedCount}`);
+    this.logger.log(
+      `對帳完成 - 精準: ${matchedCount}, 模糊: ${fuzzyMatchedCount}`,
+    );
 
     return {
       success: true,
@@ -169,10 +197,18 @@ export class ReconciliationService {
     matchedId: string,
     userId: string,
   ) {
-    this.logger.log(`手動對帳 - 銀行交易: ${bankTransactionId}, 匹配: ${matchedType}/${matchedId}`);
+    this.logger.log(
+      `手動對帳 - 銀行交易: ${bankTransactionId}, 匹配: ${matchedType}/${matchedId}`,
+    );
 
     await this.prisma.$transaction(async (tx) => {
-      await this.createReconciliationResult(bankTransactionId, matchedType, matchedId, 100, 'manual');
+      await this.createReconciliationResult(
+        bankTransactionId,
+        matchedType,
+        matchedId,
+        100,
+        'manual',
+      );
 
       await tx.bankTransaction.update({
         where: { id: bankTransactionId },

@@ -5,15 +5,15 @@ import { PrismaModule } from '../../common/prisma/prisma.module';
 
 /**
  * InvoicingModule
- * 
+ *
  * 電子發票整合模組
- * 
+ *
  * 功能：
  * - 預覽交易的電子發票內容
  * - 開立正式電子發票
  * - 發票作廢與折讓
  * - 與台灣財政部電子發票系統整合
- * 
+ *
  * TODO: 未來整合
  * - 串接財政部電子發票API（Turnkey）
  * - 支援B2B、B2C發票格式

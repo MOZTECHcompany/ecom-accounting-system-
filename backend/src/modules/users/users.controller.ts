@@ -56,12 +56,12 @@ export class UsersController {
   @Roles('ADMIN')
   @UseGuards(RolesGuard)
   @ApiOperation({ summary: '查詢所有使用者（管理員）' })
-  async listUsers(
-    @Query('page') page = '1',
-    @Query('limit') limit = '25',
-  ) {
+  async listUsers(@Query('page') page = '1', @Query('limit') limit = '25') {
     const pageNumber = Math.max(1, Number.parseInt(page, 10) || 1);
-    const limitNumber = Math.min(100, Math.max(1, Number.parseInt(limit, 10) || 25));
+    const limitNumber = Math.min(
+      100,
+      Math.max(1, Number.parseInt(limit, 10) || 25),
+    );
 
     return this.usersService.findAll(pageNumber, limitNumber);
   }

@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 
 /**
  * 薪資管理服務
- * 
+ *
  * 核心功能：
  * 1. 薪資批次計算
  * 2. 勞健保計算（台灣/大陸）
@@ -28,7 +28,11 @@ export class PayrollService {
   /**
    * 計算員工薪資
    */
-  async calculateEmployeePayroll(employeeId: string, periodStart: Date, periodEnd: Date) {
+  async calculateEmployeePayroll(
+    employeeId: string,
+    periodStart: Date,
+    periodEnd: Date,
+  ) {
     // TODO: 計算基本薪資
     // TODO: 計算加班費
     // TODO: 計算獎金
@@ -81,7 +85,9 @@ export class PayrollService {
    * @returns 薪資計算結果
    */
   async calculatePayroll(entityId: string, year: number, month: number) {
-    this.logger.log(`Calculating payroll for entity ${entityId}, period: ${year}/${month}`);
+    this.logger.log(
+      `Calculating payroll for entity ${entityId}, period: ${year}/${month}`,
+    );
     throw new Error('Not implemented: calculatePayroll');
   }
 

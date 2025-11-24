@@ -33,11 +33,11 @@ import { InventoryModule } from './modules/inventory/inventory.module';
 /**
  * AppModule
  * 應用程式根模組
- * 
+ *
  * 架構設計：
  * - Common: 共用模組（Prisma, Config, Guards, Decorators）
  * - Modules: 14 個業務模組（依序為：Auth, Users, Entities, Accounting, Sales, Cost, AR, AP, Expense, Approvals, Banking, Payroll, Reports, Invoicing, Reconciliation）
- * 
+ *
  * 模組依賴關係（重要！）：
  * - SalesModule → AccountingModule（訂單完成時產生會計分錄）
  * - ApModule → ApprovalsModule, BankingModule（AP需要審批流程與銀行付款）
@@ -48,7 +48,7 @@ import { InventoryModule } from './modules/inventory/inventory.module';
  * - ReportsModule → AccountingModule（報表依賴會計資料）
  * - InvoicingModule → SalesModule, ArModule（電子發票整合）
  * - ReconciliationModule → BankingModule, AccountingModule（銀行對帳整合）
- * 
+ *
  * 全域設定：
  * - ConfigModule: 環境變數管理
  * - PrismaModule: 資料庫連線
@@ -60,7 +60,7 @@ import { InventoryModule } from './modules/inventory/inventory.module';
     ConfigModule,
     PrismaModule,
     DatabaseModule,
-    
+
     // Features
     AuthModule,
     UsersModule,
@@ -69,25 +69,25 @@ import { InventoryModule } from './modules/inventory/inventory.module';
     EntitiesModule,
     VendorModule,
     InventoryModule,
-    
+
     // 2. 核心會計模組（被其他模組依賴）
     AccountingModule,
     ApprovalsModule,
     BankingModule,
-    
+
     // 3. 業務模組（依賴核心模組）
-    SalesModule,        // → AccountingModule
-    CostModule,         // → AccountingModule
-    ArModule,           // → AccountingModule
-    ApModule,           // → ApprovalsModule, BankingModule
-    ExpenseModule,      // → ApprovalsModule, ApModule
-    PayrollModule,      // → AccountingModule, ApprovalsModule
-    
+    SalesModule, // → AccountingModule
+    CostModule, // → AccountingModule
+    ArModule, // → AccountingModule
+    ApModule, // → ApprovalsModule, BankingModule
+    ExpenseModule, // → ApprovalsModule, ApModule
+    PayrollModule, // → AccountingModule, ApprovalsModule
+
     // 4. 報表模組（依賴所有業務模組）
-    ReportsModule,      // → AccountingModule
-    
+    ReportsModule, // → AccountingModule
+
     // 5. 整合模組（外部服務整合）
-    InvoicingModule,    // → SalesModule, ArModule (電子發票)
+    InvoicingModule, // → SalesModule, ArModule (電子發票)
     ReconciliationModule, // → BankingModule, AccountingModule (銀行對帳)
   ],
   controllers: [AppController],

@@ -1,4 +1,9 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
@@ -6,7 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 /**
  * RolesGuard
  * 檢查使用者是否擁有所需的角色
- * 
+ *
  * 支援三種角色：
  * - ADMIN: 系統管理員（最高權限）
  * - ACCOUNTANT: 會計人員（可查看、建立、審核會計相關資料）
@@ -21,10 +26,10 @@ export class RolesGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     // 取得 @Roles() decorator 設定的角色
-    const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const requiredRoles = this.reflector.getAllAndOverride<string[]>(
+      ROLES_KEY,
+      [context.getHandler(), context.getClass()],
+    );
 
     // 如果沒有設定 @Roles()，表示不需要角色檢查
     if (!requiredRoles || requiredRoles.length === 0) {

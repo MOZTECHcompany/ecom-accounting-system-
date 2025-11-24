@@ -1,5 +1,11 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ReportsService } from './reports.service';
 
@@ -18,21 +24,37 @@ export class ReportsController {
   @ApiOperation({ summary: '產生損益表 (Income Statement / P&L)' })
   @ApiResponse({ status: 200, description: '成功產生損益表' })
   @ApiQuery({ name: 'entityId', required: true, description: '實體ID' })
-  @ApiQuery({ name: 'startDate', required: true, description: '開始日期 (YYYY-MM-DD)' })
-  @ApiQuery({ name: 'endDate', required: true, description: '結束日期 (YYYY-MM-DD)' })
+  @ApiQuery({
+    name: 'startDate',
+    required: true,
+    description: '開始日期 (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: true,
+    description: '結束日期 (YYYY-MM-DD)',
+  })
   async getIncomeStatement(
     @Query('entityId') entityId: string,
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
   ) {
-    return this.reportsService.getIncomeStatement(entityId, new Date(startDate), new Date(endDate));
+    return this.reportsService.getIncomeStatement(
+      entityId,
+      new Date(startDate),
+      new Date(endDate),
+    );
   }
 
   @Get('balance-sheet')
   @ApiOperation({ summary: '產生資產負債表 (Balance Sheet)' })
   @ApiResponse({ status: 200, description: '成功產生資產負債表' })
   @ApiQuery({ name: 'entityId', required: true })
-  @ApiQuery({ name: 'asOfDate', required: true, description: '截止日期 (YYYY-MM-DD)' })
+  @ApiQuery({
+    name: 'asOfDate',
+    required: true,
+    description: '截止日期 (YYYY-MM-DD)',
+  })
   async getBalanceSheet(
     @Query('entityId') entityId: string,
     @Query('asOfDate') asOfDate: string,
@@ -51,7 +73,11 @@ export class ReportsController {
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
   ) {
-    return this.reportsService.getCashFlowStatement(entityId, new Date(startDate), new Date(endDate));
+    return this.reportsService.getCashFlowStatement(
+      entityId,
+      new Date(startDate),
+      new Date(endDate),
+    );
   }
 
   @Get('trial-balance')
@@ -79,7 +105,12 @@ export class ReportsController {
     @Query('endDate') endDate: string,
   ) {
     // TODO: Implement general ledger
-    return { message: 'General ledger not yet implemented', accountId, startDate, endDate };
+    return {
+      message: 'General ledger not yet implemented',
+      accountId,
+      startDate,
+      endDate,
+    };
   }
 
   @Get('sales-summary')
@@ -88,7 +119,11 @@ export class ReportsController {
   @ApiQuery({ name: 'entityId', required: true })
   @ApiQuery({ name: 'startDate', required: true })
   @ApiQuery({ name: 'endDate', required: true })
-  @ApiQuery({ name: 'groupBy', required: false, description: '分組依據: channel|month|product' })
+  @ApiQuery({
+    name: 'groupBy',
+    required: false,
+    description: '分組依據: channel|month|product',
+  })
   async getSalesSummary(
     @Query('entityId') entityId: string,
     @Query('startDate') startDate: string,
@@ -96,6 +131,12 @@ export class ReportsController {
     @Query('groupBy') groupBy?: string,
   ) {
     // TODO: Implement sales summary
-    return { message: 'Sales summary not yet implemented', entityId, startDate, endDate, groupBy };
+    return {
+      message: 'Sales summary not yet implemented',
+      entityId,
+      startDate,
+      endDate,
+      groupBy,
+    };
   }
 }

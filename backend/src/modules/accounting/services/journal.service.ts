@@ -10,13 +10,13 @@ import { Prisma } from '@prisma/client';
 /**
  * JournalService
  * 會計分錄服務，處理分錄的建立、查詢、審核等功能
- * 
+ *
  * 核心職責：
  * - 產生會計分錄（借貸平衡驗證）
  * - 分錄查詢與追蹤
  * - 分錄審核流程
  * - 期間鎖定檢查
- * 
+ *
  * 重要原則：
  * - 所有模組（銷售、進貨、人事等）最終都要透過此服務產生分錄
  * - 分錄必須借貸平衡（debit = credit）
@@ -32,7 +32,7 @@ export class JournalService {
    * 建立會計分錄
    * @param data - 分錄資料
    * @returns 建立的分錄
-   * 
+   *
    * @example
    * ```typescript
    * // 銷售收入分錄
