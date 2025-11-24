@@ -1,19 +1,35 @@
-import React, { useEffect, useState } from 'react'
-import { Card, Button, Table, Tag, Drawer, Form, Input, InputNumber, DatePicker, Select, Space, message } from 'antd'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  Card,
+  Button,
+  Table,
+  Tag,
+  Drawer,
+  Form,
+  Input,
+  InputNumber,
+  DatePicker,
+  Select,
+  Space,
+  message,
+  Typography,
+  Divider,
+  Timeline,
+  Descriptions,
+} from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
-import { expenseService, ReimbursementItem } from '../services/expense.service'
+import {
+  expenseService,
+  ReimbursementItem,
+  ExpenseRequest,
+  ExpenseHistoryEntry,
+} from '../services/expense.service'
 import { useAuth } from '../contexts/AuthContext'
 
-interface ExpenseRequestRow {
-  id: string
-  reimbursementItemName: string
-  amount: number
-  currency: string
-  expenseDate: string
-  status: string
-  createdAt: string
-}
+const { Text, Title } = Typography
+
+const DEFAULT_ENTITY_ID = import.meta.env.VITE_DEFAULT_ENTITY_ID?.trim() || 'tw-entity-001'
 
 const receiptTypeLabelMap: Record<string, string> = {
   TAX_INVOICE: '發票',
@@ -22,76 +38,114 @@ const receiptTypeLabelMap: Record<string, string> = {
   INTERNAL_ONLY: '內部單據',
 }
 
+const statusMeta: Record<
+  string,
+  {
+    label: string
+    color: string
+  }
+> = {
+  pending: { label: '審核中', color: 'gold' },
+  approved: { label: '已核准', color: 'green' },
+  rejected: { label: '已退回', color: 'red' },
+  draft: { label: '草稿', color: 'default' },
+  paid: { label: '已付款', color: 'blue' },
+}
+
+const historyLabelMap: Record<string, string> = {
+  submitted: '已提交',
+  approved: '核准',
+  rejected: '退回',
+  pending: '審核中',
+}
+
+type ValidationErrorShape = {
+  errorFields?: unknown
+}
+
+type ApiErrorShape = {
+  response?: {
+    data?: {
+      message?: string
+    }
+  }
+}
+
+const toNumber = (value?: string | number | null) => {
+  if (value === null || value === undefined) return 0
+  return typeof value === 'number' ? value : Number(value)
+}
+
+const confidenceColor = (value?: number) => {
+  if (value === undefined) return 'default'
+  if (value >= 0.8) return 'green'
+  if (value >= 0.5) return 'blue'
+  return 'default'
+}
+
+const hasValidationErrorFields = (error: unknown): error is ValidationErrorShape =>
+  typeof error === 'object' && error !== null && 'errorFields' in error
+
+const extractApiMessage = (error: unknown) => {
+  if (typeof error === 'object' && error !== null) {
+    const apiError = error as ApiErrorShape
+    return apiError.response?.data?.message
+  }
+  return undefined
+}
+
 const ExpenseRequestsPage: React.FC = () => {
   const { user } = useAuth()
-  const [loading, setLoading] = useState(false)
+  const [listLoading, setListLoading] = useState(true)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [detailDrawerOpen, setDetailDrawerOpen] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [reimbursementItems, setReimbursementItems] = useState<ReimbursementItem[]>([])
   const [selectedItem, setSelectedItem] = useState<ReimbursementItem | null>(null)
+  const [requests, setRequests] = useState<ExpenseRequest[]>([])
+  const [selectedRequest, setSelectedRequest] = useState<ExpenseRequest | null>(null)
+  const [history, setHistory] = useState<ExpenseHistoryEntry[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [form] = Form.useForm()
 
-  // TODO: 從實際 user / 設定中取得 entityId、roles、departmentId
-  const entityId = 'tw-entity-001'
-  const roles: string[] = []
+  const roleKey = useMemo(() => (user?.roles ?? []).join(','), [user])
+  const resolvedRoles = useMemo(() => (roleKey ? roleKey.split(',').filter(Boolean) : []), [roleKey])
+  const entityId = DEFAULT_ENTITY_ID
   const departmentId: string | undefined = undefined
 
-  const [data] = useState<ExpenseRequestRow[]>([])
+  const loadInitialData = useCallback(async () => {
+    try {
+      setListLoading(true)
+      const [items, requestList] = await Promise.all([
+        expenseService.getReimbursementItems(entityId, resolvedRoles, departmentId),
+        expenseService.getExpenseRequests({ entityId, mine: true }),
+      ])
+      setReimbursementItems(items)
+      setRequests(requestList)
+    } catch (error) {
+      console.error(error)
+      message.error('無法載入費用資料，請稍後再試')
+    } finally {
+      setListLoading(false)
+    }
+  }, [departmentId, entityId, resolvedRoles])
+
+  const refreshRequests = useCallback(async () => {
+    try {
+      setListLoading(true)
+      const requestList = await expenseService.getExpenseRequests({ entityId, mine: true })
+      setRequests(requestList)
+    } catch (error) {
+      console.error(error)
+      message.error('無法重新整理列表')
+    } finally {
+      setListLoading(false)
+    }
+  }, [entityId])
 
   useEffect(() => {
-    const loadReimbursementItems = async () => {
-      try {
-        setLoading(true)
-        const items = await expenseService.getReimbursementItems(entityId, roles, departmentId)
-        setReimbursementItems(items)
-      } catch (error) {
-        console.error(error)
-        message.error('無法載入報銷項目，請稍後再試')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadReimbursementItems()
-  }, [entityId, roles, departmentId])
-
-  const columns: ColumnsType<ExpenseRequestRow> = [
-    {
-      title: '報銷項目',
-      dataIndex: 'reimbursementItemName',
-      key: 'reimbursementItemName',
-    },
-    {
-      title: '金額',
-      dataIndex: 'amount',
-      key: 'amount',
-      render: (value: number, record) => `${record.currency} ${value.toFixed(0)}`,
-    },
-    {
-      title: '發生日期',
-      dataIndex: 'expenseDate',
-      key: 'expenseDate',
-      render: (value: string) => dayjs(value).format('YYYY-MM-DD'),
-    },
-    {
-      title: '狀態',
-      dataIndex: 'status',
-      key: 'status',
-      render: (value: string) => {
-        const color =
-          value === 'approved' ? 'green' : value === 'rejected' ? 'red' : value === 'pending' ? 'gold' : 'default'
-        const label =
-          value === 'approved' ? '已核准' : value === 'rejected' ? '已拒絕' : value === 'pending' ? '審核中' : value
-        return <Tag color={color}>{label}</Tag>
-      },
-    },
-    {
-      title: '申請時間',
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      render: (value: string) => dayjs(value).format('YYYY-MM-DD HH:mm'),
-    },
-  ]
+    loadInitialData()
+  }, [loadInitialData])
 
   const handleOpenDrawer = () => {
     setSelectedItem(null)
@@ -102,8 +156,9 @@ const ExpenseRequestsPage: React.FC = () => {
   const handleReimbursementItemChange = (id: string) => {
     const item = reimbursementItems.find((x) => x.id === id) || null
     setSelectedItem(item)
-    // 重置憑證類型，避免殘留不允許的值
-    form.setFieldsValue({ receiptType: undefined })
+    form.setFieldsValue({
+      receiptType: item?.defaultReceiptType,
+    })
   }
 
   const handleSubmit = async () => {
@@ -115,28 +170,67 @@ const ExpenseRequestsPage: React.FC = () => {
       }
       setSubmitting(true)
 
-      await expenseService.createExpenseRequest({
+      const payload = {
         entityId,
         reimbursementItemId: selectedItem.id,
-        amount: values.amount,
-        currency: 'TWD',
-        expenseDate: values.expenseDate.format('YYYY-MM-DD'),
+        amountOriginal: values.amount,
+        amountCurrency: 'TWD',
         description: values.description,
         receiptType: values.receiptType,
-      })
+        dueDate: values.expenseDate ? values.expenseDate.toISOString() : undefined,
+        metadata: values.expenseDate
+          ? { expenseDate: values.expenseDate.format('YYYY-MM-DD') }
+          : undefined,
+      }
 
-      message.success('費用申請已送出')
+      const response = await expenseService.createExpenseRequest(payload)
+
+      const rawConfidence =
+        response.suggestionConfidence === undefined || response.suggestionConfidence === null
+          ? undefined
+          : Number(response.suggestionConfidence)
+      const confidence = rawConfidence !== undefined && !Number.isNaN(rawConfidence) ? rawConfidence : undefined
+      const suggestion = response.suggestedAccount
+        ? `（建議：${response.suggestedAccount.code} ${response.suggestedAccount.name}${
+            confidence !== undefined ? ` · ${(confidence * 100).toFixed(0)}%` : ''
+          }）`
+        : ''
+      message.success(`費用申請已送出${suggestion}`)
       setDrawerOpen(false)
-      // TODO: 重新載入列表資料
+      form.resetFields()
+      setSelectedItem(null)
+      await refreshRequests()
     } catch (error) {
-      if ((error as any).errorFields) {
+      if (hasValidationErrorFields(error)) {
         return
       }
       console.error(error)
-      message.error('送出申請時發生錯誤，請稍後再試')
+      message.error(extractApiMessage(error) || '送出申請時發生錯誤，請稍後再試')
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const handleOpenDetail = async (request: ExpenseRequest) => {
+    setSelectedRequest(request)
+    setDetailDrawerOpen(true)
+    setHistory([])
+    try {
+      setHistoryLoading(true)
+      const entries = await expenseService.getExpenseRequestHistory(request.id)
+      setHistory(entries)
+    } catch (error) {
+      console.error(error)
+      message.error('無法取得歷程紀錄，請稍後再試')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  const handleCloseDetail = () => {
+    setDetailDrawerOpen(false)
+    setSelectedRequest(null)
+    setHistory([])
   }
 
   const allowedReceiptTypes = selectedItem?.allowedReceiptTypes
@@ -144,20 +238,96 @@ const ExpenseRequestsPage: React.FC = () => {
     .map((x) => x.trim())
     .filter(Boolean)
 
+  const columns: ColumnsType<ExpenseRequest> = [
+    {
+      title: '報銷項目',
+      dataIndex: ['reimbursementItem', 'name'],
+      key: 'reimbursementItem',
+      render: (_, record) => (
+        <span className="font-medium text-gray-800">{record.reimbursementItem?.name || '--'}</span>
+      ),
+    },
+    {
+      title: '金額',
+      dataIndex: 'amountOriginal',
+      key: 'amountOriginal',
+      render: (_: unknown, record) => {
+        const amount = toNumber(record.amountOriginal)
+        return (
+          <span className="font-mono text-gray-700">
+            {record.amountCurrency || 'TWD'} {amount.toLocaleString()}
+          </span>
+        )
+      },
+    },
+    {
+      title: '智能建議',
+      key: 'suggestedAccount',
+      render: (_: unknown, record) => {
+        if (!record.suggestedAccount) {
+          return <Text type="secondary">—</Text>
+        }
+        const confidence = Number(record.suggestionConfidence ?? 0)
+        return (
+          <Space size={4} direction="vertical">
+            <Space size={4}>
+              <Tag color="blue" bordered={false}>
+                {record.suggestedAccount.code}
+              </Tag>
+              <span>{record.suggestedAccount.name}</span>
+            </Space>
+            <Tag color={confidenceColor(confidence)} bordered={false}>
+              信心 {(confidence * 100).toFixed(0)}%
+            </Tag>
+          </Space>
+        )
+      },
+    },
+    {
+      title: '狀態',
+      dataIndex: 'status',
+      key: 'status',
+      render: (value: string) => {
+        const meta = statusMeta[value] || { label: value, color: 'default' }
+        return <Tag color={meta.color}>{meta.label}</Tag>
+      },
+    },
+    {
+      title: '申請時間',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      render: (value: string) => dayjs(value).format('YYYY-MM-DD HH:mm'),
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      render: (_: unknown, record) => (
+        <Button type="link" size="small" onClick={() => handleOpenDetail(record)}>
+          查看
+        </Button>
+      ),
+    },
+  ]
+
   return (
     <div className="p-4 md:p-6 space-y-4">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center flex-wrap gap-3">
         <div>
           <h1 className="text-xl md:text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>
             費用申請
           </h1>
           <p className="text-sm opacity-70" style={{ color: 'var(--text-secondary)' }}>
-            讓員工以標準化報銷項目提交費用申請，並對應正式會計科目。
+            以標準化報銷項目提交費用，並串接智慧科目建議與審批歷程。
           </p>
         </div>
-        <Button type="primary" onClick={handleOpenDrawer} className="rounded-full px-5 shadow-md">
-          新增費用申請
-        </Button>
+        <Space>
+          <Button onClick={refreshRequests} disabled={listLoading}>
+            重新整理
+          </Button>
+          <Button type="primary" onClick={handleOpenDrawer} className="rounded-full px-5 shadow-md">
+            新增費用申請
+          </Button>
+        </Space>
       </div>
 
       <Card className="glass-panel" bodyStyle={{ padding: 16 }}>
@@ -165,14 +335,13 @@ const ExpenseRequestsPage: React.FC = () => {
           <h2 className="text-base md:text-lg font-medium" style={{ color: 'var(--text-primary)' }}>
             我的費用申請
           </h2>
-          {/* 預留篩選器：狀態 / 期間 */}
         </div>
         <Table
           rowKey="id"
-          loading={loading}
+          loading={listLoading}
           columns={columns}
-          dataSource={data}
-          pagination={false}
+          dataSource={requests}
+          pagination={{ pageSize: 8, showSizeChanger: false }}
           locale={{ emptyText: '目前尚無費用申請紀錄' }}
         />
       </Card>
@@ -195,24 +364,41 @@ const ExpenseRequestsPage: React.FC = () => {
             <Select
               placeholder="請選擇報銷項目"
               onChange={handleReimbursementItemChange}
-              loading={loading}
-              options={reimbursementItems.map((item) => ({
-                label: (
-                  <div className="flex flex-col">
-                    <span className="font-medium">{item.name}</span>
-                    {item.description && (
-                      <span className="text-xs opacity-70" style={{ color: 'var(--text-secondary)' }}>
-                        {item.description}
-                      </span>
-                    )}
-                  </div>
-                ),
-                value: item.id,
-              }))}
+              loading={listLoading}
               showSearch
               optionFilterProp="label"
+              options={reimbursementItems.map((item) => ({
+                label: item.name,
+                value: item.id,
+              }))}
             />
           </Form.Item>
+
+          {selectedItem?.account && (
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 mb-4">
+              <Text type="secondary" className="text-xs">
+                對應會計科目
+              </Text>
+              <div className="font-medium text-gray-800 mt-1">
+                {selectedItem.account.code} · {selectedItem.account.name}
+              </div>
+              {selectedItem.description && (
+                <div className="text-xs text-gray-500 mt-1">{selectedItem.description}</div>
+              )}
+              <Space size={[4, 4]} wrap className="mt-2">
+                {selectedItem.defaultReceiptType && (
+                  <Tag color="purple" bordered={false}>
+                    預設憑證：{receiptTypeLabelMap[selectedItem.defaultReceiptType] || selectedItem.defaultReceiptType}
+                  </Tag>
+                )}
+                {selectedItem.amountLimit && (
+                  <Tag color="geekblue" bordered={false}>
+                    單筆上限 {toNumber(selectedItem.amountLimit).toLocaleString()} TWD
+                  </Tag>
+                )}
+              </Space>
+            </div>
+          )}
 
           <Form.Item
             label="金額（TWD）"
@@ -240,7 +426,10 @@ const ExpenseRequestsPage: React.FC = () => {
             <DatePicker className="w-full" />
           </Form.Item>
 
-          <Form.Item label="憑證類型" name="receiptType" rules={[{ required: true, message: '請選擇憑證類型' }]}
+          <Form.Item
+            label="憑證類型"
+            name="receiptType"
+            rules={[{ required: true, message: '請選擇憑證類型' }]}
           >
             <Select
               placeholder={selectedItem ? '請選擇憑證類型' : '請先選擇報銷項目'}
@@ -278,6 +467,100 @@ const ExpenseRequestsPage: React.FC = () => {
             </Button>
           </div>
         </Form>
+      </Drawer>
+
+      <Drawer
+        title="申請詳情"
+        placement="right"
+        onClose={handleCloseDetail}
+        open={detailDrawerOpen}
+        width={520}
+        destroyOnClose
+        styles={{ body: { paddingBottom: 24 } }}
+      >
+        {!selectedRequest ? (
+          <Text type="secondary">請選擇申請查看詳情</Text>
+        ) : (
+          <>
+            <Descriptions bordered column={1} size="small" labelStyle={{ width: 120 }}>
+              <Descriptions.Item label="報銷項目">
+                {selectedRequest.reimbursementItem?.name || '--'}
+              </Descriptions.Item>
+              <Descriptions.Item label="金額">
+                {selectedRequest.amountCurrency || 'TWD'} {toNumber(selectedRequest.amountOriginal).toLocaleString()}
+              </Descriptions.Item>
+              <Descriptions.Item label="狀態">
+                <Tag color={statusMeta[selectedRequest.status]?.color || 'default'}>
+                  {statusMeta[selectedRequest.status]?.label || selectedRequest.status}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="系統建議">
+                {selectedRequest.suggestedAccount ? (
+                  <Space direction="vertical" size={0}>
+                    <span>
+                      {selectedRequest.suggestedAccount.code} · {selectedRequest.suggestedAccount.name}
+                    </span>
+                    {selectedRequest.suggestionConfidence && (
+                      <Text type="secondary">
+                        信心 {(Number(selectedRequest.suggestionConfidence) * 100).toFixed(0)}%
+                      </Text>
+                    )}
+                  </Space>
+                ) : (
+                  <Text type="secondary">—</Text>
+                )}
+              </Descriptions.Item>
+              <Descriptions.Item label="最終科目">
+                {selectedRequest.finalAccount ? (
+                  <span>
+                    {selectedRequest.finalAccount.code} · {selectedRequest.finalAccount.name}
+                  </span>
+                ) : (
+                  <Text type="secondary">尚未指定</Text>
+                )}
+              </Descriptions.Item>
+              <Descriptions.Item label="備註">
+                {selectedRequest.description || <Text type="secondary">—</Text>}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Divider />
+            <Title level={5} style={{ marginBottom: 16 }}>
+              歷程紀錄
+            </Title>
+            <div className="max-h-72 overflow-y-auto pr-2">
+              <Timeline
+                mode="left"
+                pending={historyLoading ? '讀取中...' : undefined}
+                items={history.map((entry) => ({
+                  color:
+                    entry.action === 'approved'
+                      ? 'green'
+                      : entry.action === 'rejected'
+                      ? 'red'
+                      : 'blue',
+                  children: (
+                    <div>
+                      <div className="flex items-center justify-between text-sm font-medium">
+                        <span>{historyLabelMap[entry.action] || entry.action}</span>
+                        <span className="text-xs text-gray-500">
+                          {dayjs(entry.createdAt).format('YYYY/MM/DD HH:mm')}
+                        </span>
+                      </div>
+                      {entry.actor && (
+                        <div className="text-xs text-gray-500 mt-0.5">由 {entry.actor.name}</div>
+                      )}
+                      {entry.note && <div className="text-sm mt-1">{entry.note}</div>}
+                    </div>
+                  ),
+                }))}
+              />
+              {!historyLoading && history.length === 0 && (
+                <Text type="secondary">尚無歷程紀錄</Text>
+              )}
+            </div>
+          </>
+        )}
       </Drawer>
     </div>
   )
