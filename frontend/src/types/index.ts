@@ -73,7 +73,7 @@ export interface Account {
   type: string
   category: string
   isActive: boolean
-  balance: number
+  balance?: number
   currency: string
   entity: {
     id: string
