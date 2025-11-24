@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Get,
-  Query,
-  UseGuards,
-  ParseUUIDPipe,
-} from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -41,7 +35,7 @@ export class AccountingController {
     description: '科目類型 (asset/liability/equity/revenue/expense)',
   })
   async getAccounts(
-    @Query('entityId', ParseUUIDPipe) entityId: string,
+    @Query('entityId') entityId: string,
     @Query('type') type?: string,
   ) {
     return this.accountingService.getAccountsByEntity(entityId, type);
@@ -59,7 +53,7 @@ export class AccountingController {
     description: '期間狀態 (open/closed/locked)',
   })
   async getPeriods(
-    @Query('entityId', ParseUUIDPipe) entityId: string,
+    @Query('entityId') entityId: string,
     @Query('status') status?: string,
   ) {
     return this.accountingService.getPeriods(entityId, status);
@@ -82,7 +76,7 @@ export class AccountingController {
     description: '結束日期 (YYYY-MM-DD)',
   })
   async getIncomeStatement(
-    @Query('entityId', ParseUUIDPipe) entityId: string,
+    @Query('entityId') entityId: string,
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
   ) {
@@ -105,7 +99,7 @@ export class AccountingController {
     description: '截止日期 (YYYY-MM-DD)',
   })
   async getBalanceSheet(
-    @Query('entityId', ParseUUIDPipe) entityId: string,
+    @Query('entityId') entityId: string,
     @Query('asOfDate') asOfDate: string,
   ) {
     return this.reportService.getBalanceSheet(entityId, new Date(asOfDate));

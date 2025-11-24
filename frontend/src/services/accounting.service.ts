@@ -1,10 +1,14 @@
 import api from './api'
 import { Account } from '../types'
 
+const DEFAULT_ENTITY_ID = import.meta.env.VITE_DEFAULT_ENTITY_ID?.trim() || 'tw-entity-001'
+
 export const accountingService = {
   async getAccounts(entityId?: string): Promise<Account[]> {
-    const params = entityId ? { entityId } : {}
-    const response = await api.get<Account[]>('/accounting/accounts', { params })
+    const effectiveEntityId = entityId?.trim() || DEFAULT_ENTITY_ID
+    const response = await api.get<Account[]>('/accounting/accounts', {
+      params: { entityId: effectiveEntityId },
+    })
     return response.data
   },
 
