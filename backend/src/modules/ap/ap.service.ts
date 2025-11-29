@@ -1,5 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ApRepository } from './ap.repository';
+import {
+  ApPaymentFrequency,
+  BatchCreateApInvoicesDto,
+} from './dto/batch-create-ap-invoices.dto';
+import { UpdateApInvoiceDto } from './dto/update-ap-invoice.dto';
 
 /**
  * 應付帳款服務
@@ -28,12 +33,73 @@ export class ApService {
     return this.apRepository.createInvoice(data);
   }
 
+  async batchImportInvoices(payload: BatchCreateApInvoicesDto) {
+    const invoices = payload.invoices.map((invoice) => {
+      const dueDate = new Date(invoice.dueDate);
+      const invoiceDate = new Date(invoice.invoiceDate);
+      const isMonthly = invoice.paymentFrequency === ApPaymentFrequency.MONTHLY;
+      return {
+        entityId: payload.entityId,
+        vendorId: invoice.vendorId,
+        invoiceNo: invoice.invoiceNo,
+        amountOriginal: invoice.amountOriginal,
+        amountCurrency: invoice.amountCurrency ?? 'TWD',
+        amountFxRate: 1,
+        amountBase: invoice.amountOriginal,
+        invoiceDate,
+        dueDate,
+        nextDueDate: isMonthly ? dueDate : null,
+        paymentFrequency: invoice.paymentFrequency ?? ApPaymentFrequency.ONE_TIME,
+        isRecurringMonthly: isMonthly,
+        recurringDayOfMonth: isMonthly ? dueDate.getUTCDate() : null,
+        notes: invoice.notes ?? null,
+      };
+    });
+
+    return this.apRepository.createInvoicesBatch(invoices);
+  }
+
   /**
    * 記錄付款
    * TODO: 產生分錄（借：應付帳款 / 貸：銀行存款）
    */
   async recordPayment(invoiceId: string, data: any) {
     return this.apRepository.recordPayment(invoiceId, data);
+  }
+
+  async updateInvoice(id: string, dto: UpdateApInvoiceDto) {
+    const data: Record<string, unknown> = {};
+    if (dto.paymentFrequency) {
+      data.paymentFrequency = dto.paymentFrequency;
+      if (dto.paymentFrequency === ApPaymentFrequency.MONTHLY) {
+        data.isRecurringMonthly = true;
+        if (dto.recurringDayOfMonth) {
+          data.recurringDayOfMonth = dto.recurringDayOfMonth;
+        }
+      } else {
+        data.isRecurringMonthly = false;
+        data.recurringDayOfMonth = null;
+        data.nextDueDate = null;
+      }
+    }
+    if (typeof dto.isRecurringMonthly === 'boolean') {
+      data.isRecurringMonthly = dto.isRecurringMonthly;
+    }
+    if (dto.recurringDayOfMonth) {
+      data.recurringDayOfMonth = dto.recurringDayOfMonth;
+    }
+    if (dto.dueDate) {
+      const dueDate = new Date(dto.dueDate);
+      data.dueDate = dueDate;
+      if (data.isRecurringMonthly || dto.paymentFrequency === ApPaymentFrequency.MONTHLY) {
+        data.nextDueDate = dueDate;
+      }
+    }
+    if (dto.notes !== undefined) {
+      data.notes = dto.notes;
+    }
+
+    return this.apRepository.updateInvoice(id, data);
   }
 
   /**
@@ -123,5 +189,9 @@ export class ApService {
       `Applying discount of ${discountAmount} to invoice ${invoiceId}`,
     );
     throw new Error('Not implemented: applyDiscount');
+  }
+
+  async getInvoiceAlerts(entityId?: string) {
+    return this.apRepository.getInvoiceAlerts(entityId);
   }
 }

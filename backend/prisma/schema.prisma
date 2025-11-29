@@ -643,6 +643,7 @@ model ApInvoice {
 
   invoiceDate DateTime @map("invoice_date")
   dueDate     DateTime @map("due_date")
+  nextDueDate DateTime? @map("next_due_date")
 
   // 已付金額（符合四欄位標準）
   paidAmountOriginal Decimal  @default(0) @map("paid_amount_original") @db.Decimal(18, 2)
@@ -651,6 +652,9 @@ model ApInvoice {
   paidAmountBase     Decimal  @default(0) @map("paid_amount_base") @db.Decimal(18, 2)
   status             String   @default("pending") // pending, partial, paid, overdue
   priority           String   @default("normal") // normal, urgent
+  paymentFrequency   String   @default("one_time") @map("payment_frequency") // one_time, monthly
+  isRecurringMonthly Boolean  @default(false) @map("is_recurring_monthly")
+  recurringDayOfMonth Int?    @map("recurring_day_of_month")
   sourceModule       String?  @map("source_module")
   sourceId           String?  @map("source_id")
   approvalStatus     String   @default("pending") @map("approval_status") // pending, approved, rejected

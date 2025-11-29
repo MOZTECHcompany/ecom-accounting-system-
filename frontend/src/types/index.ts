@@ -128,6 +128,7 @@ export interface ArInvoice {
 
 export interface ApInvoice {
   id: string
+  entityId: string
   invoiceNo: string
   vendorId: string
   vendorName?: string
@@ -137,6 +138,21 @@ export interface ApInvoice {
   status: string
   invoiceDate: string
   dueDate: string
+  paymentFrequency?: 'one_time' | 'monthly'
+  isRecurringMonthly?: boolean
+  recurringDayOfMonth?: number | null
+  nextDueDate?: string | null
+  notes?: string | null
+  vendor?: {
+    id: string
+    name: string
+  }
+}
+
+export interface ApInvoiceAlerts {
+  unpaid: number
+  overdue: number
+  upcoming: number
 }
 
 export interface ExpenseRequest {
