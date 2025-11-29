@@ -114,6 +114,11 @@ const DashboardLayout: React.FC = () => {
           label: '帳號與權限',
           onClick: () => navigate('/admin/access-control'),
         },
+        {
+          key: '/admin/reimbursement-items',
+          label: '報銷項目管理',
+          onClick: () => navigate('/admin/reimbursement-items'),
+        },
       ],
     },
   ]

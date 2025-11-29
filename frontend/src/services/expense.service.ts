@@ -17,8 +17,17 @@ export interface ApprovalPolicyStep {
   maxAmount?: string | number | null
 }
 
+export interface ApprovalPolicySummary {
+  id: string
+  name: string
+  description?: string | null
+  isActive?: boolean
+  steps?: ApprovalPolicyStep[]
+}
+
 export interface ReimbursementItem {
   id: string
+  entityId: string
   name: string
   description?: string | null
   accountId: string
@@ -32,10 +41,30 @@ export interface ReimbursementItem {
   allowedRoles?: string | null
   allowedDepartments?: string | null
   allowedReceiptTypes?: string | null
+  isActive?: boolean
+  createdAt?: string
+  updatedAt?: string
   approvalPolicy?: {
     id: string
     steps: ApprovalPolicyStep[]
   } | null
+}
+
+export interface UpsertReimbursementItemPayload {
+  entityId?: string
+  name: string
+  description?: string
+  accountId: string
+  keywords?: string[]
+  amountLimit?: number
+  requiresDepartmentHead?: boolean
+  approverRoleCodes?: string[]
+  approvalPolicyId?: string | null
+  defaultReceiptType?: string | null
+  allowedRoles?: string[]
+  allowedDepartments?: string[]
+  allowedReceiptTypes?: string[]
+  isActive?: boolean
 }
 
 export interface ExpenseRequest {
@@ -155,4 +184,82 @@ export const expenseService = {
     const response = await api.post(`/expense/requests/${requestId}/feedback`, payload)
     return response.data
   },
+
+  async listReimbursementItemsAdmin(params: { entityId?: string; includeInactive?: boolean } = {}) {
+    const query = buildParams({
+      entityId: params.entityId?.trim() || DEFAULT_ENTITY_ID,
+      includeInactive: params.includeInactive ? 'true' : undefined,
+    })
+    const response = await api.get<ReimbursementItem[]>('/expense/admin/reimbursement-items', {
+      params: query,
+    })
+    return response.data
+  },
+
+  async listApprovalPolicies(entityId?: string) {
+    const response = await api.get<ApprovalPolicySummary[]>(
+      '/expense/admin/approval-policies',
+      {
+        params: { entityId: entityId?.trim() || DEFAULT_ENTITY_ID },
+      },
+    )
+    return response.data
+  },
+
+  async createReimbursementItemAdmin(payload: UpsertReimbursementItemPayload) {
+    const body = buildReimbursementPayload(payload, true)
+    const response = await api.post<ReimbursementItem>(
+      '/expense/admin/reimbursement-items',
+      body,
+    )
+    return response.data
+  },
+
+  async updateReimbursementItemAdmin(
+    id: string,
+    payload: UpsertReimbursementItemPayload,
+  ) {
+    const body = buildReimbursementPayload(payload)
+    const response = await api.put<ReimbursementItem>(
+      `/expense/admin/reimbursement-items/${id}`,
+      body,
+    )
+    return response.data
+  },
+
+  async archiveReimbursementItemAdmin(id: string) {
+    const response = await api.put<ReimbursementItem>(
+      `/expense/admin/reimbursement-items/${id}/archive`,
+    )
+    return response.data
+  },
+}
+
+const normalizeList = (values?: string[]): string[] | undefined => {
+  if (!values) return undefined
+  const normalized = values
+    .map((value) => value.trim())
+    .filter((value) => value.length)
+  return normalized.length ? normalized : undefined
+}
+
+const buildReimbursementPayload = (
+  payload: UpsertReimbursementItemPayload,
+  requireEntity = false,
+) => {
+  const entityId = payload.entityId?.trim() || DEFAULT_ENTITY_ID
+  if (requireEntity && !payload.entityId) {
+    // ensure entity id is explicitly included when required
+    payload = { ...payload, entityId }
+  }
+
+  return {
+    ...payload,
+    entityId,
+    keywords: normalizeList(payload.keywords),
+    approverRoleCodes: normalizeList(payload.approverRoleCodes),
+    allowedRoles: normalizeList(payload.allowedRoles),
+    allowedDepartments: normalizeList(payload.allowedDepartments),
+    allowedReceiptTypes: normalizeList(payload.allowedReceiptTypes),
+  }
 }
