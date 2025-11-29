@@ -83,6 +83,8 @@ export interface ExpenseRequest {
   suggestionConfidence?: number | string | null
   suggestedAccount?: ExpenseAccountRef | null
   finalAccount?: ExpenseAccountRef | null
+  reimbursementItemId?: string | null
+  finalAccountId?: string | null
   reimbursementItem?: ReimbursementItem | null
 }
 
@@ -124,6 +126,18 @@ export interface CreateExpenseRequestPayload {
   metadata?: Record<string, unknown>
   departmentId?: string
   vendorId?: string
+}
+
+export interface ApproveExpenseRequestPayload {
+  finalAccountId?: string
+  remark?: string
+  metadata?: Record<string, unknown>
+}
+
+export interface RejectExpenseRequestPayload {
+  reason: string
+  note?: string
+  metadata?: Record<string, unknown>
 }
 
 const buildParams = (params: Record<string, string | undefined>) =>
@@ -230,6 +244,28 @@ export const expenseService = {
   async archiveReimbursementItemAdmin(id: string) {
     const response = await api.put<ReimbursementItem>(
       `/expense/admin/reimbursement-items/${id}/archive`,
+    )
+    return response.data
+  },
+
+  async approveExpenseRequest(
+    requestId: string,
+    payload: ApproveExpenseRequestPayload,
+  ) {
+    const response = await api.put<ExpenseRequest>(
+      `/expense/requests/${requestId}/approve`,
+      payload,
+    )
+    return response.data
+  },
+
+  async rejectExpenseRequest(
+    requestId: string,
+    payload: RejectExpenseRequestPayload,
+  ) {
+    const response = await api.put<ExpenseRequest>(
+      `/expense/requests/${requestId}/reject`,
+      payload,
     )
     return response.data
   },

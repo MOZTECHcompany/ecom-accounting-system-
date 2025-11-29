@@ -16,6 +16,7 @@ import {
   Divider,
   Timeline,
   Descriptions,
+  Segmented,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
@@ -25,6 +26,8 @@ import {
   ExpenseRequest,
   ExpenseHistoryEntry,
 } from '../services/expense.service'
+import { accountingService } from '../services/accounting.service'
+import type { Account } from '../types'
 import { useAuth } from '../contexts/AuthContext'
 
 const { Text, Title } = Typography
@@ -58,6 +61,8 @@ const historyLabelMap: Record<string, string> = {
   rejected: '退回',
   pending: '審核中',
 }
+
+type ViewMode = 'mine' | 'pending'
 
 type ValidationErrorShape = {
   errorFields?: unknown
@@ -96,6 +101,11 @@ const extractApiMessage = (error: unknown) => {
 
 const ExpenseRequestsPage: React.FC = () => {
   const { user } = useAuth()
+  const isAdmin = useMemo(
+    () => (user?.roles ?? []).some((role) => role === 'SUPER_ADMIN' || role === 'ADMIN'),
+    [user],
+  )
+  const [viewMode, setViewMode] = useState<ViewMode>('mine')
   const [listLoading, setListLoading] = useState(true)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false)
@@ -105,47 +115,94 @@ const ExpenseRequestsPage: React.FC = () => {
   const [requests, setRequests] = useState<ExpenseRequest[]>([])
   const [selectedRequest, setSelectedRequest] = useState<ExpenseRequest | null>(null)
   const [history, setHistory] = useState<ExpenseHistoryEntry[]>([])
+  const [accounts, setAccounts] = useState<Account[]>([])
+  const [accountsLoading, setAccountsLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [approveLoading, setApproveLoading] = useState(false)
+  const [rejectLoading, setRejectLoading] = useState(false)
   const [form] = Form.useForm()
+  const [approvalForm] = Form.useForm()
 
   const roleKey = useMemo(() => (user?.roles ?? []).join(','), [user])
   const resolvedRoles = useMemo(() => (roleKey ? roleKey.split(',').filter(Boolean) : []), [roleKey])
   const entityId = DEFAULT_ENTITY_ID
   const departmentId: string | undefined = undefined
 
-  const loadInitialData = useCallback(async () => {
+  const fetchReimbursementItems = useCallback(async () => {
     try {
-      setListLoading(true)
-      const [items, requestList] = await Promise.all([
-        expenseService.getReimbursementItems(entityId, resolvedRoles, departmentId),
-        expenseService.getExpenseRequests({ entityId, mine: true }),
-      ])
+      const items = await expenseService.getReimbursementItems(
+        entityId,
+        resolvedRoles,
+        departmentId,
+      )
       setReimbursementItems(items)
-      setRequests(requestList)
     } catch (error) {
       console.error(error)
-      message.error('無法載入費用資料，請稍後再試')
-    } finally {
-      setListLoading(false)
+      message.error('無法載入報銷項目')
     }
   }, [departmentId, entityId, resolvedRoles])
 
   const refreshRequests = useCallback(async () => {
     try {
       setListLoading(true)
-      const requestList = await expenseService.getExpenseRequests({ entityId, mine: true })
+      const query =
+        viewMode === 'pending'
+          ? { entityId, status: 'pending' }
+          : { entityId, mine: true }
+      const requestList = await expenseService.getExpenseRequests(query)
       setRequests(requestList)
     } catch (error) {
       console.error(error)
-      message.error('無法重新整理列表')
+      message.error('無法載入費用申請列表')
     } finally {
       setListLoading(false)
     }
-  }, [entityId])
+  }, [entityId, viewMode])
 
   useEffect(() => {
-    loadInitialData()
-  }, [loadInitialData])
+    fetchReimbursementItems()
+  }, [fetchReimbursementItems])
+
+  useEffect(() => {
+    refreshRequests()
+  }, [refreshRequests])
+
+  useEffect(() => {
+    if (!isAdmin && viewMode === 'pending') {
+      setViewMode('mine')
+    }
+  }, [isAdmin, viewMode])
+
+  useEffect(() => {
+    if (!detailDrawerOpen || !isAdmin) {
+      return
+    }
+    setAccountsLoading(true)
+    accountingService
+      .getAccounts(entityId)
+      .then(setAccounts)
+      .catch((error) => {
+        console.error(error)
+        message.error('無法載入會計科目')
+      })
+      .finally(() => setAccountsLoading(false))
+  }, [detailDrawerOpen, entityId, isAdmin])
+
+  useEffect(() => {
+    if (detailDrawerOpen && selectedRequest) {
+      approvalForm.setFieldsValue({
+        finalAccountId:
+          selectedRequest.finalAccount?.id ||
+          selectedRequest.suggestedAccount?.id ||
+          undefined,
+        remark: '',
+        rejectReason: '',
+        rejectNote: '',
+      })
+    } else {
+      approvalForm.resetFields()
+    }
+  }, [approvalForm, detailDrawerOpen, selectedRequest])
 
   const handleOpenDrawer = () => {
     setSelectedItem(null)
@@ -231,12 +288,70 @@ const ExpenseRequestsPage: React.FC = () => {
     setDetailDrawerOpen(false)
     setSelectedRequest(null)
     setHistory([])
+    approvalForm.resetFields()
+  }
+
+  const handleApproveRequest = async () => {
+    if (!selectedRequest) {
+      return
+    }
+    try {
+      const { finalAccountId, remark } = approvalForm.getFieldsValue()
+      setApproveLoading(true)
+      await expenseService.approveExpenseRequest(selectedRequest.id, {
+        finalAccountId: finalAccountId || undefined,
+        remark: remark?.trim() || undefined,
+      })
+      message.success('已核准該費用申請')
+      handleCloseDetail()
+      await refreshRequests()
+    } catch (error) {
+      console.error(error)
+      message.error(extractApiMessage(error) || '核准失敗，請稍後再試')
+    } finally {
+      setApproveLoading(false)
+    }
+  }
+
+  const handleRejectRequest = async () => {
+    if (!selectedRequest) {
+      return
+    }
+    try {
+      const { rejectReason, rejectNote } = await approvalForm.validateFields([
+        'rejectReason',
+        'rejectNote',
+      ])
+      const reason = (rejectReason as string | undefined)?.trim()
+      if (!reason) {
+        message.error('請輸入退回原因')
+        return
+      }
+      setRejectLoading(true)
+      await expenseService.rejectExpenseRequest(selectedRequest.id, {
+        reason,
+        note: (rejectNote as string | undefined)?.trim() || undefined,
+      })
+      message.success('已退回該費用申請')
+      handleCloseDetail()
+      await refreshRequests()
+    } catch (error) {
+      if (hasValidationErrorFields(error)) {
+        return
+      }
+      console.error(error)
+      message.error(extractApiMessage(error) || '退回失敗，請稍後再試')
+    } finally {
+      setRejectLoading(false)
+    }
   }
 
   const allowedReceiptTypes = selectedItem?.allowedReceiptTypes
     ?.split(',')
     .map((x) => x.trim())
     .filter(Boolean)
+
+  const canReview = Boolean(isAdmin && selectedRequest?.status === 'pending')
 
   const columns: ColumnsType<ExpenseRequest> = [
     {
@@ -321,6 +436,16 @@ const ExpenseRequestsPage: React.FC = () => {
           </p>
         </div>
         <Space>
+          {isAdmin && (
+            <Segmented
+              options={[
+                { label: '我的申請', value: 'mine' },
+                { label: '待審清單', value: 'pending' },
+              ]}
+              value={viewMode}
+              onChange={(value) => setViewMode(value as ViewMode)}
+            />
+          )}
           <Button onClick={refreshRequests} disabled={listLoading}>
             重新整理
           </Button>
@@ -559,6 +684,55 @@ const ExpenseRequestsPage: React.FC = () => {
                 <Text type="secondary">尚無歷程紀錄</Text>
               )}
             </div>
+
+            {canReview && (
+              <>
+                <Divider />
+                <Title level={5} style={{ marginBottom: 16 }}>
+                  審核操作（管理員）
+                </Title>
+                <Form layout="vertical" form={approvalForm} requiredMark={false}>
+                  <Form.Item label="最終會計科目" name="finalAccountId">
+                    <Select
+                      allowClear
+                      showSearch
+                      placeholder="選擇最終會計科目"
+                      loading={accountsLoading}
+                      optionFilterProp="label"
+                      options={accounts.map((account) => ({
+                        label: `${account.code} ｜ ${account.name}`,
+                        value: account.id,
+                      }))}
+                    />
+                  </Form.Item>
+
+                  <Form.Item label="核准備註" name="remark">
+                    <Input.TextArea rows={2} placeholder="可填寫核准說明" />
+                  </Form.Item>
+
+                  <Form.Item label="退回原因" name="rejectReason" tooltip="退回時必填">
+                    <Input.TextArea rows={2} placeholder="若要退回請輸入原因" />
+                  </Form.Item>
+
+                  <Form.Item label="退回補充說明" name="rejectNote">
+                    <Input.TextArea rows={2} placeholder="可填寫額外說明或要求" />
+                  </Form.Item>
+
+                  <Space className="w-full justify-end">
+                    <Button danger onClick={handleRejectRequest} loading={rejectLoading}>
+                      退回
+                    </Button>
+                    <Button
+                      type="primary"
+                      onClick={handleApproveRequest}
+                      loading={approveLoading}
+                    >
+                      核准
+                    </Button>
+                  </Space>
+                </Form>
+              </>
+            )}
           </>
         )}
       </Drawer>
