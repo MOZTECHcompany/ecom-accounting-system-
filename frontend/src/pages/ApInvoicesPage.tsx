@@ -25,11 +25,13 @@ import {
   CloudUploadOutlined,
   ReloadOutlined,
   ClockCircleOutlined,
+  DollarCircleOutlined,
 } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import dayjs from 'dayjs'
 import { apService } from '../services/ap.service'
-import { ApInvoice, ApInvoiceAlerts } from '../types'
+import { vendorService } from '../services/vendor.service'
+import { ApInvoice, ApInvoiceAlerts, Vendor } from '../types'
 
 const { Title, Text } = Typography
 const STATUS_COLORS: Record<string, string> = {
@@ -42,6 +44,12 @@ const PAYMENT_FREQUENCIES = [
   { label: '單次付款', value: 'one_time' },
   { label: '每月循環', value: 'monthly' },
 ]
+const PAYMENT_STATUS_OPTIONS = [
+  { label: '未付款', value: 'pending' },
+  { label: '部分付款', value: 'partial' },
+  { label: '已付款', value: 'paid' },
+  { label: '逾期', value: 'overdue' },
+]
 
 const ApInvoicesPage: React.FC = () => {
   const [invoices, setInvoices] = useState<ApInvoice[]>([])
@@ -53,9 +61,14 @@ const ApInvoicesPage: React.FC = () => {
   const [editingInvoice, setEditingInvoice] = useState<ApInvoice | null>(null)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [vendors, setVendors] = useState<Vendor[]>([])
+  const [vendorsLoading, setVendorsLoading] = useState(false)
+  const [paymentOpen, setPaymentOpen] = useState(false)
+  const [paymentInvoice, setPaymentInvoice] = useState<ApInvoice | null>(null)
   const [form] = Form.useForm()
   const [batchForm] = Form.useForm()
   const [editForm] = Form.useForm()
+  const [paymentForm] = Form.useForm()
 
   const fetchInvoices = async () => {
     setLoading(true)
@@ -74,8 +87,34 @@ const ApInvoicesPage: React.FC = () => {
     }
   }
 
+  const fetchVendors = async () => {
+    setVendorsLoading(true)
+    try {
+      const vendorList = await vendorService.findAll()
+      setVendors(vendorList)
+    } catch (error) {
+      console.error(error)
+      message.error('載入供應商失敗')
+    } finally {
+      setVendorsLoading(false)
+    }
+  }
+
+  const vendorOptions = useMemo(
+    () =>
+      vendors.map((vendor) => ({
+        value: vendor.id,
+        label: `${vendor.name}${vendor.code ? ` (${vendor.code})` : ''}`,
+      })),
+    [vendors],
+  )
+
   useEffect(() => {
     fetchInvoices()
+  }, [])
+
+  useEffect(() => {
+    fetchVendors()
   }, [])
 
   useEffect(() => {
@@ -170,6 +209,43 @@ const ApInvoicesPage: React.FC = () => {
       fetchInvoices()
     } catch (error) {
       console.error(error)
+    }
+  }
+
+  const calculateOutstanding = (invoice: ApInvoice) => {
+    const total = Number(invoice.amountOriginal ?? 0)
+    const paid = Number(invoice.paidAmountOriginal ?? 0)
+    return Math.max(total - paid, 0)
+  }
+
+  const handleOpenPayment = (invoice: ApInvoice) => {
+    const outstanding = calculateOutstanding(invoice)
+    paymentForm.setFieldsValue({
+      amount: outstanding || Number(invoice.amountOriginal || 0),
+      paymentDate: dayjs(),
+      newStatus: outstanding > 0 ? 'paid' : invoice.status,
+    })
+    setPaymentInvoice(invoice)
+    setPaymentOpen(true)
+  }
+
+  const handleRecordPayment = async () => {
+    if (!paymentInvoice) return
+    try {
+      const values = await paymentForm.validateFields()
+      await apService.recordPayment(paymentInvoice.id, {
+        amount: Number(values.amount),
+        paymentDate: values.paymentDate?.toISOString(),
+        newStatus: values.newStatus,
+      })
+      message.success('付款已記錄')
+      setPaymentOpen(false)
+      setPaymentInvoice(null)
+      paymentForm.resetFields()
+      fetchInvoices()
+    } catch (error) {
+      console.error(error)
+      message.error('記錄付款失敗')
     }
   }
 
@@ -277,6 +353,14 @@ const ApInvoicesPage: React.FC = () => {
       key: 'actions',
       render: (_: unknown, record: ApInvoice) => (
         <Space>
+          <Button
+            size="small"
+            type="link"
+            icon={<DollarCircleOutlined />}
+            onClick={() => handleOpenPayment(record)}
+          >
+            記錄付款
+          </Button>
           <Button size="small" type="link" onClick={() => handleOpenEdit(record)}>
             更新排程
           </Button>
@@ -404,10 +488,13 @@ const ApInvoicesPage: React.FC = () => {
         <Form form={form} layout="vertical">
           <div className="grid grid-cols-2 gap-4">
             <Form.Item name="vendorId" label="供應商" rules={[{ required: true }]}>
-              <Select placeholder="選擇供應商">
-                <Select.Option value="VEND001">範例供應商 A</Select.Option>
-                <Select.Option value="VEND002">範例供應商 B</Select.Option>
-              </Select>
+              <Select
+                showSearch
+                placeholder="選擇供應商"
+                loading={vendorsLoading}
+                options={vendorOptions}
+                optionFilterProp="label"
+              />
             </Form.Item>
             <Form.Item name="invoiceNo" label="發票號碼" rules={[{ required: true }]}>
               <Input />
@@ -474,7 +561,13 @@ const ApInvoicesPage: React.FC = () => {
                           label="供應商"
                           rules={[{ required: true }]}
                         >
-                          <Input placeholder="供應商 ID" />
+                          <Select
+                            showSearch
+                            placeholder="選擇供應商"
+                            loading={vendorsLoading}
+                            options={vendorOptions}
+                            optionFilterProp="label"
+                          />
                         </Form.Item>
                       </Col>
                       <Col span={6}>
@@ -563,7 +656,11 @@ const ApInvoicesPage: React.FC = () => {
       <Modal
         title="更新付款排程"
         open={editOpen}
-        onCancel={() => setEditOpen(false)}
+        onCancel={() => {
+          setEditOpen(false)
+          setEditingInvoice(null)
+          editForm.resetFields()
+        }}
         onOk={handleUpdateRecurring}
         okText="儲存"
       >
@@ -607,6 +704,48 @@ const ApInvoicesPage: React.FC = () => {
           </Form.Item>
           <Form.Item name="notes" label="備註">
             <Input.TextArea rows={3} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="記錄付款"
+        open={paymentOpen}
+        onCancel={() => {
+          setPaymentOpen(false)
+          setPaymentInvoice(null)
+          paymentForm.resetFields()
+        }}
+        onOk={handleRecordPayment}
+        okText="儲存"
+        destroyOnClose
+      >
+        {paymentInvoice && (
+          <Alert
+            type="info"
+            showIcon
+            className="mb-4"
+            message={`發票 ${paymentInvoice.invoiceNo || paymentInvoice.id}`}
+            description={`尚未付款：${paymentInvoice.amountCurrency} ${calculateOutstanding(paymentInvoice).toLocaleString()}`}
+          />
+        )}
+        <Form form={paymentForm} layout="vertical">
+          <Form.Item
+            name="amount"
+            label="付款金額"
+            rules={[{ required: true, message: '請輸入金額' }]}
+          >
+            <InputNumber className="w-full" min={0} prefix="$" precision={2} />
+          </Form.Item>
+          <Form.Item
+            name="paymentDate"
+            label="付款日期"
+            rules={[{ required: true, message: '請選擇付款日期' }]}
+          >
+            <DatePicker className="w-full" />
+          </Form.Item>
+          <Form.Item name="newStatus" label="更新狀態" rules={[{ required: true }]}>
+            <Select options={PAYMENT_STATUS_OPTIONS} />
           </Form.Item>
         </Form>
       </Modal>

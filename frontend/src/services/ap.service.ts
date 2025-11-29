@@ -40,6 +40,14 @@ export const apService = {
     return response.data
   },
 
+  recordPayment: async (
+    id: string,
+    data: { amount: number; paymentDate?: string; newStatus?: string },
+  ) => {
+    const response = await api.post<ApInvoice>(`/ap/invoices/${id}/pay`, data)
+    return response.data
+  },
+
   getExpenses: async (page = 1, limit = 20) => {
     const response = await api.get<PaginatedResult<ExpenseRequest>>('/expense/requests', {
       params: { page, limit },
