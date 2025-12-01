@@ -17,8 +17,9 @@ import {
   Timeline,
   Descriptions,
   Segmented,
+  Upload,
 } from 'antd'
-import { PlusOutlined } from '@ant-design/icons'
+import { PlusOutlined, UploadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import {
@@ -229,6 +230,24 @@ const ExpenseRequestsPage: React.FC = () => {
       }
       setSubmitting(true)
 
+      const files = values.files || []
+      const evidenceFiles = await Promise.all(
+        files.map(async (file: any) => {
+          const originFile = file.originFileObj
+          return new Promise<{ name: string; url: string; mimeType: string }>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.readAsDataURL(originFile)
+            reader.onload = () =>
+              resolve({
+                name: originFile.name,
+                url: reader.result as string,
+                mimeType: originFile.type,
+              })
+            reader.onerror = (error) => reject(error)
+          })
+        }),
+      )
+
       const payload = {
         entityId,
         reimbursementItemId: selectedItem.id,
@@ -240,6 +259,7 @@ const ExpenseRequestsPage: React.FC = () => {
         metadata: values.expenseDate
           ? { expenseDate: values.expenseDate.format('YYYY-MM-DD') }
           : undefined,
+        evidenceFiles: evidenceFiles.length > 0 ? evidenceFiles : undefined,
       }
 
       const response = await expenseService.createExpenseRequest(payload)
@@ -568,6 +588,25 @@ const ExpenseRequestsPage: React.FC = () => {
 
           <Form.Item label="備註說明" name="description">
             <Input.TextArea rows={3} placeholder="可填寫用途、對象、專案代號等說明" />
+          </Form.Item>
+
+          <Form.Item
+            label="憑證/單據照片"
+            name="files"
+            valuePropName="fileList"
+            getValueFromEvent={(e) => {
+              if (Array.isArray(e)) return e
+              return e?.fileList
+            }}
+          >
+            <Upload
+              listType="picture"
+              beforeUpload={() => false}
+              maxCount={5}
+              accept="image/*,.pdf"
+            >
+              <Button icon={<UploadOutlined />}>上傳照片</Button>
+            </Upload>
           </Form.Item>
 
           {selectedItem && allowedReceiptTypes && (

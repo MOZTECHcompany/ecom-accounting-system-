@@ -114,6 +114,12 @@ export interface SubmitFeedbackPayload {
   comment?: string
 }
 
+export interface EvidenceFile {
+  name: string
+  url: string
+  mimeType?: string
+}
+
 export interface CreateExpenseRequestPayload {
   entityId?: string
   reimbursementItemId: string
@@ -126,6 +132,7 @@ export interface CreateExpenseRequestPayload {
   metadata?: Record<string, unknown>
   departmentId?: string
   vendorId?: string
+  evidenceFiles?: EvidenceFile[]
 }
 
 export interface ApproveExpenseRequestPayload {
@@ -190,6 +197,7 @@ export const expenseService = {
       metadata: payload.metadata,
       departmentId: payload.departmentId,
       vendorId: payload.vendorId,
+      evidenceFiles: payload.evidenceFiles,
     })
     return response.data
   },
