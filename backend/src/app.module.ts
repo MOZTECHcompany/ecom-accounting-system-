@@ -29,6 +29,7 @@ import { InvoicingModule } from './modules/invoicing/invoicing.module';
 import { ReconciliationModule } from './modules/reconciliation/reconciliation.module';
 import { VendorModule } from './modules/vendor/vendor.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
+import { NotificationModule } from './modules/notification/notification.module';
 
 /**
  * AppModule
@@ -89,6 +90,7 @@ import { InventoryModule } from './modules/inventory/inventory.module';
     // 5. 整合模組（外部服務整合）
     InvoicingModule, // → SalesModule, ArModule (電子發票)
     ReconciliationModule, // → BankingModule, AccountingModule (銀行對帳)
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [

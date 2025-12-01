@@ -42,6 +42,7 @@ model User {
   approvalSteps                 ApprovalStep[]
   expenseRequestHistories       ExpenseRequestHistory[]
   accountingClassifierFeedbacks AccountingClassifierFeedback[]
+  notifications                 Notification[]
 
   @@map("users")
 }
@@ -1403,4 +1404,22 @@ model ReconciliationResult {
   @@index([matchedType, matchedId])
   @@index([confidence])
   @@map("reconciliation_results")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  title     String
+  message   String
+  type      String   // e.g., 'info', 'success', 'warning', 'error'
+  category  String   // e.g., 'expense', 'system', 'approval'
+  read      Boolean  @default(false)
+  data      Json?    // Store related entity ID, link, etc.
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+  @@index([userId])
+  @@index([read])
 }

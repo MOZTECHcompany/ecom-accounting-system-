@@ -18,6 +18,7 @@ import {
   CreateReimbursementItemDto,
   UpdateReimbursementItemDto,
 } from './dto/manage-reimbursement-item.dto';
+import { NotificationService } from '../notification/notification.service';
 
 interface UserContext {
   id: string;
@@ -39,6 +40,7 @@ export class ExpenseService {
   constructor(
     private readonly expenseRepository: ExpenseRepository,
     private readonly classifierService: AccountingClassifierService,
+    private readonly notificationService: NotificationService,
   ) {}
   /**
    * 建立費用申請單
@@ -129,7 +131,7 @@ export class ExpenseService {
   ) {
     const request = await this.ensureExpenseRequest(requestId);
 
-    return this.expenseRepository.updateExpenseRequestWithHistory(
+    const result = await this.expenseRepository.updateExpenseRequestWithHistory(
       requestId,
       {
         status: 'rejected',
@@ -160,6 +162,18 @@ export class ExpenseService {
           }
         : undefined,
     );
+
+    // Send notification to the requester
+    await this.notificationService.create({
+      userId: request.createdBy,
+      title: '費用申請已退回',
+      message: `您的費用申請「${request.description}」已被退回。原因：${payload.reason}`,
+      type: 'error',
+      category: 'expense',
+      data: { requestId: request.id },
+    });
+
+    return result;
   }
 
   /**

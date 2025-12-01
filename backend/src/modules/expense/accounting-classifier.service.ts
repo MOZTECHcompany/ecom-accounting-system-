@@ -79,7 +79,9 @@ export class AccountingClassifierService {
     );
 
     if (input.reimbursementItemAccountId) {
-      const baseConfidence = keywordMatched ? 0.95 : 0.9;
+      // If keywords match, we are very sure (0.95).
+      // If no keywords match, we lower confidence to allow AI to override if it finds a better match (0.6).
+      const baseConfidence = keywordMatched ? 0.95 : 0.6;
       appliedRules.add(
         keywordMatched
           ? 'reimbursement_item_keyword_match'

@@ -6,6 +6,7 @@ import { AccountingClassifierService } from './accounting-classifier.service';
 import { PrismaModule } from '../../common/prisma/prisma.module';
 import { ApprovalsModule } from '../approvals/approvals.module'; // 依賴：費用審批
 import { ApModule } from '../ap/ap.module'; // 依賴：審批後產生AP
+import { NotificationModule } from '../notification/notification.module';
 
 /**
  * ExpenseModule
@@ -16,7 +17,7 @@ import { ApModule } from '../ap/ap.module'; // 依賴：審批後產生AP
  * - ApModule: 審批通過後產生應付帳款
  */
 @Module({
-  imports: [PrismaModule, ApprovalsModule, ApModule],
+  imports: [PrismaModule, ApprovalsModule, ApModule, NotificationModule],
   controllers: [ExpenseController],
   providers: [ExpenseService, ExpenseRepository, AccountingClassifierService],
   exports: [ExpenseService],
