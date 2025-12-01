@@ -28,6 +28,9 @@ async function bootstrap() {
     origin: '*',
   });
 
+  // Force restart trigger
+  console.log('Server restarting...');
+
   // API 前綴
   const prefix = configService.get('API_PREFIX') || '/api/v1';
   app.setGlobalPrefix(prefix);

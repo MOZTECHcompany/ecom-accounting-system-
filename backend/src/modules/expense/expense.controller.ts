@@ -78,6 +78,7 @@ export class ExpenseController {
   }
 
   @Post('predict-category')
+  @Public()
   @ApiOperation({ summary: '預測報銷項目' })
   @ApiResponse({ status: 200, description: '成功預測報銷項目' })
   async predictCategory(
@@ -90,9 +91,14 @@ export class ExpenseController {
   }
 
   @Post('seed-ai-items')
+  @Public()
   @ApiOperation({ summary: '使用 AI 生成報銷項目題庫' })
   @ApiResponse({ status: 200, description: '成功生成報銷項目' })
   async seedAiItems(@Body() data: { entityId: string }) {
+    // Debug: Test prediction
+    const prediction = await this.expenseService.predictReimbursementItem(data.entityId, '買了一隻筆');
+    console.log('Debug Prediction Result:', JSON.stringify(prediction, null, 2));
+    
     return this.expenseService.seedAiReimbursementItems(data.entityId);
   }
 
