@@ -538,13 +538,39 @@ const ExpenseRequestsPage: React.FC = () => {
         styles={{ body: { paddingBottom: 24 } }}
       >
         <Form layout="vertical" form={form} initialValues={{ amount: 0 }}>
+          <Form.Item label="備註說明" style={{ marginBottom: 24 }}>
+            <div className="mb-2 text-gray-500 text-xs">
+              請輸入費用內容（如：文具、計程車費），AI 將自動建議報銷項目。
+            </div>
+            <Form.Item name="description" noStyle>
+              <Input.TextArea
+                rows={3}
+                placeholder="例如：購買辦公室用的原子筆與筆記本"
+                style={{ marginBottom: 8 }}
+              />
+            </Form.Item>
+            <Button
+              block
+              icon={<BulbOutlined />}
+              onClick={handlePredictCategory}
+              loading={predicting}
+              style={{ 
+                backgroundColor: '#fffbe6', 
+                borderColor: '#ffe58f', 
+                color: '#d48806' 
+              }}
+            >
+              AI 智能建議報銷項目
+            </Button>
+          </Form.Item>
+
           <Form.Item
             label="報銷項目"
             name="reimbursementItemId"
             rules={[{ required: true, message: '請選擇報銷項目' }]}
           >
             <Select
-              placeholder="請選擇報銷項目"
+              placeholder="請選擇報銷項目（可使用上方 AI 建議）"
               onChange={handleReimbursementItemChange}
               loading={listLoading}
               showSearch
@@ -623,23 +649,6 @@ const ExpenseRequestsPage: React.FC = () => {
                 })) || []
               }
             />
-          </Form.Item>
-
-          <Form.Item label="備註說明" style={{ marginBottom: 12 }}>
-            <Form.Item name="description" noStyle>
-              <Input.TextArea rows={3} placeholder="可填寫用途、對象、專案代號等說明" />
-            </Form.Item>
-            <div className="flex justify-end mt-2">
-              <Button
-                type="dashed"
-                size="small"
-                icon={<BulbOutlined />}
-                onClick={handlePredictCategory}
-                loading={predicting}
-              >
-                AI 智能建議
-              </Button>
-            </div>
           </Form.Item>
 
           <Form.Item
