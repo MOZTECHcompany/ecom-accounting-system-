@@ -394,7 +394,28 @@ const ExpenseRequestsPage: React.FC = () => {
             icon: <BulbOutlined style={{ color: '#faad14' }} />,
           })
         } else {
-          message.info('AI 建議的項目目前不可用')
+          // 如果找不到對應的項目，嘗試重新載入列表
+          console.log('Suggested item not found in current list, refreshing...')
+          await fetchReimbursementItems()
+          // 重新尋找
+          const refreshedItems = await expenseService.getReimbursementItems(entityId, resolvedRoles, departmentId)
+          const refreshedItem = refreshedItems.find((i) => i.id === result.suggestedItem?.id)
+          
+          if (refreshedItem) {
+             setReimbursementItems(refreshedItems)
+             form.setFieldsValue({ reimbursementItemId: refreshedItem.id })
+             setSelectedItem(refreshedItem)
+             message.success({
+              content: (
+                <span>
+                  AI 建議：<span className="font-bold">{refreshedItem.name}</span> (信心度 {(result.confidence * 100).toFixed(0)}%)
+                </span>
+              ),
+              icon: <BulbOutlined style={{ color: '#faad14' }} />,
+            })
+          } else {
+             message.info('AI 建議的項目目前不可用')
+          }
         }
       } else {
         message.info('AI 無法判斷合適的報銷項目，請手動選擇')
