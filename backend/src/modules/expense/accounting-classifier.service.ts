@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
 export interface SuggestAccountInput {
@@ -33,14 +34,41 @@ interface SuggestionCandidate {
 @Injectable()
 export class AccountingClassifierService {
   private readonly logger = new Logger(AccountingClassifierService.name);
+  private readonly geminiApiKey: string;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+  ) {
+    this.geminiApiKey = this.configService.get<string>('GEMINI_API_KEY') || '';
+  }
 
   async suggestAccount(
     input: SuggestAccountInput,
   ): Promise<AccountSuggestionResult> {
     const appliedRules = new Set<string>();
     const candidates: SuggestionCandidate[] = [];
+
+    // 1. AI Classification (Gemini)
+    if (this.geminiApiKey && input.description) {
+      try {
+        const aiSuggestion = await this.classifyWithGemini(
+          input.entityId,
+          input.description,
+        );
+        if (aiSuggestion) {
+          appliedRules.add('ai_gemini');
+          candidates.push({
+            accountId: aiSuggestion.accountId,
+            confidence: aiSuggestion.confidence,
+            source: 'ai_gemini',
+            rule: 'ai_gemini',
+          });
+        }
+      } catch (error) {
+        this.logger.error(`Gemini AI classification failed: ${error}`);
+      }
+    }
 
     const normalizedKeywords = (input.reimbursementItemKeywords || [])
       .map((keyword) => keyword.trim().toLowerCase())
@@ -169,6 +197,81 @@ export class AccountingClassifierService {
         `Failed to compute frequent account for reimbursement item ${reimbursementItemId}: ${(error as Error).message}`,
       );
       return undefined;
+    }
+  }
+
+  private async classifyWithGemini(
+    entityId: string,
+    description: string,
+  ): Promise<{ accountId: string; confidence: number } | null> {
+    // 1. Fetch active expense accounts
+    const accounts = await this.prisma.account.findMany({
+      where: {
+        entityId,
+        isActive: true,
+      },
+      select: { id: true, code: true, name: true, description: true },
+    });
+
+    if (accounts.length === 0) return null;
+
+    const accountListText = accounts
+      .map((a) => `- ${a.code} ${a.name} (${a.description || ''}) [ID: ${a.id}]`)
+      .join('\n');
+
+    const prompt = `
+You are an expert accountant.
+Analyze the following expense description and select the most appropriate accounting account from the list below.
+
+Expense Description: "${description}"
+
+Available Accounts:
+${accountListText}
+
+Instructions:
+1. Select the best matching account.
+2. Return the result in JSON format: { "accountId": "THE_ID", "confidence": 0.95 }
+3. Confidence should be between 0.0 and 1.0.
+4. If no account is suitable, return null.
+5. Do not include any markdown formatting or explanation, just the JSON string.
+`;
+
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${this.geminiApiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(`Gemini API Error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!text) return null;
+
+      // Clean up markdown code blocks if present
+      const jsonString = text.replace(/```json/g, '').replace(/```/g, '').trim();
+      const result = JSON.parse(jsonString);
+
+      if (result && result.accountId && typeof result.confidence === 'number') {
+        // Verify account exists
+        const exists = accounts.find((a) => a.id === result.accountId);
+        if (exists) {
+          return { accountId: result.accountId, confidence: result.confidence };
+        }
+      }
+      return null;
+    } catch (error) {
+      this.logger.error('Error calling Gemini API', error);
+      return null;
     }
   }
 }
