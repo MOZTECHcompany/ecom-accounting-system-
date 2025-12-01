@@ -57,27 +57,26 @@ export class ExpenseService {
   }
 
   async predictReimbursementItem(entityId: string, description: string) {
-    // 1. Use AI to suggest an account
-    const suggestion = await this.classifierService.suggestAccount({
+    // 1. Use AI to suggest a Reimbursement Item directly
+    const suggestion = await this.classifierService.suggestReimbursementItem(
       entityId,
       description,
-      amountOriginal: 0, // Not needed for prediction
-    });
+    );
 
-    if (!suggestion.accountId) {
+    if (!suggestion || !suggestion.itemId) {
       return null;
     }
 
-    // 2. Find a reimbursement item that maps to this account
-    const item = await this.expenseRepository.findReimbursementItemByAccount(
-      entityId,
-      suggestion.accountId,
-    );
+    // 2. Find the full item details
+    const item = await this.prisma.reimbursementItem.findUnique({
+      where: { id: suggestion.itemId },
+      include: { account: true },
+    });
 
     return {
       suggestedItem: item,
       confidence: suggestion.confidence,
-      reason: suggestion.source,
+      reason: 'ai_gemini',
     };
   }
 

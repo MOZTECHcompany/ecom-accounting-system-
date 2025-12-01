@@ -202,6 +202,82 @@ export class AccountingClassifierService {
     }
   }
 
+  async suggestReimbursementItem(
+    entityId: string,
+    description: string,
+  ): Promise<{ itemId: string; confidence: number } | null> {
+    // 1. Fetch active reimbursement items
+    const items = await this.prisma.reimbursementItem.findMany({
+      where: {
+        entityId,
+        isActive: true,
+      },
+      select: { id: true, name: true, description: true, keywords: true },
+    });
+
+    if (items.length === 0) return null;
+
+    const itemListText = items
+      .map(
+        (i) =>
+          `- ${i.name} (${i.description || ''}) [Keywords: ${i.keywords || ''}] [ID: ${i.id}]`,
+      )
+      .join('\n');
+
+    const prompt = `
+You are an expert accountant assisting employees with expense reimbursement.
+Analyze the following expense description and select the most appropriate Reimbursement Item from the list below.
+
+Expense Description: "${description}"
+
+Available Reimbursement Items:
+${itemListText}
+
+Instructions:
+1. Select the best matching item.
+2. Return the result in JSON format: { "itemId": "THE_ID", "confidence": 0.95 }
+3. Confidence should be between 0.0 and 1.0.
+4. If no item is suitable, return null.
+5. Do not include any markdown formatting or explanation, just the raw JSON string.
+`;
+
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${this.geminiApiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(`Gemini API Error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!text) return null;
+
+      const jsonString = text.replace(/```json/g, '').replace(/```/g, '').trim();
+      const result = JSON.parse(jsonString);
+
+      if (result && result.itemId && typeof result.confidence === 'number') {
+        const exists = items.find((i) => i.id === result.itemId);
+        if (exists) {
+          return { itemId: result.itemId, confidence: result.confidence };
+        }
+      }
+      return null;
+    } catch (error) {
+      this.logger.error('Error calling Gemini API for item suggestion', error);
+      return null;
+    }
+  }
+
   private async classifyWithGemini(
     entityId: string,
     description: string,
