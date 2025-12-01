@@ -164,14 +164,19 @@ export class ExpenseService {
     );
 
     // Send notification to the requester
-    await this.notificationService.create({
-      userId: request.createdBy,
-      title: '費用申請已退回',
-      message: `您的費用申請「${request.description}」已被退回。原因：${payload.reason}`,
-      type: 'error',
-      category: 'expense',
-      data: { requestId: request.id },
-    });
+    try {
+      await this.notificationService.create({
+        userId: request.createdBy,
+        title: '費用申請已退回',
+        message: `您的費用申請「${request.description}」已被退回。原因：${payload.reason}`,
+        type: 'error',
+        category: 'expense',
+        data: { requestId: request.id },
+      });
+    } catch (error) {
+      this.logger.error(`Failed to send rejection notification: ${error}`);
+      // Do not throw error, let the rejection proceed
+    }
 
     return result;
   }

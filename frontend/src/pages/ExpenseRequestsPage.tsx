@@ -702,8 +702,8 @@ const ExpenseRequestsPage: React.FC = () => {
                       ? 'red'
                       : 'blue',
                   children: (
-                    <div className="pb-2">
-                      <div className="flex flex-wrap items-baseline justify-between gap-x-2 text-sm font-medium">
+                    <div className="pb-3">
+                      <div className="flex flex-wrap items-baseline justify-between gap-x-2 text-sm font-medium leading-relaxed">
                         <span className="font-bold text-gray-700">
                           {historyLabelMap[entry.action] || entry.action}
                         </span>
@@ -712,10 +712,10 @@ const ExpenseRequestsPage: React.FC = () => {
                         </span>
                       </div>
                       {entry.actor && (
-                        <div className="text-xs text-gray-500 mt-0.5">由 {entry.actor.name}</div>
+                        <div className="text-xs text-gray-500 mt-1">由 {entry.actor.name}</div>
                       )}
                       {entry.note && (
-                        <div className="text-sm mt-1 text-gray-600 break-words whitespace-pre-wrap">
+                        <div className="text-sm mt-2 text-gray-600 break-words whitespace-pre-wrap leading-relaxed p-2 bg-gray-50 rounded-md border border-gray-100">
                           {entry.note}
                         </div>
                       )}
