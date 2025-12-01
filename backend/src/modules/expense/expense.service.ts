@@ -4,6 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import {
   ExpenseRepository,
@@ -19,6 +20,7 @@ import {
   UpdateReimbursementItemDto,
 } from './dto/manage-reimbursement-item.dto';
 import { NotificationService } from '../notification/notification.service';
+import { PrismaService } from '../../common/prisma/prisma.service';
 
 interface UserContext {
   id: string;
@@ -41,6 +43,8 @@ export class ExpenseService {
     private readonly expenseRepository: ExpenseRepository,
     private readonly classifierService: AccountingClassifierService,
     private readonly notificationService: NotificationService,
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
   ) {}
   /**
    * 建立費用申請單
@@ -75,6 +79,125 @@ export class ExpenseService {
       confidence: suggestion.confidence,
       reason: suggestion.source,
     };
+  }
+
+  async seedAiReimbursementItems(entityId: string) {
+    const geminiApiKey = this.configService.get<string>('GEMINI_API_KEY');
+    if (!geminiApiKey) {
+      throw new BadRequestException('GEMINI_API_KEY is not configured');
+    }
+
+    // 1. Fetch all active expense accounts
+    const accounts = await this.prisma.account.findMany({
+      where: {
+        entityId,
+        isActive: true,
+        OR: [
+          { code: { startsWith: '5' } },
+          { code: { startsWith: '6' } },
+          { code: { startsWith: '7' } },
+          { code: { startsWith: '8' } },
+        ],
+      },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        description: true,
+      },
+    });
+
+    if (accounts.length === 0) {
+      throw new BadRequestException('No expense accounts found to seed from');
+    }
+
+    // 2. Prepare prompt for Gemini
+    const accountListText = accounts
+      .map((a) => `- ${a.code} ${a.name} (${a.description || ''}) [ID: ${a.id}]`)
+      .join('\n');
+
+    const prompt = `
+You are an expert accountant setting up an expense reimbursement system for a Taiwanese E-commerce company.
+Your task is to generate a comprehensive list of "Reimbursement Items" (Question Bank) that employees will see when they apply for expenses.
+These items should cover common scenarios like Travel, Office Supplies, Marketing, Software, Meals, etc.
+
+Based on the provided list of Accounting Accounts, generate 30-50 common Reimbursement Items.
+
+For each item, provide:
+1. "name": User-friendly name (e.g., "計程車費", "文具用品", "Facebook 廣告費").
+2. "description": A helpful tooltip description for the user.
+3. "keywords": A list of 3-5 keywords for search/AI matching.
+4. "accountId": The exact ID of the corresponding account from the provided list.
+5. "defaultReceiptType": One of ["TAX_INVOICE", "RECEIPT", "BANK_SLIP", "INTERNAL_ONLY"].
+6. "allowedReceiptTypes": A comma-separated string of allowed types (e.g., "TAX_INVOICE,RECEIPT").
+
+Available Accounts:
+${accountListText}
+
+Return the result as a JSON array of objects.
+Do not include any markdown formatting (like \`\`\`json), just the raw JSON string.
+`;
+
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${geminiApiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(`Gemini API Error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!text) {
+        throw new Error('Empty response from Gemini');
+      }
+
+      const jsonString = text.replace(/```json/g, '').replace(/```/g, '').trim();
+      const items = JSON.parse(jsonString);
+
+      let createdCount = 0;
+      for (const item of items) {
+        const accountExists = accounts.find((a) => a.id === item.accountId);
+        if (!accountExists) continue;
+
+        const existingItem = await this.prisma.reimbursementItem.findFirst({
+          where: {
+            entityId,
+            name: item.name,
+          },
+        });
+
+        if (existingItem) continue;
+
+        await this.prisma.reimbursementItem.create({
+          data: {
+            entityId,
+            name: item.name,
+            description: item.description,
+            accountId: item.accountId,
+            keywords: item.keywords ? item.keywords.join(',') : null,
+            defaultReceiptType: item.defaultReceiptType,
+            allowedReceiptTypes: item.allowedReceiptTypes,
+            isActive: true,
+          },
+        });
+        createdCount++;
+      }
+
+      return { success: true, createdCount };
+    } catch (error) {
+      this.logger.error('Error seeding AI items', error);
+      throw new BadRequestException('Failed to seed AI items: ' + error);
+    }
   }
 
   /**

@@ -89,6 +89,13 @@ export class ExpenseController {
     );
   }
 
+  @Post('seed-ai-items')
+  @ApiOperation({ summary: '使用 AI 生成報銷項目題庫' })
+  @ApiResponse({ status: 200, description: '成功生成報銷項目' })
+  async seedAiItems(@Body() data: { entityId: string }) {
+    return this.expenseService.seedAiReimbursementItems(data.entityId);
+  }
+
   @Put('requests/:id/approve')
   @ApiOperation({ summary: '核准費用請款' })
   @ApiResponse({ status: 200, description: '成功核准費用請款' })
