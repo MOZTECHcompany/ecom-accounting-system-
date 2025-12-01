@@ -46,9 +46,10 @@ const ArInvoicesPage: React.FC = () => {
     setLoading(true)
     try {
       const result = await arService.getInvoices()
-      setInvoices(result.items)
+      setInvoices(Array.isArray(result?.items) ? result.items : [])
     } catch (error) {
       message.error('載入發票失敗')
+      setInvoices([])
     } finally {
       setLoading(false)
     }

@@ -151,10 +151,11 @@ const ExpenseRequestsPage: React.FC = () => {
           ? { entityId, status: 'pending' }
           : { entityId, mine: true }
       const requestList = await expenseService.getExpenseRequests(query)
-      setRequests(requestList)
+      setRequests(Array.isArray(requestList) ? requestList : [])
     } catch (error) {
       console.error(error)
       message.error('無法載入費用申請列表')
+      setRequests([])
     } finally {
       setListLoading(false)
     }
@@ -650,7 +651,7 @@ const ExpenseRequestsPage: React.FC = () => {
             <Title level={5} style={{ marginBottom: 16 }}>
               歷程紀錄
             </Title>
-            <div className="max-h-72 overflow-y-auto pr-2">
+            <div className="max-h-72 overflow-y-auto pr-2 pb-4">
               <Timeline
                 mode="left"
                 pending={historyLoading ? '讀取中...' : undefined}

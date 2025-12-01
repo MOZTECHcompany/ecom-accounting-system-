@@ -93,11 +93,12 @@ const ApInvoicesPage: React.FC = () => {
         apService.getInvoices(),
         apService.getInvoiceAlerts(),
       ])
-      setInvoices(invoiceList)
+      setInvoices(Array.isArray(invoiceList) ? invoiceList : [])
       setAlerts(alertStats)
     } catch (error) {
       console.error(error)
       message.error('載入發票失敗')
+      setInvoices([])
     } finally {
       setLoading(false)
     }
