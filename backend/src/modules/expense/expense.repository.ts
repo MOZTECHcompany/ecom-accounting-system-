@@ -70,6 +70,17 @@ export class ExpenseRepository {
     return this.prisma.expenseRequest.update({ where: { id }, data });
   }
 
+  async findReimbursementItemByAccount(entityId: string, accountId: string) {
+    return this.prisma.reimbursementItem.findFirst({
+      where: {
+        entityId,
+        accountId,
+        isActive: true,
+      },
+      include: REIMBURSEMENT_ITEM_INCLUDE,
+    });
+  }
+
   async findActiveReimbursementItems(
     entityId: string,
     options?: { roles?: string[]; departmentId?: string },

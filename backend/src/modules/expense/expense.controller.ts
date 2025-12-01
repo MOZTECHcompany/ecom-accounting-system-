@@ -77,6 +77,18 @@ export class ExpenseController {
     });
   }
 
+  @Post('predict-category')
+  @ApiOperation({ summary: '預測報銷項目' })
+  @ApiResponse({ status: 200, description: '成功預測報銷項目' })
+  async predictCategory(
+    @Body() data: { description: string; entityId: string },
+  ) {
+    return this.expenseService.predictReimbursementItem(
+      data.entityId,
+      data.description,
+    );
+  }
+
   @Put('requests/:id/approve')
   @ApiOperation({ summary: '核准費用請款' })
   @ApiResponse({ status: 200, description: '成功核准費用請款' })

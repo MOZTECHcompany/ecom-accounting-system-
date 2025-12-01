@@ -105,6 +105,12 @@ export interface ExpenseHistoryEntry {
   finalAccount?: ExpenseAccountRef | null
 }
 
+export interface PredictionResult {
+  suggestedItem: ReimbursementItem | null
+  confidence: number
+  reason: string
+}
+
 export interface SubmitFeedbackPayload {
   suggestedAccountId?: string
   chosenAccountId?: string
@@ -151,7 +157,15 @@ const buildParams = (params: Record<string, string | undefined>) =>
   Object.fromEntries(Object.entries(params).filter(([, value]) => Boolean(value)))
 
 export const expenseService = {
-  async getReimbursementItems(entityId?: string, roles?: string[], departmentId?: string) {
+  async predictCategory(entityId: string, description: string): Promise<PredictionResult | null> {
+    const { data } = await api.post<PredictionResult | null>('/expense/predict-category', {
+      entityId,
+      description,
+    })
+    return data
+  },
+
+  async getReimbursementItems(entityId: string = DEFAULT_ENTITY_ID) {
     const effectiveEntityId = entityId?.trim() || DEFAULT_ENTITY_ID
     const params: Record<string, string> = { entityId: effectiveEntityId }
     if (roles && roles.length) {

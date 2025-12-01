@@ -18,8 +18,9 @@ import {
   Descriptions,
   Segmented,
   Upload,
+  Tooltip,
 } from 'antd'
-import { PlusOutlined, UploadOutlined } from '@ant-design/icons'
+import { PlusOutlined, UploadOutlined, BulbOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import {
@@ -122,6 +123,7 @@ const ExpenseRequestsPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false)
   const [approveLoading, setApproveLoading] = useState(false)
   const [rejectLoading, setRejectLoading] = useState(false)
+  const [predicting, setPredicting] = useState(false)
   const [form] = Form.useForm()
   const [approvalForm] = Form.useForm()
 
@@ -368,6 +370,43 @@ const ExpenseRequestsPage: React.FC = () => {
     }
   }
 
+  const handlePredictCategory = async () => {
+    const description = form.getFieldValue('description')
+    if (!description || !description.trim()) {
+      message.warning('請先輸入備註說明，AI 才能進行分析')
+      return
+    }
+
+    try {
+      setPredicting(true)
+      const result = await expenseService.predictCategory(entityId, description)
+      if (result && result.suggestedItem) {
+        const item = reimbursementItems.find((i) => i.id === result.suggestedItem?.id)
+        if (item) {
+          form.setFieldsValue({ reimbursementItemId: item.id })
+          setSelectedItem(item)
+          message.success({
+            content: (
+              <span>
+                AI 建議：<span className="font-bold">{item.name}</span> (信心度 {(result.confidence * 100).toFixed(0)}%)
+              </span>
+            ),
+            icon: <BulbOutlined style={{ color: '#faad14' }} />,
+          })
+        } else {
+          message.info('AI 建議的項目目前不可用')
+        }
+      } else {
+        message.info('AI 無法判斷合適的報銷項目，請手動選擇')
+      }
+    } catch (error) {
+      console.error(error)
+      message.error('AI 分析失敗，請稍後再試')
+    } finally {
+      setPredicting(false)
+    }
+  }
+
   const allowedReceiptTypes = selectedItem?.allowedReceiptTypes
     ?.split(',')
     .map((x) => x.trim())
@@ -586,8 +625,21 @@ const ExpenseRequestsPage: React.FC = () => {
             />
           </Form.Item>
 
-          <Form.Item label="備註說明" name="description">
-            <Input.TextArea rows={3} placeholder="可填寫用途、對象、專案代號等說明" />
+          <Form.Item label="備註說明" style={{ marginBottom: 12 }}>
+            <Form.Item name="description" noStyle>
+              <Input.TextArea rows={3} placeholder="可填寫用途、對象、專案代號等說明" />
+            </Form.Item>
+            <div className="flex justify-end mt-2">
+              <Button
+                type="dashed"
+                size="small"
+                icon={<BulbOutlined />}
+                onClick={handlePredictCategory}
+                loading={predicting}
+              >
+                AI 智能建議
+              </Button>
+            </div>
           </Form.Item>
 
           <Form.Item
@@ -690,7 +742,7 @@ const ExpenseRequestsPage: React.FC = () => {
             <Title level={5} style={{ marginBottom: 16 }}>
               歷程紀錄
             </Title>
-            <div className="max-h-72 overflow-y-auto pr-2 pb-4">
+            <div className="max-h-72 overflow-y-auto px-1 pt-1 pb-4">
               <Timeline
                 mode="left"
                 pending={historyLoading ? '讀取中...' : undefined}

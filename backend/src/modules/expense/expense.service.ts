@@ -52,6 +52,31 @@ export class ExpenseService {
     return this.submitIntelligentExpenseRequest(data, requestedBy);
   }
 
+  async predictReimbursementItem(entityId: string, description: string) {
+    // 1. Use AI to suggest an account
+    const suggestion = await this.classifierService.suggestAccount({
+      entityId,
+      description,
+      amountOriginal: 0, // Not needed for prediction
+    });
+
+    if (!suggestion.accountId) {
+      return null;
+    }
+
+    // 2. Find a reimbursement item that maps to this account
+    const item = await this.expenseRepository.findReimbursementItemByAccount(
+      entityId,
+      suggestion.accountId,
+    );
+
+    return {
+      suggestedItem: item,
+      confidence: suggestion.confidence,
+      reason: suggestion.source,
+    };
+  }
+
   /**
    * 查詢費用申請單列表
    */
