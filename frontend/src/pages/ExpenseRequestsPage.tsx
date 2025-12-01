@@ -18,6 +18,7 @@ import {
   Descriptions,
   Segmented,
 } from 'antd'
+import { PlusOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import {
@@ -425,15 +426,11 @@ const ExpenseRequestsPage: React.FC = () => {
   ]
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
-      <div className="flex justify-between items-center flex-wrap gap-3">
+    <div className="space-y-6">
+      <div className="flex justify-between items-end">
         <div>
-          <h1 className="text-xl md:text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>
-            費用申請
-          </h1>
-          <p className="text-sm opacity-70" style={{ color: 'var(--text-secondary)' }}>
-            以標準化報銷項目提交費用，並串接智慧科目建議與審批歷程。
-          </p>
+          <Title level={2} className="!mb-1 !font-light">費用申請</Title>
+          <Text className="text-gray-500">以標準化報銷項目提交費用，並串接智慧科目建議與審批歷程。</Text>
         </div>
         <Space>
           {isAdmin && (
@@ -449,24 +446,24 @@ const ExpenseRequestsPage: React.FC = () => {
           <Button onClick={refreshRequests} disabled={listLoading}>
             重新整理
           </Button>
-          <Button type="primary" onClick={handleOpenDrawer} className="rounded-full px-5 shadow-md">
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenDrawer}>
             新增費用申請
           </Button>
         </Space>
       </div>
 
-      <Card className="glass-panel" bodyStyle={{ padding: 16 }}>
+      <Card className="glass-card" bordered={false}>
         <div className="flex justify-between items-center mb-3">
-          <h2 className="text-base md:text-lg font-medium" style={{ color: 'var(--text-primary)' }}>
-            我的費用申請
-          </h2>
+          <Title level={4} className="!mb-0">
+            {viewMode === 'mine' ? '我的費用申請' : '待審核申請'}
+          </Title>
         </div>
         <Table
           rowKey="id"
           loading={listLoading}
           columns={columns}
           dataSource={requests}
-          pagination={{ pageSize: 8, showSizeChanger: false }}
+          pagination={{ pageSize: 10, showSizeChanger: false }}
           locale={{ emptyText: '目前尚無費用申請紀錄' }}
         />
       </Card>

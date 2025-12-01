@@ -1,6 +1,31 @@
-import React, { useEffect, useState } from 'react'
-import { Table, Tag, message, Space, Button, Typography, Modal, Form, Input, Select, Switch } from 'antd'
-import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
+import React, { useEffect, useMemo, useState } from 'react'
+import {
+  Button,
+  Card,
+  Col,
+  Drawer,
+  Form,
+  Input,
+  Row,
+  Select,
+  Space,
+  Statistic,
+  Switch,
+  Table,
+  Tag,
+  Typography,
+  message,
+  Popconfirm
+} from 'antd'
+import {
+  PlusOutlined,
+  ReloadOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  SearchOutlined,
+  ShopOutlined,
+  CheckCircleOutlined
+} from '@ant-design/icons'
 import { vendorService } from '../services/vendor.service'
 import { Vendor, CreateVendorDto } from '../types'
 
@@ -10,8 +35,9 @@ const { Option } = Select
 const VendorsPage: React.FC = () => {
   const [vendors, setVendors] = useState<Vendor[]>([])
   const [loading, setLoading] = useState(false)
-  const [isModalVisible, setIsModalVisible] = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [editingVendor, setEditingVendor] = useState<Vendor | null>(null)
+  const [searchKeyword, setSearchKeyword] = useState('')
   const [form] = Form.useForm()
 
   const loadVendors = async () => {
@@ -30,16 +56,34 @@ const VendorsPage: React.FC = () => {
     loadVendors()
   }, [])
 
+  const stats = useMemo(() => {
+    const total = vendors.length
+    const active = vendors.filter(v => v.isActive).length
+    return { total, active }
+  }, [vendors])
+
+  const filteredVendors = useMemo(() => {
+    if (!searchKeyword) return vendors
+    const lower = searchKeyword.toLowerCase()
+    return vendors.filter(
+      v =>
+        v.name.toLowerCase().includes(lower) ||
+        v.code.toLowerCase().includes(lower) ||
+        v.taxId?.includes(lower)
+    )
+  }, [vendors, searchKeyword])
+
   const handleAdd = () => {
     setEditingVendor(null)
     form.resetFields()
-    setIsModalVisible(true)
+    form.setFieldsValue({ isActive: true, currency: 'TWD' })
+    setDrawerOpen(true)
   }
 
   const handleEdit = (record: Vendor) => {
     setEditingVendor(record)
     form.setFieldsValue(record)
-    setIsModalVisible(true)
+    setDrawerOpen(true)
   }
 
   const handleDelete = async (id: string) => {
@@ -52,7 +96,7 @@ const VendorsPage: React.FC = () => {
     }
   }
 
-  const handleModalOk = async () => {
+  const handleSubmit = async () => {
     try {
       const values = await form.validateFields()
       if (editingVendor) {
@@ -62,7 +106,7 @@ const VendorsPage: React.FC = () => {
         await vendorService.create(values as CreateVendorDto)
         message.success('新增成功')
       }
-      setIsModalVisible(false)
+      setDrawerOpen(false)
       loadVendors()
     } catch (error) {
       // Form validation error
@@ -129,18 +173,13 @@ const VendorsPage: React.FC = () => {
             icon={<EditOutlined />} 
             onClick={() => handleEdit(record)}
           />
-          <Button 
-            type="text" 
-            danger 
-            icon={<DeleteOutlined />} 
-            onClick={() => {
-              Modal.confirm({
-                title: '確認刪除',
-                content: `確定要刪除供應商 ${record.name} 嗎？`,
-                onOk: () => handleDelete(record.id)
-              })
-            }}
-          />
+          <Popconfirm
+            title="確認刪除"
+            description={`確定要刪除供應商 ${record.name} 嗎？`}
+            onConfirm={() => handleDelete(record.id)}
+          >
+            <Button type="text" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
         </Space>
       ),
     },
@@ -148,91 +187,171 @@ const VendorsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex justify-between items-end">
         <div>
-          <Title level={2} className="!mb-1">供應商管理</Title>
-          <Text type="secondary">管理所有供應商資料與聯絡資訊</Text>
+          <Title level={2} className="!mb-1 !font-light">供應商管理</Title>
+          <Text className="text-gray-500">管理所有供應商資料與聯絡資訊</Text>
         </div>
-        <Space wrap>
+        <Space>
           <Button icon={<ReloadOutlined />} onClick={loadVendors}>重新整理</Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增供應商</Button>
         </Space>
       </div>
 
-      <div className="bg-white/50 backdrop-blur-xl rounded-2xl p-6 shadow-sm border border-white/20">
+      <Row gutter={16}>
+        <Col span={12}>
+          <Card bordered={false} className="glass-card">
+            <Statistic
+              title="供應商總數"
+              value={stats.total}
+              prefix={<ShopOutlined />}
+              valueStyle={{ color: '#1890ff' }}
+            />
+          </Card>
+        </Col>
+        <Col span={12}>
+          <Card bordered={false} className="glass-card">
+            <Statistic
+              title="活躍供應商"
+              value={stats.active}
+              prefix={<CheckCircleOutlined />}
+              valueStyle={{ color: '#52c41a' }}
+            />
+          </Card>
+        </Col>
+      </Row>
+
+      <Card className="glass-card" bordered={false}>
+        <Form layout="inline" className="mb-6">
+          <Form.Item name="search">
+            <Input
+              allowClear
+              prefix={<SearchOutlined />}
+              placeholder="搜尋代碼、名稱或統編"
+              value={searchKeyword}
+              onChange={(e) => setSearchKeyword(e.target.value)}
+              style={{ minWidth: 280 }}
+            />
+          </Form.Item>
+        </Form>
+
         <Table 
           columns={columns} 
-          dataSource={vendors} 
+          dataSource={filteredVendors} 
           rowKey="id" 
           loading={loading}
           scroll={{ x: 1000 }}
           pagination={{ pageSize: 10 }}
         />
-      </div>
+      </Card>
 
-      <Modal
+      <Drawer
         title={editingVendor ? '編輯供應商' : '新增供應商'}
-        open={isModalVisible}
-        onOk={handleModalOk}
-        onCancel={() => setIsModalVisible(false)}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
         width={720}
+        extra={
+          <Space>
+            <Button onClick={() => setDrawerOpen(false)}>取消</Button>
+            <Button type="primary" onClick={handleSubmit}>
+              {editingVendor ? '更新' : '新增'}
+            </Button>
+          </Space>
+        }
       >
         <Form
           form={form}
           layout="vertical"
-          initialValues={{ isActive: true, currency: 'TWD' }}
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Form.Item
-              name="code"
-              label="供應商代碼"
-              rules={[{ required: true, message: '請輸入代碼' }]}
-            >
-              <Input placeholder="例如：V001" />
-            </Form.Item>
-            <Form.Item
-              name="name"
-              label="供應商名稱"
-              rules={[{ required: true, message: '請輸入名稱' }]}
-            >
-              <Input placeholder="輸入公司名稱" />
-            </Form.Item>
-            <Form.Item name="taxId" label="統一編號">
-              <Input />
-            </Form.Item>
-            <Form.Item name="contactPerson" label="聯絡人">
-              <Input />
-            </Form.Item>
-            <Form.Item name="email" label="Email" rules={[{ type: 'email' }]}>
-              <Input />
-            </Form.Item>
-            <Form.Item name="phone" label="電話">
-              <Input />
-            </Form.Item>
-            <Form.Item name="currency" label="預設幣別">
-              <Select>
-                <Option value="TWD">TWD - 新台幣</Option>
-                <Option value="USD">USD - 美金</Option>
-                <Option value="EUR">EUR - 歐元</Option>
-                <Option value="JPY">JPY - 日圓</Option>
-              </Select>
-            </Form.Item>
-            <Form.Item name="paymentTerms" label="付款條件">
-              <Select>
-                <Option value="NET30">月結 30 天</Option>
-                <Option value="NET60">月結 60 天</Option>
-                <Option value="COD">貨到付款</Option>
-              </Select>
-            </Form.Item>
-            <Form.Item name="address" label="地址" className="md:col-span-2">
-              <Input.TextArea rows={2} />
-            </Form.Item>
-            <Form.Item name="isActive" label="狀態" valuePropName="checked">
-              <Switch checkedChildren="啟用" unCheckedChildren="停用" />
-            </Form.Item>
-          </div>
+          <Card title="基本資料" bordered={false} className="mb-4">
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="code"
+                  label="供應商代碼"
+                  rules={[{ required: true, message: '請輸入代碼' }]}
+                >
+                  <Input placeholder="例如：V001" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="name"
+                  label="供應商名稱"
+                  rules={[{ required: true, message: '請輸入名稱' }]}
+                >
+                  <Input placeholder="輸入公司名稱" />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item name="taxId" label="統一編號">
+                  <Input />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item name="isActive" label="狀態" valuePropName="checked">
+                  <Switch checkedChildren="啟用" unCheckedChildren="停用" />
+                </Form.Item>
+              </Col>
+            </Row>
+          </Card>
+
+          <Card title="聯絡資訊" bordered={false} className="mb-4">
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item name="contactPerson" label="聯絡人">
+                  <Input />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item name="phone" label="電話">
+                  <Input />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col span={24}>
+                <Form.Item name="email" label="Email" rules={[{ type: 'email' }]}>
+                  <Input />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col span={24}>
+                <Form.Item name="address" label="地址">
+                  <Input.TextArea rows={2} />
+                </Form.Item>
+              </Col>
+            </Row>
+          </Card>
+
+          <Card title="財務設定" bordered={false}>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item name="currency" label="預設幣別">
+                  <Select>
+                    <Option value="TWD">TWD - 新台幣</Option>
+                    <Option value="USD">USD - 美金</Option>
+                    <Option value="EUR">EUR - 歐元</Option>
+                    <Option value="JPY">JPY - 日圓</Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item name="paymentTerms" label="付款條件">
+                  <Select>
+                    <Option value="NET30">月結 30 天</Option>
+                    <Option value="NET60">月結 60 天</Option>
+                    <Option value="COD">貨到付款</Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+            </Row>
+          </Card>
         </Form>
-      </Modal>
+      </Drawer>
     </div>
   )
 }

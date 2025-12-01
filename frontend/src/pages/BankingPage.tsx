@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   Button,
   Card,
   Form,
   Input,
-  Modal,
+  Drawer,
   Select,
   Table,
   Tabs,
@@ -14,14 +14,16 @@ import {
   Upload,
   Statistic,
   Row,
-  Col
+  Col,
+  Space
 } from 'antd'
 import { 
   BankOutlined, 
   HistoryOutlined, 
   PlusOutlined, 
   UploadOutlined,
-  DollarOutlined
+  DollarOutlined,
+  WalletOutlined
 } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import dayjs from 'dayjs'
@@ -33,7 +35,7 @@ const { Title, Text } = Typography
 const AccountsTab = () => {
   const [accounts, setAccounts] = useState<BankAccount[]>([])
   const [loading, setLoading] = useState(false)
-  const [createOpen, setCreateOpen] = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [form] = Form.useForm()
 
   const fetchAccounts = async () => {
@@ -52,12 +54,18 @@ const AccountsTab = () => {
     fetchAccounts()
   }, [])
 
+  const stats = useMemo(() => {
+    const totalBalance = accounts.reduce((sum, acc) => sum + (acc.balance || 0), 0)
+    const totalAccounts = accounts.length
+    return { totalBalance, totalAccounts }
+  }, [accounts])
+
   const handleCreate = async () => {
     try {
       const values = await form.validateFields()
       await bankingService.createAccount(values)
       message.success('帳戶建立成功')
-      setCreateOpen(false)
+      setDrawerOpen(false)
       form.resetFields()
       fetchAccounts()
     } catch (error) {
@@ -87,29 +95,36 @@ const AccountsTab = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <Title level={4} className="!mb-0 !font-light">銀行帳戶列表</Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+      <Row gutter={16}>
+        <Col span={12}>
+          <Card bordered={false} className="glass-card">
+            <Statistic
+              title="總資產餘額 (預估)"
+              value={stats.totalBalance}
+              precision={0}
+              prefix={<DollarOutlined />}
+              suffix="TWD"
+              valueStyle={{ color: '#3f8600' }}
+            />
+          </Card>
+        </Col>
+        <Col span={12}>
+          <Card bordered={false} className="glass-card">
+            <Statistic
+              title="銀行帳戶數"
+              value={stats.totalAccounts}
+              prefix={<BankOutlined />}
+              valueStyle={{ color: '#1890ff' }}
+            />
+          </Card>
+        </Col>
+      </Row>
+
+      <div className="flex justify-end">
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => setDrawerOpen(true)}>
           新增帳戶
         </Button>
       </div>
-
-      <Row gutter={16}>
-        {accounts.map(acc => (
-          <Col span={8} key={acc.id}>
-            <Card className="glass-card mb-4">
-              <Statistic
-                title={acc.bankName}
-                value={acc.balance ?? 0}
-                precision={2}
-                prefix={<DollarOutlined />}
-                suffix={acc.currency}
-              />
-              <Text type="secondary">{acc.accountNo}</Text>
-            </Card>
-          </Col>
-        ))}
-      </Row>
 
       <Table
         rowKey="id"
@@ -118,31 +133,44 @@ const AccountsTab = () => {
         dataSource={accounts}
       />
 
-      <Modal
+      <Drawer
         title="新增銀行帳戶"
-        open={createOpen}
-        onCancel={() => setCreateOpen(false)}
-        onOk={handleCreate}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        width={520}
+        extra={
+          <Space>
+            <Button onClick={() => setDrawerOpen(false)}>取消</Button>
+            <Button type="primary" onClick={handleCreate}>
+              建立
+            </Button>
+          </Space>
+        }
       >
         <Form form={form} layout="vertical">
-          <Form.Item name="bankName" label="銀行名稱" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="accountNumber" label="帳號" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="currency" label="幣別" initialValue="TWD">
-            <Select>
-              <Select.Option value="TWD">TWD</Select.Option>
-              <Select.Option value="USD">USD</Select.Option>
-              <Select.Option value="EUR">EUR</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name="glAccountId" label="對應會計科目">
-            <Input placeholder="例如: 1101" />
-          </Form.Item>
+          <Card title="帳戶資訊" bordered={false} className="mb-4">
+            <Form.Item name="bankName" label="銀行名稱" rules={[{ required: true }]}>
+              <Input placeholder="例如：玉山銀行" />
+            </Form.Item>
+            <Form.Item name="accountNumber" label="帳號" rules={[{ required: true }]}>
+              <Input placeholder="例如：123-456-789" />
+            </Form.Item>
+          </Card>
+          
+          <Card title="設定" bordered={false}>
+            <Form.Item name="currency" label="幣別" initialValue="TWD">
+              <Select>
+                <Select.Option value="TWD">TWD</Select.Option>
+                <Select.Option value="USD">USD</Select.Option>
+                <Select.Option value="EUR">EUR</Select.Option>
+              </Select>
+            </Form.Item>
+            <Form.Item name="glAccountId" label="對應會計科目">
+              <Input placeholder="例如: 1101" />
+            </Form.Item>
+          </Card>
         </Form>
-      </Modal>
+      </Drawer>
     </div>
   )
 }

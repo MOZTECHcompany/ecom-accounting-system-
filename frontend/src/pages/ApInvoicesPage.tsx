@@ -5,6 +5,7 @@ import {
   Card,
   Col,
   DatePicker,
+  Drawer,
   Form,
   Input,
   InputNumber,
@@ -17,6 +18,7 @@ import {
   Table,
   Tag,
   Typography,
+  Upload,
   message,
 } from 'antd'
 import {
@@ -26,9 +28,12 @@ import {
   ReloadOutlined,
   ClockCircleOutlined,
   DollarCircleOutlined,
+  UploadOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import dayjs from 'dayjs'
+import * as XLSX from 'xlsx'
 import { apService } from '../services/ap.service'
 import { vendorService } from '../services/vendor.service'
 import { ApInvoice, ApInvoiceAlerts, Vendor } from '../types'
@@ -50,6 +55,16 @@ const PAYMENT_STATUS_OPTIONS = [
   { label: '已付款', value: 'paid' },
   { label: '逾期', value: 'overdue' },
 ]
+const CSV_FIELD_MAP = {
+  vendorId: ['vendorid', 'vendor_id', 'vendor'],
+  invoiceNo: ['invoiceno', 'invoice_no', 'invoice'],
+  amountOriginal: ['amountoriginal', 'amount', 'amount_original'],
+  amountCurrency: ['amountcurrency', 'currency', 'amount_currency'],
+  invoiceDate: ['invoicedate', 'invoice_date', 'issue_date'],
+  dueDate: ['duedate', 'due_date'],
+  paymentFrequency: ['paymentfrequency', 'payment_frequency'],
+  notes: ['notes', 'memo', '備註'],
+}
 
 const ApInvoicesPage: React.FC = () => {
   const [invoices, setInvoices] = useState<ApInvoice[]>([])
@@ -65,6 +80,7 @@ const ApInvoicesPage: React.FC = () => {
   const [vendorsLoading, setVendorsLoading] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [paymentInvoice, setPaymentInvoice] = useState<ApInvoice | null>(null)
+  const [batchUploading, setBatchUploading] = useState(false)
   const [form] = Form.useForm()
   const [batchForm] = Form.useForm()
   const [editForm] = Form.useForm()
@@ -183,6 +199,158 @@ const ApInvoicesPage: React.FC = () => {
     } catch (error) {
       console.error(error)
     }
+  }
+
+  const handleDownloadTemplate = () => {
+    const headers = [
+      'vendorId',
+      'invoiceNo',
+      'amountOriginal',
+      'amountCurrency',
+      'invoiceDate',
+      'dueDate',
+      'paymentFrequency',
+      'notes',
+    ]
+    const sampleRow = [
+      'VEND001',
+      'AP-2025-001',
+      '15000',
+      'TWD',
+      dayjs().format('YYYY-MM-DD'),
+      dayjs().add(30, 'day').format('YYYY-MM-DD'),
+      'monthly',
+      '自動扣款示意',
+    ]
+    const csvContent = [headers.join(','), sampleRow.join(',')].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'ap-invoices-template.csv'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  const parseDateCell = (value: unknown) => {
+    if (value === null || value === undefined || value === '') return null
+    if (typeof value === 'number' && !Number.isNaN(value)) {
+      // Excel serial number → JS Date (Excel epoch 1899-12-30)
+      const baseDate = dayjs('1899-12-30')
+      const converted = baseDate.add(value, 'day')
+      return converted.isValid() ? converted : null
+    }
+    const parsed = dayjs(String(value))
+    if (parsed.isValid()) {
+      return parsed
+    }
+    return null
+  }
+
+  const extractField = (
+    row: Record<string, unknown>,
+    candidates: string[],
+  ) => {
+    for (const key of candidates) {
+      if (row[key] !== undefined && row[key] !== null) {
+        return row[key]
+      }
+    }
+    return undefined
+  }
+
+  const handleCsvUpload = async (file: File) => {
+    setBatchUploading(true)
+    try {
+      const buffer = await file.arrayBuffer()
+      const workbook = XLSX.read(buffer, { type: 'array' })
+      const sheet = workbook.Sheets[workbook.SheetNames[0]]
+      if (!sheet) {
+        message.error('無法讀取 CSV 內容')
+        return false
+      }
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+        defval: null,
+        raw: true,
+      })
+
+      if (!rows.length) {
+        message.warning('CSV 檔沒有資料列')
+        return false
+      }
+
+      const normalizedRows = rows
+        .map((row) => {
+          const lowered = Object.keys(row).reduce<Record<string, unknown>>(
+            (acc, key) => {
+              acc[key.trim().toLowerCase()] = row[key]
+              return acc
+            },
+            {},
+          )
+          const vendorId = extractField(lowered, CSV_FIELD_MAP.vendorId)
+          const invoiceNo = extractField(lowered, CSV_FIELD_MAP.invoiceNo)
+          const amountOriginal = Number(
+            extractField(lowered, CSV_FIELD_MAP.amountOriginal) ?? 0,
+          )
+          const amountCurrency =
+            (extractField(lowered, CSV_FIELD_MAP.amountCurrency) as string) ||
+            'TWD'
+          const invoiceDate = parseDateCell(
+            extractField(lowered, CSV_FIELD_MAP.invoiceDate),
+          )
+          const dueDate = parseDateCell(
+            extractField(lowered, CSV_FIELD_MAP.dueDate),
+          )
+          const paymentFrequencyRaw = (
+            extractField(lowered, CSV_FIELD_MAP.paymentFrequency) as string
+          )?.toLowerCase()
+          const paymentFrequency =
+            paymentFrequencyRaw === 'monthly' ? 'monthly' : 'one_time'
+          const notes = (extractField(lowered, CSV_FIELD_MAP.notes) as string) ||
+            undefined
+
+          if (
+            !vendorId ||
+            !invoiceNo ||
+            !invoiceDate ||
+            !dueDate ||
+            Number.isNaN(amountOriginal) ||
+            amountOriginal <= 0
+          ) {
+            return null
+          }
+
+          return {
+            vendorId: String(vendorId),
+            invoiceNo: String(invoiceNo),
+            amountOriginal,
+            amountCurrency,
+            invoiceDate,
+            dueDate,
+            paymentFrequency,
+            notes,
+          }
+        })
+        .filter(Boolean) as Record<string, unknown>[]
+
+      if (!normalizedRows.length) {
+        message.warning('CSV 欄位不完整，請確認欄位並重試')
+        return false
+      }
+
+      batchForm.setFieldsValue({ invoices: normalizedRows })
+      message.success(`已載入 ${normalizedRows.length} 筆資料`)
+    } catch (error) {
+      console.error(error)
+      message.error('解析 CSV 失敗，請確認檔案格式')
+    } finally {
+      setBatchUploading(false)
+    }
+
+    return false
   }
 
   const handleOpenEdit = (invoice: ApInvoice) => {
@@ -446,28 +614,32 @@ const ApInvoicesPage: React.FC = () => {
       />
 
       <Card className="glass-card" bordered={false}>
-        <div className="flex flex-wrap gap-3 mb-4">
-          <Input
-            allowClear
-            prefix={<SearchOutlined />}
-            placeholder="搜尋發票號碼或供應商"
-            value={searchKeyword}
-            onChange={(e) => setSearchKeyword(e.target.value)}
-            style={{ minWidth: 240 }}
-          />
-          <Select
-            value={statusFilter}
-            onChange={setStatusFilter}
-            style={{ width: 160 }}
-            options={[
-              { value: 'all', label: '全部狀態' },
-              { value: 'pending', label: '未付款' },
-              { value: 'partial', label: '部分付款' },
-              { value: 'paid', label: '已付款' },
-              { value: 'overdue', label: '已逾期' },
-            ]}
-          />
-        </div>
+        <Form layout="inline" className="mb-6">
+          <Form.Item name="search">
+            <Input
+              allowClear
+              prefix={<SearchOutlined />}
+              placeholder="搜尋發票號碼或供應商"
+              value={searchKeyword}
+              onChange={(e) => setSearchKeyword(e.target.value)}
+              style={{ minWidth: 240 }}
+            />
+          </Form.Item>
+          <Form.Item name="status">
+            <Select
+              value={statusFilter}
+              onChange={setStatusFilter}
+              style={{ width: 160 }}
+              options={[
+                { value: 'all', label: '全部狀態' },
+                { value: 'pending', label: '未付款' },
+                { value: 'partial', label: '部分付款' },
+                { value: 'paid', label: '已付款' },
+                { value: 'overdue', label: '已逾期' },
+              ]}
+            />
+          </Form.Item>
+        </Form>
 
         <Table
           rowKey="id"
@@ -478,49 +650,83 @@ const ApInvoicesPage: React.FC = () => {
         />
       </Card>
 
-      <Modal
+      <Drawer
         title="登記供應商發票"
         open={createOpen}
-        onCancel={() => setCreateOpen(false)}
-        onOk={handleCreate}
-        width={640}
+        onClose={() => setCreateOpen(false)}
+        width={720}
+        extra={
+          <Space>
+            <Button onClick={() => setCreateOpen(false)}>取消</Button>
+            <Button type="primary" onClick={handleCreate}>
+              建立
+            </Button>
+          </Space>
+        }
       >
         <Form form={form} layout="vertical">
-          <div className="grid grid-cols-2 gap-4">
-            <Form.Item name="vendorId" label="供應商" rules={[{ required: true }]}>
-              <Select
-                showSearch
-                placeholder="選擇供應商"
-                loading={vendorsLoading}
-                options={vendorOptions}
-                optionFilterProp="label"
-              />
-            </Form.Item>
-            <Form.Item name="invoiceNo" label="發票號碼" rules={[{ required: true }]}>
-              <Input />
-            </Form.Item>
-            <Form.Item name="amountOriginal" label="發票金額" rules={[{ required: true }]}>
-              <InputNumber className="w-full" min={0} prefix="$" precision={2} />
-            </Form.Item>
-            <Form.Item name="amountCurrency" label="幣別" initialValue="TWD">
-              <Select options={[{ value: 'TWD' }, { value: 'USD' }, { value: 'JPY' }]} />
-            </Form.Item>
-            <Form.Item name="invoiceDate" label="開立日期" rules={[{ required: true }]}>
-              <DatePicker className="w-full" />
-            </Form.Item>
-            <Form.Item name="dueDate" label="到期日" rules={[{ required: true }]}>
-              <DatePicker className="w-full" />
-            </Form.Item>
-            <Form.Item name="paymentFrequency" label="付款頻率" initialValue="one_time">
-              <Select options={PAYMENT_FREQUENCIES} />
-            </Form.Item>
-          </div>
+          <Card title="基本資訊" bordered={false} className="mb-4">
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item name="vendorId" label="供應商" rules={[{ required: true }]}>
+                  <Select
+                    showSearch
+                    placeholder="選擇供應商"
+                    loading={vendorsLoading}
+                    options={vendorOptions}
+                    optionFilterProp="label"
+                  />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item name="invoiceNo" label="發票號碼" rules={[{ required: true }]}>
+                  <Input />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item name="amountOriginal" label="發票金額" rules={[{ required: true }]}>
+                  <InputNumber className="w-full" min={0} prefix="$" precision={2} />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item name="amountCurrency" label="幣別" initialValue="TWD">
+                  <Select options={[{ value: 'TWD' }, { value: 'USD' }, { value: 'JPY' }]} />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item name="invoiceDate" label="開立日期" rules={[{ required: true }]}>
+                  <DatePicker className="w-full" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item name="dueDate" label="到期日" rules={[{ required: true }]}>
+                  <DatePicker className="w-full" />
+                </Form.Item>
+              </Col>
+            </Row>
+          </Card>
 
-          <Form.Item name="notes" label="備註">
-            <Input.TextArea rows={3} />
-          </Form.Item>
+          <Card title="付款設定" bordered={false} className="mb-4">
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item name="paymentFrequency" label="付款頻率" initialValue="one_time">
+                  <Select options={PAYMENT_FREQUENCIES} />
+                </Form.Item>
+              </Col>
+            </Row>
+          </Card>
+
+          <Card title="其他" bordered={false}>
+            <Form.Item name="notes" label="備註">
+              <Input.TextArea rows={3} />
+            </Form.Item>
+          </Card>
         </Form>
-      </Modal>
+      </Drawer>
 
       <Modal
         title="批次匯入應付發票"
@@ -541,6 +747,33 @@ const ApInvoicesPage: React.FC = () => {
           <Form.Item name="entityId" label="實體 ID">
             <Input placeholder="留白則使用預設實體" />
           </Form.Item>
+
+          <Alert
+            type="info"
+            showIcon
+            className="mb-4"
+            message="支援 CSV 匯入"
+            description="欄位：vendorId, invoiceNo, amountOriginal, amountCurrency, invoiceDate, dueDate, paymentFrequency, notes"
+          />
+          <Space className="mb-4" wrap>
+            <Upload
+              accept=".csv"
+              beforeUpload={handleCsvUpload}
+              showUploadList={false}
+              multiple={false}
+              disabled={batchUploading}
+            >
+              <Button icon={<UploadOutlined />} loading={batchUploading}>
+                匯入 CSV 檔
+              </Button>
+            </Upload>
+            <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>
+              下載 CSV 範本
+            </Button>
+            <Text type="secondary">
+              需包含標題列；日期請使用 YYYY-MM-DD 或 Excel 日期格式
+            </Text>
+          </Space>
 
           <Form.List name="invoices">
             {(fields, { add, remove }) => (
@@ -653,16 +886,23 @@ const ApInvoicesPage: React.FC = () => {
         </Form>
       </Modal>
 
-      <Modal
+      <Drawer
         title="更新付款排程"
         open={editOpen}
-        onCancel={() => {
+        onClose={() => {
           setEditOpen(false)
           setEditingInvoice(null)
           editForm.resetFields()
         }}
-        onOk={handleUpdateRecurring}
-        okText="儲存"
+        width={520}
+        extra={
+          <Space>
+            <Button onClick={() => setEditOpen(false)}>取消</Button>
+            <Button type="primary" onClick={handleUpdateRecurring}>
+              儲存
+            </Button>
+          </Space>
+        }
       >
         <Form form={editForm} layout="vertical">
           <Form.Item name="paymentFrequency" label="付款頻率" rules={[{ required: true }]}>
@@ -706,7 +946,7 @@ const ApInvoicesPage: React.FC = () => {
             <Input.TextArea rows={3} />
           </Form.Item>
         </Form>
-      </Modal>
+      </Drawer>
 
       <Modal
         title="記錄付款"

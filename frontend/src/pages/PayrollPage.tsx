@@ -5,19 +5,22 @@ import {
   DatePicker,
   Form,
   Input,
-  Modal,
+  Drawer,
   Table,
   Tag,
   Typography,
   message,
   Statistic,
   Row,
-  Col
+  Col,
+  Space
 } from 'antd'
 import { 
   DollarOutlined, 
   PlayCircleOutlined, 
-  FileTextOutlined 
+  FileTextOutlined,
+  TeamOutlined,
+  CalendarOutlined
 } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import dayjs from 'dayjs'
@@ -29,7 +32,7 @@ const { Title, Text } = Typography
 const PayrollPage: React.FC = () => {
   const [runs, setRuns] = useState<PayrollRun[]>([])
   const [loading, setLoading] = useState(false)
-  const [createOpen, setCreateOpen] = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [form] = Form.useForm()
 
   const fetchRuns = async () => {
@@ -57,7 +60,7 @@ const PayrollPage: React.FC = () => {
         payDate: values.payDate.toISOString(),
       })
       message.success('薪資計算已啟動')
-      setCreateOpen(false)
+      setDrawerOpen(false)
       form.resetFields()
       fetchRuns()
     } catch (error) {
@@ -83,7 +86,7 @@ const PayrollPage: React.FC = () => {
       title: '總金額', 
       dataIndex: 'totalAmount', 
       key: 'totalAmount',
-      render: (val: number) => `$${val.toLocaleString()}`
+      render: (val: number) => `$${(val || 0).toLocaleString()}`
     },
     {
       title: '狀態',
@@ -118,28 +121,41 @@ const PayrollPage: React.FC = () => {
           <Title level={2} className="!mb-1 !font-light">薪資管理</Title>
           <Text className="text-gray-500">薪資計算與發放紀錄</Text>
         </div>
-        <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => setCreateOpen(true)}>
+        <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => setDrawerOpen(true)}>
           執行薪資計算
         </Button>
       </div>
 
       <Row gutter={16}>
         <Col span={8}>
-          <Card className="glass-card">
+          <Card bordered={false} className="glass-card">
             <Statistic
               title="本月預估薪資支出"
               value={1250000}
               prefix={<DollarOutlined />}
               precision={0}
+              valueStyle={{ color: '#cf1322' }}
             />
           </Card>
         </Col>
         <Col span={8}>
-          <Card className="glass-card">
+          <Card bordered={false} className="glass-card">
             <Statistic
               title="待發放人數"
               value={45}
+              prefix={<TeamOutlined />}
               suffix="人"
+              valueStyle={{ color: '#1890ff' }}
+            />
+          </Card>
+        </Col>
+        <Col span={8}>
+          <Card bordered={false} className="glass-card">
+            <Statistic
+              title="下次發薪日"
+              value="2025-12-05"
+              prefix={<CalendarOutlined />}
+              valueStyle={{ fontSize: '20px' }}
             />
           </Card>
         </Col>
@@ -154,21 +170,40 @@ const PayrollPage: React.FC = () => {
         />
       </Card>
 
-      <Modal
+      <Drawer
         title="執行薪資計算"
-        open={createOpen}
-        onCancel={() => setCreateOpen(false)}
-        onOk={handleCreate}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        width={520}
+        extra={
+          <Space>
+            <Button onClick={() => setDrawerOpen(false)}>取消</Button>
+            <Button type="primary" onClick={handleCreate}>
+              開始計算
+            </Button>
+          </Space>
+        }
       >
         <Form form={form} layout="vertical">
-          <Form.Item name="period" label="計薪期間" rules={[{ required: true }]}>
-            <DatePicker.RangePicker className="w-full" />
-          </Form.Item>
-          <Form.Item name="payDate" label="預計發薪日" rules={[{ required: true }]}>
-            <DatePicker className="w-full" />
-          </Form.Item>
+          <Card title="計算參數" bordered={false} className="mb-4">
+            <Form.Item name="period" label="計薪期間" rules={[{ required: true }]}>
+              <DatePicker.RangePicker className="w-full" />
+            </Form.Item>
+            <Form.Item name="payDate" label="預計發薪日" rules={[{ required: true }]}>
+              <DatePicker className="w-full" />
+            </Form.Item>
+          </Card>
+          
+          <Card title="進階選項" bordered={false}>
+            <Form.Item label="包含獎金" name="includeBonus" valuePropName="checked" initialValue={true}>
+               <Input type="checkbox" className="w-4 h-4" />
+            </Form.Item>
+            <Text type="secondary">
+              系統將自動計算本期出勤、加班費與勞健保扣除額。
+            </Text>
+          </Card>
         </Form>
-      </Modal>
+      </Drawer>
     </motion.div>
   )
 }

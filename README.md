@@ -42,7 +42,7 @@
 - **2025-11-29 — 應付帳款批次匯入與費用審核全面升級**：
   - **費用管理**：完成報銷項目後台 CRUD、核銷管理 UI 與 Jest e2e 覆蓋，管理員可直接於審核佇列批次核准/駁回申請並同步更新費用分錄。
   - **AP 後端**：Prisma `ApInvoice` Schema 新增循環付款欄位（`payment_frequency`, `next_due_date`, `recurring_day_of_month` 等），並提供批次匯入、付款排程更新與逾期/未付款統計 API，支援月結提醒與財務警示。
-  - **AP 前端**：`ApInvoicesPage` 導入 KPI 統計卡＋警示 Banner、搜尋/狀態篩選、可上傳多筆發票的批次匯入流程、動態供應商選單、付款排程維護與「記錄付款」行內操作，並搭配 `ap.service.ts`、`types/index.ts` 的新欄位與方法。
+  - **AP 前端**：`ApInvoicesPage` 導入 KPI 統計卡＋警示 Banner、搜尋/狀態篩選、支援 CSV 上傳的批次匯入流程、動態供應商選單、付款排程維護與「記錄付款」行內操作，並搭配 `ap.service.ts`、`types/index.ts` 的新欄位與方法。
 - **2025-11-23 — 核心會計模組前端實作完成**：
   - **應收帳款 (AR)**：新增 `ArInvoicesPage`，支援發票開立、列表檢視與狀態追蹤。
   - **應付帳款 (AP)**：新增 `ApInvoicesPage`，支援供應商發票登記與審核流程。
