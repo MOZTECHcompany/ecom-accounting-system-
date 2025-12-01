@@ -117,27 +117,42 @@ export class ExpenseService {
       .join('\n');
 
     const prompt = `
-You are an expert accountant setting up an expense reimbursement system for a Taiwanese E-commerce company (selling on Shopify, Shopee, momo).
-Your task is to generate a HIGHLY DETAILED and COMPREHENSIVE list of "Reimbursement Items" (Question Bank).
-Employees will search for these or AI will match them.
+You are a Senior CPA (Certified Public Accountant) and CFO for a large Taiwanese E-commerce Enterprise.
+Your goal is to build a "Standardized Reimbursement Policy" and "Item Master Data".
 
-Please generate 60-80 items covering these specific E-commerce categories:
-1. Digital Marketing: Facebook Ads, Google Ads, KOL/Influencer fees, EDM software, SEO tools, Content production.
-2. Logistics & Warehousing: Courier fees (Black Cat, HCT), International freight, Customs duties, Packaging materials (boxes, bubble wrap), Warehouse rent.
-3. Technology & SaaS: Shopify subscription, AWS/GCP, Slack, Notion, Adobe Creative Cloud, POS system, Domain registration.
-4. Office & Admin: Office rent, Electricity, Water, Internet, Cleaning fees, Office supplies (paper, pens), Pantry snacks, Printing.
-5. Travel & Entertainment: High Speed Rail (HSR), Taxi (Uber/55688), Hotel, Client meals, Team building, Parking fees.
-6. Product & R&D: Sample purchase, Product photography, Testing fees, Patent fees.
+Context:
+- Location: Taiwan (R.O.C.)
+- Industry: E-commerce (Cross-border, Retail, B2C/B2B)
+- Tax System: VAT (Value Added Tax), GUI (Government Uniform Invoice)
 
-Based on the provided list of Accounting Accounts, map each item to the most appropriate account.
+Task:
+Generate a professional, granular, and tax-compliant list of 80-100 Reimbursement Items.
+These items must bridge the gap between "Employee Language" (what they buy) and "Accounting Language" (General Ledger Accounts).
+
+Categories to cover deeply:
+1. **Digital Marketing (Ads & Traffic)**:
+   - Distinguish between "Domestic Ads" (local invoice) and "Foreign Ads" (Facebook/Google - often Invoice/Withholding tax issues).
+   - KOL/Influencer: Distinguish between "Individual (Professional Service)" and "Company (Invoice)".
+2. **Logistics & Supply Chain**:
+   - Import Duties, Forwarder Fees, Local Courier, Packaging (Consumables vs Inventory).
+3. **IT & Infrastructure**:
+   - SaaS Subscriptions (Monthly/Yearly), Cloud Infrastructure, Hardware (Assets vs Expense), Domain/SSL.
+4. **General & Administrative**:
+   - Office Rent, Utilities, Property Management, Cleaning, Security.
+   - Office Supplies: Distinguish "Consumables" (Pens/Paper) from "Low-value Assets" (Chairs/Monitors < 80k TWD).
+5. **Travel & Representation**:
+   - Travel: HSR, Taxi, Flight, Accommodation.
+   - Meals: Distinguish "Staff Meal" (Overtime) vs "Business Meal" (Client entertainment - 交際費).
+6. **Employee Benefits**:
+   - Team Building, Training, Health Checkup, Snacks/Pantry.
 
 For each item, provide:
-1. "name": User-friendly name (e.g., "計程車費", "文具用品", "Facebook 廣告費").
-2. "description": A helpful tooltip description for the user (e.g., "公務外出搭乘計程車或 Uber 之費用").
-3. "keywords": A list of 3-5 keywords for search/AI matching.
+1. "name": Professional name (e.g., "廣告費-Facebook(境外)", "交際費-客戶餐敘", "文具用品-一般耗材").
+2. "description": A precise policy description. Mention tax requirements if applicable (e.g., "需打統編，若為境外公司請附 Invoice").
+3. "keywords": 5-8 keywords including slang, English terms, and synonyms (e.g., ["uber", "taxi", "計程車", "小黃", "交通費"]).
 4. "accountId": The exact ID of the corresponding account from the provided list.
-5. "defaultReceiptType": One of ["TAX_INVOICE", "RECEIPT", "BANK_SLIP", "INTERNAL_ONLY"].
-6. "allowedReceiptTypes": A comma-separated string of allowed types (e.g., "TAX_INVOICE,RECEIPT").
+5. "defaultReceiptType": Best match from ["TAX_INVOICE" (三聯式), "RECEIPT" (收據/二聯), "BANK_SLIP", "INTERNAL_ONLY"].
+6. "allowedReceiptTypes": Comma-separated list.
 
 Available Accounts:
 ${accountListText}

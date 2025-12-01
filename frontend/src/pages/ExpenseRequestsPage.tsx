@@ -391,7 +391,8 @@ const ExpenseRequestsPage: React.FC = () => {
                 <span>
                   AI 建議：<span className="font-bold">{item.name}</span> (信心度 {(result.confidence * 100).toFixed(0)}%)
                 </span>
-                {item.description && <span className="text-xs text-gray-500 mt-1">{item.description}</span>}
+                {item.account && <span className="text-xs text-gray-500 mt-1">科目：{item.account.code} {item.account.name}</span>}
+                {item.description && <span className="text-xs text-gray-400 mt-0.5">{item.description}</span>}
               </div>
             ),
             icon: <BulbOutlined style={{ color: '#faad14' }} />,
@@ -415,7 +416,8 @@ const ExpenseRequestsPage: React.FC = () => {
                   <span>
                     AI 建議：<span className="font-bold">{refreshedItem.name}</span> (信心度 {(result.confidence * 100).toFixed(0)}%)
                   </span>
-                  {refreshedItem.description && <span className="text-xs text-gray-500 mt-1">{refreshedItem.description}</span>}
+                  {refreshedItem.account && <span className="text-xs text-gray-500 mt-1">科目：{refreshedItem.account.code} {refreshedItem.account.name}</span>}
+                  {refreshedItem.description && <span className="text-xs text-gray-400 mt-0.5">{refreshedItem.description}</span>}
                 </div>
               ),
               icon: <BulbOutlined style={{ color: '#faad14' }} />,
