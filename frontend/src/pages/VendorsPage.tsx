@@ -44,9 +44,10 @@ const VendorsPage: React.FC = () => {
     setLoading(true)
     try {
       const data = await vendorService.findAll()
-      setVendors(data)
+      setVendors(Array.isArray(data) ? data : [])
     } catch (error: any) {
       message.error(error.response?.data?.message || '載入失敗')
+      setVendors([])
     } finally {
       setLoading(false)
     }

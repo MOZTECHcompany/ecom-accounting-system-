@@ -42,9 +42,10 @@ const AccountsTab = () => {
     setLoading(true)
     try {
       const result = await bankingService.getAccounts()
-      setAccounts(result)
+      setAccounts(Array.isArray(result) ? result : [])
     } catch (error) {
       message.error('載入帳戶失敗')
+      setAccounts([])
     } finally {
       setLoading(false)
     }

@@ -608,7 +608,7 @@ const ApInvoicesPage: React.FC = () => {
       <Alert
         type="warning"
         showIcon
-        className="glass-card"
+        className="glass-card !mb-6"
         message="會計提醒"
         description="請優先處理逾期或 7 日內到期的發票，避免供應商催款。"
       />

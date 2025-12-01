@@ -39,9 +39,10 @@ const PayrollPage: React.FC = () => {
     setLoading(true)
     try {
       const result = await payrollService.getPayrollRuns()
-      setRuns(result.items)
+      setRuns(Array.isArray(result?.items) ? result.items : [])
     } catch (error) {
       message.error('載入薪資單失敗')
+      setRuns([])
     } finally {
       setLoading(false)
     }
