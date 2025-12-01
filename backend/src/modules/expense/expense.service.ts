@@ -126,7 +126,7 @@ Context:
 - Tax System: VAT (Value Added Tax), GUI (Government Uniform Invoice)
 
 Task:
-Generate a professional, granular, and tax-compliant list of 80-100 Reimbursement Items.
+Generate a professional, granular, and tax-compliant list of 40-50 Reimbursement Items.
 These items must bridge the gap between "Employee Language" (what they buy) and "Accounting Language" (General Ledger Accounts).
 
 Categories to cover deeply:
@@ -163,7 +163,7 @@ Do not include any markdown formatting (like \`\`\`json), just the raw JSON stri
 
     try {
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${geminiApiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -174,7 +174,8 @@ Do not include any markdown formatting (like \`\`\`json), just the raw JSON stri
       );
 
       if (!response.ok) {
-        throw new Error(`Gemini API Error: ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(`Gemini API Error: ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
