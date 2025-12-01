@@ -320,8 +320,12 @@ Do not include any markdown formatting (like \`\`\`json), just the raw JSON stri
         },
         request.suggestedAccountId
           ? {
+              entityId: request.entityId,
+              description: request.description,
               suggestedAccountId: request.suggestedAccountId,
               chosenAccountId: finalAccountId ?? request.suggestedAccountId,
+              suggestedItemId: request.suggestedItemId ?? null,
+              chosenItemId: request.reimbursementItemId ?? null,
               confidence: request.suggestionConfidence ?? new Prisma.Decimal(0),
               label:
                 finalAccountId && request.suggestedAccountId !== finalAccountId
@@ -368,8 +372,12 @@ Do not include any markdown formatting (like \`\`\`json), just the raw JSON stri
       },
       request.suggestedAccountId
         ? {
+            entityId: request.entityId,
+            description: request.description,
             suggestedAccountId: request.suggestedAccountId,
             chosenAccountId: request.finalAccountId ?? null,
+            suggestedItemId: request.suggestedItemId ?? null,
+            chosenItemId: request.reimbursementItemId ?? null,
             confidence: request.suggestionConfidence ?? new Prisma.Decimal(0),
             label: 'rejected',
             features: request.metadata ?? undefined,
@@ -579,7 +587,11 @@ Do not include any markdown formatting (like \`\`\`json), just the raw JSON stri
 
     const classifierFeedback = suggestion.accountId
       ? {
+          entityId: dto.entityId,
+          description: dto.description,
           suggestedAccountId: suggestion.accountId,
+          suggestedItemId: dto.reimbursementItemId ?? null,
+          chosenItemId: null,
           confidence: this.toDecimal(suggestion.confidence),
           label: 'pending',
           features: this.toJsonObject(suggestion.features),
@@ -609,9 +621,14 @@ Do not include any markdown formatting (like \`\`\`json), just the raw JSON stri
     user: UserContext,
     dto: SubmitExpenseFeedbackDto,
   ) {
-    await this.ensureExpenseRequest(requestId);
+    const request = await this.ensureExpenseRequest(requestId);
 
     return this.expenseRepository.createFeedbackEntry({
+      entityId: request.entityId,
+      description: dto.description ?? request.description,
+      suggestedItemId: dto.suggestedItemId ?? request.suggestedItemId ?? null,
+      chosenItemId:
+        dto.chosenItemId ?? request.reimbursementItemId ?? request.suggestedItemId ?? null,
       expenseRequestId: requestId,
       suggestedAccountId: dto.suggestedAccountId ?? null,
       chosenAccountId: dto.chosenAccountId ?? null,

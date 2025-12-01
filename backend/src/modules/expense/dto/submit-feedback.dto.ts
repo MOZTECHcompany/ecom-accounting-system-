@@ -20,6 +20,16 @@ export class SubmitExpenseFeedbackDto {
   @IsUUID()
   chosenAccountId?: string;
 
+  @ApiPropertyOptional({ description: 'AI 建議的報銷項目 ID', required: false })
+  @IsOptional()
+  @IsUUID()
+  suggestedItemId?: string;
+
+  @ApiPropertyOptional({ description: '財務最終選擇的報銷項目 ID', required: false })
+  @IsOptional()
+  @IsUUID()
+  chosenItemId?: string;
+
   @ApiPropertyOptional({
     description: '標籤：correct / incorrect / needs_review',
   })
@@ -33,6 +43,11 @@ export class SubmitExpenseFeedbackDto {
   @Min(0)
   @Max(1)
   confidence?: number;
+
+  @ApiPropertyOptional({ description: '敘述或備註，會寫入 classifier feedback' })
+  @IsOptional()
+  @IsString()
+  description?: string;
 
   @ApiPropertyOptional({ description: '用於訓練的原始特徵 JSON' })
   @IsOptional()
