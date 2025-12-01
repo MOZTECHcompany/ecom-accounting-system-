@@ -682,6 +682,7 @@ model ExpenseRequest {
   entityId            String  @map("entity_id")
   vendorId            String? @map("vendor_id")
   reimbursementItemId String? @map("reimbursement_item_id")
+  suggestedItemId     String? @map("suggested_item_id")
 
   // 費用金額（符合四欄位標準）
   amountOriginal Decimal @map("amount_original") @db.Decimal(18, 2)
@@ -711,7 +712,8 @@ model ExpenseRequest {
   creator             User                           @relation("RequestedBy", fields: [createdBy], references: [id])
   approver            User?                          @relation("ApprovedBy", fields: [approvalUserId], references: [id])
   department          Department?                    @relation(fields: [departmentId], references: [id])
-  reimbursementItem   ReimbursementItem?             @relation(fields: [reimbursementItemId], references: [id], onDelete: SetNull)
+  reimbursementItem   ReimbursementItem?             @relation("ExpenseRequestFinalItem", fields: [reimbursementItemId], references: [id], onDelete: SetNull)
+  suggestedItem       ReimbursementItem?             @relation("ExpenseRequestSuggestedItem", fields: [suggestedItemId], references: [id], onDelete: SetNull)
   suggestedAccount    Account?                       @relation("ExpenseRequestSuggestedAccount", fields: [suggestedAccountId], references: [id], onDelete: SetNull)
   finalAccount        Account?                       @relation("ExpenseRequestFinalAccount", fields: [finalAccountId], references: [id], onDelete: SetNull)
   histories           ExpenseRequestHistory[]
@@ -722,6 +724,7 @@ model ExpenseRequest {
   @@index([entityId, status])
   @@index([createdBy])
   @@index([reimbursementItemId])
+  @@index([suggestedItemId])
   @@index([suggestedAccountId])
   @@index([finalAccountId])
   @@map("expense_requests")
@@ -793,10 +796,13 @@ model ReimbursementItem {
   createdAt              DateTime @default(now()) @map("created_at")
   updatedAt              DateTime @updatedAt @map("updated_at")
 
-  entity          Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  account         Account          @relation(fields: [accountId], references: [id])
-  approvalPolicy  ApprovalPolicy?  @relation(fields: [approvalPolicyId], references: [id], onDelete: SetNull)
-  expenseRequests ExpenseRequest[]
+  entity                     Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  account                    Account          @relation(fields: [accountId], references: [id])
+  approvalPolicy             ApprovalPolicy?  @relation(fields: [approvalPolicyId], references: [id], onDelete: SetNull)
+  expenseRequests            ExpenseRequest[] @relation("ExpenseRequestFinalItem")
+  suggestedExpenseRequests   ExpenseRequest[] @relation("ExpenseRequestSuggestedItem")
+  suggestedFeedbacks AccountingClassifierFeedback[] @relation("FeedbackSuggestedItem")
+  chosenFeedbacks    AccountingClassifierFeedback[] @relation("FeedbackChosenItem")
 
   @@unique([entityId, name])
   @@index([entityId, isActive])
@@ -927,20 +933,28 @@ model PaymentTask {
 // 智能科目建議的回饋紀錄
 model AccountingClassifierFeedback {
   id                 String   @id @default(uuid())
-  expenseRequestId   String   @map("expense_request_id")
+  entityId           String   @map("entity_id")
+  expenseRequestId   String?  @map("expense_request_id")
+  description        String?
   suggestedAccountId String?  @map("suggested_account_id")
   chosenAccountId    String?  @map("chosen_account_id")
+  suggestedItemId    String?  @map("suggested_item_id")
+  chosenItemId       String?  @map("chosen_item_id")
   confidence         Decimal? @map("confidence") @db.Decimal(5, 2)
   label              String?
   features           Json?
   createdBy          String?  @map("created_by")
   createdAt          DateTime @default(now()) @map("created_at")
 
-  expenseRequest   ExpenseRequest @relation(fields: [expenseRequestId], references: [id], onDelete: Cascade)
-  createdByUser    User?          @relation(fields: [createdBy], references: [id])
-  suggestedAccount Account?       @relation("ClassifierSuggestedAccount", fields: [suggestedAccountId], references: [id])
-  chosenAccount    Account?       @relation("ClassifierChosenAccount", fields: [chosenAccountId], references: [id])
+  entity           Entity?            @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  expenseRequest  ExpenseRequest?     @relation(fields: [expenseRequestId], references: [id], onDelete: SetNull)
+  createdByUser   User?               @relation(fields: [createdBy], references: [id])
+  suggestedAccount Account?           @relation("ClassifierSuggestedAccount", fields: [suggestedAccountId], references: [id])
+  chosenAccount     Account?          @relation("ClassifierChosenAccount", fields: [chosenAccountId], references: [id])
+  suggestedItem     ReimbursementItem? @relation("FeedbackSuggestedItem", fields: [suggestedItemId], references: [id])
+  chosenItem        ReimbursementItem? @relation("FeedbackChosenItem", fields: [chosenItemId], references: [id])
 
+  @@index([entityId])
   @@index([expenseRequestId])
   @@map("accounting_classifier_feedbacks")
 }
