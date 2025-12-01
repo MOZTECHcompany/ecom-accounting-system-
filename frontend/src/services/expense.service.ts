@@ -165,7 +165,11 @@ export const expenseService = {
     return data
   },
 
-  async getReimbursementItems(entityId: string = DEFAULT_ENTITY_ID) {
+  async getReimbursementItems(
+    entityId: string = DEFAULT_ENTITY_ID,
+    roles?: string[],
+    departmentId?: string,
+  ) {
     const effectiveEntityId = entityId?.trim() || DEFAULT_ENTITY_ID
     const params: Record<string, string> = { entityId: effectiveEntityId }
     if (roles && roles.length) {
