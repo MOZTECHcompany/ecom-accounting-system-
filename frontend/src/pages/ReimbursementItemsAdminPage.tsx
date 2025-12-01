@@ -18,6 +18,7 @@ import {
   Table,
   Tag,
   Tooltip,
+  Typography,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
@@ -25,7 +26,9 @@ import {
   PlusOutlined,
   ReloadOutlined,
   StopOutlined,
+  SearchOutlined,
 } from '@ant-design/icons'
+import { motion } from 'framer-motion'
 import { expenseService } from '../services/expense.service'
 import type {
   ApprovalPolicySummary,
@@ -35,6 +38,8 @@ import type {
 import { accountingService } from '../services/accounting.service'
 import type { Account } from '../types'
 import { useAuth } from '../contexts/AuthContext'
+
+const { Title, Text } = Typography
 
 const DEFAULT_ENTITY_ID = import.meta.env.VITE_DEFAULT_ENTITY_ID?.trim() || 'tw-entity-001'
 const ROLE_OPTIONS = ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'OPERATOR']
@@ -316,7 +321,7 @@ const ReimbursementItemsAdminPage: React.FC = () => {
 
   if (!isAdmin) {
     return (
-      <Card className="glass-panel">
+      <Card className="glass-card">
         <Alert
           message="權限不足"
           description="此頁面僅限系統管理員或超級管理員存取。"
@@ -328,31 +333,41 @@ const ReimbursementItemsAdminPage: React.FC = () => {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
-      <Card className="glass-panel" bordered={false}>
-        <Row gutter={[16, 16]} align="middle">
-          <Col xs={24} md={8}>
-            <label className="text-sm text-gray-500 block mb-1">實體 ID</label>
-            <Input value={entityId} onChange={(e) => setEntityId(e.target.value)} />
-          </Col>
-          <Col xs={12} md={4}>
-            <label className="text-sm text-gray-500 block mb-1">顯示停用</label>
-            <Switch checked={includeInactive} onChange={setIncludeInactive} />
-          </Col>
-          <Col xs={12} md={12} className="text-right">
-            <Space wrap>
-              <Button icon={<ReloadOutlined />} onClick={fetchItems}>
-                重新整理
-              </Button>
-              <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-                新增報銷項目
-              </Button>
-            </Space>
-          </Col>
-        </Row>
-      </Card>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-6"
+    >
+      <div className="flex justify-between items-end">
+        <div>
+          <Title level={2} className="!mb-1 !font-light">報銷項目管理</Title>
+          <Text className="text-gray-500">設定費用報銷項目、審核政策與會計科目對應</Text>
+        </div>
+        <Space>
+          <Button icon={<ReloadOutlined />} onClick={fetchItems}>
+            重新整理
+          </Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+            新增報銷項目
+          </Button>
+        </Space>
+      </div>
 
-      <Card className="glass-panel" bordered={false}>
+      <Card className="glass-card" bordered={false}>
+        <Form layout="inline" className="mb-6">
+          <Form.Item label="實體 ID">
+            <Input
+              value={entityId}
+              onChange={(e) => setEntityId(e.target.value)}
+              placeholder="輸入實體 ID"
+            />
+          </Form.Item>
+          <Form.Item label="顯示停用">
+            <Switch checked={includeInactive} onChange={setIncludeInactive} />
+          </Form.Item>
+        </Form>
+
         <Table<ReimbursementItem>
           rowKey="id"
           loading={loading}
@@ -360,6 +375,7 @@ const ReimbursementItemsAdminPage: React.FC = () => {
           columns={columns}
           locale={{ emptyText: <Empty description="尚無資料" /> }}
           pagination={{ pageSize: 10 }}
+          scroll={{ x: 1000 }}
         />
       </Card>
 
@@ -478,7 +494,7 @@ const ReimbursementItemsAdminPage: React.FC = () => {
           </Form.Item>
         </Form>
       </Drawer>
-    </div>
+    </motion.div>
   )
 }
 

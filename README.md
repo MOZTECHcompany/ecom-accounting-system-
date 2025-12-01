@@ -39,6 +39,10 @@
 
 ## 🆕 最近更新
 
+- **2025-12-01 — 全系統 UI/UX 一致性優化與功能增強**：
+  - **介面標準化**：全面重構 `VendorsPage` (供應商)、`BankingPage` (銀行)、`PayrollPage` (薪資) 與 `ReimbursementItemsAdminPage` (報銷項目管理)，統一採用 **Drawer** 側邊欄編輯模式、**Glassmorphism** 視覺風格與 **KPI 統計儀表板**，提升操作體驗一致性。
+  - **費用申請升級**：`ExpenseRequestsPage` 新增 **憑證/單據照片上傳** 功能，支援圖片與 PDF 格式，並優化歷程紀錄顯示樣式，解決文字裁切問題。
+  - **細節優化**：調整 `ApInvoicesPage` 版面間距，並修復全系統列表頁面在 API 異常時的資料處理邏輯（防呆機制），徹底解決 `filter of undefined` 錯誤。
 - **2025-11-29 — 應付帳款批次匯入與費用審核全面升級**：
   - **費用管理**：完成報銷項目後台 CRUD、核銷管理 UI 與 Jest e2e 覆蓋，管理員可直接於審核佇列批次核准/駁回申請並同步更新費用分錄。
   - **AP 後端**：Prisma `ApInvoice` Schema 新增循環付款欄位（`payment_frequency`, `next_due_date`, `recurring_day_of_month` 等），並提供批次匯入、付款排程更新與逾期/未付款統計 API，支援月結提醒與財務警示。
