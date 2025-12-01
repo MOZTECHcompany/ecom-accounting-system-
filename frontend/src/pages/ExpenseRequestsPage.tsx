@@ -702,17 +702,23 @@ const ExpenseRequestsPage: React.FC = () => {
                       ? 'red'
                       : 'blue',
                   children: (
-                    <div>
-                      <div className="flex items-center justify-between text-sm font-medium">
-                        <span>{historyLabelMap[entry.action] || entry.action}</span>
-                        <span className="text-xs text-gray-500">
+                    <div className="pb-2">
+                      <div className="flex flex-wrap items-baseline justify-between gap-x-2 text-sm font-medium">
+                        <span className="font-bold text-gray-700">
+                          {historyLabelMap[entry.action] || entry.action}
+                        </span>
+                        <span className="text-xs text-gray-400 whitespace-nowrap">
                           {dayjs(entry.createdAt).format('YYYY/MM/DD HH:mm')}
                         </span>
                       </div>
                       {entry.actor && (
                         <div className="text-xs text-gray-500 mt-0.5">由 {entry.actor.name}</div>
                       )}
-                      {entry.note && <div className="text-sm mt-1">{entry.note}</div>}
+                      {entry.note && (
+                        <div className="text-sm mt-1 text-gray-600 break-words whitespace-pre-wrap">
+                          {entry.note}
+                        </div>
+                      )}
                     </div>
                   ),
                 }))}
