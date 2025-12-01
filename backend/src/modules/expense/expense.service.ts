@@ -117,15 +117,23 @@ export class ExpenseService {
       .join('\n');
 
     const prompt = `
-You are an expert accountant setting up an expense reimbursement system for a Taiwanese E-commerce company.
-Your task is to generate a comprehensive list of "Reimbursement Items" (Question Bank) that employees will see when they apply for expenses.
-These items should cover common scenarios like Travel, Office Supplies, Marketing, Software, Meals, etc.
+You are an expert accountant setting up an expense reimbursement system for a Taiwanese E-commerce company (selling on Shopify, Shopee, momo).
+Your task is to generate a HIGHLY DETAILED and COMPREHENSIVE list of "Reimbursement Items" (Question Bank).
+Employees will search for these or AI will match them.
 
-Based on the provided list of Accounting Accounts, generate 30-50 common Reimbursement Items.
+Please generate 60-80 items covering these specific E-commerce categories:
+1. Digital Marketing: Facebook Ads, Google Ads, KOL/Influencer fees, EDM software, SEO tools, Content production.
+2. Logistics & Warehousing: Courier fees (Black Cat, HCT), International freight, Customs duties, Packaging materials (boxes, bubble wrap), Warehouse rent.
+3. Technology & SaaS: Shopify subscription, AWS/GCP, Slack, Notion, Adobe Creative Cloud, POS system, Domain registration.
+4. Office & Admin: Office rent, Electricity, Water, Internet, Cleaning fees, Office supplies (paper, pens), Pantry snacks, Printing.
+5. Travel & Entertainment: High Speed Rail (HSR), Taxi (Uber/55688), Hotel, Client meals, Team building, Parking fees.
+6. Product & R&D: Sample purchase, Product photography, Testing fees, Patent fees.
+
+Based on the provided list of Accounting Accounts, map each item to the most appropriate account.
 
 For each item, provide:
 1. "name": User-friendly name (e.g., "計程車費", "文具用品", "Facebook 廣告費").
-2. "description": A helpful tooltip description for the user.
+2. "description": A helpful tooltip description for the user (e.g., "公務外出搭乘計程車或 Uber 之費用").
 3. "keywords": A list of 3-5 keywords for search/AI matching.
 4. "accountId": The exact ID of the corresponding account from the provided list.
 5. "defaultReceiptType": One of ["TAX_INVOICE", "RECEIPT", "BANK_SLIP", "INTERNAL_ONLY"].
