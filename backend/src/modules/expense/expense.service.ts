@@ -200,6 +200,50 @@ Do not include any markdown formatting (like \`\`\`json), just the raw JSON stri
     }
   }
 
+  async testAiConnection() {
+    const geminiApiKey = this.configService.get<string>('GEMINI_API_KEY');
+    if (!geminiApiKey) {
+      return {
+        success: false,
+        message: 'GEMINI_API_KEY is not configured in environment variables.',
+      };
+    }
+
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${geminiApiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: 'Say "Hello AI"' }] }],
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        return {
+          success: false,
+          message: `Gemini API Error: ${response.status} ${response.statusText}`,
+        };
+      }
+
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      return {
+        success: true,
+        message: 'AI connection successful',
+        response: text,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Connection failed: ${error}`,
+      };
+    }
+  }
+
   /**
    * 查詢費用申請單列表
    */

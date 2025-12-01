@@ -96,6 +96,13 @@ export class ExpenseController {
     return this.expenseService.seedAiReimbursementItems(data.entityId);
   }
 
+  @Get('test-ai-connection')
+  @ApiOperation({ summary: '測試 AI 連線' })
+  @ApiResponse({ status: 200, description: 'AI 連線測試結果' })
+  async testAiConnection() {
+    return this.expenseService.testAiConnection();
+  }
+
   @Put('requests/:id/approve')
   @ApiOperation({ summary: '核准費用請款' })
   @ApiResponse({ status: 200, description: '成功核准費用請款' })
