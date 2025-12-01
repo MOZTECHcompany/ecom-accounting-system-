@@ -387,11 +387,15 @@ const ExpenseRequestsPage: React.FC = () => {
           setSelectedItem(item)
           message.success({
             content: (
-              <span>
-                AI 建議：<span className="font-bold">{item.name}</span> (信心度 {(result.confidence * 100).toFixed(0)}%)
-              </span>
+              <div className="flex flex-col">
+                <span>
+                  AI 建議：<span className="font-bold">{item.name}</span> (信心度 {(result.confidence * 100).toFixed(0)}%)
+                </span>
+                {item.description && <span className="text-xs text-gray-500 mt-1">{item.description}</span>}
+              </div>
             ),
             icon: <BulbOutlined style={{ color: '#faad14' }} />,
+            duration: 4,
           })
         } else {
           // 如果找不到對應的項目，嘗試重新載入列表
@@ -407,11 +411,15 @@ const ExpenseRequestsPage: React.FC = () => {
              setSelectedItem(refreshedItem)
              message.success({
               content: (
-                <span>
-                  AI 建議：<span className="font-bold">{refreshedItem.name}</span> (信心度 {(result.confidence * 100).toFixed(0)}%)
-                </span>
+                <div className="flex flex-col">
+                  <span>
+                    AI 建議：<span className="font-bold">{refreshedItem.name}</span> (信心度 {(result.confidence * 100).toFixed(0)}%)
+                  </span>
+                  {refreshedItem.description && <span className="text-xs text-gray-500 mt-1">{refreshedItem.description}</span>}
+                </div>
               ),
               icon: <BulbOutlined style={{ color: '#faad14' }} />,
+              duration: 4,
             })
           } else {
              message.info('AI 建議的項目目前不可用')
