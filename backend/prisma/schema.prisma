@@ -166,6 +166,7 @@ model Entity {
   reimbursementItems    ReimbursementItem[]
   approvalPolicies      ApprovalPolicy[]
   paymentTasks          PaymentTask[]
+  classifierFeedbacks   AccountingClassifierFeedback[] @relation("EntityClassifierFeedback")
 
   @@map("entities")
 }
@@ -946,7 +947,7 @@ model AccountingClassifierFeedback {
   createdBy          String?  @map("created_by")
   createdAt          DateTime @default(now()) @map("created_at")
 
-  entity           Entity?            @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  entity           Entity             @relation("EntityClassifierFeedback", fields: [entityId], references: [id], onDelete: Cascade)
   expenseRequest  ExpenseRequest?     @relation(fields: [expenseRequestId], references: [id], onDelete: SetNull)
   createdByUser   User?               @relation(fields: [createdBy], references: [id])
   suggestedAccount Account?           @relation("ClassifierSuggestedAccount", fields: [suggestedAccountId], references: [id])
