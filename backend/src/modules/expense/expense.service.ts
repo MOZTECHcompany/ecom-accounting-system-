@@ -235,7 +235,7 @@ Do not include any markdown formatting (like \`\`\`json), just the raw JSON stri
 
     try {
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${geminiApiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
