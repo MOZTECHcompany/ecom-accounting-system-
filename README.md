@@ -39,6 +39,10 @@
 
 ## 🆕 最近更新
 
+- **2025-12-01 — AI 智能建議與反饋閉環（Beta）**：
+  - **資料模型升級**：`expense_requests` 新增 `suggested_item_id`、`suggested_account_id`、`suggestion_confidence`；`reimbursement_items` 對應 `FeedbackSuggestedItem`/`FeedbackChosenItem`；`accounting_classifier_feedbacks` 追加 `entity_id`、`description`、`suggested_item_id`、`chosen_item_id`，完整追蹤建議與實際決策。
+  - **API 與服務**：`AccountingClassifierService` 將 Gemini 2.0 Flash AI、關鍵字規則與回饋資料整合，並透過 `/api/v1/expense/predict-category`（建議）、`/requests/:id/feedback`（回饋）、`/seed-ai-items`（建立題庫）、`/test-ai-connection`（健檢）等端點對外提供。
+  - **前端體驗**：`ExpenseRequestsPage` 顯示 AI 推薦項目與信心值，允許一鍵採用或提交修正；`AICopilotWidget` 與 `AIInsightsWidget` 會帶入最新建議與異常提醒，協助會計加速審核。
 - **2025-12-01 — 全系統 UI/UX 一致性優化與功能增強**：
   - **介面標準化**：全面重構 `VendorsPage` (供應商)、`BankingPage` (銀行)、`PayrollPage` (薪資) 與 `ReimbursementItemsAdminPage` (報銷項目管理)，統一採用 **Drawer** 側邊欄編輯模式、**Glassmorphism** 視覺風格與 **KPI 統計儀表板**，提升操作體驗一致性。
   - **費用申請升級**：`ExpenseRequestsPage` 新增 **憑證/單據照片上傳** 功能，支援圖片與 PDF 格式，並優化歷程紀錄顯示樣式，解決文字裁切問題。
@@ -100,6 +104,50 @@
 - **表單與列表體驗**：
   - 採用 Ant Design Table + Modal Form 模式（如 `AccountsPage`、`VendorsPage`）。
   - 針對欄位排版、對齊與 Tag 顏色做精緻調整，提升密集財務資訊的可掃描性。
+
+## 🤖 AI 智能建議與反饋迴路
+
+### 功能總覽
+- **多信號推論**：`AccountingClassifierService` 先以 Gemini 2.0 Flash 生成建議，再搭配關鍵字規則與白名單策略，輸出最終 `suggestedItemId`、`suggestedAccountId` 與 `suggestionConfidence`。
+- **建議存證**：所有決策寫入 `expense_requests`，供審核人員檢視「AI 推薦 vs. 實際決策」。
+- **回饋閉環**：審核者或申請者可呼叫 `/expense/requests/:id/feedback`，系統會在 `accounting_classifier_feedbacks` 中記錄 `suggested_item_id`、`chosen_item_id`、`label` 與 `features`，下一次推論會將歷史修正納入 Few-shot 參考。
+
+### 資料流程
+1. **輸入**：員工於 `ExpenseRequestsPage` 輸入用途、金額與憑證。
+2. **推論**：後端呼叫 `predictReimbursementItem`，Gemini + 規則雙層推論，並同步查出可用的 `ReimbursementItem`。
+3. **呈現**：前端顯示建議名稱、所屬科目與信心值，低信心（<0.4）會加註提醒。
+4. **回饋**：審核者改選其他項目或填寫錯誤原因時，透過 Feedback API 寫入 `AccountingClassifierFeedback`，與 `ReimbursementItem` 之間透過 `FeedbackSuggestedItem` / `FeedbackChosenItem` 名稱化關聯。
+
+### 關鍵資料表
+- `expense_requests`：新增 `suggested_item_id`, `suggested_account_id`, `suggestion_confidence` 欄位與 `ExpenseRequestSuggestedItem` 關聯，完整紀錄每次 AI 推薦。
+- `reimbursement_items`：保留使用者可選清單，並新增 `suggestedFeedbacks` / `chosenFeedbacks` 反向關聯，方便統計建議命中率。
+- `accounting_classifier_feedbacks`：擴充 `entity_id`, `description`, `suggested_item_id`, `chosen_item_id` 欄位，讓每筆反饋都能回溯到實體、敘述與最終選擇。
+
+### 設定與檢查
+```bash
+# 1. 更新資料庫 Schema
+cd backend
+npm run prisma:migrate
+
+# 2. 產生/更新 Prisma Client
+npm run prisma:generate
+
+# 3. 設定環境變數
+echo "GEMINI_API_KEY=your-key" >> ../.env
+
+# 4. 建立 AI 報銷項目題庫（選擇性，但強烈建議）
+# 預設實體為 tw-entity-001，若需其他實體請先調整 src/scripts/seed-ai-reimbursement-items.ts
+npm run seed:ai-items
+
+# 5. 健檢 + 測試推論
+curl -X GET http://localhost:3000/api/v1/expense/test-ai-connection
+curl -X POST http://localhost:3000/api/v1/expense/predict-category -d '{"entityId":"tw-entity-001","description":"採買攝影器材"}' -H "Content-Type: application/json" -H "Authorization: Bearer <token>"
+```
+
+### 前端整合
+- `ExpenseRequestsPage` 在送出需求前即會呼叫 `/expense/predict-category`，同時將 `suggestionConfidence` 視覺化，並允許「採用建議 / 改選其他項目 / 提交回饋」。
+- `AICopilotWidget`（`components/AICopilotWidget.tsx`）會顯示最新建議、觸發率與錯誤回饋摘要；`AIInsightsWidget` 則針對財務異常額外提供語意化建議。
+- 所有回饋結果會透過 `expense.service.ts` 的 `submitFeedback` 儲存到資料庫，可在 `ReimbursementItemsAdminPage` 看到命中率與常見誤判描述。
 
 ---
 
@@ -387,6 +435,8 @@ ecom-accounting-system/
 - `expense_requests` - 費用申請
 - `expenses` - 費用記錄
 - `expense_items` - 費用明細
+- `reimbursement_items` - 員工可選的報銷模板，含關鍵字與審批政策，並追蹤 AI 建議命中率
+- `accounting_classifier_feedbacks` - 儲存建議與實際選擇、信心值與特徵向量，作為 AI 訓練資料
 - `approval_requests` - 審批請求
 
 #### 成本管理
@@ -468,6 +518,11 @@ async getSensitiveData() {
   - AMAZON - Amazon
   - TTSHOP - TikTok Shop
 - ✅ **24個會計期間**：2025年度 12個月 × 2個實體
+
+### AI 報銷題庫（選用，但建議啟用）
+- 設定 `GEMINI_API_KEY` 後，於 `backend/` 執行 `npm run seed:ai-items`。
+- 腳本會使用 Gemini 依據會計科目自動生成 30~50 個 `ReimbursementItem`，預設實體為 `tw-entity-001`；若需切換實體可調整 `src/scripts/seed-ai-reimbursement-items.ts` 中的常數。
+- 自動帶入的 `keywords`、`defaultReceiptType` 與 `allowedReceiptTypes` 會作為 AI 推論與表單搜尋的資料來源。
 
 ---
 
