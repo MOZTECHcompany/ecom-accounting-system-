@@ -207,7 +207,7 @@ export class AccountingClassifierService {
     entityId: string,
     description: string,
     model: string = 'gemini-2.0-flash',
-  ): Promise<{ itemId: string; confidence: number } | null> {
+  ): Promise<{ itemId: string; confidence: number; amount?: number } | null> {
     // 1. Fetch active reimbursement items
     const items = await this.prisma.reimbursementItem.findMany({
       where: {
@@ -229,6 +229,7 @@ export class AccountingClassifierService {
     const prompt = `
 You are an expert accountant assisting employees with expense reimbursement.
 Analyze the following expense description and select the most appropriate Reimbursement Item from the list below.
+Also, extract the expense amount from the description if present.
 
 Expense Description: "${description}"
 
@@ -237,22 +238,24 @@ ${itemListText}
 
 Instructions:
 1. Select the best matching item.
-2. Return the result in JSON format: { "itemId": "THE_ID", "confidence": 0.95 }
-3. Confidence should be between 0.0 and 1.0.
-4. If no item is suitable, return null.
-5. Do not include any markdown formatting or explanation, just the raw JSON string.
+2. Extract the expense amount from the description. Look for numbers that represent the cost.
+3. Return the result in JSON format: { "itemId": "THE_ID", "confidence": 0.95, "amount": 500 }
+4. Confidence should be between 0.0 and 1.0.
+5. If no item is suitable, return null.
+6. If no amount is found, set "amount" to null.
+7. Do not include any markdown formatting or explanation, just the raw JSON string.
 `;
 
     try {
       const text = await this.aiService.generateContent(prompt, model);
       if (!text) return null;
 
-      const result = this.aiService.parseJsonOutput<{ itemId: string; confidence: number }>(text);
+      const result = this.aiService.parseJsonOutput<{ itemId: string; confidence: number; amount?: number }>(text);
 
       if (result && result.itemId && typeof result.confidence === 'number') {
         const exists = items.find((i) => i.id === result.itemId);
         if (exists) {
-          return { itemId: result.itemId, confidence: result.confidence };
+          return { itemId: result.itemId, confidence: result.confidence, amount: result.amount };
         }
       }
       return null;

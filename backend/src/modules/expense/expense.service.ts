@@ -77,6 +77,7 @@ export class ExpenseService {
     return {
       suggestedItem: item,
       confidence: suggestion.confidence,
+      amount: suggestion.amount,
       reason: 'ai_gemini',
     };
   }

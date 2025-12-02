@@ -459,6 +459,9 @@ const ExpenseRequestsPage: React.FC = () => {
         const item = reimbursementItems.find((i) => i.id === result.suggestedItem?.id)
         if (item) {
           form.setFieldsValue({ reimbursementItemId: item.id })
+          if (result.amount) {
+            form.setFieldsValue({ amount: result.amount })
+          }
           setSelectedItem(item)
           message.success({
             content: (
@@ -466,6 +469,7 @@ const ExpenseRequestsPage: React.FC = () => {
                 <span>
                   AI 建議：<span className="font-bold">{item.name}</span> (信心度 {(result.confidence * 100).toFixed(0)}%)
                 </span>
+                {result.amount && <span className="text-xs text-gray-500 mt-1">已自動填入金額：{result.amount}</span>}
                 {item.account && <span className="text-xs text-gray-500 mt-1">科目：{item.account.code} {item.account.name}</span>}
                 {item.description && <span className="text-xs text-gray-400 mt-0.5">{item.description}</span>}
               </div>
@@ -484,6 +488,9 @@ const ExpenseRequestsPage: React.FC = () => {
           if (refreshedItem) {
              setReimbursementItems(refreshedItems)
              form.setFieldsValue({ reimbursementItemId: refreshedItem.id })
+             if (result.amount) {
+                form.setFieldsValue({ amount: result.amount })
+             }
              setSelectedItem(refreshedItem)
              message.success({
               content: (
@@ -491,6 +498,7 @@ const ExpenseRequestsPage: React.FC = () => {
                   <span>
                     AI 建議：<span className="font-bold">{refreshedItem.name}</span> (信心度 {(result.confidence * 100).toFixed(0)}%)
                   </span>
+                  {result.amount && <span className="text-xs text-gray-500 mt-1">已自動填入金額：{result.amount}</span>}
                   {refreshedItem.account && <span className="text-xs text-gray-500 mt-1">科目：{refreshedItem.account.code} {refreshedItem.account.name}</span>}
                   {refreshedItem.description && <span className="text-xs text-gray-400 mt-0.5">{refreshedItem.description}</span>}
                 </div>

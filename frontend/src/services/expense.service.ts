@@ -108,6 +108,7 @@ export interface ExpenseHistoryEntry {
 export interface PredictionResult {
   suggestedItem: ReimbursementItem | null
   confidence: number
+  amount?: number
   reason: string
 }
 
