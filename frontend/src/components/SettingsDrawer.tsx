@@ -1,7 +1,8 @@
 import React from 'react'
-import { Drawer, Switch, Radio, Typography, Divider, Space } from 'antd'
+import { Drawer, Switch, Radio, Typography, Divider, Space, Select, Tag } from 'antd'
 import { useTheme } from '../contexts/ThemeContext'
-import { BulbOutlined, BulbFilled, CheckCircleFilled } from '@ant-design/icons'
+import { useAI } from '../contexts/AIContext'
+import { BulbOutlined, BulbFilled, CheckCircleFilled, RobotOutlined } from '@ant-design/icons'
 
 const { Title, Text } = Typography
 
@@ -12,6 +13,7 @@ interface SettingsDrawerProps {
 
 const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ open, onClose }) => {
   const { mode, toggleMode, primaryColor, setPrimaryColor } = useTheme()
+  const { selectedModelId, setSelectedModelId, availableModels, loading: aiLoading } = useAI()
 
   const colors = [
     { name: 'Classic Black', value: 'black', hex: '#000000' },
@@ -85,6 +87,38 @@ const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ open, onClose }) => {
           <Text type="secondary" className="block mt-2 text-xs">
             選擇您喜好的系統主色調
           </Text>
+        </div>
+
+        <Divider />
+
+        {/* AI Settings */}
+        <div>
+          <Title level={5} className="mb-4">
+            <Space>
+              <RobotOutlined /> AI 智能設定 (AI Agent)
+            </Space>
+          </Title>
+          <div className="mb-2">
+            <Text className="block mb-2 text-sm">預設語言模型 (Default Model)</Text>
+            <Select
+              className="w-full"
+              loading={aiLoading}
+              value={selectedModelId}
+              onChange={setSelectedModelId}
+              options={availableModels.map(m => ({
+                label: (
+                  <Space>
+                    <span>{m.name}</span>
+                    {m.isExperimental && <Tag color="purple" className="mr-0 text-[10px]">Preview</Tag>}
+                  </Space>
+                ),
+                value: m.id
+              }))}
+            />
+            <Text type="secondary" className="block mt-2 text-xs">
+              此模型將應用於全系統的 AI 輔助功能（如：費用分類、財報分析、Copilot 助手）。
+            </Text>
+          </div>
         </div>
 
         <Divider />

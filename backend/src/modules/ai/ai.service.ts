@@ -16,6 +16,8 @@ export class AiService {
   // Default supported models - this can be moved to DB later for full dynamic control
   private readonly supportedModels: AiModel[] = [
     { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Fastest, multimodal', isExperimental: true },
+    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', description: 'Next Gen Reasoning', isExperimental: true },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Next Gen Speed', isExperimental: true },
     { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', description: 'Best for complex reasoning' },
     { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', description: 'Fast and cost-effective' },
     // Future proofing: User can add these via config later, or we just add them here

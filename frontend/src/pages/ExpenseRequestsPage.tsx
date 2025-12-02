@@ -38,6 +38,7 @@ import {
 import { accountingService } from '../services/accounting.service'
 import type { Account } from '../types'
 import { useAuth } from '../contexts/AuthContext'
+import { useAI } from '../contexts/AIContext'
 import { aiService, AiModel } from '../services/ai.service'
 
 const { Text, Title } = Typography
@@ -134,8 +135,16 @@ const ExpenseRequestsPage: React.FC = () => {
   const [approveLoading, setApproveLoading] = useState(false)
   const [rejectLoading, setRejectLoading] = useState(false)
   const [predicting, setPredicting] = useState(false)
-  const [selectedModel, setSelectedModel] = useState<string>('gemini-2.0-flash')
-  const [availableModels, setAvailableModels] = useState<AiModel[]>([])
+  
+  // Use global AI context
+  const { selectedModelId: globalModelId, availableModels } = useAI()
+  const [selectedModel, setSelectedModel] = useState<string>(globalModelId)
+  
+  // Sync local state when global changes (optional, but good UX)
+  useEffect(() => {
+    if (globalModelId) setSelectedModel(globalModelId)
+  }, [globalModelId])
+
   const [form] = Form.useForm()
   const [approvalForm] = Form.useForm()
 
@@ -182,8 +191,7 @@ const ExpenseRequestsPage: React.FC = () => {
 
   useEffect(() => {
     refreshRequests()
-    // Fetch available AI models
-    aiService.getAvailableModels().then(setAvailableModels).catch(console.error)
+    // Models are now fetched by AIContext, no need to fetch here manually
   }, [refreshRequests])
 
   useEffect(() => {

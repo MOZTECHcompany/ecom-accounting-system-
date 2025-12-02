@@ -2,6 +2,7 @@ import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
+import { AIProvider } from './contexts/AIContext'
 import DashboardLayout from './components/DashboardLayout'
 import ProtectedRoute from './components/ProtectedRoute'
 import LoginPage from './pages/LoginPage'
@@ -23,9 +24,10 @@ const App: React.FC = () => {
   return (
     <BrowserRouter>
       <ThemeProvider>
-        <AuthProvider>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
+        <AIProvider>
+          <AuthProvider>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
             
             <Route path="/" element={<ProtectedRoute />}>
               <Route element={<DashboardLayout />}>
@@ -52,7 +54,8 @@ const App: React.FC = () => {
               </Route>
             </Route>
           </Routes>
-        </AuthProvider>
+          </AuthProvider>
+        </AIProvider>
       </ThemeProvider>
     </BrowserRouter>
   )
