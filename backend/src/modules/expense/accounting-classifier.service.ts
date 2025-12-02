@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { AiService } from '../ai/ai.service';
 
 export interface SuggestAccountInput {
   entityId: string;
@@ -35,14 +36,12 @@ interface SuggestionCandidate {
 @Injectable()
 export class AccountingClassifierService {
   private readonly logger = new Logger(AccountingClassifierService.name);
-  private readonly geminiApiKey: string;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
-  ) {
-    this.geminiApiKey = this.configService.get<string>('GEMINI_API_KEY') || '';
-  }
+    private readonly aiService: AiService,
+  ) {}
 
   async suggestAccount(
     input: SuggestAccountInput,
@@ -51,7 +50,7 @@ export class AccountingClassifierService {
     const candidates: SuggestionCandidate[] = [];
 
     // 1. AI Classification (Gemini)
-    if (this.geminiApiKey && input.description) {
+    if (input.description) {
       try {
         const aiSuggestion = await this.classifyWithGemini(
           input.entityId,
@@ -245,28 +244,10 @@ Instructions:
 `;
 
     try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.geminiApiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-          }),
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error(`Gemini API Error: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
+      const text = await this.aiService.generateContent(prompt, model);
       if (!text) return null;
 
-      const jsonString = text.replace(/```json/g, '').replace(/```/g, '').trim();
-      const result = JSON.parse(jsonString);
+      const result = this.aiService.parseJsonOutput<{ itemId: string; confidence: number }>(text);
 
       if (result && result.itemId && typeof result.confidence === 'number') {
         const exists = items.find((i) => i.id === result.itemId);
@@ -319,29 +300,10 @@ Instructions:
 `;
 
     try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.geminiApiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-          }),
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error(`Gemini API Error: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
+      const text = await this.aiService.generateContent(prompt, model);
       if (!text) return null;
 
-      // Clean up markdown code blocks if present
-      const jsonString = text.replace(/```json/g, '').replace(/```/g, '').trim();
-      const result = JSON.parse(jsonString);
+      const result = this.aiService.parseJsonOutput<{ accountId: string; confidence: number }>(text);
 
       if (result && result.accountId && typeof result.confidence === 'number') {
         // Verify account exists

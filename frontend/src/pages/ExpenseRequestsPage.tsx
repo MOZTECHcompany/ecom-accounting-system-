@@ -38,6 +38,7 @@ import {
 import { accountingService } from '../services/accounting.service'
 import type { Account } from '../types'
 import { useAuth } from '../contexts/AuthContext'
+import { aiService, AiModel } from '../services/ai.service'
 
 const { Text, Title } = Typography
 
@@ -134,6 +135,7 @@ const ExpenseRequestsPage: React.FC = () => {
   const [rejectLoading, setRejectLoading] = useState(false)
   const [predicting, setPredicting] = useState(false)
   const [selectedModel, setSelectedModel] = useState<string>('gemini-2.0-flash')
+  const [availableModels, setAvailableModels] = useState<AiModel[]>([])
   const [form] = Form.useForm()
   const [approvalForm] = Form.useForm()
 
@@ -180,6 +182,8 @@ const ExpenseRequestsPage: React.FC = () => {
 
   useEffect(() => {
     refreshRequests()
+    // Fetch available AI models
+    aiService.getAvailableModels().then(setAvailableModels).catch(console.error)
   }, [refreshRequests])
 
   useEffect(() => {
@@ -679,13 +683,9 @@ const ExpenseRequestsPage: React.FC = () => {
                  <Select
                   value={selectedModel}
                   onChange={setSelectedModel}
-                  options={[
-                    { label: 'Gemini 2.0 Flash', value: 'gemini-2.0-flash' },
-                    { label: 'Gemini 1.5 Pro', value: 'gemini-1.5-pro' },
-                    { label: 'Gemini 1.5 Flash', value: 'gemini-1.5-flash' },
-                  ]}
+                  options={availableModels.map(m => ({ label: m.name, value: m.id }))}
                   size="small"
-                  style={{ width: 140 }}
+                  style={{ width: 160 }}
                   variant="borderless"
                   className="bg-white/50 rounded"
                 />

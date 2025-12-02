@@ -30,6 +30,7 @@ import { ReconciliationModule } from './modules/reconciliation/reconciliation.mo
 import { VendorModule } from './modules/vendor/vendor.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { AiModule } from './modules/ai/ai.module';
 
 /**
  * AppModule
@@ -91,6 +92,7 @@ import { NotificationModule } from './modules/notification/notification.module';
     InvoicingModule, // → SalesModule, ArModule (電子發票)
     ReconciliationModule, // → BankingModule, AccountingModule (銀行對帳)
     NotificationModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [
