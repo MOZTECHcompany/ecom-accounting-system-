@@ -4,7 +4,7 @@ import { AiService, AiModel } from './ai.service';
 import { AiInsightsService } from './ai-insights.service';
 import { AiCopilotService } from './ai-copilot.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { Request } from 'express';
+import type { Request } from 'express';
 
 @ApiTags('AI Core')
 @ApiBearerAuth()

@@ -1,19 +1,35 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Button, Input, Avatar, Card, Typography, Space, Spin } from 'antd'
+import { Button, Input, Avatar, Card, Typography, Space } from 'antd'
 import { 
-  RobotOutlined, 
   SendOutlined, 
   CloseOutlined, 
   UserOutlined,
   BulbOutlined,
   BarChartOutlined,
-  SearchOutlined
+  SearchOutlined,
+  AudioOutlined,
+  PictureOutlined
 } from '@ant-design/icons'
 import { motion, AnimatePresence } from 'framer-motion'
 import { aiService } from '../services/ai.service'
 import { useAI } from '../contexts/AIContext'
 
 const { Text } = Typography
+
+// Gemini Sparkle Icon
+const GeminiIcon = ({ className = "", style = {} }: { className?: string, style?: React.CSSProperties }) => (
+  <svg 
+    viewBox="0 0 24 24" 
+    fill="currentColor" 
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+    style={style}
+    width="1em"
+    height="1em"
+  >
+    <path d="M12 2C12 2 13.5 7.5 16 10C18.5 12.5 22 12 22 12C22 12 18.5 13.5 16 16C13.5 18.5 12 22 12 22C12 22 10.5 18.5 8 16C5.5 13.5 2 12 2 12C2 12 5.5 12.5 8 10C10.5 7.5 12 2 12 2Z" />
+  </svg>
+)
 
 interface Message {
   id: string
@@ -36,7 +52,7 @@ const AICopilotWidget: React.FC = () => {
     {
       id: 'welcome',
       type: 'ai',
-      content: "嗨！我是您的 AI 財務助手。我可以協助您分析數據、查詢訂單或解答系統問題。請問今天有什麼可以幫您？",
+      content: "你好！我是 Gemini 財務助手。我可以協助你分析數據、查詢訂單或解答系統問題。",
       timestamp: new Date()
     }
   ])
@@ -95,17 +111,25 @@ const AICopilotWidget: React.FC = () => {
       {/* Floating Action Button */}
       <motion.div
         className="fixed bottom-8 right-8 z-50"
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.9 }}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
       >
         <Button
           type="primary"
           shape="circle"
           size="large"
-          className="!w-14 !h-14 !bg-gradient-to-r !from-indigo-500 !to-purple-600 !border-0 !shadow-lg !shadow-indigo-500/40 flex items-center justify-center"
+          className={`!w-14 !h-14 !border-0 !shadow-lg flex items-center justify-center overflow-hidden relative group ${isOpen ? '!bg-gray-900' : ''}`}
+          style={{
+            background: isOpen ? '#1f1f1f' : 'linear-gradient(135deg, #4E75F6 0%, #8E4EC6 50%, #E34F6F 100%)'
+          }}
           onClick={() => setIsOpen(!isOpen)}
-          icon={isOpen ? <CloseOutlined className="text-xl" /> : <RobotOutlined className="text-2xl" />}
-        />
+        >
+          {isOpen ? (
+            <CloseOutlined className="text-xl text-white" />
+          ) : (
+            <GeminiIcon className="text-2xl text-white animate-pulse" />
+          )}
+        </Button>
       </motion.div>
 
       {/* Chat Window */}
@@ -115,29 +139,47 @@ const AICopilotWidget: React.FC = () => {
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            transition={{ duration: 0.2 }}
-            className="fixed bottom-28 right-8 z-40 w-[380px] h-[600px] max-h-[80vh]"
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="fixed bottom-28 right-8 z-40 w-[400px] h-[650px] max-h-[80vh]"
           >
             <Card 
-              className="h-full shadow-2xl !rounded-2xl overflow-hidden flex flex-col glass-card !border-0 !bg-white/90 backdrop-blur-xl"
+              className="h-full shadow-2xl !rounded-3xl overflow-hidden flex flex-col !border-0 !bg-white/95 backdrop-blur-xl"
               bodyStyle={{ padding: 0, height: '100%', display: 'flex', flexDirection: 'column' }}
             >
               {/* Header */}
-              <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-indigo-50 to-purple-50 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-md">
-                  <RobotOutlined className="text-xl" />
-                </div>
-                <div>
-                  <div className="font-bold text-gray-800">AI Copilot</div>
-                  <div className="text-xs text-green-500 flex items-center gap-1">
-                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                    Online
+              <div className="p-5 border-b border-gray-100/50 flex items-center justify-between bg-white/50 backdrop-blur-md sticky top-0 z-10">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <GeminiIcon className="text-2xl text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" style={{ fill: 'url(#gemini-gradient)' }} />
+                    {/* SVG Gradient Definition */}
+                    <svg width="0" height="0" className="absolute">
+                      <linearGradient id="gemini-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop stopColor="#4E75F6" offset="0%" />
+                        <stop stopColor="#8E4EC6" offset="50%" />
+                        <stop stopColor="#E34F6F" offset="100%" />
+                      </linearGradient>
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-gray-800 text-base bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                      Gemini
+                    </div>
+                    <div className="text-[10px] text-gray-400 font-medium tracking-wide">
+                      ADVANCED MODEL
+                    </div>
                   </div>
                 </div>
+                <Button 
+                  type="text" 
+                  shape="circle" 
+                  icon={<CloseOutlined className="text-gray-400" />} 
+                  onClick={() => setIsOpen(false)}
+                  className="hover:!bg-gray-100"
+                />
               </div>
 
               {/* Messages Area */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50">
+              <div className="flex-1 overflow-y-auto p-5 space-y-6 bg-white scrollbar-hide">
                 {messages.map(msg => (
                   <motion.div
                     key={msg.id}
@@ -145,17 +187,18 @@ const AICopilotWidget: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
-                    <div className={`flex gap-2 max-w-[85%] ${msg.type === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                      <Avatar 
-                        size="small" 
-                        icon={msg.type === 'user' ? <UserOutlined /> : <RobotOutlined />}
-                        className={msg.type === 'user' ? '!bg-gray-800' : '!bg-indigo-500'}
-                      />
+                    <div className={`flex gap-3 max-w-[85%] ${msg.type === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                      {msg.type === 'ai' && (
+                        <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center mt-1">
+                          <GeminiIcon className="text-xl" style={{ fill: 'url(#gemini-gradient)' }} />
+                        </div>
+                      )}
+                      
                       <div 
-                        className={`p-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
+                        className={`py-3 px-4 text-[15px] leading-relaxed ${
                           msg.type === 'user' 
-                            ? 'bg-gray-800 text-white rounded-tr-none' 
-                            : 'bg-white text-gray-700 rounded-tl-none border border-gray-100'
+                            ? 'bg-[#f0f4f9] text-gray-800 rounded-[20px] rounded-tr-sm' 
+                            : 'text-gray-700'
                         }`}
                       >
                         {msg.content}
@@ -166,12 +209,16 @@ const AICopilotWidget: React.FC = () => {
                 
                 {isTyping && (
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
-                    <div className="flex gap-2">
-                      <Avatar size="small" icon={<RobotOutlined />} className="!bg-indigo-500" />
-                      <div className="bg-white p-3 rounded-2xl rounded-tl-none border border-gray-100 shadow-sm flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    <div className="flex gap-3">
+                      <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center mt-1">
+                         <GeminiIcon className="text-xl animate-pulse" style={{ fill: 'url(#gemini-gradient)' }} />
+                      </div>
+                      <div className="py-3 px-4">
+                        <div className="flex gap-1.5">
+                          <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <span className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <span className="w-2 h-2 bg-pink-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </div>
                       </div>
                     </div>
                   </motion.div>
@@ -181,43 +228,69 @@ const AICopilotWidget: React.FC = () => {
 
               {/* Suggested Prompts */}
               {messages.length === 1 && (
-                <div className="px-4 pb-2">
-                  <Text type="secondary" className="text-xs mb-2 block ml-1">建議提問：</Text>
-                  <div className="flex flex-wrap gap-2">
+                <div className="px-6 pb-4">
+                  <div className="flex flex-col gap-2">
                     {SUGGESTED_PROMPTS.map((prompt, idx) => (
-                      <Button 
-                        key={idx} 
-                        size="small" 
-                        className="!rounded-full !text-xs !bg-white hover:!border-indigo-500 hover:!text-indigo-500"
-                        icon={prompt.icon}
+                      <motion.button
+                        key={idx}
+                        whileHover={{ scale: 1.02, backgroundColor: '#f8fafc' }}
+                        whileTap={{ scale: 0.98 }}
+                        className="w-full text-left p-3 rounded-xl bg-[#f0f4f9] hover:bg-gray-100 transition-colors flex items-center gap-3 text-gray-600 text-sm group border-0 cursor-pointer"
                         onClick={() => handleSend(prompt.text)}
                       >
+                        <span className="p-2 bg-white rounded-full shadow-sm text-indigo-500 group-hover:text-indigo-600 transition-colors">
+                          {prompt.icon}
+                        </span>
                         {prompt.text}
-                      </Button>
+                      </motion.button>
                     ))}
                   </div>
                 </div>
               )}
 
               {/* Input Area */}
-              <div className="p-4 bg-white border-t border-gray-100">
-                <Space.Compact style={{ width: '100%' }}>
-                  <Input 
-                    placeholder="輸入您的問題..." 
+              <div className="p-5 bg-white">
+                <div className="relative bg-[#f0f4f9] rounded-[24px] p-2 transition-all focus-within:ring-2 focus-within:ring-blue-100 focus-within:bg-white focus-within:shadow-md border border-transparent focus-within:border-blue-200">
+                  <Input.TextArea 
+                    placeholder="問問 Gemini..." 
                     value={inputValue}
                     onChange={e => setInputValue(e.target.value)}
-                    onPressEnter={() => handleSend()}
-                    className="!rounded-l-xl"
+                    onPressEnter={(e) => {
+                      if (!e.shiftKey) {
+                        e.preventDefault();
+                        handleSend();
+                      }
+                    }}
+                    autoSize={{ minRows: 1, maxRows: 4 }}
+                    className="!bg-transparent !border-0 !shadow-none !resize-none !text-base !px-3 !py-2 focus:!shadow-none"
                     disabled={isTyping}
                   />
-                  <Button 
-                    type="primary" 
-                    icon={<SendOutlined />} 
-                    onClick={() => handleSend()}
-                    className="!rounded-r-xl !bg-indigo-600"
-                    disabled={isTyping}
-                  />
-                </Space.Compact>
+                  <div className="flex justify-between items-center px-2 pb-1 mt-1">
+                    <div className="flex gap-1">
+                       <Button type="text" shape="circle" size="small" icon={<PictureOutlined className="text-gray-400" />} />
+                       <Button type="text" shape="circle" size="small" icon={<AudioOutlined className="text-gray-400" />} />
+                    </div>
+                    <Button 
+                      type="text" 
+                      shape="circle"
+                      icon={
+                        inputValue.trim() ? (
+                          <SendOutlined className="text-blue-600" />
+                        ) : (
+                          <SendOutlined className="text-gray-400" />
+                        )
+                      }
+                      onClick={() => handleSend()}
+                      disabled={isTyping || !inputValue.trim()}
+                      className={inputValue.trim() ? "!bg-blue-50" : ""}
+                    />
+                  </div>
+                </div>
+                <div className="text-center mt-2">
+                  <Text type="secondary" className="text-[10px]">
+                    Gemini 可能會顯示不準確的資訊，請務必再次確認。
+                  </Text>
+                </div>
               </div>
             </Card>
           </motion.div>

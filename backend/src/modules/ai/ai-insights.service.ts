@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AiService } from './ai.service';
-import * as dayjs from 'dayjs';
+import dayjs from 'dayjs';
 
 @Injectable()
 export class AiInsightsService {
@@ -23,7 +23,7 @@ export class AiInsightsService {
           entityId,
           createdAt: { gte: yesterday, lt: today },
         },
-        _sum: { totalAmount: true },
+        _sum: { totalGrossBase: true },
         _count: { id: true },
       }),
       this.prisma.expenseRequest.aggregate({
@@ -36,7 +36,7 @@ export class AiInsightsService {
       }),
     ]);
 
-    const salesTotal = salesData._sum.totalAmount || 0;
+    const salesTotal = salesData._sum.totalGrossBase || 0;
     const salesCount = salesData._count.id || 0;
     const expenseTotal = expenseData._sum.amountOriginal || 0;
     const expenseCount = expenseData._count.id || 0;
@@ -78,17 +78,19 @@ Max length: 50 words.
       _count: { id: true },
     });
 
-    const avgAmount = stats._avg.amountOriginal || 0;
+    const avgAmount = stats._avg.amountOriginal;
     const count = stats._count.id || 0;
 
     // Not enough data to judge
     if (count < 5) return { isAnomaly: false };
 
+    const avgVal = avgAmount ? Number(avgAmount) : 0;
+
     // Simple Rule: > 200% of average
-    if (amount > avgAmount * 2) {
+    if (amount > avgVal * 2) {
       return {
         isAnomaly: true,
-        reason: `金額 TWD ${amount} 顯著高於歷史平均 (TWD ${avgAmount.toFixed(0)})`,
+        reason: `金額 TWD ${amount} 顯著高於歷史平均 (TWD ${avgVal.toFixed(0)})`,
       };
     }
 
