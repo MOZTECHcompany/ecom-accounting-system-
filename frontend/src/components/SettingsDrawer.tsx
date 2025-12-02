@@ -91,6 +91,28 @@ const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ open, onClose }) => {
         {/* Primary Color */}
         <div>
           <Title level={5} className="mb-4">主題色系 (Accent Color)</Title>
+          <div className="grid grid-cols-5 gap-2">
+            {colors.map((color) => (
+              <button
+                key={color.value}
+                onClick={() => setPrimaryColor(color.value as any)}
+                className="w-10 h-10 rounded-full flex items-center justify-center transition-transform hover:scale-110 relative"
+                style={{ backgroundColor: color.hex }}
+                title={color.name}
+              >
+                {primaryColor === color.value && (
+                  <CheckCircleFilled className="text-white text-lg drop-shadow-md" />
+                )}
+              </button>
+            ))}
+          </div>
+          <Text type="secondary" className="block mt-2 text-xs">
+            選擇您喜好的系統主色調
+          </Text>
+        </div>
+
+        <Divider />
+
         {/* AI Settings */}
         <div>
           <Title level={5} className="mb-4">
@@ -135,28 +157,6 @@ const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ open, onClose }) => {
                 <BulbOutlined className="mt-0.5 text-yellow-500" />
                 <span>此模型將應用於全系統的 AI 輔助功能，包含費用分類預測、財報分析與 Copilot 助手。</span>
               </Space>
-            </Text>
-          </div>
-        </div>
-          <div className="mb-2">
-            <Text className="block mb-2 text-sm">預設語言模型 (Default Model)</Text>
-            <Select
-              className="w-full"
-              loading={aiLoading}
-              value={selectedModelId}
-              onChange={setSelectedModelId}
-              options={availableModels.map(m => ({
-                label: (
-                  <Space>
-                    <span>{m.name}</span>
-                    {m.isExperimental && <Tag color="purple" className="mr-0 text-[10px]">Preview</Tag>}
-                  </Space>
-                ),
-                value: m.id
-              }))}
-            />
-            <Text type="secondary" className="block mt-2 text-xs">
-              此模型將應用於全系統的 AI 輔助功能（如：費用分類、財報分析、Copilot 助手）。
             </Text>
           </div>
         </div>
