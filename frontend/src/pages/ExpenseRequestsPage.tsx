@@ -643,10 +643,27 @@ const ExpenseRequestsPage: React.FC = () => {
                   style={{ marginBottom: 12 }}
                   onChange={(e) => {
                     const value = e.target.value
-                    // Try to extract amount from description (e.g. "Taxi 560" -> 560)
-                    // Matches numbers at the end of string or after spaces
-                    const match = value.match(/(?:^|\s)(\d+(?:,\d{3})*(?:\.\d+)?)(?:\s|$|元|TWD|NT)/)
+                    // Strategy 1: Look for explicit currency suffixes (元, 塊, etc.) - works for "筆50塊"
+                    let match = value.match(/(\d+(?:,\d{3})*(?:\.\d+)?)\s*(?:元|塊|TWD|NT|USD)/i)
+                    
+                    // Strategy 2: Look for explicit currency prefixes ($, NT$, etc.)
+                    if (!match) {
+                      match = value.match(/(?:\$|NT\$?|TWD)\s*(\d+(?:,\d{3})*(?:\.\d+)?)/i)
+                      // If matched, the number is in group 1
+                    }
+
+                    // Strategy 3: Look for standalone numbers or numbers at the end (original logic)
+                    if (!match) {
+                      match = value.match(/(?:^|\s)(\d+(?:,\d{3})*(?:\.\d+)?)(?:\s|$)/)
+                    }
+
                     if (match) {
+                      // In all regexes above, the number is in the first capturing group (index 1)
+                      // Note: For Strategy 2, we need to be careful about group indices if we change the regex.
+                      // Let's verify:
+                      // S1: (\d...) is group 1.
+                      // S2: (?:...) is non-capturing, (\d...) is group 1.
+                      // S3: (?:...) is non-capturing, (\d...) is group 1.
                       const amountStr = match[1].replace(/,/g, '')
                       const amount = parseFloat(amountStr)
                       if (!isNaN(amount)) {
