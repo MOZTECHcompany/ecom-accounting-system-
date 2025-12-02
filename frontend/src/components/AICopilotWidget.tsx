@@ -10,6 +10,8 @@ import {
   SearchOutlined
 } from '@ant-design/icons'
 import { motion, AnimatePresence } from 'framer-motion'
+import { aiService } from '../services/ai.service'
+import { useAI } from '../contexts/AIContext'
 
 const { Text } = Typography
 
@@ -39,6 +41,8 @@ const AICopilotWidget: React.FC = () => {
     }
   ])
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const { selectedModelId } = useAI()
+  const entityId = import.meta.env.VITE_DEFAULT_ENTITY_ID || 'tw-entity-001'
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -62,28 +66,28 @@ const AICopilotWidget: React.FC = () => {
     setInputValue('')
     setIsTyping(true)
 
-    // Simulate AI processing
-    setTimeout(() => {
-      let aiResponse = "我收到您的請求了，正在為您分析..."
+    try {
+      const response = await aiService.chat(text, entityId, selectedModelId)
       
-      if (text.includes("銷售") || text.includes("趨勢")) {
-        aiResponse = "根據數據分析，本月銷售額較上月成長 12.5%。主要增長來自 Electronics 類別。建議您可以查看銷售儀表板獲取更多細節。"
-      } else if (text.includes("未付款")) {
-        aiResponse = "目前系統中有 5 筆逾期未付款的訂單，總金額為 NT$ 45,200。我已經將列表整理好，您是否要發送催款通知？"
-      } else if (text.includes("客單價")) {
-        aiResponse = "目前的平均客單價 (AOV) 為 NT$ 3,250。建議透過「滿額免運」或「加價購」策略，有機會將 AOV 提升至 NT$ 3,500 以上。"
-      }
-
       const aiMsg: Message = {
         id: (Date.now() + 1).toString(),
         type: 'ai',
-        content: aiResponse,
+        content: response.reply,
         timestamp: new Date()
       }
-      
       setMessages(prev => [...prev, aiMsg])
+    } catch (error) {
+      console.error('AI Chat Error', error)
+      const errorMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        type: 'ai',
+        content: "抱歉，我現在無法連線到 AI 服務，請稍後再試。",
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, errorMsg])
+    } finally {
       setIsTyping(false)
-    }, 1500)
+    }
   }
 
   return (

@@ -1,54 +1,75 @@
-import React, { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import React, { useEffect, useState } from 'react'
+import { Card, Typography, Skeleton, Button, Space } from 'antd'
+import { RobotOutlined, ReloadOutlined, RiseOutlined } from '@ant-design/icons'
+import { aiService } from '../services/ai.service'
+import { useAI } from '../contexts/AIContext'
+import { motion } from 'framer-motion'
 
-// Using Ant Design Icons as fallback if lucide-react is not available in package.json (it wasn't in the list I saw earlier)
-import { 
-  ThunderboltOutlined, 
-  RiseOutlined, 
-  InfoCircleOutlined, 
-  ArrowRightOutlined,
-  LoadingOutlined
-} from '@ant-design/icons'
+const { Text, Title } = Typography
 
 const AIInsightsWidget: React.FC = () => {
-  const [loading, setLoading] = useState(true)
   const [insight, setInsight] = useState<string>('')
-  const [visible, setVisible] = useState(true)
+  const [loading, setLoading] = useState(true)
+  const { selectedModelId } = useAI()
+  const entityId = import.meta.env.VITE_DEFAULT_ENTITY_ID || 'tw-entity-001'
 
-  const insights = [
-    "Revenue is trending up 12% compared to last week. Projected to hit monthly target by Friday.",
-    "Detected unusual spike in returns for 'Ergonomic Chair'. Recommend investigating quality control.",
-    "Cash flow forecast indicates a surplus. Consider early payment of vendor #402 to capture 2% discount.",
-    "Customer acquisition cost dropped by 5% this month due to organic traffic increase."
-  ]
-
-  useEffect(() => {
-    // Simulate AI generation delay
-    const timer = setTimeout(() => {
+  const fetchInsight = async () => {
+    setLoading(true)
+    try {
+      const data = await aiService.getDailyBriefing(entityId, selectedModelId)
+      setInsight(data.insight)
+    } catch (error) {
+      console.error('Failed to fetch AI insight', error)
+      setInsight('暫時無法取得 AI 財務簡報。')
+    } finally {
       setLoading(false)
-      typewriterEffect(insights[0])
-    }, 1500)
-    return () => clearTimeout(timer)
-  }, [])
-
-  const typewriterEffect = (text: string) => {
-    let i = 0
-    setInsight('')
-    const interval = setInterval(() => {
-      setInsight(text.substring(0, i + 1))
-      i++
-      if (i === text.length) clearInterval(interval)
-    }, 30)
+    }
   }
 
-  if (!visible) return null
+  useEffect(() => {
+    fetchInsight()
+  }, [selectedModelId])
 
   return (
     <motion.div
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="relative group mb-6"
+      className="mb-6"
     >
+      <Card 
+        className="glass-card border-l-4 border-l-purple-500" 
+        bodyStyle={{ padding: '16px 24px' }}
+      >
+        <div className="flex items-start gap-4">
+          <div className="p-3 bg-purple-100 rounded-full text-purple-600">
+            <RobotOutlined style={{ fontSize: '24px' }} />
+          </div>
+          <div className="flex-1">
+            <div className="flex justify-between items-center mb-1">
+              <Title level={5} style={{ margin: 0, color: '#722ed1' }}>
+                AI 財務日報 (Daily Insights)
+              </Title>
+              <Button 
+                type="text" 
+                icon={<ReloadOutlined />} 
+                size="small" 
+                onClick={fetchInsight} 
+                loading={loading}
+              />
+            </div>
+            <Skeleton active loading={loading} paragraph={{ rows: 1 }}>
+              <Text className="text-gray-600 text-base leading-relaxed">
+                {insight}
+              </Text>
+            </Skeleton>
+          </div>
+        </div>
+      </Card>
+    </motion.div>
+  )
+}
+
+export default AIInsightsWidget    >
       {/* Shimmering Border Container */}
       <div className="absolute -inset-0.5 bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500 rounded-2xl opacity-30 blur group-hover:opacity-60 transition duration-1000 group-hover:duration-200 animate-gradient-xy"></div>
       
