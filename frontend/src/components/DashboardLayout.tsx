@@ -12,7 +12,9 @@ import {
   LogoutOutlined,
   UserOutlined,
   SearchOutlined,
-  MenuOutlined
+  MenuOutlined,
+  LeftOutlined,
+  RightOutlined
 } from '@ant-design/icons'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
@@ -186,40 +188,52 @@ const DashboardLayout: React.FC = () => {
           collapsed={collapsed} 
           onCollapse={setCollapsed}
           width={260}
+          trigger={null}
           className="floating-sidebar"
           style={{
-            overflowY: 'auto',
-            overflowX: 'hidden',
             height: 'calc(100vh - 32px)',
             position: 'fixed',
             left: 0,
             top: 0,
             zIndex: 100,
             background: 'transparent', // Handled by CSS class
-            scrollbarWidth: 'none', // Firefox
-            msOverflowStyle: 'none', // IE 10+
+            overflow: 'hidden',
           }}
         >
-          <div className="h-16 flex items-center justify-center m-4 mb-8">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md border border-white/30 shadow-lg">
-                <span className="text-xl">💎</span>
+          <div className="flex flex-col h-full">
+            <div className="shrink-0 h-16 flex items-center justify-center m-4 mb-8">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md border border-white/30 shadow-lg">
+                  <span className="text-xl">💎</span>
+                </div>
+                {!collapsed && (
+                  <span className="text-lg font-semibold tracking-wide" style={{ color: 'var(--text-primary)' }}>
+                    E-Accounting
+                  </span>
+                )}
               </div>
-              {!collapsed && (
-                <span className="text-lg font-semibold tracking-wide" style={{ color: 'var(--text-primary)' }}>
-                  E-Accounting
-                </span>
-              )}
+            </div>
+            <div className="flex-1 overflow-y-auto overflow-x-hidden" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+              <Menu
+                theme="light"
+                mode="inline"
+                selectedKeys={[location.pathname]}
+                defaultOpenKeys={['accounting', 'sales', 'ar', 'ap', 'admin']}
+                items={menuItems}
+                className="px-2 bg-transparent border-none"
+              />
+            </div>
+            <div 
+              className="shrink-0 h-12 flex items-center justify-center cursor-pointer transition-colors hover:bg-black/5"
+              style={{ 
+                borderTop: '1px solid rgba(0, 0, 0, 0.06)',
+                color: 'var(--text-primary)'
+              }}
+              onClick={() => setCollapsed(!collapsed)}
+            >
+              {collapsed ? <RightOutlined /> : <LeftOutlined />}
             </div>
           </div>
-          <Menu
-            theme="light"
-            mode="inline"
-            selectedKeys={[location.pathname]}
-            defaultOpenKeys={['accounting', 'sales', 'ar', 'ap', 'admin']}
-            items={menuItems}
-            className="px-2 bg-transparent border-none"
-          />
         </Sider>
       ) : (
         <Drawer
