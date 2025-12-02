@@ -157,10 +157,11 @@ const buildParams = (params: Record<string, string | undefined>) =>
   Object.fromEntries(Object.entries(params).filter(([, value]) => Boolean(value)))
 
 export const expenseService = {
-  async predictCategory(entityId: string, description: string): Promise<PredictionResult | null> {
+  async predictCategory(entityId: string, description: string, model?: string): Promise<PredictionResult | null> {
     const { data } = await api.post<PredictionResult | null>('/expense/predict-category', {
       entityId,
       description,
+      model,
     })
     return data
   },

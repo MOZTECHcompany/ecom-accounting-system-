@@ -56,11 +56,12 @@ export class ExpenseService {
     return this.submitIntelligentExpenseRequest(data, requestedBy);
   }
 
-  async predictReimbursementItem(entityId: string, description: string) {
+  async predictReimbursementItem(entityId: string, description: string, model?: string) {
     // 1. Use AI to suggest a Reimbursement Item directly
     const suggestion = await this.classifierService.suggestReimbursementItem(
       entityId,
       description,
+      model,
     );
 
     if (!suggestion || !suggestion.itemId) {

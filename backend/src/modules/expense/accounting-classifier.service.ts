@@ -14,6 +14,7 @@ export interface SuggestAccountInput {
   departmentId?: string;
   receiptType?: string;
   metadata?: Record<string, unknown>;
+  model?: string;
 }
 
 export interface AccountSuggestionResult {
@@ -55,6 +56,7 @@ export class AccountingClassifierService {
         const aiSuggestion = await this.classifyWithGemini(
           input.entityId,
           input.description,
+          input.model,
         );
         if (aiSuggestion) {
           appliedRules.add('ai_gemini');
@@ -205,6 +207,7 @@ export class AccountingClassifierService {
   async suggestReimbursementItem(
     entityId: string,
     description: string,
+    model: string = 'gemini-2.0-flash',
   ): Promise<{ itemId: string; confidence: number } | null> {
     // 1. Fetch active reimbursement items
     const items = await this.prisma.reimbursementItem.findMany({
@@ -243,7 +246,7 @@ Instructions:
 
     try {
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${this.geminiApiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.geminiApiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -281,6 +284,7 @@ Instructions:
   private async classifyWithGemini(
     entityId: string,
     description: string,
+    model: string = 'gemini-2.0-flash',
   ): Promise<{ accountId: string; confidence: number } | null> {
     // 1. Fetch active expense accounts
     const accounts = await this.prisma.account.findMany({
@@ -316,7 +320,7 @@ Instructions:
 
     try {
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${this.geminiApiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.geminiApiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

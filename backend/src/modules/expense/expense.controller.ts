@@ -83,11 +83,12 @@ export class ExpenseController {
   @ApiOperation({ summary: '預測報銷項目' })
   @ApiResponse({ status: 200, description: '成功預測報銷項目' })
   async predictCategory(
-    @Body() data: { description: string; entityId: string },
+    @Body() data: { description: string; entityId: string; model?: string },
   ) {
     return this.expenseService.predictReimbursementItem(
       data.entityId,
       data.description,
+      data.model,
     );
   }
 

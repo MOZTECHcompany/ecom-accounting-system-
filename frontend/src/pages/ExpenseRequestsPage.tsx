@@ -133,6 +133,7 @@ const ExpenseRequestsPage: React.FC = () => {
   const [approveLoading, setApproveLoading] = useState(false)
   const [rejectLoading, setRejectLoading] = useState(false)
   const [predicting, setPredicting] = useState(false)
+  const [selectedModel, setSelectedModel] = useState<string>('gemini-2.0-flash')
   const [form] = Form.useForm()
   const [approvalForm] = Form.useForm()
 
@@ -441,7 +442,7 @@ const ExpenseRequestsPage: React.FC = () => {
 
     try {
       setPredicting(true)
-      const result = await expenseService.predictCategory(entityId, description)
+      const result = await expenseService.predictCategory(entityId, description, selectedModel)
       if (result && result.suggestedItem) {
         const item = reimbursementItems.find((i) => i.id === result.suggestedItem?.id)
         if (item) {
@@ -673,6 +674,22 @@ const ExpenseRequestsPage: React.FC = () => {
                   }}
                 />
               </Form.Item>
+              <div className="flex items-center justify-end gap-2 mb-2">
+                 <span className="text-xs text-gray-400">AI 模型：</span>
+                 <Select
+                  value={selectedModel}
+                  onChange={setSelectedModel}
+                  options={[
+                    { label: 'Gemini 2.0 Flash', value: 'gemini-2.0-flash' },
+                    { label: 'Gemini 1.5 Pro', value: 'gemini-1.5-pro' },
+                    { label: 'Gemini 1.5 Flash', value: 'gemini-1.5-flash' },
+                  ]}
+                  size="small"
+                  style={{ width: 140 }}
+                  variant="borderless"
+                  className="bg-white/50 rounded"
+                />
+              </div>
               <Button
                 block
                 icon={<BulbOutlined />}
