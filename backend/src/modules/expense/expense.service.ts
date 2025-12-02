@@ -341,7 +341,7 @@ Do not include any markdown formatting (like \`\`\`json), just the raw JSON stri
   }
 
   /**
-   * 拒絕費用申請
+   * 駁回費用申請
    */
   async rejectExpenseRequest(
     requestId: string,

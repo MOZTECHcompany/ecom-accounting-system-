@@ -11,7 +11,7 @@ import {
 import { EvidenceFileDto } from './create-expense-request.dto';
 
 export class RejectExpenseRequestDto {
-  @ApiProperty({ description: '拒絕原因' })
+  @ApiProperty({ description: '駁回原因' })
   @IsString()
   reason!: string;
 

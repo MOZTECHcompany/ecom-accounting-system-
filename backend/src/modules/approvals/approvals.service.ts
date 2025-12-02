@@ -34,10 +34,10 @@ export class ApprovalsService {
   }
 
   /**
-   * 審批拒絕
+   * 審批駁回
    */
   async reject(requestId: string, approverId: string, reason: string) {
-    // TODO: 更新審批狀態為拒絕
+    // TODO: 更新審批狀態為駁回
     // TODO: 通知申請人
   }
 

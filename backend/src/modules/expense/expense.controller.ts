@@ -127,8 +127,8 @@ export class ExpenseController {
   }
 
   @Put('requests/:id/reject')
-  @ApiOperation({ summary: '拒絕費用請款' })
-  @ApiResponse({ status: 200, description: '成功拒絕費用請款' })
+  @ApiOperation({ summary: '駁回費用請款' })
+  @ApiResponse({ status: 200, description: '成功駁回費用請款' })
   async rejectExpense(
     @Param('id') id: string,
     @Body() data: RejectExpenseRequestDto,
