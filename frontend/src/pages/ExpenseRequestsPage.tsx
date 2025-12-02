@@ -21,7 +21,11 @@ import {
   Upload,
   Tooltip,
 } from 'antd'
-import { PlusOutlined, UploadOutlined, BulbOutlined   ExclamationCircleOutlined,
+import {
+  PlusOutlined,
+  UploadOutlined,
+  BulbOutlined,
+  ExclamationCircleOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
