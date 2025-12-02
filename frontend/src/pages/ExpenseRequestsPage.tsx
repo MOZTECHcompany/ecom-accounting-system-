@@ -137,13 +137,8 @@ const ExpenseRequestsPage: React.FC = () => {
   const [predicting, setPredicting] = useState(false)
   
   // Use global AI context
-  const { selectedModelId: globalModelId, availableModels } = useAI()
-  const [selectedModel, setSelectedModel] = useState<string>(globalModelId)
-  
-  // Sync local state when global changes (optional, but good UX)
-  useEffect(() => {
-    if (globalModelId) setSelectedModel(globalModelId)
-  }, [globalModelId])
+  const { selectedModelId: globalModelId } = useAI()
+
 
   const [form] = Form.useForm()
   const [approvalForm] = Form.useForm()
@@ -454,7 +449,7 @@ const ExpenseRequestsPage: React.FC = () => {
 
     try {
       setPredicting(true)
-      const result = await expenseService.predictCategory(entityId, description, selectedModel)
+      const result = await expenseService.predictCategory(entityId, description, globalModelId)
       if (result && result.suggestedItem) {
         const item = reimbursementItems.find((i) => i.id === result.suggestedItem?.id)
         if (item) {
@@ -694,18 +689,6 @@ const ExpenseRequestsPage: React.FC = () => {
                   }}
                 />
               </Form.Item>
-              <div className="flex items-center justify-end gap-2 mb-2">
-                 <span className="text-xs text-gray-400">AI 模型：</span>
-                 <Select
-                  value={selectedModel}
-                  onChange={setSelectedModel}
-                  options={availableModels.map(m => ({ label: m.name, value: m.id }))}
-                  size="small"
-                  style={{ width: 160 }}
-                  variant="borderless"
-                  className="bg-white/50 rounded"
-                />
-              </div>
               <Button
                 block
                 icon={<BulbOutlined />}
