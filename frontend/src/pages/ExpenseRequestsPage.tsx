@@ -21,7 +21,8 @@ import {
   Upload,
   Tooltip,
 } from 'antd'
-import { PlusOutlined, UploadOutlined, BulbOutlined } from '@ant-design/icons'
+import { PlusOutlined, UploadOutlined, BulbOutlined   ExclamationCircleOutlined,
+} from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import {
@@ -621,36 +622,76 @@ const ExpenseRequestsPage: React.FC = () => {
         placement="right"
         onClose={() => setDrawerOpen(false)}
         open={drawerOpen}
-        width={480}
+        width={520}
         destroyOnClose
         styles={{ body: { paddingBottom: 24 } }}
       >
         <Form layout="vertical" form={form} initialValues={{ amount: 0 }}>
-          <Form.Item label="備註說明" style={{ marginBottom: 24 }}>
-            <div className="mb-2 text-gray-500 text-xs">
-              請輸入費用內容（如：文具、計程車費），AI 將自動建議報銷項目。
-            </div>
-            <Form.Item name="description" noStyle>
-              <Input.TextArea
-                rows={3}
-                placeholder="例如：購買辦公室用的原子筆與筆記本"
-                style={{ marginBottom: 8 }}
+          <div className="bg-blue-50 p-4 rounded-lg mb-6 border border-blue-100">
+            <Form.Item label="備註說明" style={{ marginBottom: 0 }} required>
+              <div className="mb-2 text-gray-500 text-xs">
+                請輸入費用內容（如：文具、計程車費 560），AI 將自動建議報銷項目並填入金額。
+              </div>
+              <Form.Item name="description" noStyle rules={[{ required: true, message: '請輸入備註說明' }]}>
+                <Input.TextArea
+                  rows={3}
+                  placeholder="例如：搭計程車去拜訪客戶 560 元"
+                  style={{ marginBottom: 12 }}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    // Try to extract amount from description (e.g. "Taxi 560" -> 560)
+                    // Matches numbers at the end of string or after spaces
+                    const match = value.match(/(?:^|\s)(\d+(?:,\d{3})*(?:\.\d+)?)(?:\s|$|元|TWD|NT)/)
+                    if (match) {
+                      const amountStr = match[1].replace(/,/g, '')
+                      const amount = parseFloat(amountStr)
+                      if (!isNaN(amount)) {
+                        form.setFieldValue('amount', amount)
+                      }
+                    }
+                  }}
+                />
+              </Form.Item>
+              <Button
+                block
+                icon={<BulbOutlined />}
+                onClick={handlePredictCategory}
+                loading={predicting}
+                className="border-blue-200 text-blue-600 hover:!border-blue-400 hover:!text-blue-500 bg-white"
+              >
+                AI 智能建議報銷項目
+              </Button>
+            </Form.Item>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Form.Item
+              label="發生日期"
+              name="expenseDate"
+              rules={[{ required: true, message: '請選擇發生日期' }]}
+            >
+              <DatePicker className="w-full" />
+            </Form.Item>
+            <Form.Item
+              label="金額（TWD）"
+              name="amount"
+              rules={[{ required: true, message: '請輸入金額' }]}
+              extra={<span className="text-orange-500 text-xs flex items-center gap-1"><ExclamationCircleOutlined /> 請務必再次確認金額</span>}
+            >
+              <InputNumber<number>
+                min={0}
+                precision={0}
+                className="w-full"
+                placeholder="請輸入金額"
+                formatter={(value) => (value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '')}
+                parser={(value) => {
+                  if (!value) return 0
+                  const numeric = Number(value.replace(/,/g, ''))
+                  return Number.isNaN(numeric) ? 0 : numeric
+                }}
               />
             </Form.Item>
-            <Button
-              block
-              icon={<BulbOutlined />}
-              onClick={handlePredictCategory}
-              loading={predicting}
-              style={{ 
-                backgroundColor: '#fffbe6', 
-                borderColor: '#ffe58f', 
-                color: '#d48806' 
-              }}
-            >
-              AI 智能建議報銷項目
-            </Button>
-          </Form.Item>
+          </div>
 
           <Form.Item
             label="報銷項目"
@@ -668,58 +709,6 @@ const ExpenseRequestsPage: React.FC = () => {
                 value: item.id,
               }))}
             />
-          </Form.Item>
-
-          {selectedItem?.account && (
-            <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 mb-4">
-              <Text type="secondary" className="text-xs">
-                對應會計科目
-              </Text>
-              <div className="font-medium text-gray-800 mt-1">
-                {selectedItem.account.code} · {selectedItem.account.name}
-              </div>
-              {selectedItem.description && (
-                <div className="text-xs text-gray-500 mt-1">{selectedItem.description}</div>
-              )}
-              <Space size={[4, 4]} wrap className="mt-2">
-                {selectedItem.defaultReceiptType && (
-                  <Tag color="purple" bordered={false}>
-                    預設憑證：{receiptTypeLabelMap[selectedItem.defaultReceiptType] || selectedItem.defaultReceiptType}
-                  </Tag>
-                )}
-                {selectedItem.amountLimit && (
-                  <Tag color="geekblue" bordered={false}>
-                    單筆上限 {toNumber(selectedItem.amountLimit).toLocaleString()} TWD
-                  </Tag>
-                )}
-              </Space>
-            </div>
-          )}
-
-          <Form.Item
-            label="金額（TWD）"
-            name="amount"
-            rules={[{ required: true, message: '請輸入金額' }]}
-          >
-            <InputNumber<number>
-              min={0}
-              precision={0}
-              className="w-full"
-              formatter={(value) => (value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '')}
-              parser={(value) => {
-                if (!value) return 0
-                const numeric = Number(value.replace(/,/g, ''))
-                return Number.isNaN(numeric) ? 0 : numeric
-              }}
-            />
-          </Form.Item>
-
-          <Form.Item
-            label="發生日期"
-            name="expenseDate"
-            rules={[{ required: true, message: '請選擇發生日期' }]}
-          >
-            <DatePicker className="w-full" />
           </Form.Item>
 
           <Form.Item

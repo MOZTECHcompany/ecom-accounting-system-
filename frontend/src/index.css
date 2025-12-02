@@ -260,6 +260,10 @@ body:not(.dark) {
   -webkit-backdrop-filter: blur(25px) saturate(180%);
 }
 
+.floating-sidebar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Floating Table Rows */
 .ant-table-wrapper .ant-table {
   background: transparent !important;

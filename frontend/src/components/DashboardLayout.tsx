@@ -188,13 +188,16 @@ const DashboardLayout: React.FC = () => {
           width={260}
           className="floating-sidebar"
           style={{
-            overflow: 'hidden',
+            overflowY: 'auto',
+            overflowX: 'hidden',
             height: 'calc(100vh - 32px)',
             position: 'fixed',
             left: 0,
             top: 0,
             zIndex: 100,
             background: 'transparent', // Handled by CSS class
+            scrollbarWidth: 'none', // Firefox
+            msOverflowStyle: 'none', // IE 10+
           }}
         >
           <div className="h-16 flex items-center justify-center m-4 mb-8">
