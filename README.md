@@ -39,6 +39,20 @@
 
 ## 🆕 最近更新
 
+- **2025-12-02 — AI 智能升級與架構重構**：
+  - **UI/UX 優化**：統一系統用語，將「退回」修正為「駁回」；修復 Sidebar 版面問題。
+  - **AI 架構重構**：
+    - 建立全域 `AiModule`，集中管理 AI 邏輯。
+    - 支援多模型切換 (Gemini 2.0 Flash, 2.5 Pro/Flash, 3.0 Pro Exp)。
+    - 新增 `AiInsightsService` (每日財務簡報) 與 `AiCopilotService` (對話式查詢)。
+  - **前端 AI 功能**：
+    - **AI Context**：全域模型狀態管理。
+    - **設定面板 (Settings Drawer)**：新增 AI 模型切換選單，可即時調整使用的 Gemini 版本。
+    - **AI Insights Widget**：儀表板新增每日財務摘要組件。
+    - **AI Copilot Widget**：新增懸浮聊天助手，支援自然語言查詢銷售與費用數據（含待審核單據篩選）。
+    - **智能費用填寫**：AI 建議報銷項目時，現在能自動從描述中提取金額並填入。
+  - **後端修復**：修正 `dayjs` 依賴缺失與 Prisma 查詢欄位錯誤，確保 AI 服務穩定運行。
+
 - **2025-12-01 — AI 智能建議與反饋閉環（Beta）**：
   - **資料模型升級**：`expense_requests` 新增 `suggested_item_id`、`suggested_account_id`、`suggestion_confidence`；`reimbursement_items` 對應 `FeedbackSuggestedItem`/`FeedbackChosenItem`；`accounting_classifier_feedbacks` 追加 `entity_id`、`description`、`suggested_item_id`、`chosen_item_id`，完整追蹤建議與實際決策。
   - **API 與服務**：`AccountingClassifierService` 將 Gemini 2.0 Flash AI、關鍵字規則與回饋資料整合，並透過 `/api/v1/expense/predict-category`（建議）、`/requests/:id/feedback`（回饋）、`/seed-ai-items`（建立題庫）、`/test-ai-connection`（健檢）等端點對外提供。
