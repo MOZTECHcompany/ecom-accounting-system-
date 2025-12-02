@@ -12,6 +12,7 @@ import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/zh-tw'
 import { notificationService, Notification } from '../services/notification.service'
+import { useNavigate } from 'react-router-dom'
 
 dayjs.extend(relativeTime)
 dayjs.locale('zh-tw')
@@ -23,6 +24,7 @@ const NotificationCenter: React.FC = () => {
   const [activeTab, setActiveTab] = useState('all')
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(false)
+  const navigate = useNavigate()
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -69,6 +71,26 @@ const NotificationCenter: React.FC = () => {
     } catch (error) {
       console.error(error)
     }
+  }
+
+  const handleNotificationClick = async (item: Notification) => {
+    if (!item.read) {
+      await handleMarkAsRead(item.id)
+    }
+
+    setOpen(false)
+
+    if (item.category === 'expense' && item.data?.requestId) {
+      navigate(`/ap/expenses?requestId=${item.data.requestId}`)
+      return
+    }
+
+    if (item.data?.targetPath) {
+      navigate(item.data.targetPath)
+      return
+    }
+
+    message.info('此通知已標記為已讀')
   }
 
   const getIcon = (type: string) => {
@@ -126,7 +148,7 @@ const NotificationCenter: React.FC = () => {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
                   className={`px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors border-b border-gray-50 ${!item.read ? 'bg-blue-50/30' : ''}`}
-                  onClick={() => !item.read && handleMarkAsRead(item.id)}
+                  onClick={() => { void handleNotificationClick(item) }}
                 >
                   <div className="flex gap-3">
                     <div className={`mt-1 w-8 h-8 rounded-full flex items-center justify-center bg-white shadow-sm border border-gray-100`}>

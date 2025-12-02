@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Card,
   Button,
@@ -104,6 +105,9 @@ const extractApiMessage = (error: unknown) => {
 
 const ExpenseRequestsPage: React.FC = () => {
   const { user } = useAuth()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const requestIdFromQuery = searchParams.get('requestId')?.trim() || null
   const isAdmin = useMemo(
     () => (user?.roles ?? []).some((role) => role === 'SUPER_ADMIN' || role === 'ADMIN'),
     [user],
@@ -292,21 +296,74 @@ const ExpenseRequestsPage: React.FC = () => {
     }
   }
 
-  const handleOpenDetail = async (request: ExpenseRequest) => {
-    setSelectedRequest(request)
-    setDetailDrawerOpen(true)
-    setHistory([])
-    try {
+  const openRequestDetail = useCallback(
+    async (requestOrId: ExpenseRequest | string, options?: { fromNotification?: boolean }) => {
+      let resolvedRequest: ExpenseRequest | null =
+        typeof requestOrId === 'string' ? null : requestOrId
+
+      setDetailDrawerOpen(true)
+      setHistory([])
       setHistoryLoading(true)
-      const entries = await expenseService.getExpenseRequestHistory(request.id)
-      setHistory(entries)
-    } catch (error) {
-      console.error(error)
-      message.error('無法取得歷程紀錄，請稍後再試')
-    } finally {
-      setHistoryLoading(false)
-    }
+
+      if (resolvedRequest) {
+        setSelectedRequest(resolvedRequest)
+      } else {
+        setSelectedRequest(null)
+        try {
+          resolvedRequest = await expenseService.getExpenseRequest(requestOrId as string)
+          setSelectedRequest(resolvedRequest)
+        } catch (error) {
+          console.error(error)
+          message.error('無法取得費用申請詳情，請稍後再試')
+          setHistoryLoading(false)
+          setDetailDrawerOpen(false)
+          return
+        }
+      }
+
+      if (!resolvedRequest) {
+        setHistoryLoading(false)
+        return
+      }
+
+      try {
+        const entries = await expenseService.getExpenseRequestHistory(resolvedRequest.id)
+        setHistory(entries)
+        if (options?.fromNotification) {
+          message.success('已定位到通知中的費用申請')
+        }
+      } catch (error) {
+        console.error(error)
+        message.error('無法取得歷程紀錄，請稍後再試')
+      } finally {
+        setHistoryLoading(false)
+      }
+    },
+    [],
+  )
+
+  const handleOpenDetail = (request: ExpenseRequest) => {
+    void openRequestDetail(request)
   }
+
+  useEffect(() => {
+    if (!requestIdFromQuery) {
+      return
+    }
+
+    let cancelled = false
+
+    ;(async () => {
+      await openRequestDetail(requestIdFromQuery, { fromNotification: true })
+      if (!cancelled) {
+        navigate('/ap/expenses', { replace: true })
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [requestIdFromQuery, openRequestDetail, navigate])
 
   const handleCloseDetail = () => {
     setDetailDrawerOpen(false)
