@@ -390,8 +390,8 @@ Do not include any markdown formatting (like \`\`\`json), just the raw JSON stri
     try {
       await this.notificationService.create({
         userId: request.createdBy,
-        title: '費用申請已退回',
-        message: `您的費用申請「${request.description}」已被退回。原因：${payload.reason}`,
+        title: '費用申請已駁回',
+        message: `您的費用申請「${request.description}」已被駁回。原因：${payload.reason}`,
         type: 'error',
         category: 'expense',
         data: { requestId: request.id },

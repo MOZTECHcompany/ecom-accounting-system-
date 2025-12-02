@@ -54,7 +54,7 @@ const statusMeta: Record<
 > = {
   pending: { label: '審核中', color: 'gold' },
   approved: { label: '已核准', color: 'green' },
-  rejected: { label: '已退回', color: 'red' },
+  rejected: { label: '已駁回', color: 'red' },
   draft: { label: '草稿', color: 'default' },
   paid: { label: '已付款', color: 'blue' },
 }
@@ -62,7 +62,7 @@ const statusMeta: Record<
 const historyLabelMap: Record<string, string> = {
   submitted: '已提交',
   approved: '核准',
-  rejected: '退回',
+  rejected: '駁回',
   pending: '審核中',
 }
 
@@ -405,7 +405,7 @@ const ExpenseRequestsPage: React.FC = () => {
       ])
       const reason = (rejectReason as string | undefined)?.trim()
       if (!reason) {
-        message.error('請輸入退回原因')
+        message.error('請輸入駁回原因')
         return
       }
       setRejectLoading(true)
@@ -413,7 +413,7 @@ const ExpenseRequestsPage: React.FC = () => {
         reason,
         note: (rejectNote as string | undefined)?.trim() || undefined,
       })
-      message.success('已退回該費用申請')
+      message.success('已駁回該費用申請')
       handleCloseDetail()
       await refreshRequests()
     } catch (error) {
@@ -421,7 +421,7 @@ const ExpenseRequestsPage: React.FC = () => {
         return
       }
       console.error(error)
-      message.error(extractApiMessage(error) || '退回失敗，請稍後再試')
+      message.error(extractApiMessage(error) || '駁回失敗，請稍後再試')
     } finally {
       setRejectLoading(false)
     }
@@ -902,17 +902,17 @@ const ExpenseRequestsPage: React.FC = () => {
                     <Input.TextArea rows={2} placeholder="可填寫核准說明" />
                   </Form.Item>
 
-                  <Form.Item label="退回原因" name="rejectReason" tooltip="退回時必填">
-                    <Input.TextArea rows={2} placeholder="若要退回請輸入原因" />
+                  <Form.Item label="駁回原因" name="rejectReason" tooltip="駁回時必填">
+                    <Input.TextArea rows={2} placeholder="若要駁回請輸入原因" />
                   </Form.Item>
 
-                  <Form.Item label="退回補充說明" name="rejectNote">
+                  <Form.Item label="駁回補充說明" name="rejectNote">
                     <Input.TextArea rows={2} placeholder="可填寫額外說明或要求" />
                   </Form.Item>
 
                   <Space className="w-full justify-end">
                     <Button danger onClick={handleRejectRequest} loading={rejectLoading}>
-                      退回
+                      駁回
                     </Button>
                     <Button
                       type="primary"
