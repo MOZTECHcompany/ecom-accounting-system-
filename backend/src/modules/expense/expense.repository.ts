@@ -239,6 +239,10 @@ export class ExpenseRepository {
       Prisma.AccountingClassifierFeedbackUncheckedCreateInput,
       'expenseRequestId'
     >,
+    paymentTask?: Omit<
+      Prisma.PaymentTaskUncheckedCreateInput,
+      'expenseRequestId'
+    >,
   ): Promise<ExpenseRequestWithGraph> {
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.expenseRequest.update({
@@ -258,6 +262,15 @@ export class ExpenseRepository {
         await tx.accountingClassifierFeedback.create({
           data: {
             ...feedback,
+            expenseRequestId: id,
+          },
+        });
+      }
+
+      if (paymentTask) {
+        await tx.paymentTask.create({
+          data: {
+            ...paymentTask,
             expenseRequestId: id,
           },
         });

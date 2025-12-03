@@ -237,13 +237,14 @@ Available Reimbursement Items:
 ${itemListText}
 
 Instructions:
-1. Select the best matching item.
-2. Extract the expense amount from the description. Look for numbers that represent the cost.
-3. Return the result in JSON format: { "itemId": "THE_ID", "confidence": 0.95, "amount": 500 }
-4. Confidence should be between 0.0 and 1.0.
-5. If no item is suitable, return null.
-6. If no amount is found, set "amount" to null.
-7. Do not include any markdown formatting or explanation, just the raw JSON string.
+1. Select the best matching item based on the description and keywords.
+2. Even if the description is short (e.g. "taxi", "lunch", "pen"), try to match it to the most logical item (e.g. "Travel", "Meals", "Office Supplies").
+3. Extract the expense amount from the description. Look for numbers that represent the cost.
+4. Return the result in JSON format: { "itemId": "THE_ID", "confidence": 0.95, "amount": 500 }
+5. Confidence should be between 0.0 and 1.0. If the match is weak, use a lower confidence.
+6. If no item is suitable, return null.
+7. If no amount is found, set "amount" to null.
+8. Do not include any markdown formatting or explanation, just the raw JSON string.
 `;
 
     try {
@@ -295,11 +296,12 @@ Available Accounts:
 ${accountListText}
 
 Instructions:
-1. Select the best matching account.
-2. Return the result in JSON format: { "accountId": "THE_ID", "confidence": 0.95 }
-3. Confidence should be between 0.0 and 1.0.
-4. If no account is suitable, return null.
-5. Do not include any markdown formatting or explanation, just the JSON string.
+1. Select the best matching account based on the description.
+2. Even if the description is short or informal, try to infer the correct account (e.g. "taxi" -> "Travel Expense", "server" -> "IT Expense").
+3. Return the result in JSON format: { "accountId": "THE_ID", "confidence": 0.95 }
+4. Confidence should be between 0.0 and 1.0.
+5. If no account is suitable, return null.
+6. Do not include any markdown formatting or explanation, just the JSON string.
 `;
 
     try {

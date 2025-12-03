@@ -337,6 +337,17 @@ Do not include any markdown formatting (like \`\`\`json), just the raw JSON stri
               createdBy: approver.id,
             }
           : undefined,
+        {
+          entityId: request.entityId,
+          vendorId: request.vendorId,
+          status: 'pending',
+          dueDate: request.dueDate,
+          amountOriginal: request.amountOriginal,
+          amountCurrency: request.amountCurrency,
+          amountFxRate: request.amountFxRate,
+          amountBase: request.amountBase,
+          notes: `Expense Request Approved: ${request.description}`,
+        },
       );
 
     return updated;
