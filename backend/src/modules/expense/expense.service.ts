@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma } from '@prisma/client';
+import { Prisma, TaxType } from '@prisma/client';
 import {
   ExpenseRepository,
   ExpenseRequestWithGraph,
@@ -527,6 +527,20 @@ Do not include any markdown formatting (like \`\`\`json), just the raw JSON stri
         )
       : null;
 
+    const taxType = dto.taxType ?? reimbursementItem?.defaultTaxType ?? null;
+    let taxAmount = dto.taxAmount;
+
+    if (taxAmount === undefined || taxAmount === null) {
+      if (
+        taxType === TaxType.TAXABLE_5_PERCENT ||
+        taxType === TaxType.NON_DEDUCTIBLE_5_PERCENT
+      ) {
+        taxAmount = Math.round((dto.amountOriginal / 1.05) * 0.05);
+      } else {
+        taxAmount = 0;
+      }
+    }
+
     const suggestion = await this.classifierService.suggestAccount({
       entityId: dto.entityId,
       description: dto.description,
@@ -558,6 +572,8 @@ Do not include any markdown formatting (like \`\`\`json), just the raw JSON stri
       amountCurrency,
       amountFxRate: this.toDecimal(amountFxRate),
       amountBase,
+      taxType,
+      taxAmount: this.toDecimal(taxAmount),
       dueDate: dto.dueDate ?? null,
       description: dto.description,
       priority: dto.priority ?? 'normal',

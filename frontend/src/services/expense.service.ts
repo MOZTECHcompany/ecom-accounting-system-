@@ -1,4 +1,5 @@
 import api from './api'
+import { TaxType } from '../types'
 
 const DEFAULT_ENTITY_ID = import.meta.env.VITE_DEFAULT_ENTITY_ID?.trim() || 'tw-entity-001'
 
@@ -34,6 +35,7 @@ export interface ReimbursementItem {
   account?: ExpenseAccountRef | null
   keywords?: string | null
   amountLimit?: string | number | null
+  defaultTaxType?: TaxType | null
   requiresDepartmentHead?: boolean
   approverRoleCodes?: string | null
   approvalPolicyId?: string | null

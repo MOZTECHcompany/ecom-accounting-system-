@@ -235,9 +235,22 @@ const ExpenseRequestsPage: React.FC = () => {
   const handleReimbursementItemChange = (id: string) => {
     const item = reimbursementItems.find((x) => x.id === id) || null
     setSelectedItem(item)
-    form.setFieldsValue({
+    
+    const updates: any = {
       receiptType: item?.defaultReceiptType,
-    })
+    }
+
+    if (item?.defaultTaxType) {
+      updates.taxType = item.defaultTaxType
+      const amount = form.getFieldValue('amount')
+      if (amount && (item.defaultTaxType === 'TAXABLE_5_PERCENT' || item.defaultTaxType === 'NON_DEDUCTIBLE_5_PERCENT')) {
+        updates.taxAmount = Math.round((amount / 1.05) * 0.05)
+      } else {
+        updates.taxAmount = 0
+      }
+    }
+
+    form.setFieldsValue(updates)
   }
 
   const handleSubmit = async () => {
@@ -726,7 +739,47 @@ const ExpenseRequestsPage: React.FC = () => {
                   const numeric = Number(value.replace(/,/g, ''))
                   return Number.isNaN(numeric) ? 0 : numeric
                 }}
+                onChange={(value) => {
+                    const taxType = form.getFieldValue('taxType');
+                    if (value && (taxType === 'TAXABLE_5_PERCENT' || taxType === 'NON_DEDUCTIBLE_5_PERCENT')) {
+                        const tax = Math.round(Number(value) / 1.05 * 0.05);
+                        form.setFieldsValue({ taxAmount: tax });
+                    }
+                }}
               />
+            </Form.Item>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Form.Item
+              label="稅別"
+              name="taxType"
+            >
+              <Select
+                allowClear
+                placeholder="選擇稅別"
+                options={[
+                  { label: '應稅 5% (V5)', value: 'TAXABLE_5_PERCENT' },
+                  { label: '不可扣抵 5% (VND)', value: 'NON_DEDUCTIBLE_5_PERCENT' },
+                  { label: '零稅率 (Z0)', value: 'ZERO_RATED' },
+                  { label: '免稅 (F0)', value: 'TAX_FREE' },
+                ]}
+                onChange={(value) => {
+                   const amount = form.getFieldValue('amount');
+                   if (amount && (value === 'TAXABLE_5_PERCENT' || value === 'NON_DEDUCTIBLE_5_PERCENT')) {
+                       const tax = Math.round(amount / 1.05 * 0.05);
+                       form.setFieldsValue({ taxAmount: tax });
+                   } else {
+                       form.setFieldsValue({ taxAmount: 0 });
+                   }
+                }}
+              />
+            </Form.Item>
+            <Form.Item
+              label="稅額"
+              name="taxAmount"
+            >
+              <InputNumber min={0} precision={0} className="w-full" placeholder="自動計算" />
             </Form.Item>
           </div>
 

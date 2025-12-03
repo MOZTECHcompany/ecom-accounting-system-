@@ -1,4 +1,5 @@
 import { Type } from 'class-transformer';
+import { TaxType } from '@prisma/client';
 import {
   ArrayMinSize,
   IsArray,
@@ -8,6 +9,7 @@ import {
   IsOptional,
   IsString,
   ValidateNested,
+  Min,
 } from 'class-validator';
 
 export enum ApPaymentFrequency {
@@ -24,6 +26,15 @@ export class ApInvoiceImportItemDto {
 
   @IsNumber()
   amountOriginal!: number;
+
+  @IsOptional()
+  @IsEnum(TaxType)
+  taxType?: TaxType;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  taxAmount?: number;
 
   @IsOptional()
   @IsString()

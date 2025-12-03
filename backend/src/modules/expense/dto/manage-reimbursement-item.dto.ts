@@ -1,7 +1,9 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
+import { TaxType } from '@prisma/client';
 import {
   IsArray,
   IsBoolean,
+  IsEnum,
   IsNumber,
   IsOptional,
   IsString,
@@ -37,6 +39,11 @@ export class CreateReimbursementItemDto {
   @IsNumber()
   @Min(0)
   amountLimit?: number;
+
+  @ApiPropertyOptional({ description: '預設稅別', enum: TaxType })
+  @IsOptional()
+  @IsEnum(TaxType)
+  defaultTaxType?: TaxType;
 
   @ApiPropertyOptional({ description: '是否需部門主管覆核' })
   @IsOptional()

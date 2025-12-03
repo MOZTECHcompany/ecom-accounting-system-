@@ -5,6 +5,13 @@ export interface Permission {
   description?: string
 }
 
+export enum TaxType {
+  TAXABLE_5_PERCENT = 'TAXABLE_5_PERCENT',
+  NON_DEDUCTIBLE_5_PERCENT = 'NON_DEDUCTIBLE_5_PERCENT',
+  ZERO_RATED = 'ZERO_RATED',
+  TAX_FREE = 'TAX_FREE',
+}
+
 export interface RolePermissionLink {
   roleId: string
   permissionId: string
@@ -135,6 +142,8 @@ export interface ApInvoice {
   amountOriginal: number
   amountCurrency: string
   paidAmountOriginal: number
+  taxType?: TaxType
+  taxAmount?: number
   status: string
   invoiceDate: string
   dueDate: string
@@ -160,6 +169,8 @@ export interface ExpenseRequest {
   description: string
   amountOriginal: number
   amountCurrency: string
+  taxType?: TaxType
+  taxAmount?: number
   status: string
   createdBy: string
   createdByName?: string

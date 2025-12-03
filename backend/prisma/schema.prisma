@@ -11,6 +11,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum TaxType {
+  TAXABLE_5_PERCENT        // V5: 應稅 5% (可扣抵)
+  NON_DEDUCTIBLE_5_PERCENT // VND: 應稅 5% (不可扣抵 - 交際費、職工福利等)
+  ZERO_RATED               // Z0: 零稅率
+  TAX_FREE                 // F0: 免稅/無稅
+}
+
 // ============================================
 // 1. 系統核心：使用者、角色、權限、審計軌跡
 // ============================================
@@ -652,6 +659,10 @@ model ApInvoice {
   paidAmountCurrency String   @default("TWD") @map("paid_amount_currency")
   paidAmountFxRate   Decimal  @default(1) @map("paid_amount_fx_rate") @db.Decimal(18, 6)
   paidAmountBase     Decimal  @default(0) @map("paid_amount_base") @db.Decimal(18, 2)
+  
+  taxType            TaxType  @default(TAXABLE_5_PERCENT) @map("tax_type")
+  taxAmount          Decimal? @map("tax_amount") @db.Decimal(18, 2)
+
   status             String   @default("pending") // pending, partial, paid, overdue
   priority           String   @default("normal") // normal, urgent
   paymentFrequency   String   @default("one_time") @map("payment_frequency") // one_time, monthly
@@ -690,6 +701,9 @@ model ExpenseRequest {
   amountCurrency String  @default("TWD") @map("amount_currency")
   amountFxRate   Decimal @default(1) @map("amount_fx_rate") @db.Decimal(18, 6)
   amountBase     Decimal @map("amount_base") @db.Decimal(18, 2)
+
+  taxType        TaxType  @default(TAXABLE_5_PERCENT) @map("tax_type")
+  taxAmount      Decimal? @map("tax_amount") @db.Decimal(18, 2)
 
   dueDate              DateTime? @map("due_date")
   description          String
@@ -800,6 +814,7 @@ model ReimbursementItem {
   entity                     Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
   account                    Account          @relation(fields: [accountId], references: [id])
   approvalPolicy             ApprovalPolicy?  @relation(fields: [approvalPolicyId], references: [id], onDelete: SetNull)
+  defaultTaxType             TaxType          @default(TAXABLE_5_PERCENT) @map("default_tax_type")
   expenseRequests            ExpenseRequest[] @relation("ExpenseRequestFinalItem")
   suggestedExpenseRequests   ExpenseRequest[] @relation("ExpenseRequestSuggestedItem")
   suggestedFeedbacks AccountingClassifierFeedback[] @relation("FeedbackSuggestedItem")

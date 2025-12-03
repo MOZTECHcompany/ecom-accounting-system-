@@ -688,12 +688,53 @@ const ApInvoicesPage: React.FC = () => {
             <Row gutter={16}>
               <Col span={12}>
                 <Form.Item name="amountOriginal" label="發票金額" rules={[{ required: true }]}>
-                  <InputNumber className="w-full" min={0} prefix="$" precision={2} />
+                  <InputNumber
+                    className="w-full"
+                    min={0}
+                    prefix="$"
+                    precision={2}
+                    onChange={(value) => {
+                        const taxType = form.getFieldValue('taxType');
+                        if (value && (taxType === 'TAXABLE_5_PERCENT' || taxType === 'NON_DEDUCTIBLE_5_PERCENT')) {
+                            const tax = Math.round(Number(value) / 1.05 * 0.05);
+                            form.setFieldsValue({ taxAmount: tax });
+                        }
+                    }}
+                  />
                 </Form.Item>
               </Col>
               <Col span={12}>
                 <Form.Item name="amountCurrency" label="幣別" initialValue="TWD">
                   <Select options={[{ value: 'TWD' }, { value: 'USD' }, { value: 'JPY' }]} />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item name="taxType" label="稅別">
+                  <Select
+                    allowClear
+                    options={[
+                      { label: '應稅 5% (V5)', value: 'TAXABLE_5_PERCENT' },
+                      { label: '不可扣抵 5% (VND)', value: 'NON_DEDUCTIBLE_5_PERCENT' },
+                      { label: '零稅率 (Z0)', value: 'ZERO_RATED' },
+                      { label: '免稅 (F0)', value: 'TAX_FREE' },
+                    ]}
+                    onChange={(value) => {
+                       const amount = form.getFieldValue('amountOriginal');
+                       if (amount && (value === 'TAXABLE_5_PERCENT' || value === 'NON_DEDUCTIBLE_5_PERCENT')) {
+                           const tax = Math.round(amount / 1.05 * 0.05);
+                           form.setFieldsValue({ taxAmount: tax });
+                       } else {
+                           form.setFieldsValue({ taxAmount: 0 });
+                       }
+                    }}
+                  />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item name="taxAmount" label="稅額">
+                  <InputNumber className="w-full" min={0} precision={0} placeholder="自動計算" />
                 </Form.Item>
               </Col>
             </Row>

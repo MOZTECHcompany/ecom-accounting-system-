@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { TaxType } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsUUID,
@@ -11,6 +12,7 @@ import {
   IsArray,
   ValidateNested,
   IsDate,
+  IsEnum,
 } from 'class-validator';
 
 export class EvidenceFileDto {
@@ -52,6 +54,17 @@ export class CreateExpenseRequestDto {
   @IsOptional()
   @IsString()
   amountCurrency?: string;
+
+  @ApiPropertyOptional({ description: '稅別', enum: TaxType })
+  @IsOptional()
+  @IsEnum(TaxType)
+  taxType?: TaxType;
+
+  @ApiPropertyOptional({ description: '稅額' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  taxAmount?: number;
 
   @ApiPropertyOptional({ description: '匯率，預設 1' })
   @IsOptional()

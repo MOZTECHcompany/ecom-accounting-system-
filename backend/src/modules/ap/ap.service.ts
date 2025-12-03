@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { TaxType } from '@prisma/client';
 import { ApRepository } from './ap.repository';
 import {
   ApPaymentFrequency,
@@ -38,6 +39,21 @@ export class ApService {
       const dueDate = new Date(invoice.dueDate);
       const invoiceDate = new Date(invoice.invoiceDate);
       const isMonthly = invoice.paymentFrequency === ApPaymentFrequency.MONTHLY;
+
+      const taxType = invoice.taxType ?? null;
+      let taxAmount = invoice.taxAmount;
+
+      if (taxAmount === undefined || taxAmount === null) {
+        if (
+          taxType === TaxType.TAXABLE_5_PERCENT ||
+          taxType === TaxType.NON_DEDUCTIBLE_5_PERCENT
+        ) {
+          taxAmount = Math.round((invoice.amountOriginal / 1.05) * 0.05);
+        } else {
+          taxAmount = 0;
+        }
+      }
+
       return {
         entityId: payload.entityId,
         vendorId: invoice.vendorId,
@@ -46,6 +62,8 @@ export class ApService {
         amountCurrency: invoice.amountCurrency ?? 'TWD',
         amountFxRate: 1,
         amountBase: invoice.amountOriginal,
+        taxType,
+        taxAmount,
         invoiceDate,
         dueDate,
         nextDueDate: isMonthly ? dueDate : null,

@@ -441,6 +441,18 @@ const ReimbursementItemsAdminPage: React.FC = () => {
           </Form.Item>
 
           <Form.Item
+            label="預設稅別"
+            name="defaultTaxType"
+          >
+            <Select allowClear options={[
+              { label: '應稅 5% (V5)', value: 'TAXABLE_5_PERCENT' },
+              { label: '不可扣抵 5% (VND)', value: 'NON_DEDUCTIBLE_5_PERCENT' },
+              { label: '零稅率 (Z0)', value: 'ZERO_RATED' },
+              { label: '免稅 (F0)', value: 'TAX_FREE' },
+            ]} />
+          </Form.Item>
+
+          <Form.Item
             label="預設憑證類型"
             name="defaultReceiptType"
           >
