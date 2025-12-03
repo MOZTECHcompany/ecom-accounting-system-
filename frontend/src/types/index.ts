@@ -154,6 +154,7 @@ export interface ApInvoice {
   recurringDayOfMonth?: number | null
   nextDueDate?: string | null
   notes?: string | null
+  source?: 'payment_task' | 'ap_invoice'
   vendor?: {
     id: string
     name: string

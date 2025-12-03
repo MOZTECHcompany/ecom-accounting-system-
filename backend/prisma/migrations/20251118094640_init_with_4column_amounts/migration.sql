@@ -1,4 +1,4 @@
--- CreateTable
+ㄓ-- CreateTable
 CREATE TABLE "users" (
     "id" TEXT NOT NULL,
     "email" TEXT NOT NULL,

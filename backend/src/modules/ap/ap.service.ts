@@ -28,6 +28,11 @@ export class ApService {
       this.apRepository.findPaymentTasks(entityId),
     ]);
 
+    const mappedInvoices = invoices.map((inv) => ({
+      ...inv,
+      source: 'ap_invoice',
+    }));
+
     const taskInvoices = paymentTasks.map((task) => ({
       id: task.id,
       entityId: task.entityId,
@@ -53,7 +58,7 @@ export class ApService {
       taxAmount: 0,
     }));
 
-    return [...invoices, ...taskInvoices].sort(
+    return [...mappedInvoices, ...taskInvoices].sort(
       (a, b) =>
         new Date(b.invoiceDate).getTime() - new Date(a.invoiceDate).getTime(),
     );

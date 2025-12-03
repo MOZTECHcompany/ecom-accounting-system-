@@ -455,7 +455,14 @@ const ApInvoicesPage: React.FC = () => {
       key: 'invoiceNo',
       render: (_: unknown, record: ApInvoice) => (
         <Space direction="vertical" size={0}>
-          <Text>{record.invoiceNo || '-'}</Text>
+          <Space>
+            <Text>{record.invoiceNo || '-'}</Text>
+            {record.source === 'payment_task' ? (
+              <Tag color="blue">員工報銷</Tag>
+            ) : (
+              <Tag color="cyan">進貨發票</Tag>
+            )}
+          </Space>
           <Text type="secondary" className="text-xs">
             {record.vendor?.name || record.vendorName || record.vendorId || '未指定'}
           </Text>
@@ -530,9 +537,11 @@ const ApInvoicesPage: React.FC = () => {
           >
             記錄付款
           </Button>
-          <Button size="small" type="link" onClick={() => handleOpenEdit(record)}>
-            更新排程
-          </Button>
+          {record.source !== 'payment_task' && (
+            <Button size="small" type="link" onClick={() => handleOpenEdit(record)}>
+              更新排程
+            </Button>
+          )}
         </Space>
       ),
     },
