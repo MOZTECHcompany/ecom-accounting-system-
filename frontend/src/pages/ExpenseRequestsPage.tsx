@@ -470,6 +470,16 @@ const ExpenseRequestsPage: React.FC = () => {
           if (result.amount) {
             form.setFieldsValue({ amount: result.amount })
           }
+          // Auto-set tax type if available
+          if (item.defaultTaxType) {
+            form.setFieldValue('taxType', item.defaultTaxType)
+            // Trigger tax calculation
+            const amount = result.amount || form.getFieldValue('amount')
+            if (amount && (item.defaultTaxType === 'TAXABLE_5_PERCENT' || item.defaultTaxType === 'NON_DEDUCTIBLE_5_PERCENT')) {
+                const tax = Math.round(amount / 1.05 * 0.05)
+                form.setFieldValue('taxAmount', tax)
+            }
+          }
           setSelectedItem(item)
           message.success({
             content: (
@@ -479,6 +489,7 @@ const ExpenseRequestsPage: React.FC = () => {
                 </span>
                 {result.amount && <span className="text-xs text-gray-500 mt-1">已自動填入金額：{result.amount}</span>}
                 {item.account && <span className="text-xs text-gray-500 mt-1">科目：{item.account.code} {item.account.name}</span>}
+                {item.defaultTaxType && <span className="text-xs text-gray-500 mt-1">稅別：{item.defaultTaxType}</span>}
                 {item.description && <span className="text-xs text-gray-400 mt-0.5">{item.description}</span>}
               </div>
             ),
@@ -499,6 +510,16 @@ const ExpenseRequestsPage: React.FC = () => {
              if (result.amount) {
                 form.setFieldsValue({ amount: result.amount })
              }
+             // Auto-set tax type if available
+             if (refreshedItem.defaultTaxType) {
+                form.setFieldValue('taxType', refreshedItem.defaultTaxType)
+                // Trigger tax calculation
+                const amount = result.amount || form.getFieldValue('amount')
+                if (amount && (refreshedItem.defaultTaxType === 'TAXABLE_5_PERCENT' || refreshedItem.defaultTaxType === 'NON_DEDUCTIBLE_5_PERCENT')) {
+                    const tax = Math.round(amount / 1.05 * 0.05)
+                    form.setFieldValue('taxAmount', tax)
+                }
+             }
              setSelectedItem(refreshedItem)
              message.success({
               content: (
@@ -508,6 +529,7 @@ const ExpenseRequestsPage: React.FC = () => {
                   </span>
                   {result.amount && <span className="text-xs text-gray-500 mt-1">已自動填入金額：{result.amount}</span>}
                   {refreshedItem.account && <span className="text-xs text-gray-500 mt-1">科目：{refreshedItem.account.code} {refreshedItem.account.name}</span>}
+                  {refreshedItem.defaultTaxType && <span className="text-xs text-gray-500 mt-1">稅別：{refreshedItem.defaultTaxType}</span>}
                   {refreshedItem.description && <span className="text-xs text-gray-400 mt-0.5">{refreshedItem.description}</span>}
                 </div>
               ),
