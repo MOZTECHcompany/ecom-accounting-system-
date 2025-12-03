@@ -23,7 +23,40 @@ export class ApService {
   constructor(private readonly apRepository: ApRepository) {}
 
   async getInvoices(entityId?: string) {
-    return this.apRepository.findInvoices(entityId);
+    const [invoices, paymentTasks] = await Promise.all([
+      this.apRepository.findInvoices(entityId),
+      this.apRepository.findPaymentTasks(entityId),
+    ]);
+
+    const taskInvoices = paymentTasks.map((task) => ({
+      id: task.id,
+      entityId: task.entityId,
+      invoiceNo:
+        task.expenseRequest?.description?.slice(0, 20) ||
+        `EXP-${task.expenseRequestId?.slice(0, 8)}`,
+      vendorId: task.vendorId || 'EMP-REIMBURSE',
+      vendor: task.vendor || {
+        id: 'EMP-REIMBURSE',
+        name: '員工報銷 / 零用金',
+        code: 'EMP',
+      },
+      amountOriginal: task.amountOriginal,
+      amountCurrency: task.amountCurrency,
+      paidAmountOriginal: task.paidDate ? task.amountOriginal : 0,
+      status: task.status === 'pending' ? 'pending' : 'paid',
+      invoiceDate: task.createdAt,
+      dueDate: task.dueDate || task.createdAt,
+      paymentFrequency: 'one_time',
+      notes: task.notes,
+      source: 'payment_task',
+      taxType: null,
+      taxAmount: 0,
+    }));
+
+    return [...invoices, ...taskInvoices].sort(
+      (a, b) =>
+        new Date(b.invoiceDate).getTime() - new Date(a.invoiceDate).getTime(),
+    );
   }
 
   /**
@@ -82,6 +115,13 @@ export class ApService {
    * TODO: 產生分錄（借：應付帳款 / 貸：銀行存款）
    */
   async recordPayment(invoiceId: string, data: any) {
+    // Check if it's a payment task
+    const task = await this.apRepository.findPaymentTaskById(invoiceId);
+    if (task) {
+      const status = data.newStatus === 'paid' ? 'paid' : 'pending';
+      return this.apRepository.updatePaymentTaskStatus(invoiceId, status);
+    }
+
     return this.apRepository.recordPayment(invoiceId, data);
   }
 

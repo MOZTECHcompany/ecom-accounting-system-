@@ -17,6 +17,42 @@ export class ApRepository {
     });
   }
 
+  async findPaymentTasks(entityId?: string) {
+    return this.prisma.paymentTask.findMany({
+      where: {
+        ...(entityId ? { entityId } : {}),
+        status: { not: 'cancelled' },
+      },
+      include: {
+        vendor: true,
+        entity: true,
+        expenseRequest: {
+          select: {
+            description: true,
+            reimbursementItem: {
+              select: { name: true },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async findPaymentTaskById(id: string) {
+    return this.prisma.paymentTask.findUnique({ where: { id } });
+  }
+
+  async updatePaymentTaskStatus(taskId: string, status: string) {
+    return this.prisma.paymentTask.update({
+      where: { id: taskId },
+      data: {
+        status,
+        paidDate: status === 'paid' ? new Date() : null,
+      },
+    });
+  }
+
   async createInvoice(data: any) {
     return this.prisma.apInvoice.create({ data });
   }
