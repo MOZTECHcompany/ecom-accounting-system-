@@ -47,3 +47,7 @@ Implemented `TaxType` logic for handling Taiwan VAT deductibility across the sys
 
 ### 4. Build Fixes
 - **Frontend Types**: Replaced `enum TaxType` with `const TaxType` object and `type TaxType` definition in `frontend/src/types/index.ts` to resolve TS1294 error ("erasableSyntaxOnly").
+
+### 5. Deployment Automation
+- **Backend Startup**: Updated `backend/package.json` script `start:prod` to include `npm run prisma:deploy`.
+  - **Effect**: Every time the production server starts (or redeploys), it will automatically check and apply any pending database migrations. This prevents "500 Internal Server Error" caused by schema mismatches.
