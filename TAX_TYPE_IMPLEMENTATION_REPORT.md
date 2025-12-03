@@ -44,3 +44,6 @@ Implemented `TaxType` logic for handling Taiwan VAT deductibility across the sys
 - Frontend UI code is updated and ready.
 - Backend logic is updated and ready.
 - Database schema is updated.
+
+### 4. Build Fixes
+- **Frontend Types**: Replaced `enum TaxType` with `const TaxType` object and `type TaxType` definition in `frontend/src/types/index.ts` to resolve TS1294 error ("erasableSyntaxOnly").

@@ -5,12 +5,14 @@ export interface Permission {
   description?: string
 }
 
-export enum TaxType {
-  TAXABLE_5_PERCENT = 'TAXABLE_5_PERCENT',
-  NON_DEDUCTIBLE_5_PERCENT = 'NON_DEDUCTIBLE_5_PERCENT',
-  ZERO_RATED = 'ZERO_RATED',
-  TAX_FREE = 'TAX_FREE',
-}
+export const TaxType = {
+  TAXABLE_5_PERCENT: 'TAXABLE_5_PERCENT',
+  NON_DEDUCTIBLE_5_PERCENT: 'NON_DEDUCTIBLE_5_PERCENT',
+  ZERO_RATED: 'ZERO_RATED',
+  TAX_FREE: 'TAX_FREE',
+} as const
+
+export type TaxType = typeof TaxType[keyof typeof TaxType]
 
 export interface RolePermissionLink {
   roleId: string
