@@ -12,6 +12,7 @@ import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/zh-tw'
 import { notificationService, Notification } from '../services/notification.service'
+import { webSocketService } from '../services/websocket.service'
 import { useNavigate } from 'react-router-dom'
 
 dayjs.extend(relativeTime)
@@ -44,12 +45,23 @@ const NotificationCenter: React.FC = () => {
     }
   }, [open, fetchNotifications])
 
-  // Initial fetch
+  // Initial fetch and WebSocket subscription
   useEffect(() => {
     fetchNotifications()
-    // Poll every minute
+    
+    // Subscribe to real-time notifications
+    const unsubscribe = webSocketService.subscribe((newNotification) => {
+      setNotifications(prev => [newNotification, ...prev])
+      message.info(`新通知: ${newNotification.title}`)
+    })
+
+    // Poll every minute as fallback
     const interval = setInterval(fetchNotifications, 60000)
-    return () => clearInterval(interval)
+    
+    return () => {
+      clearInterval(interval)
+      unsubscribe()
+    }
   }, [fetchNotifications])
 
   const unreadCount = notifications.filter(n => !n.read).length

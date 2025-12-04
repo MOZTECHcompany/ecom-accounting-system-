@@ -155,6 +155,7 @@ export interface ApInvoice {
   nextDueDate?: string | null
   notes?: string | null
   source?: 'payment_task' | 'ap_invoice'
+  isUrgent?: boolean
   vendor?: {
     id: string
     name: string

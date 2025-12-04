@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { authService } from '../services/auth.service'
+import { webSocketService } from '../services/websocket.service'
 import { User, LoginRequest } from '../types'
 
 interface AuthContextType {
@@ -22,6 +23,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           const currentUser = await authService.getCurrentUser()
           setUser(currentUser)
+          webSocketService.connect()
         } catch (error) {
           authService.logout()
         }
@@ -34,11 +36,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (data: LoginRequest) => {
     const response = await authService.login(data)
     setUser(response.user)
+    webSocketService.connect()
   }
 
   const logout = () => {
     authService.logout()
     setUser(null)
+    webSocketService.disconnect()
   }
 
   return (

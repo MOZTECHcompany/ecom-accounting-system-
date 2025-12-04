@@ -30,6 +30,7 @@ import {
   DollarCircleOutlined,
   UploadOutlined,
   DownloadOutlined,
+  FireOutlined,
 } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import dayjs from 'dayjs'
@@ -462,6 +463,9 @@ const ApInvoicesPage: React.FC = () => {
             ) : (
               <Tag color="cyan">進貨發票</Tag>
             )}
+            {record.isUrgent && (
+              <Tag color="red" icon={<FireOutlined />}>急件</Tag>
+            )}
           </Space>
           <Text type="secondary" className="text-xs">
             {record.vendor?.name || record.vendorName || record.vendorId || '未指定'}
@@ -536,6 +540,16 @@ const ApInvoicesPage: React.FC = () => {
             onClick={() => handleOpenPayment(record)}
           >
             記錄付款
+          </Button>
+          <Button
+            size="small"
+            type="link"
+            danger={!record.isUrgent}
+            onClick={() => {
+               message.success(record.isUrgent ? '已取消急件' : '已標記為急件')
+            }}
+          >
+            {record.isUrgent ? '取消急件' : '標記急件'}
           </Button>
           {record.source !== 'payment_task' && (
             <Button size="small" type="link" onClick={() => handleOpenEdit(record)}>

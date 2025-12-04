@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import {
   Card,
   Button,
@@ -838,6 +839,41 @@ const ExpenseRequestsPage: React.FC = () => {
                 })) || []
               }
             />
+          </Form.Item>
+
+          <Form.Item
+            noStyle
+            shouldUpdate={(prevValues, currentValues) => prevValues.receiptType !== currentValues.receiptType}
+          >
+            {({ getFieldValue }) => {
+              const receiptType = getFieldValue('receiptType')
+              const hasInvoice = receiptType === 'TAX_INVOICE' || receiptType === 'RECEIPT'
+              
+              return hasInvoice ? (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="grid grid-cols-2 gap-4 p-4 mb-4 bg-gray-50 rounded-lg border border-gray-100"
+                >
+                  <Form.Item
+                    label="發票號碼"
+                    name="invoiceNo"
+                    rules={[{ required: true, message: '請輸入發票號碼' }]}
+                    className="mb-0"
+                  >
+                    <Input placeholder="例如：AB-12345678" />
+                  </Form.Item>
+                  <Form.Item
+                    label="統一編號"
+                    name="taxId"
+                    className="mb-0"
+                  >
+                    <Input placeholder="賣方統編 (選填)" />
+                  </Form.Item>
+                </motion.div>
+              ) : null
+            }}
           </Form.Item>
 
           <Form.Item
