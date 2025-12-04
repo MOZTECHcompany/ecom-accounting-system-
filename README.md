@@ -48,6 +48,22 @@
   - **系統穩定性與建置修復**：
     - 修正 `@nestjs/websockets` 與 `socket.io` 依賴缺失問題。
     - 解決 Prisma Client 生成時的資料庫連線問題，確保 `npm run build` 順利執行。
+- **2025-12-04 — 費用申請流程優化 (Expense Request Workflow Enhancement)**：
+  - **資料庫 Schema 更新**：
+    - 新增 `payeeType` 欄位：區分「員工代墊 (Reimbursement)」與「廠商直付 (Vendor Direct Payment)」。
+    - 新增 `paymentMethod` 欄位：記錄付款方式（現金、轉帳、支票等）。
+    - 新增 `dueDate` 欄位：記錄預計付款日。
+  - **後端 API 更新**：
+    - 更新 `CreateExpenseRequestDto` 支援上述新欄位。
+    - 更新 `ExpenseService` 處理邏輯，將前端傳入的付款資訊寫入資料庫。
+  - **前端介面更新**：
+    - **申請表單優化**：
+      - 新增「受款人類型」選擇器。
+      - 新增「預計付款日」選擇器。
+      - 新增「付款方式」下拉選單。
+    - **列表顯示優化**：
+      - 新增「預計付款日」欄位顯示。
+      - 優化付款狀態顯示邏輯。
   - **開發體驗優化**：
     - 更新 Dev Container 設定 (`settings.json`)，啟用終端機指令自動批准，提升開發效率。
 
