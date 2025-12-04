@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Input, DatePicker, Select, Button, Card, Table, Tag, message, InputNumber } from 'antd';
+import { Form, Input, DatePicker, Select, Button, Card, Table, Tag, message, InputNumber, Modal, Row, Col, Statistic, Space, Typography } from 'antd';
+import { PlusOutlined, CalendarOutlined, ClockCircleOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { attendanceService } from '../../services/attendance.service';
 import { LeaveRequest, LeaveStatus } from '../../types/attendance';
 import dayjs from 'dayjs';
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
+const { Title } = Typography;
 
 const LeaveRequestPage: React.FC = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
+  const [isModalVisible, setIsModalVisible] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -47,6 +50,7 @@ const LeaveRequestPage: React.FC = () => {
       
       message.success('請假申請已送出');
       form.resetFields();
+      setIsModalVisible(false);
       void loadData();
     } catch (error) {
       console.error(error);
@@ -61,50 +65,115 @@ const LeaveRequestPage: React.FC = () => {
       title: '假別',
       dataIndex: ['leaveType', 'name'],
       key: 'leaveType',
-      render: (text: string, record: LeaveRequest) => record.leaveType?.name || '未知',
+      render: (text: string) => <Tag color="blue">{text || '未知'}</Tag>,
     },
     {
-      title: '開始時間',
-      dataIndex: 'startAt',
-      key: 'startAt',
-      render: (text: string) => dayjs(text).format('YYYY-MM-DD HH:mm'),
-    },
-    {
-      title: '結束時間',
-      dataIndex: 'endAt',
-      key: 'endAt',
-      render: (text: string) => dayjs(text).format('YYYY-MM-DD HH:mm'),
+      title: '期間',
+      key: 'period',
+      render: (_: any, record: LeaveRequest) => (
+        <Space direction="vertical" size="small">
+          <span>{dayjs(record.startAt).format('YYYY-MM-DD HH:mm')}</span>
+          <span className="text-gray-400 text-xs">至</span>
+          <span>{dayjs(record.endAt).format('YYYY-MM-DD HH:mm')}</span>
+        </Space>
+      ),
     },
     {
       title: '時數',
       dataIndex: 'hours',
       key: 'hours',
+      render: (hours: number) => `${hours} 小時`,
     },
     {
       title: '狀態',
       dataIndex: 'status',
       key: 'status',
       render: (status: LeaveStatus) => {
-        const colors: Record<string, string> = {
-          [LeaveStatus.APPROVED]: 'green',
-          [LeaveStatus.REJECTED]: 'red',
-          [LeaveStatus.SUBMITTED]: 'blue',
-          [LeaveStatus.DRAFT]: 'default',
+        const config: Record<string, { color: string; text: string }> = {
+          [LeaveStatus.APPROVED]: { color: 'success', text: '已核准' },
+          [LeaveStatus.REJECTED]: { color: 'error', text: '已駁回' },
+          [LeaveStatus.SUBMITTED]: { color: 'processing', text: '簽核中' },
+          [LeaveStatus.DRAFT]: { color: 'default', text: '草稿' },
         };
-        return <Tag color={colors[status]}>{status}</Tag>;
+        const { color, text } = config[status] || { color: 'default', text: status };
+        return <Tag color={color}>{text}</Tag>;
       },
     },
     {
       title: '原因',
       dataIndex: 'reason',
       key: 'reason',
+      ellipsis: true,
     },
   ];
 
   return (
-    <div className="p-6">
-      <Card title="請假申請" className="mb-6 shadow-md">
-        <Form form={form} layout="vertical" onFinish={handleSubmit}>
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <Title level={2}>請假管理</Title>
+          <span className="text-gray-500">查看您的假單紀錄與剩餘額度</span>
+        </div>
+        <Button 
+          type="primary" 
+          icon={<PlusOutlined />} 
+          size="large"
+          onClick={() => setIsModalVisible(true)}
+        >
+          新增請假申請
+        </Button>
+      </div>
+
+      <Row gutter={[24, 24]} className="mb-6">
+        <Col xs={24} md={8}>
+          <Card bordered={false} className="shadow-sm">
+            <Statistic
+              title="特休剩餘"
+              value={10} // Mock data
+              suffix="天"
+              prefix={<CalendarOutlined className="text-blue-500" />}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card bordered={false} className="shadow-sm">
+            <Statistic
+              title="本年度已休"
+              value={3.5} // Mock data
+              suffix="天"
+              prefix={<CheckCircleOutlined className="text-green-500" />}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card bordered={false} className="shadow-sm">
+            <Statistic
+              title="待核准假單"
+              value={requests.filter(r => r.status === LeaveStatus.SUBMITTED).length}
+              suffix="筆"
+              prefix={<ClockCircleOutlined className="text-orange-500" />}
+            />
+          </Card>
+        </Col>
+      </Row>
+
+      <Card className="shadow-md border-0" bordered={false} title="申請紀錄">
+        <Table
+          dataSource={requests}
+          columns={columns}
+          rowKey="id"
+          pagination={{ pageSize: 10 }}
+        />
+      </Card>
+
+      <Modal
+        title="新增請假申請"
+        open={isModalVisible}
+        onCancel={() => setIsModalVisible(false)}
+        footer={null}
+        width={700}
+      >
+        <Form form={form} layout="vertical" onFinish={handleSubmit} className="mt-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Form.Item
               name="leaveTypeId"
@@ -125,7 +194,7 @@ const LeaveRequestPage: React.FC = () => {
               label="請假期間"
               rules={[{ required: true, message: '請選擇期間' }]}
             >
-              <RangePicker showTime className="w-full" />
+              <RangePicker showTime format="YYYY-MM-DD HH:mm" className="w-full" />
             </Form.Item>
 
             <Form.Item
@@ -146,25 +215,17 @@ const LeaveRequestPage: React.FC = () => {
             label="請假事由"
             rules={[{ required: true, message: '請輸入事由' }]}
           >
-            <Input.TextArea rows={3} />
+            <Input.TextArea rows={4} placeholder="請詳細說明請假原因..." />
           </Form.Item>
 
-          <Form.Item>
+          <div className="flex justify-end gap-2">
+            <Button onClick={() => setIsModalVisible(false)}>取消</Button>
             <Button type="primary" htmlType="submit" loading={loading}>
               送出申請
             </Button>
-          </Form.Item>
+          </div>
         </Form>
-      </Card>
-
-      <Card title="申請紀錄" className="shadow-md">
-        <Table
-          dataSource={requests}
-          columns={columns}
-          rowKey="id"
-          pagination={{ pageSize: 10 }}
-        />
-      </Card>
+      </Modal>
     </div>
   );
 };
