@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, Param } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -137,6 +137,25 @@ export class ReportsController {
       startDate,
       endDate,
       groupBy,
+    };
+  }
+
+  @Get(':id/export')
+  @ApiOperation({ summary: '匯出報表 (Excel/PDF)' })
+  @ApiResponse({ status: 200, description: '成功匯出報表' })
+  @ApiQuery({ name: 'format', required: true, enum: ['xlsx', 'pdf'] })
+  async exportReport(
+    @Param('id') id: string,
+    @Query('format') format: string,
+    @Query('entityId') entityId: string,
+  ) {
+    // Mock export implementation
+    // In a real app, this would generate a file stream
+    return {
+      message: 'Report export initiated',
+      reportId: id,
+      format,
+      downloadUrl: `/api/v1/reports/download/${id}.${format}?token=temp-token`,
     };
   }
 }

@@ -1,15 +1,24 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { Prisma } from '@prisma/client';
+import { NotificationGateway } from './notification.gateway';
 
 @Injectable()
 export class NotificationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly gateway: NotificationGateway,
+  ) {}
 
   async create(data: Prisma.NotificationUncheckedCreateInput) {
-    return this.prisma.notification.create({
+    const notification = await this.prisma.notification.create({
       data,
     });
+    
+    // Real-time push
+    this.gateway.sendToUser(data.userId, notification);
+    
+    return notification;
   }
 
   async findAll(userId: string) {
