@@ -414,35 +414,38 @@ const ExpenseReviewCenterPage: React.FC = () => {
       title: '操作',
       key: 'actions',
       fixed: 'right',
+      width: 140,
       render: (_value, record) => (
-        <Space size={0} direction="vertical">
+        <Space direction="vertical" size={8} className="w-full">
           <Button
-            type="link"
+            size="small"
+            block
             icon={<FileSearchOutlined />}
             onClick={() => navigate(`/ap/expenses?requestId=${record.id}`)}
           >
-            查看詳情
+            詳情
           </Button>
           {record.status === 'pending' && (
-            <Space size={4}>
-              <Button
-                size="small"
-                type="primary"
-                ghost
-                icon={<CheckCircleOutlined />}
-                onClick={() => openActionModal('approve', record)}
-              >
-                快速核准
-              </Button>
-              <Button
-                size="small"
-                danger
-                icon={<CloseCircleOutlined />}
-                onClick={() => openActionModal('reject', record)}
-              >
-                駁回
-              </Button>
-            </Space>
+            <div className="flex gap-2">
+              <Tooltip title="快速核准">
+                <Button
+                  className="flex-1 bg-green-500 hover:!bg-green-600 border-green-500 hover:!border-green-600 text-white"
+                  size="small"
+                  type="primary"
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => openActionModal('approve', record)}
+                />
+              </Tooltip>
+              <Tooltip title="駁回申請">
+                <Button
+                  className="flex-1"
+                  size="small"
+                  danger
+                  icon={<CloseCircleOutlined />}
+                  onClick={() => openActionModal('reject', record)}
+                />
+              </Tooltip>
+            </div>
           )}
         </Space>
       ),
@@ -466,7 +469,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap justify-between gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div>
           <Title level={2} className="!mb-1 !font-light">
             費用審核中心
@@ -487,7 +490,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
 
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={6}>
-          <Card bordered={false} className="shadow-sm">
+          <Card bordered={false} className="shadow-sm hover:shadow-md transition-shadow h-full">
             <Statistic
               title="待審件數"
               value={pendingRequests.length}
@@ -497,7 +500,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card bordered={false} className="shadow-sm">
+          <Card bordered={false} className="shadow-sm hover:shadow-md transition-shadow h-full">
             <Statistic
               title="急件"
               value={urgentQueue.length}
@@ -507,7 +510,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card bordered={false} className="shadow-sm">
+          <Card bordered={false} className="shadow-sm hover:shadow-md transition-shadow h-full">
             <Statistic
               title="待審金額 (TWD)"
               value={backlogAmount}
@@ -517,7 +520,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card bordered={false} className="shadow-sm">
+          <Card bordered={false} className="shadow-sm hover:shadow-md transition-shadow h-full">
             <Statistic
               title="平均等待天數"
               value={averagePendingAge}
@@ -651,28 +654,28 @@ const ExpenseReviewCenterPage: React.FC = () => {
               {urgentQueue.length === 0 ? (
                 <Empty description="目前沒有急件" image={Empty.PRESENTED_IMAGE_SIMPLE} />
               ) : (
-                <Space direction="vertical" size={12} className="w-full">
+                <div className="flex flex-col gap-3">
                   {urgentQueue.slice(0, 4).map((request) => (
                     <div
                       key={request.id}
-                      className="p-3 bg-red-50 rounded-lg border border-red-100"
+                      className="p-3 bg-red-50 rounded-lg border border-red-100 hover:border-red-200 transition-colors"
                     >
-                      <div className="flex justify-between text-sm font-medium">
-                        <span>{request.reimbursementItem?.name || '未分類'}</span>
-                        <span>
-                          TWD {toNumber(request.amountOriginal).toLocaleString()}
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="font-medium text-gray-800 line-clamp-1">
+                          {request.reimbursementItem?.name || '未分類'}
+                        </span>
+                        <span className="font-mono font-medium text-red-600 whitespace-nowrap ml-2">
+                          ${toNumber(request.amountOriginal).toLocaleString()}
                         </span>
                       </div>
-                      <div className="flex justify-between text-xs text-red-600 mt-1">
-                        <span>
-                          到期：
-                          {request.dueDate
-                            ? dayjs(request.dueDate).format('YYYY/MM/DD')
-                            : '未設定'}
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-red-500 bg-red-100/50 px-1.5 py-0.5 rounded">
+                          到期：{request.dueDate ? dayjs(request.dueDate).format('MM/DD') : '未設定'}
                         </span>
                         <Button
                           type="link"
                           size="small"
+                          className="!p-0 h-auto"
                           onClick={() => navigate(`/ap/expenses?requestId=${request.id}`)}
                         >
                           詳情
@@ -680,7 +683,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
                       </div>
                     </div>
                   ))}
-                </Space>
+                </div>
               )}
             </Card>
 
@@ -696,31 +699,40 @@ const ExpenseReviewCenterPage: React.FC = () => {
               {flaggedRequests.length === 0 ? (
                 <Empty description="目前沒有需要補件的申請" image={Empty.PRESENTED_IMAGE_SIMPLE} />
               ) : (
-                <Space direction="vertical" size={12} className="w-full">
+                <div className="flex flex-col gap-3">
                   {flaggedRequests.slice(0, 4).map((request) => (
-                    <Alert
+                    <div
                       key={request.id}
-                      type={isOverdue(request) ? 'error' : 'warning'}
-                      showIcon
-                      message={request.reimbursementItem?.name || '未分類'}
-                      description={
-                        <div className="text-xs text-gray-600 space-y-1">
-                          {isOverdue(request) && <div>已逾期 {dayjs().diff(dayjs(request.dueDate), 'day')} 天</div>}
-                          {!request.suggestedAccount && <div>缺少 AI 科目建議</div>}
-                        </div>
-                      }
-                      action={
+                      className="p-3 bg-amber-50 rounded-lg border border-amber-100 hover:border-amber-200 transition-colors"
+                    >
+                      <div className="flex justify-between items-start mb-1">
+                        <span className="font-medium text-gray-800 line-clamp-1">
+                          {request.reimbursementItem?.name || '未分類'}
+                        </span>
                         <Button
                           type="link"
                           size="small"
+                          className="!p-0 h-auto text-amber-600"
                           onClick={() => navigate(`/ap/expenses?requestId=${request.id}`)}
                         >
                           處理
                         </Button>
-                      }
-                    />
+                      </div>
+                      <div className="text-xs text-gray-500 space-y-1">
+                        {isOverdue(request) && (
+                          <div className="flex items-center gap-1 text-red-500">
+                            <WarningOutlined /> 已逾期 {dayjs().diff(dayjs(request.dueDate), 'day')} 天
+                          </div>
+                        )}
+                        {!request.suggestedAccount && (
+                          <div className="flex items-center gap-1 text-amber-600">
+                            <WarningOutlined /> 缺少 AI 科目建議
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   ))}
-                </Space>
+                </div>
               )}
             </Card>
           </Space>
