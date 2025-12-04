@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { message } from 'antd';
+import { motion } from 'framer-motion';
 import { PlusOutlined, CalendarOutlined, ClockCircleOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { attendanceService } from '../../services/attendance.service';
 import { LeaveRequest, LeaveStatus } from '../../types/attendance';
@@ -107,12 +108,17 @@ const LeaveRequestPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen p-6 md:p-10 w-full max-w-[1200px] mx-auto animate-[fadeInUp_0.4s_ease-out]">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-6"
+    >
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+      <div className="flex flex-wrap justify-between gap-4">
         <div>
-          <h1 className="text-3xl md:text-4xl font-semibold text-slate-900 mb-2">請假管理</h1>
-          <p className="text-slate-500 text-base">查看您的假單紀錄與剩餘額度</p>
+          <h1 className="text-2xl font-semibold text-slate-900 mb-1">請假管理</h1>
+          <p className="text-slate-500 text-sm">查看您的假單紀錄與剩餘額度</p>
         </div>
         <GlassButton 
           onClick={() => setIsModalVisible(true)}
@@ -124,7 +130,7 @@ const LeaveRequestPage: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 w-full">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <GlassCard className="relative overflow-hidden group h-full">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <CalendarOutlined className="text-6xl text-blue-500" />
@@ -157,7 +163,7 @@ const LeaveRequestPage: React.FC = () => {
       </div>
 
       {/* History Table */}
-      <GlassCard className="overflow-hidden p-0 w-full">
+      <GlassCard className="overflow-hidden p-0">
         <div className="p-6 border-b border-white/20">
           <h3 className="text-xl font-semibold text-slate-900">申請紀錄</h3>
         </div>
@@ -296,7 +302,7 @@ const LeaveRequestPage: React.FC = () => {
           />
         </div>
       </GlassModal>
-    </div>
+    </motion.div>
   );
 };
 
