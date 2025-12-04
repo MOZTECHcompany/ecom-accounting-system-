@@ -14,7 +14,8 @@ import {
   SearchOutlined,
   MenuOutlined,
   LeftOutlined,
-  RightOutlined
+  RightOutlined,
+  ClockCircleOutlined
 } from '@ant-design/icons'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
@@ -91,6 +92,16 @@ const DashboardLayout: React.FC = () => {
       icon: <BankOutlined />,
       label: '銀行管理',
       onClick: () => navigate('/banking'),
+    },
+    {
+      key: 'attendance',
+      icon: <ClockCircleOutlined />,
+      label: '考勤管理',
+      children: [
+        { key: '/attendance/dashboard', label: '打卡儀表板', onClick: () => navigate('/attendance/dashboard') },
+        { key: '/attendance/leaves', label: '請假申請', onClick: () => navigate('/attendance/leaves') },
+        { key: '/attendance/admin', label: '考勤管理後台', onClick: () => navigate('/attendance/admin') },
+      ],
     },
     {
       key: 'payroll',
