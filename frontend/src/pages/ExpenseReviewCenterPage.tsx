@@ -5,6 +5,9 @@ import {
   Card,
   Col,
   DatePicker,
+  Descriptions,
+  Divider,
+  Drawer,
   Empty,
   Form,
   Input,
@@ -17,6 +20,7 @@ import {
   Statistic,
   Table,
   Tag,
+  Timeline,
   Tooltip,
   Typography,
   message,
@@ -40,6 +44,7 @@ import { useAuth } from '../contexts/AuthContext'
 import {
   expenseService,
   type ExpenseRequest,
+  type ExpenseHistoryEntry,
 } from '../services/expense.service'
 import { accountingService } from '../services/accounting.service'
 import type { Account } from '../types'
@@ -100,6 +105,13 @@ const statusColorMap: Record<string, string> = {
   paid: 'blue',
 }
 
+const historyLabelMap: Record<string, string> = {
+  submitted: '已提交',
+  approved: '核准',
+  rejected: '駁回',
+  pending: '審核中',
+}
+
 const toNumber = (value?: number | string | null) => {
   if (value === null || value === undefined) return 0
   return typeof value === 'number' ? value : Number(value)
@@ -134,6 +146,12 @@ const ExpenseReviewCenterPage: React.FC = () => {
   const [actionLoading, setActionLoading] = useState(false)
   const [accounts, setAccounts] = useState<Account[]>([])
   const [accountsLoading, setAccountsLoading] = useState(false)
+
+  // Detail Drawer State
+  const [detailDrawerOpen, setDetailDrawerOpen] = useState(false)
+  const [selectedRequest, setSelectedRequest] = useState<ExpenseRequest | null>(null)
+  const [history, setHistory] = useState<ExpenseHistoryEntry[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   const entityId = DEFAULT_ENTITY_ID
 
@@ -268,6 +286,27 @@ const ExpenseReviewCenterPage: React.FC = () => {
     const withSuggestions = requests.filter((request) => request.suggestedAccount).length
     return Math.round((withSuggestions / requests.length) * 100)
   }, [requests])
+
+  const handleOpenDetail = async (request: ExpenseRequest) => {
+    setSelectedRequest(request)
+    setDetailDrawerOpen(true)
+    setHistoryLoading(true)
+    try {
+      const historyData = await expenseService.getExpenseRequestHistory(request.id)
+      setHistory(historyData)
+    } catch (error) {
+      console.error(error)
+      message.error('無法載入歷程紀錄')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  const handleCloseDetail = () => {
+    setDetailDrawerOpen(false)
+    setSelectedRequest(null)
+    setHistory([])
+  }
 
   const openActionModal = (mode: ActionMode, request: ExpenseRequest) => {
     setActionState({ mode, request })
@@ -421,7 +460,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
               type="primary"
               block
               size="small"
-              className="bg-green-600 hover:!bg-green-500 border-green-600 hover:!border-green-500 text-white shadow-sm flex items-center justify-center gap-1"
+              className="!bg-green-600/85 !backdrop-blur-md !border-green-400/30 !text-white !shadow-md hover:!bg-green-600/95 hover:!shadow-lg transition-all duration-300 flex items-center justify-center gap-1"
               onClick={() => openActionModal('approve', record)}
             >
               <CheckCircleOutlined /> 核准
@@ -432,7 +471,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
               type="text"
               size="small"
               className="text-gray-500 hover:text-blue-600 hover:bg-blue-50 flex-1 flex items-center justify-center gap-1"
-              onClick={() => navigate(`/ap/expenses?requestId=${record.id}`)}
+              onClick={() => handleOpenDetail(record)}
             >
               <FileSearchOutlined /> 詳情
             </Button>
@@ -675,7 +714,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
                           type="link"
                           size="small"
                           className="!p-0 h-auto text-blue-500 hover:text-blue-600"
-                          onClick={() => navigate(`/ap/expenses?requestId=${request.id}`)}
+                          onClick={() => handleOpenDetail(request)}
                         >
                           詳情
                         </Button>
@@ -712,7 +751,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
                           type="link"
                           size="small"
                           className="!p-0 h-auto text-amber-600"
-                          onClick={() => navigate(`/ap/expenses?requestId=${request.id}`)}
+                          onClick={() => handleOpenDetail(request)}
                         >
                           處理
                         </Button>
@@ -738,6 +777,134 @@ const ExpenseReviewCenterPage: React.FC = () => {
         </Col>
       </Row>
 
+      <Drawer
+        title="申請詳情"
+        placement="right"
+        onClose={handleCloseDetail}
+        open={detailDrawerOpen}
+        width={520}
+        destroyOnClose
+        styles={{ body: { paddingBottom: 24 } }}
+      >
+        {!selectedRequest ? (
+          <Text type="secondary">請選擇申請查看詳情</Text>
+        ) : (
+          <>
+            <Descriptions bordered column={1} size="small" labelStyle={{ width: 120 }}>
+              <Descriptions.Item label="報銷項目">
+                {selectedRequest.reimbursementItem?.name || '--'}
+              </Descriptions.Item>
+              <Descriptions.Item label="金額">
+                {selectedRequest.amountCurrency || 'TWD'} {toNumber(selectedRequest.amountOriginal).toLocaleString()}
+              </Descriptions.Item>
+              <Descriptions.Item label="狀態">
+                <Tag color={statusColorMap[selectedRequest.status] || 'default'}>
+                  {statusLabelMap[selectedRequest.status] || selectedRequest.status}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="系統建議">
+                {selectedRequest.suggestedAccount ? (
+                  <Space direction="vertical" size={0}>
+                    <span>
+                      {selectedRequest.suggestedAccount.code} · {selectedRequest.suggestedAccount.name}
+                    </span>
+                    {selectedRequest.suggestionConfidence && (
+                      <Text type="secondary">
+                        信心 {(Number(selectedRequest.suggestionConfidence) * 100).toFixed(0)}%
+                      </Text>
+                    )}
+                  </Space>
+                ) : (
+                  <Text type="secondary">—</Text>
+                )}
+              </Descriptions.Item>
+              <Descriptions.Item label="最終科目">
+                {selectedRequest.finalAccount ? (
+                  <span>
+                    {selectedRequest.finalAccount.code} · {selectedRequest.finalAccount.name}
+                  </span>
+                ) : (
+                  <Text type="secondary">尚未指定</Text>
+                )}
+              </Descriptions.Item>
+              <Descriptions.Item label="備註">
+                {selectedRequest.description || <Text type="secondary">—</Text>}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Divider />
+            <Title level={5} style={{ marginBottom: 16 }}>
+              歷程紀錄
+            </Title>
+            <div className="max-h-72 overflow-y-auto px-1 pt-1 pb-4">
+              <Timeline
+                mode="left"
+                pending={historyLoading ? '讀取中...' : undefined}
+                items={history.map((entry) => ({
+                  color:
+                    entry.action === 'approved'
+                      ? 'green'
+                      : entry.action === 'rejected'
+                      ? 'red'
+                      : 'blue',
+                  children: (
+                    <div className="pb-3">
+                      <div className="flex flex-wrap items-baseline justify-between gap-x-2 text-sm font-medium leading-relaxed">
+                        <span className="font-bold text-gray-700">
+                          {historyLabelMap[entry.action] || entry.action}
+                        </span>
+                        <span className="text-xs text-gray-400 whitespace-nowrap">
+                          {dayjs(entry.createdAt).format('YYYY/MM/DD HH:mm')}
+                        </span>
+                      </div>
+                      {entry.actor && (
+                        <div className="text-xs text-gray-500 mt-1">由 {entry.actor.name}</div>
+                      )}
+                      {entry.note && (
+                        <div className="text-sm mt-2 text-gray-600 break-words whitespace-pre-wrap leading-relaxed p-2 bg-gray-50 rounded-md border border-gray-100">
+                          {entry.note}
+                        </div>
+                      )}
+                    </div>
+                  ),
+                }))}
+              />
+              {!historyLoading && history.length === 0 && (
+                <Text type="secondary">尚無歷程紀錄</Text>
+              )}
+            </div>
+
+            {selectedRequest.status === 'pending' && (
+              <div className="mt-6 flex gap-3">
+                <Button
+                  block
+                  danger
+                  icon={<CloseCircleOutlined />}
+                  onClick={() => {
+                    handleCloseDetail()
+                    openActionModal('reject', selectedRequest)
+                  }}
+                >
+                  駁回
+                </Button>
+                <Button
+                  block
+                  type="primary"
+                  className="!bg-green-600/85 !backdrop-blur-md !border-green-400/30 !text-white !shadow-md hover:!bg-green-600/95 hover:!shadow-lg transition-all duration-300"
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => {
+                    handleCloseDetail()
+                    openActionModal('approve', selectedRequest)
+                  }}
+                >
+                  核准
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      </Drawer>
+
       <Modal
         open={Boolean(actionState.request)}
         title={actionState.mode === 'approve' ? '快速核准' : '駁回申請'}
@@ -745,7 +912,13 @@ const ExpenseReviewCenterPage: React.FC = () => {
         onOk={handleActionSubmit}
         confirmLoading={actionLoading}
         okText={actionState.mode === 'approve' ? '核准' : '駁回'}
-        okButtonProps={{ danger: actionState.mode === 'reject' }}
+        okButtonProps={{
+          danger: actionState.mode === 'reject',
+          className:
+            actionState.mode === 'approve'
+              ? '!bg-green-600/85 !backdrop-blur-md !border-green-400/30 !text-white !shadow-md hover:!bg-green-600/95 hover:!shadow-lg transition-all duration-300'
+              : undefined,
+        }}
       >
         {!actionState.request ? null : actionState.mode === 'approve' ? (
           <Form form={actionForm} layout="vertical">
