@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { AttendanceIntegrationService } from '../attendance/services/integration.service';
 
 /**
  * 薪資管理服務
@@ -12,6 +13,10 @@ import { Injectable, Logger } from '@nestjs/common';
 @Injectable()
 export class PayrollService {
   private readonly logger = new Logger(PayrollService.name);
+
+  constructor(
+    private readonly attendanceIntegration: AttendanceIntegrationService,
+  ) {}
   /**
    * 建立薪資批次
    */
@@ -33,10 +38,29 @@ export class PayrollService {
     periodStart: Date,
     periodEnd: Date,
   ) {
-    // TODO: 計算基本薪資
-    // TODO: 計算加班費
+    this.logger.log(`Calculating payroll for employee ${employeeId}`);
+
+    // 1. Get Attendance Data
+    const attendanceData = await this.attendanceIntegration.getPayrollData(
+      employeeId,
+      periodStart,
+      periodEnd,
+    );
+
+    this.logger.log(`Attendance data: ${JSON.stringify(attendanceData)}`);
+
+    // TODO: 計算基本薪資 (Base Salary / Working Days * Days Worked)
+    // TODO: 計算加班費 (Overtime Hours * Rate)
     // TODO: 計算獎金
     // TODO: 扣除勞健保、稅金
+
+    return {
+      employeeId,
+      period: { start: periodStart, end: periodEnd },
+      attendance: attendanceData,
+      grossPay: 0, // Placeholder
+      netPay: 0,   // Placeholder
+    };
   }
 
   /**

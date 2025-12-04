@@ -5,6 +5,7 @@ import { PayrollRepository } from './payroll.repository';
 import { PrismaModule } from '../../common/prisma/prisma.module';
 import { AccountingModule } from '../accounting/accounting.module'; // 依賴：薪資分錄
 import { ApprovalsModule } from '../approvals/approvals.module'; // 依賴：薪資審批
+import { AttendanceModule } from '../attendance/attendance.module'; // 依賴：考勤數據
 
 /**
  * PayrollModule
@@ -13,9 +14,10 @@ import { ApprovalsModule } from '../approvals/approvals.module'; // 依賴：薪
  * 依賴模組：
  * - AccountingModule: 薪資產生會計分錄
  * - ApprovalsModule: 薪資需要審批流程
+ * - AttendanceModule: 獲取考勤時數
  */
 @Module({
-  imports: [PrismaModule, AccountingModule, ApprovalsModule],
+  imports: [PrismaModule, AccountingModule, ApprovalsModule, AttendanceModule],
   controllers: [PayrollController],
   providers: [PayrollService, PayrollRepository],
   exports: [PayrollService],

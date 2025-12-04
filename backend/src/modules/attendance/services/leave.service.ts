@@ -1,11 +1,15 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { NotificationService } from '../../notification/notification.service';
 import { CreateLeaveRequestDto } from '../dto/create-leave-request.dto';
 import { LeaveStatus } from '@prisma/client';
 
 @Injectable()
 export class LeaveService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationService: NotificationService,
+  ) {}
 
   async createLeaveRequest(userId: string, dto: CreateLeaveRequestDto) {
     const employee = await this.prisma.employee.findUnique({
@@ -33,8 +37,40 @@ export class LeaveService {
       },
     });
 
+    // Notify Employee
+    await this.notificationService.create({
+      userId: userId,
+      title: 'Leave Request Submitted',
+      message: `Your leave request for ${dto.hours} hours has been submitted.`,
+      type: 'LEAVE_REQUEST',
+      entityId: employee.entityId,
+    });
+
+    // TODO: Notify Manager (Need hierarchy logic)
+
     return leaveRequest;
   }
+
+  async updateLeaveStatus(requestId: string, status: LeaveStatus, reviewerId: string) {
+    const request = await this.prisma.leaveRequest.update({
+      where: { id: requestId },
+      data: { status },
+      include: { employee: true },
+    });
+
+    if (request.employee?.userId) {
+      await this.notificationService.create({
+        userId: request.employee.userId,
+        title: `Leave Request ${status}`,
+        message: `Your leave request has been ${status.toLowerCase()}.`,
+        type: 'LEAVE_STATUS_UPDATE',
+        entityId: request.entityId,
+      });
+    }
+
+    return request;
+  }
+
 
   async getLeaveRequests(userId: string) {
     const employee = await this.prisma.employee.findUnique({
