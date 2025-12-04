@@ -39,6 +39,18 @@
 
 ## 🆕 最近更新
 
+- **2025-12-04 — 後端功能補全與環境優化**：
+  - **即時通知系統**：
+    - 新增 `NotificationGateway` (WebSocket) 支援即時推播。
+    - 整合 `NotificationService`，實現後端事件即時通知前端。
+  - **報表匯出功能**：
+    - 於 `ReportsController` 新增 `/export` 端點，支援報表資料匯出。
+  - **系統穩定性與建置修復**：
+    - 修正 `@nestjs/websockets` 與 `socket.io` 依賴缺失問題。
+    - 解決 Prisma Client 生成時的資料庫連線問題，確保 `npm run build` 順利執行。
+  - **開發體驗優化**：
+    - 更新 Dev Container 設定 (`settings.json`)，啟用終端機指令自動批准，提升開發效率。
+
 - **2025-12-02 — AI 智能升級與架構重構**：
   - **UI/UX 優化**：統一系統用語，將「退回」修正為「駁回」；修復 Sidebar 版面問題。
   - **AI 架構重構**：
