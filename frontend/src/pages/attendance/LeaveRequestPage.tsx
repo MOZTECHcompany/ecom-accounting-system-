@@ -118,6 +118,7 @@ const LeaveRequestPage: React.FC = () => {
           type="primary" 
           icon={<PlusOutlined />} 
           size="large"
+          className="rounded-xl shadow-md"
           onClick={() => setIsModalVisible(true)}
         >
           新增請假申請
@@ -126,7 +127,7 @@ const LeaveRequestPage: React.FC = () => {
 
       <Row gutter={[24, 24]} className="mb-6">
         <Col xs={24} md={8}>
-          <Card bordered={false} className="shadow-sm">
+          <Card bordered={false} className="shadow-sm rounded-2xl">
             <Statistic
               title="特休剩餘"
               value={10} // Mock data
@@ -136,7 +137,7 @@ const LeaveRequestPage: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card bordered={false} className="shadow-sm">
+          <Card bordered={false} className="shadow-sm rounded-2xl">
             <Statistic
               title="本年度已休"
               value={3.5} // Mock data
@@ -146,7 +147,7 @@ const LeaveRequestPage: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card bordered={false} className="shadow-sm">
+          <Card bordered={false} className="shadow-sm rounded-2xl">
             <Statistic
               title="待核准假單"
               value={requests.filter(r => r.status === LeaveStatus.SUBMITTED).length}
@@ -157,7 +158,7 @@ const LeaveRequestPage: React.FC = () => {
         </Col>
       </Row>
 
-      <Card className="shadow-md border-0" bordered={false} title="申請紀錄">
+      <Card className="shadow-md border-0 rounded-3xl" bordered={false} title="申請紀錄" headStyle={{ borderBottom: 'none', padding: '24px 24px 0' }} bodyStyle={{ padding: '24px' }}>
         <Table
           dataSource={requests}
           columns={columns}
@@ -172,6 +173,7 @@ const LeaveRequestPage: React.FC = () => {
         onCancel={() => setIsModalVisible(false)}
         footer={null}
         width={700}
+        className="rounded-2xl overflow-hidden"
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} className="mt-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -180,7 +182,7 @@ const LeaveRequestPage: React.FC = () => {
               label="假別"
               rules={[{ required: true, message: '請選擇假別' }]}
             >
-              <Select placeholder="選擇假別">
+              <Select placeholder="選擇假別" className="rounded-lg">
                 {leaveTypes.map((type) => (
                   <Option key={type.id} value={type.id}>
                     {type.name}
@@ -194,7 +196,7 @@ const LeaveRequestPage: React.FC = () => {
               label="請假期間"
               rules={[{ required: true, message: '請選擇期間' }]}
             >
-              <RangePicker showTime format="YYYY-MM-DD HH:mm" className="w-full" />
+              <RangePicker showTime format="YYYY-MM-DD HH:mm" className="w-full rounded-lg" />
             </Form.Item>
 
             <Form.Item
@@ -202,11 +204,11 @@ const LeaveRequestPage: React.FC = () => {
               label="請假時數"
               rules={[{ required: true, message: '請輸入時數' }]}
             >
-              <InputNumber min={0.5} step={0.5} className="w-full" />
+              <InputNumber min={0.5} step={0.5} className="w-full rounded-lg" />
             </Form.Item>
 
             <Form.Item name="location" label="請假地點 (選填)">
-              <Input placeholder="國內/國外地點" />
+              <Input placeholder="國內/國外地點" className="rounded-lg" />
             </Form.Item>
           </div>
 
@@ -215,12 +217,12 @@ const LeaveRequestPage: React.FC = () => {
             label="請假事由"
             rules={[{ required: true, message: '請輸入事由' }]}
           >
-            <Input.TextArea rows={4} placeholder="請詳細說明請假原因..." />
+            <Input.TextArea rows={4} placeholder="請詳細說明請假原因..." className="rounded-lg" />
           </Form.Item>
 
           <div className="flex justify-end gap-2">
-            <Button onClick={() => setIsModalVisible(false)}>取消</Button>
-            <Button type="primary" htmlType="submit" loading={loading}>
+            <Button onClick={() => setIsModalVisible(false)} className="rounded-lg">取消</Button>
+            <Button type="primary" htmlType="submit" loading={loading} className="rounded-lg">
               送出申請
             </Button>
           </div>

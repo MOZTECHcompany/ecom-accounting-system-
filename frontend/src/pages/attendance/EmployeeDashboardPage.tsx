@@ -108,25 +108,25 @@ const EmployeeDashboardPage: React.FC = () => {
       <Row gutter={[24, 24]}>
         {/* Left Column: Clock In/Out Action */}
         <Col xs={24} lg={14}>
-          <Card className="shadow-md h-full border-0" bordered={false}>
-            <div className="flex flex-col items-center justify-center py-8">
-              <div className="text-center mb-8">
-                <div className="text-6xl font-bold text-gray-800 font-mono mb-2">
+          <Card className="shadow-lg h-full border-0 rounded-3xl" bordered={false}>
+            <div className="flex flex-col items-center justify-center py-12">
+              <div className="text-center mb-10">
+                <div className="text-7xl font-bold text-gray-800 font-mono mb-4 tracking-wider">
                   {currentTime.format('HH:mm:ss')}
                 </div>
-                <div className="text-lg text-gray-500">
+                <div className="text-xl text-gray-500">
                   {currentTime.format('YYYY年MM月DD日 dddd')}
                 </div>
               </div>
 
-              <div className="mb-8 w-full max-w-md">
+              <div className="mb-10 w-full max-w-lg">
                 {location ? (
                   <Alert 
-                    message={`已定位: ${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`} 
+                    message={<span className="font-medium text-base">已定位: {location.lat.toFixed(4)}, {location.lng.toFixed(4)}</span>}
                     type="success" 
                     showIcon 
                     icon={<EnvironmentOutlined />}
-                    className="text-center"
+                    className="text-center rounded-xl border-0 bg-green-50 text-green-700 py-2"
                   />
                 ) : (
                   <Alert 
@@ -134,7 +134,7 @@ const EmployeeDashboardPage: React.FC = () => {
                     type="warning" 
                     showIcon 
                     icon={<EnvironmentOutlined />}
-                    className="text-center"
+                    className="text-center rounded-xl border-0 bg-orange-50 text-orange-700 py-2"
                   />
                 )}
               </div>
@@ -142,33 +142,36 @@ const EmployeeDashboardPage: React.FC = () => {
               <div className="flex gap-8 justify-center w-full">
                 <Button
                   type="primary"
-                  shape="circle"
-                  className="h-32 w-32 flex flex-col items-center justify-center bg-blue-600 hover:bg-blue-500 border-0 shadow-lg transition-transform hover:scale-105"
+                  className="h-40 w-48 flex flex-col items-center justify-center bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 border-0 shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1 rounded-3xl"
                   onClick={handleClockIn}
                   loading={loading}
                   disabled={!location}
                 >
-                  <LoginOutlined className="text-3xl mb-2" />
-                  <span className="text-lg font-bold">上班打卡</span>
+                  <div className="bg-white/20 p-4 rounded-full mb-3">
+                    <LoginOutlined className="text-3xl text-white" />
+                  </div>
+                  <span className="text-xl font-bold tracking-wide text-white">上班打卡</span>
                 </Button>
                 
                 <Button
                   type="primary"
-                  shape="circle"
-                  className="h-32 w-32 flex flex-col items-center justify-center bg-orange-500 hover:bg-orange-400 border-0 shadow-lg transition-transform hover:scale-105"
+                  className="h-40 w-48 flex flex-col items-center justify-center bg-gradient-to-br from-orange-400 to-orange-500 hover:from-orange-500 hover:to-orange-600 border-0 shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1 rounded-3xl"
                   onClick={handleClockOut}
                   loading={loading}
                   disabled={!location}
                 >
-                  <LogoutOutlined className="text-3xl mb-2" />
-                  <span className="text-lg font-bold">下班打卡</span>
+                  <div className="bg-white/20 p-4 rounded-full mb-3">
+                    <LogoutOutlined className="text-3xl text-white" />
+                  </div>
+                  <span className="text-xl font-bold tracking-wide text-white">下班打卡</span>
                 </Button>
               </div>
 
               {lastAction && (
-                <div className="mt-8 animate-fade-in">
-                  <Tag color="success" className="px-4 py-2 text-base rounded-full">
-                    <CheckCircleOutlined /> 最新動作: {lastAction.type} ({lastAction.time})
+                <div className="mt-10 animate-fade-in">
+                  <Tag color="success" className="px-6 py-2 text-lg rounded-full border-0 bg-green-100 text-green-700 flex items-center gap-2">
+                    <CheckCircleOutlined /> 
+                    <span>最新動作: {lastAction.type} ({lastAction.time})</span>
                   </Tag>
                 </div>
               )}
@@ -180,64 +183,74 @@ const EmployeeDashboardPage: React.FC = () => {
         <Col xs={24} lg={10}>
           <Row gutter={[0, 24]}>
             <Col span={24}>
-              <Card title="本月概況" className="shadow-md border-0" bordered={false}>
+              <Card title="本月概況" className="shadow-lg border-0 rounded-3xl" bordered={false} headStyle={{ borderBottom: 'none', padding: '24px 24px 0' }} bodyStyle={{ padding: '24px' }}>
                 <Row gutter={16}>
                   <Col span={12}>
-                    <Statistic
-                      title="累積工時"
-                      value={0}
-                      precision={1}
-                      suffix="小時"
-                      prefix={<ClockCircleOutlined className="text-blue-500" />}
-                    />
+                    <div className="bg-blue-50 p-4 rounded-2xl">
+                      <Statistic
+                        title={<span className="text-gray-500 font-medium">累積工時</span>}
+                        value={0}
+                        precision={1}
+                        suffix="小時"
+                        valueStyle={{ fontWeight: 'bold', color: '#1d4ed8' }}
+                        prefix={<ClockCircleOutlined className="text-blue-500 mr-2" />}
+                      />
+                    </div>
                   </Col>
                   <Col span={12}>
-                    <Statistic
-                      title="遲到次數"
-                      value={0}
-                      valueStyle={{ color: '#cf1322' }}
-                      prefix={<WarningOutlined />}
-                    />
+                    <div className="bg-red-50 p-4 rounded-2xl">
+                      <Statistic
+                        title={<span className="text-gray-500 font-medium">遲到次數</span>}
+                        value={0}
+                        valueStyle={{ fontWeight: 'bold', color: '#dc2626' }}
+                        prefix={<WarningOutlined className="text-red-500 mr-2" />}
+                      />
+                    </div>
                   </Col>
                 </Row>
-                <Divider />
+                <div className="h-4"></div>
                 <Row gutter={16}>
                   <Col span={12}>
-                    <Statistic
-                      title="特休餘額"
-                      value={10}
-                      suffix="天"
-                      prefix={<CalendarOutlined className="text-green-500" />}
-                    />
+                    <div className="bg-green-50 p-4 rounded-2xl">
+                      <Statistic
+                        title={<span className="text-gray-500 font-medium">特休餘額</span>}
+                        value={10}
+                        suffix="天"
+                        valueStyle={{ fontWeight: 'bold', color: '#15803d' }}
+                        prefix={<CalendarOutlined className="text-green-500 mr-2" />}
+                      />
+                    </div>
                   </Col>
                   <Col span={12}>
-                    <Statistic
-                      title="本月請假"
-                      value={0}
-                      suffix="天"
-                    />
+                    <div className="bg-gray-50 p-4 rounded-2xl">
+                      <Statistic
+                        title={<span className="text-gray-500 font-medium">本月請假</span>}
+                        value={0}
+                        suffix="天"
+                        valueStyle={{ fontWeight: 'bold', color: '#374151' }}
+                      />
+                    </div>
                   </Col>
                 </Row>
               </Card>
             </Col>
 
             <Col span={24}>
-              <Card title="今日打卡紀錄" className="shadow-md border-0 h-full" bordered={false}>
+              <Card title="今日打卡紀錄" className="shadow-lg border-0 h-full rounded-3xl" bordered={false} headStyle={{ borderBottom: 'none', padding: '24px 24px 0' }} bodyStyle={{ padding: '24px' }}>
                 {todayRecords.length > 0 ? (
                   <Timeline
                     items={todayRecords.map((record, index) => ({
                       color: record.type === 'clock_in' ? 'blue' : 'orange',
                       children: (
-                        <>
-                          <Text strong>{record.type === 'clock_in' ? '上班' : '下班'}</Text>
-                          <br/>
-                          <Text type="secondary">{record.time}</Text>
-                        </>
+                        <div className="flex flex-col pb-4">
+                          <Text strong className="text-lg">{record.type === 'clock_in' ? '上班' : '下班'}</Text>
+                          <Text type="secondary" className="font-mono">{record.time}</Text>
+                        </div>
                       ),
                     }))}
                   />
                 ) : (
-                  <div className="text-center text-gray-400 py-8">
+                  <div className="text-center text-gray-400 py-12 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
                     尚無今日紀錄
                   </div>
                 )}

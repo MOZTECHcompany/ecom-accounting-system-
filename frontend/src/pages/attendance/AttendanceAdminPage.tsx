@@ -149,19 +149,20 @@ const AttendanceAdminPage: React.FC = () => {
           <Text type="secondary">管理與監控每日員工出勤狀況</Text>
         </div>
         <Space>
-          <Button icon={<DownloadOutlined />}>匯出報表</Button>
+          <Button icon={<DownloadOutlined />} className="rounded-lg">匯出報表</Button>
           <DatePicker 
             value={selectedDate} 
             onChange={(date) => date && setSelectedDate(date)} 
             allowClear={false}
             size="large"
+            className="rounded-lg"
           />
         </Space>
       </div>
 
       <Row gutter={[24, 24]} className="mb-6">
         <Col xs={12} md={6}>
-          <Card bordered={false} className="shadow-sm">
+          <Card bordered={false} className="shadow-sm rounded-2xl">
             <Statistic
               title="應到人數"
               value={stats.total}
@@ -171,7 +172,7 @@ const AttendanceAdminPage: React.FC = () => {
           </Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card bordered={false} className="shadow-sm">
+          <Card bordered={false} className="shadow-sm rounded-2xl">
             <Statistic
               title="實到人數"
               value={stats.present}
@@ -182,7 +183,7 @@ const AttendanceAdminPage: React.FC = () => {
           </Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card bordered={false} className="shadow-sm">
+          <Card bordered={false} className="shadow-sm rounded-2xl">
             <Statistic
               title="缺卡/未到"
               value={stats.missing}
@@ -193,7 +194,7 @@ const AttendanceAdminPage: React.FC = () => {
           </Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card bordered={false} className="shadow-sm">
+          <Card bordered={false} className="shadow-sm rounded-2xl">
             <Statistic
               title="遲到"
               value={stats.late}
@@ -205,13 +206,13 @@ const AttendanceAdminPage: React.FC = () => {
         </Col>
       </Row>
 
-      <Card className="shadow-md border-0" bordered={false}>
+      <Card className="shadow-md border-0 rounded-3xl" bordered={false} headStyle={{ borderBottom: 'none', padding: '24px 24px 0' }} bodyStyle={{ padding: '24px' }}>
         <div className="mb-4 flex justify-between items-center">
           <Title level={4} className="m-0">每日考勤明細</Title>
           <Input 
             placeholder="搜尋員工姓名..." 
             prefix={<SearchOutlined />} 
-            className="w-64"
+            className="w-64 rounded-lg"
             onChange={e => setSearchText(e.target.value)}
           />
         </div>
