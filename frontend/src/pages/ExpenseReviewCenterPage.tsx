@@ -263,6 +263,12 @@ const ExpenseReviewCenterPage: React.FC = () => {
     return Math.round(totalDays / pendingRequests.length)
   }, [pendingRequests])
 
+  const aiCoverage = useMemo(() => {
+    if (!requests.length) return 0
+    const withSuggestions = requests.filter((request) => request.suggestedAccount).length
+    return Math.round((withSuggestions / requests.length) * 100)
+  }, [requests])
+
   const openActionModal = (mode: ActionMode, request: ExpenseRequest) => {
     setActionState({ mode, request })
     actionForm.resetFields()
@@ -313,125 +319,135 @@ const ExpenseReviewCenterPage: React.FC = () => {
 
   const columns: ColumnsType<ExpenseRequest> = [
     {
-      title: '申請項目',
+      title: '費用項目',
       dataIndex: 'reimbursementItem',
       key: 'reimbursementItem',
-      width: 250,
       render: (_value, record) => (
-        <div className="flex flex-col">
-          <span className="font-medium text-gray-900 text-base">
-            {record.reimbursementItem?.name || '未分類項目'}
+        <Space direction="vertical" size={0}>
+          <span className="font-medium text-gray-800">
+            {record.reimbursementItem?.name || '—'}
           </span>
-          <span className="text-gray-500 text-sm line-clamp-1">
-            {record.description || '無詳細說明'}
-          </span>
-        </div>
+          {record.description && (
+            <Text type="secondary" className="text-xs text-gray-500">
+              {record.description}
+            </Text>
+          )}
+        </Space>
       ),
     },
     {
       title: '金額',
       dataIndex: 'amountOriginal',
       key: 'amountOriginal',
-      align: 'right',
-      width: 150,
       render: (_value, record) => (
-        <div className="flex flex-col items-end">
-          <span className="font-mono font-semibold text-gray-800 text-base">
-            {toNumber(record.amountOriginal).toLocaleString()}
-          </span>
-          <span className="text-xs text-gray-400">{record.amountCurrency || 'TWD'}</span>
-        </div>
+        <Text className="font-mono">
+          {(record.amountCurrency || 'TWD') + ' ' + toNumber(record.amountOriginal).toLocaleString()}
+        </Text>
       ),
     },
     {
-      title: '狀態 / 優先度',
+      title: '狀態',
+      dataIndex: 'status',
       key: 'status',
-      width: 140,
-      render: (_value, record) => (
-        <div className="flex flex-col gap-1">
-          <Tag color={statusColorMap[record.status]} className="w-fit m-0">
-            {statusLabelMap[record.status]}
-          </Tag>
-          {record.priority === 'urgent' && (
-            <Tag color="red" className="w-fit m-0 flex items-center gap-1">
-              <FireOutlined /> 急件
-            </Tag>
-          )}
-        </div>
+      render: (value: string) => (
+        <Tag color={statusColorMap[value] || 'default'}>
+          {statusLabelMap[value] || value}
+        </Tag>
       ),
     },
     {
-      title: 'AI 建議科目',
+      title: '付款 / 優先度',
+      key: 'priority',
+      render: (_value, record) => (
+        <Space direction="vertical" size={0}>
+          <Space size={6}>
+            {record.priority && (
+              <Tag color={record.priority === 'urgent' ? 'red' : 'default'}>
+                {record.priority === 'urgent' ? '急件' : '一般'}
+              </Tag>
+            )}
+            {record.dueDate && (
+              <Tag color={isOverdue(record) ? 'red' : 'blue'}>
+                到期 {dayjs(record.dueDate).format('MM/DD')}
+              </Tag>
+            )}
+          </Space>
+          {record.paymentStatus && (
+            <Text type="secondary" className="text-xs">
+              付款狀態：{record.paymentStatus}
+            </Text>
+          )}
+        </Space>
+      ),
+    },
+    {
+      title: 'AI 建議',
       key: 'ai',
-      width: 200,
       render: (_value, record) => {
         if (!record.suggestedAccount) {
-          return <span className="text-gray-400 text-sm">—</span>
+          return <Tag bordered={false}>—</Tag>
         }
         const confidence = Number(record.suggestionConfidence ?? 0)
         return (
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <Tag color="blue" className="m-0 font-mono">
+          <Space direction="vertical" size={0}>
+            <Space size={4}>
+              <Tag color="blue" bordered={false}>
                 {record.suggestedAccount.code}
               </Tag>
-              <span className="text-sm text-gray-700 truncate max-w-[100px]">
-                {record.suggestedAccount.name}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 mt-1">
-              <Progress 
-                percent={Math.round(confidence * 100)} 
-                size="small" 
-                steps={5} 
-                strokeColor={confidence > 0.8 ? '#52c41a' : '#faad14'}
-                showInfo={false}
-                className="w-16 m-0"
-              />
-              <span className="text-xs text-gray-400">{Math.round(confidence * 100)}%</span>
-            </div>
-          </div>
+              <Text>{record.suggestedAccount.name}</Text>
+            </Space>
+            <Text type="secondary" className="text-xs">
+              信心 {(confidence * 100).toFixed(0)}%
+            </Text>
+          </Space>
         )
       },
     },
     {
+      title: '等待天數',
+      key: 'aging',
+      render: (_value, record) => (
+        <Text>{dayjs().diff(dayjs(record.createdAt), 'day')} 天</Text>
+      ),
+    },
+    {
       title: '操作',
       key: 'actions',
-      fixed: 'right',
       width: 120,
       render: (_value, record) => (
-        <div className="flex items-center gap-2">
-          <Tooltip title="查看詳情">
-            <Button
-              type="text"
-              shape="circle"
-              icon={<FileSearchOutlined className="text-gray-500" />}
-              onClick={() => navigate(`/ap/expenses?requestId=${record.id}`)}
-            />
-          </Tooltip>
+        <Space direction="vertical" size={8} className="w-full">
+          <Button
+            size="small"
+            block
+            icon={<FileSearchOutlined />}
+            onClick={() => navigate(`/ap/expenses?requestId=${record.id}`)}
+          >
+            詳情
+          </Button>
           {record.status === 'pending' && (
-            <>
-              <Tooltip title="核准">
+            <div className="flex gap-2">
+              <Tooltip title="快速核准">
                 <Button
-                  type="text"
-                  shape="circle"
-                  className="bg-green-50 hover:bg-green-100 border border-green-200"
-                  icon={<CheckCircleOutlined className="text-green-600" />}
+                  className="flex-1 bg-green-600 hover:!bg-green-500 border-green-600 hover:!border-green-500 text-white"
+                  size="small"
+                  type="primary"
+                  icon={<CheckCircleOutlined />}
                   onClick={() => openActionModal('approve', record)}
                 />
               </Tooltip>
-              <Tooltip title="駁回">
+              <Tooltip title="駁回申請">
                 <Button
-                  type="text"
-                  shape="circle"
-                  className="bg-red-50 hover:bg-red-100 border border-red-200"
-                  icon={<CloseCircleOutlined className="text-red-600" />}
+                  className="flex-1"
+                  size="small"
+                  type="primary"
+                  danger
+                  icon={<CloseCircleOutlined />}
                   onClick={() => openActionModal('reject', record)}
                 />
               </Tooltip>
-            </>
+            </div>
           )}
-        </div>
+        </Space>
       ),
     },
   ]
@@ -452,173 +468,268 @@ const ExpenseReviewCenterPage: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6 p-2">
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row justify-between items-end gap-4">
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <Title level={3} className="!mb-1 !font-light tracking-tight text-gray-800">
+          <Title level={2} className="!mb-1 !font-light">
             費用審核中心
           </Title>
           <Text className="text-gray-500">
-            集中管理與審核各項費用申請，確保財務合規。
+            集中檢視所有待審核費用、設定優先順序並進行快速核准或駁回。
           </Text>
         </div>
-        <Space>
-          <Button onClick={() => navigate('/ap/expenses')}>費用申請列表</Button>
-          <Button type="primary" icon={<ReloadOutlined />} onClick={() => void loadRequests()} loading={loading}>
+        <Space wrap>
+          <Button icon={<FileSearchOutlined />} onClick={() => navigate('/ap/expenses')}>
+            回到費用申請
+          </Button>
+          <Button icon={<ReloadOutlined />} onClick={() => void loadRequests()} loading={loading}>
             重新整理
           </Button>
         </Space>
       </div>
 
-      {/* Stats Grid */}
-      <Row gutter={[16, 16]}>
+      <Row gutter={[24, 24]}>
         <Col xs={24} sm={12} lg={6}>
-          <div className="glass-panel p-5 flex items-center justify-between h-full">
-            <div>
-              <div className="text-gray-500 text-sm mb-1">待審件數</div>
-              <div className="text-2xl font-semibold text-gray-800">
-                {pendingRequests.length} <span className="text-sm font-normal text-gray-400">件</span>
-              </div>
-            </div>
-            <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center">
-              <AuditOutlined className="text-xl text-blue-500" />
-            </div>
-          </div>
+          <Card bordered={false} className="shadow-sm hover:shadow-md transition-shadow h-full">
+            <Statistic
+              title="待審件數"
+              value={pendingRequests.length}
+              prefix={<AuditOutlined className="text-blue-500" />}
+              suffix="件"
+            />
+          </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <div className="glass-panel p-5 flex items-center justify-between h-full">
-            <div>
-              <div className="text-gray-500 text-sm mb-1">急件申請</div>
-              <div className="text-2xl font-semibold text-gray-800">
-                {urgentQueue.length} <span className="text-sm font-normal text-gray-400">件</span>
-              </div>
-            </div>
-            <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center">
-              <FireOutlined className="text-xl text-red-500" />
-            </div>
-          </div>
+          <Card bordered={false} className="shadow-sm hover:shadow-md transition-shadow h-full">
+            <Statistic
+              title="急件"
+              value={urgentQueue.length}
+              prefix={<FireOutlined className="text-red-500" />}
+              suffix="件"
+            />
+          </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <div className="glass-panel p-5 flex items-center justify-between h-full">
-            <div>
-              <div className="text-gray-500 text-sm mb-1">待審金額</div>
-              <div className="text-2xl font-semibold text-gray-800">
-                {backlogAmount.toLocaleString()} <span className="text-sm font-normal text-gray-400">TWD</span>
-              </div>
-            </div>
-            <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center">
-              <ThunderboltOutlined className="text-xl text-amber-500" />
-            </div>
-          </div>
+          <Card bordered={false} className="shadow-sm hover:shadow-md transition-shadow h-full">
+            <Statistic
+              title="待審金額 (TWD)"
+              value={backlogAmount}
+              precision={0}
+              prefix={<ThunderboltOutlined className="text-amber-500" />}
+            />
+          </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <div className="glass-panel p-5 flex items-center justify-between h-full">
-            <div>
-              <div className="text-gray-500 text-sm mb-1">平均等待</div>
-              <div className="text-2xl font-semibold text-gray-800">
-                {averagePendingAge} <span className="text-sm font-normal text-gray-400">天</span>
-              </div>
-            </div>
-            <div className="w-12 h-12 rounded-2xl bg-purple-50 flex items-center justify-center">
-              <FilterOutlined className="text-xl text-purple-500" />
-            </div>
-          </div>
+          <Card bordered={false} className="shadow-sm hover:shadow-md transition-shadow h-full">
+            <Statistic
+              title="平均等待天數"
+              value={averagePendingAge}
+              suffix="天"
+            />
+          </Card>
         </Col>
       </Row>
 
-      <Row gutter={[24, 24]}>
-        {/* Main Content Area */}
-        <Col xs={24} xl={17}>
-          <div className="glass-panel p-6 space-y-6">
-            {/* Filters */}
-            <div className="flex flex-wrap gap-4 items-center justify-between border-b border-gray-100 pb-4">
-              <div className="flex items-center gap-2 text-lg font-medium text-gray-800">
-                <AuditOutlined /> 待審核清單
-              </div>
-              <Space wrap>
-                <Input 
-                  placeholder="搜尋項目..." 
-                  prefix={<FileSearchOutlined className="text-gray-400" />} 
-                  className="w-48"
-                  allowClear
-                  onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                />
+      <Card
+        bordered={false}
+        className="shadow-sm"
+        title={
+          <Space>
+            <FilterOutlined /> 審核篩選
+          </Space>
+        }
+        extra={
+          <Button type="link" onClick={handleResetFilters}>
+            清除篩選
+          </Button>
+        }
+      >
+        <Form
+          layout="vertical"
+          form={filterForm}
+          onValuesChange={handleFiltersChange}
+          initialValues={createDefaultFilters()}
+        >
+          <Row gutter={[24, 24]}>
+            <Col xs={24} md={8}>
+              <Form.Item name="search" label="關鍵字" className="mb-0">
+                <Input allowClear placeholder="輸入描述或報銷項目" prefix={<FileSearchOutlined />} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item name="statuses" label="狀態" initialValue={['pending']} className="mb-0">
                 <Select
-                  placeholder="狀態"
-                  className="w-32"
-                  allowClear
                   mode="multiple"
-                  maxTagCount="responsive"
-                  defaultValue={['pending']}
-                  onChange={(val) => setFilters(prev => ({ ...prev, statuses: val }))}
-                  options={Object.entries(statusLabelMap).map(([value, label]) => ({ value, label }))}
+                  allowClear
+                  placeholder="選擇狀態"
+                  options={Object.entries(statusLabelMap).map(([value, label]) => ({
+                    value,
+                    label,
+                  }))}
                 />
-                <Button type="text" icon={<ReloadOutlined />} onClick={handleResetFilters}>重置</Button>
-              </Space>
-            </div>
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item name="dateRange" label="申請期間" className="mb-0">
+                <RangePicker className="w-full" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item name="payeeType" label="受款人" initialValue="all" className="mb-0">
+                <Select
+                  options={[
+                    { label: '全部', value: 'all' },
+                    { label: '員工', value: 'employee' },
+                    { label: '廠商', value: 'vendor' },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item name="priority" label="優先度" initialValue="all" className="mb-0">
+                <Select
+                  options={[
+                    { label: '全部', value: 'all' },
+                    { label: '一般', value: 'normal' },
+                    { label: '急件', value: 'urgent' },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item name="minAmount" label="最低金額" className="mb-0">
+                <InputNumber className="w-full" min={0} placeholder="金額下限" />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Form>
+      </Card>
 
-            {/* Table */}
+      <Row gutter={[24, 24]}>
+        <Col xs={24} xl={16}>
+          <Card bordered={false} className="shadow-sm h-full" bodyStyle={{ paddingTop: 12 }}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <Title level={4} className="!mb-0">
+                  待審核清單
+                </Title>
+                <Text type="secondary">符合目前篩選的 {filteredRequests.length} 筆申請</Text>
+              </div>
+              <Tooltip title="透過 AI 建議覆蓋率掌握模型使用情況">
+                <div className="text-right">
+                  <Text type="secondary">AI 建議覆蓋率</Text>
+                  <Progress percent={aiCoverage} size="small" style={{ width: 160 }} />
+                </div>
+              </Tooltip>
+            </div>
             <Table
               rowKey="id"
               loading={loading}
               columns={columns}
               dataSource={filteredRequests}
-              pagination={{ pageSize: 10, showSizeChanger: false }}
-              scroll={{ x: 800 }}
-              className="ant-table-modern"
+              pagination={{ pageSize: 8, showSizeChanger: false }}
+              rowClassName={(record) => (isUrgentRequest(record) ? 'bg-red-50/70' : '')}
+              locale={{ emptyText: <Empty description="沒有符合條件的申請" /> }}
             />
-          </div>
+          </Card>
         </Col>
-
-        {/* Right Sidebar */}
-        <Col xs={24} xl={7}>
-          <div className="space-y-6">
-            {/* Action Required Panel */}
-            <div className="glass-panel p-5">
-              <div className="flex items-center gap-2 mb-4 text-gray-800 font-medium">
-                <FireOutlined className="text-red-500" /> 需優先處理
-              </div>
-              
-              {urgentQueue.length === 0 && flaggedRequests.length === 0 ? (
-                <Empty description="目前無急件" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        <Col xs={24} xl={8}>
+          <Space direction="vertical" size={24} className="w-full">
+            <Card
+              bordered={false}
+              className="shadow-sm"
+              title={
+                <Space>
+                  <FireOutlined className="text-red-500" /> 急件提醒
+                </Space>
+              }
+              bodyStyle={{ minHeight: 180 }}
+            >
+              {urgentQueue.length === 0 ? (
+                <Empty description="目前沒有急件" image={Empty.PRESENTED_IMAGE_SIMPLE} />
               ) : (
-                <div className="space-y-3">
-                  {urgentQueue.slice(0, 3).map(req => (
-                    <div key={req.id} className="p-3 rounded-xl bg-red-50 border border-red-100 flex flex-col gap-2">
-                      <div className="flex justify-between items-start">
-                        <span className="font-medium text-gray-800 line-clamp-1">{req.reimbursementItem?.name}</span>
-                        <Tag color="red" className="mr-0">急件</Tag>
+                <div className="flex flex-col gap-3">
+                  {urgentQueue.slice(0, 4).map((request) => (
+                    <div
+                      key={request.id}
+                      className="p-3 bg-red-50 rounded-lg border border-red-100 hover:border-red-200 transition-colors"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="font-medium text-gray-800 line-clamp-1">
+                          {request.reimbursementItem?.name || '未分類'}
+                        </span>
+                        <span className="font-mono font-medium text-red-600 whitespace-nowrap ml-2">
+                          ${toNumber(request.amountOriginal).toLocaleString()}
+                        </span>
                       </div>
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-red-600 font-mono">${toNumber(req.amountOriginal).toLocaleString()}</span>
-                        <Button 
-                          size="small" 
-                          type="link" 
-                          className="text-red-500 p-0 h-auto"
-                          onClick={() => navigate(`/ap/expenses?requestId=${req.id}`)}
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-red-500 bg-red-100/50 px-1.5 py-0.5 rounded">
+                          到期：{request.dueDate ? dayjs(request.dueDate).format('MM/DD') : '未設定'}
+                        </span>
+                        <Button
+                          type="link"
+                          size="small"
+                          className="!p-0 h-auto text-blue-500 hover:text-blue-600"
+                          onClick={() => navigate(`/ap/expenses?requestId=${request.id}`)}
                         >
-                          處理
+                          詳情
                         </Button>
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {flaggedRequests.slice(0, 3).map(req => (
-                    <div key={req.id} className="p-3 rounded-xl bg-amber-50 border border-amber-100 flex flex-col gap-2">
-                      <div className="flex justify-between items-start">
-                        <span className="font-medium text-gray-800 line-clamp-1">{req.reimbursementItem?.name}</span>
-                        <Tag color="orange" className="mr-0">需注意</Tag>
-                      </div>
-                      <div className="text-xs text-amber-700">
-                        {isOverdue(req) ? '已逾期' : '缺少 AI 建議'}
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-            </div>
-          </div>
+            </Card>
+
+            <Card
+              bordered={false}
+              className="shadow-sm"
+              title={
+                <Space>
+                  <WarningOutlined className="text-amber-500" /> 需注意/補件
+                </Space>
+              }
+            >
+              {flaggedRequests.length === 0 ? (
+                <Empty description="目前沒有需要補件的申請" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {flaggedRequests.slice(0, 4).map((request) => (
+                    <div
+                      key={request.id}
+                      className="p-3 bg-amber-50 rounded-lg border border-amber-100 hover:border-amber-200 transition-colors"
+                    >
+                      <div className="flex justify-between items-start mb-1">
+                        <span className="font-medium text-gray-800 line-clamp-1">
+                          {request.reimbursementItem?.name || '未分類'}
+                        </span>
+                        <Button
+                          type="link"
+                          size="small"
+                          className="!p-0 h-auto text-amber-600"
+                          onClick={() => navigate(`/ap/expenses?requestId=${request.id}`)}
+                        >
+                          處理
+                        </Button>
+                      </div>
+                      <div className="text-xs text-gray-500 space-y-1">
+                        {isOverdue(request) && (
+                          <div className="flex items-center gap-1 text-red-500">
+                            <WarningOutlined /> 已逾期 {dayjs().diff(dayjs(request.dueDate), 'day')} 天
+                          </div>
+                        )}
+                        {!request.suggestedAccount && (
+                          <div className="flex items-center gap-1 text-amber-600">
+                            <WarningOutlined /> 缺少 AI 科目建議
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          </Space>
         </Col>
       </Row>
 
@@ -630,17 +741,9 @@ const ExpenseReviewCenterPage: React.FC = () => {
         confirmLoading={actionLoading}
         okText={actionState.mode === 'approve' ? '核准' : '駁回'}
         okButtonProps={{ danger: actionState.mode === 'reject' }}
-        centered
       >
         {!actionState.request ? null : actionState.mode === 'approve' ? (
           <Form form={actionForm} layout="vertical">
-            <Alert 
-              message={`即將核准：${actionState.request.reimbursementItem?.name}`}
-              description={`金額：${toNumber(actionState.request.amountOriginal).toLocaleString()} TWD`}
-              type="info"
-              showIcon
-              className="mb-4"
-            />
             <Form.Item name="finalAccountId" label="最終會計科目">
               <Select
                 allowClear
@@ -660,12 +763,6 @@ const ExpenseReviewCenterPage: React.FC = () => {
           </Form>
         ) : (
           <Form form={actionForm} layout="vertical">
-            <Alert 
-              message="駁回後，申請人將收到通知並可重新編輯提交"
-              type="warning"
-              showIcon
-              className="mb-4"
-            />
             <Form.Item
               name="reason"
               label="駁回原因"
