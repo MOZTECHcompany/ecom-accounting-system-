@@ -413,40 +413,42 @@ const ExpenseReviewCenterPage: React.FC = () => {
     {
       title: '操作',
       key: 'actions',
-      width: 120,
+      width: 140,
       render: (_value, record) => (
-        <Space direction="vertical" size={8} className="w-full">
-          <Button
-            size="small"
-            block
-            icon={<FileSearchOutlined />}
-            onClick={() => navigate(`/ap/expenses?requestId=${record.id}`)}
-          >
-            詳情
-          </Button>
+        <div className="flex flex-col gap-2">
           {record.status === 'pending' && (
-            <div className="flex gap-2">
-              <Tooltip title="快速核准">
-                <Button
-                  className="flex-1 bg-green-500 hover:!bg-green-600 border-green-500 hover:!border-green-600 text-white"
-                  size="small"
-                  type="primary"
-                  icon={<CheckCircleOutlined />}
-                  onClick={() => openActionModal('approve', record)}
-                />
-              </Tooltip>
-              <Tooltip title="駁回申請">
-                <Button
-                  className="flex-1 bg-red-500 hover:!bg-red-600 border-red-500 hover:!border-red-600 text-white"
-                  size="small"
-                  type="primary"
-                  icon={<CloseCircleOutlined />}
-                  onClick={() => openActionModal('reject', record)}
-                />
-              </Tooltip>
-            </div>
+            <Button
+              type="primary"
+              block
+              size="small"
+              className="bg-green-600 hover:!bg-green-500 border-green-600 hover:!border-green-500 text-white shadow-sm flex items-center justify-center gap-1"
+              onClick={() => openActionModal('approve', record)}
+            >
+              <CheckCircleOutlined /> 核准
+            </Button>
           )}
-        </Space>
+          <div className="flex justify-between items-center gap-1">
+            <Button
+              type="text"
+              size="small"
+              className="text-gray-500 hover:text-blue-600 hover:bg-blue-50 flex-1 flex items-center justify-center gap-1"
+              onClick={() => navigate(`/ap/expenses?requestId=${record.id}`)}
+            >
+              <FileSearchOutlined /> 詳情
+            </Button>
+            {record.status === 'pending' && (
+              <Button
+                type="text"
+                danger
+                size="small"
+                className="flex-1 flex items-center justify-center gap-1 hover:bg-red-50"
+                onClick={() => openActionModal('reject', record)}
+              >
+                <CloseCircleOutlined /> 駁回
+              </Button>
+            )}
+          </div>
+        </div>
       ),
     },
   ]
