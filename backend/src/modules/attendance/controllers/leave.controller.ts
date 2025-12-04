@@ -9,12 +9,12 @@ export class LeaveController {
   constructor(private readonly leaveService: LeaveService) {}
 
   @Post()
-  async createLeaveRequest(@Request() req, @Body() dto: CreateLeaveRequestDto) {
+  async createLeaveRequest(@Request() req: any, @Body() dto: CreateLeaveRequestDto) {
     return this.leaveService.createLeaveRequest(req.user.id, dto);
   }
 
   @Get()
-  async getLeaveRequests(@Request() req) {
+  async getLeaveRequests(@Request() req: any) {
     return this.leaveService.getLeaveRequests(req.user.id);
   }
 }

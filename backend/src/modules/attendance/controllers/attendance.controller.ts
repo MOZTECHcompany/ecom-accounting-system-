@@ -10,12 +10,12 @@ export class AttendanceController {
   constructor(private readonly attendanceService: AttendanceService) {}
 
   @Post('clock-in')
-  async clockIn(@Request() req, @Body() dto: ClockInDto) {
+  async clockIn(@Request() req: any, @Body() dto: ClockInDto) {
     return this.attendanceService.clockIn(req.user.id, dto);
   }
 
   @Post('clock-out')
-  async clockOut(@Request() req, @Body() dto: ClockOutDto) {
+  async clockOut(@Request() req: any, @Body() dto: ClockOutDto) {
     return this.attendanceService.clockOut(req.user.id, dto);
   }
 

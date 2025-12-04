@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { ClockInDto } from '../dto/clock-in.dto';
 import { ClockOutDto } from '../dto/clock-out.dto';
@@ -26,7 +26,40 @@ export class AttendanceService {
       throw new BadRequestException('Employee record not found for this user');
     }
 
-    // TODO: Implement full validation logic with Policy and Schedule
+    // Validate Policy
+    const schedules = await this.prisma.attendanceSchedule.findMany({
+      where: {
+        OR: [
+          { employeeId: employee.id },
+          { departmentId: employee.departmentId },
+        ],
+      },
+      include: { policy: true },
+    });
+
+    const activeSchedule = schedules.find(s => s.employeeId === employee.id) 
+                        || schedules.find(s => s.departmentId === employee.departmentId);
+
+    if (activeSchedule?.policy) {
+      const { policy } = activeSchedule;
+
+      // GPS Validation
+      if (policy.geofence) {
+        if (!dto.latitude || !dto.longitude) {
+           throw new ForbiddenException('Location data is required by policy.');
+        }
+        if (!this.gpsStrategy.validate(dto.latitude, dto.longitude, policy.geofence)) {
+           throw new ForbiddenException('You are outside the allowed clock-in area.');
+        }
+      }
+
+      // IP Validation
+      if (policy.ipAllowList && dto.ipAddress) {
+         if (!this.ipStrategy.validate(dto.ipAddress, policy.ipAllowList)) {
+            throw new ForbiddenException(`IP address ${dto.ipAddress} is not authorized.`);
+         }
+      }
+    }
     
     const record = await this.prisma.attendanceRecord.create({
       data: {
@@ -76,6 +109,41 @@ export class AttendanceService {
     });
     if (!employee) {
       throw new BadRequestException('Employee record not found for this user');
+    }
+
+    // Validate Policy
+    const schedules = await this.prisma.attendanceSchedule.findMany({
+      where: {
+        OR: [
+          { employeeId: employee.id },
+          { departmentId: employee.departmentId },
+        ],
+      },
+      include: { policy: true },
+    });
+
+    const activeSchedule = schedules.find(s => s.employeeId === employee.id) 
+                        || schedules.find(s => s.departmentId === employee.departmentId);
+
+    if (activeSchedule?.policy) {
+      const { policy } = activeSchedule;
+
+      // GPS Validation
+      if (policy.geofence) {
+        if (!dto.latitude || !dto.longitude) {
+           throw new ForbiddenException('Location data is required by policy.');
+        }
+        if (!this.gpsStrategy.validate(dto.latitude, dto.longitude, policy.geofence)) {
+           throw new ForbiddenException('You are outside the allowed clock-out area.');
+        }
+      }
+
+      // IP Validation
+      if (policy.ipAllowList && dto.ipAddress) {
+         if (!this.ipStrategy.validate(dto.ipAddress, policy.ipAllowList)) {
+            throw new ForbiddenException(`IP address ${dto.ipAddress} is not authorized.`);
+         }
+      }
     }
 
     const record = await this.prisma.attendanceRecord.create({

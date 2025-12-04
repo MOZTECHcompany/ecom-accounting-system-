@@ -1,24 +1,27 @@
-export enum AttendanceMethod {
-  MOBILE = 'MOBILE',
-  WEB = 'WEB',
-  KIOSK = 'KIOSK',
-}
+export const AttendanceMethod = {
+  MOBILE: 'MOBILE',
+  WEB: 'WEB',
+  KIOSK: 'KIOSK',
+} as const;
+export type AttendanceMethod = typeof AttendanceMethod[keyof typeof AttendanceMethod];
 
-export enum AttendanceEventType {
-  CLOCK_IN = 'CLOCK_IN',
-  CLOCK_OUT = 'CLOCK_OUT',
-  BREAK_START = 'BREAK_START',
-  BREAK_END = 'BREAK_END',
-}
+export const AttendanceEventType = {
+  CLOCK_IN: 'CLOCK_IN',
+  CLOCK_OUT: 'CLOCK_OUT',
+  BREAK_START: 'BREAK_START',
+  BREAK_END: 'BREAK_END',
+} as const;
+export type AttendanceEventType = typeof AttendanceEventType[keyof typeof AttendanceEventType];
 
-export enum LeaveStatus {
-  DRAFT = 'DRAFT',
-  SUBMITTED = 'SUBMITTED',
-  UNDER_REVIEW = 'UNDER_REVIEW',
-  APPROVED = 'APPROVED',
-  REJECTED = 'REJECTED',
-  CANCELLED = 'CANCELLED',
-}
+export const LeaveStatus = {
+  DRAFT: 'DRAFT',
+  SUBMITTED: 'SUBMITTED',
+  UNDER_REVIEW: 'UNDER_REVIEW',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type LeaveStatus = typeof LeaveStatus[keyof typeof LeaveStatus];
 
 export interface ClockInDto {
   method: AttendanceMethod;
