@@ -21,6 +21,7 @@ import {
   Segmented,
   Upload,
   Tooltip,
+  Modal,
 } from 'antd'
 import {
   PlusOutlined,
@@ -143,6 +144,8 @@ const ExpenseRequestsPage: React.FC = () => {
 
   const [form] = Form.useForm()
   const [approvalForm] = Form.useForm()
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false)
+  const [paymentForm] = Form.useForm()
 
   const roleKey = useMemo(() => (user?.roles ?? []).join(','), [user])
   const resolvedRoles = useMemo(() => (roleKey ? roleKey.split(',').filter(Boolean) : []), [roleKey])
@@ -557,6 +560,33 @@ const ExpenseRequestsPage: React.FC = () => {
     .map((x) => x.trim())
     .filter(Boolean)
 
+  const handleOpenPayment = (record: ExpenseRequest) => {
+    setSelectedRequest(record)
+    paymentForm.setFieldsValue({
+      paymentMethod: record.paymentMethod,
+      paymentStatus: record.paymentStatus || 'pending',
+    })
+    setPaymentModalOpen(true)
+  }
+
+  const handlePaymentSubmit = async () => {
+    try {
+      const values = await paymentForm.validateFields()
+      if (!selectedRequest) return
+      
+      setSubmitting(true)
+      await expenseService.updatePaymentInfo(selectedRequest.id, values)
+      message.success('付款資訊已更新')
+      setPaymentModalOpen(false)
+      refreshRequests()
+    } catch (error) {
+      console.error(error)
+      message.error('更新失敗')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const canReview = Boolean(isAdmin && selectedRequest?.status === 'pending')
 
   const columns: ColumnsType<ExpenseRequest> = [
@@ -605,6 +635,39 @@ const ExpenseRequestsPage: React.FC = () => {
       },
     },
     {
+      title: '付款狀態',
+      dataIndex: 'paymentStatus',
+      key: 'paymentStatus',
+      width: 120,
+      sorter: (a, b) => (a.paymentStatus || '').localeCompare(b.paymentStatus || ''),
+      render: (status: string, record) => {
+        const map: Record<string, { text: string; color: string }> = {
+          pending: { text: '待付款', color: 'default' },
+          processing: { text: '付款中', color: 'processing' },
+          paid: { text: '已付款', color: 'success' },
+        }
+        const meta = map[status] || { text: '待付款', color: 'default' }
+
+        // 急件邏輯：優先級為 urgent 或 到期日剩餘 3 天內且未付款
+        const isUrgent =
+          record.priority === 'urgent' ||
+          (record.dueDate &&
+            dayjs(record.dueDate).diff(dayjs(), 'day') <= 3 &&
+            status !== 'paid')
+
+        return (
+          <Space>
+            <Tag color={meta.color}>{meta.text}</Tag>
+            {isUrgent && (
+              <Tooltip title="急件：請盡速處理">
+                <ExclamationCircleOutlined className="text-red-500" />
+              </Tooltip>
+            )}
+          </Space>
+        )
+      },
+    },
+    {
       title: '狀態',
       dataIndex: 'status',
       key: 'status',
@@ -623,9 +686,16 @@ const ExpenseRequestsPage: React.FC = () => {
       title: '操作',
       key: 'actions',
       render: (_: unknown, record) => (
-        <Button type="link" size="small" onClick={() => handleOpenDetail(record)}>
-          查看
-        </Button>
+        <Space>
+          <Button type="link" size="small" onClick={() => handleOpenDetail(record)}>
+            查看
+          </Button>
+          {isAdmin && record.status === 'approved' && (
+             <Button type="link" size="small" onClick={() => handleOpenPayment(record)}>
+               付款
+             </Button>
+          )}
+        </Space>
       ),
     },
   ]
@@ -1065,6 +1135,40 @@ const ExpenseRequestsPage: React.FC = () => {
           </>
         )}
       </Drawer>
+
+      <Modal
+        title="更新付款資訊"
+        open={paymentModalOpen}
+        onOk={handlePaymentSubmit}
+        onCancel={() => setPaymentModalOpen(false)}
+        confirmLoading={submitting}
+      >
+        <Form form={paymentForm} layout="vertical">
+          <Form.Item
+            name="paymentMethod"
+            label="付款方式"
+            rules={[{ required: true, message: '請選擇付款方式' }]}
+          >
+            <Select>
+              <Select.Option value="cash">現金</Select.Option>
+              <Select.Option value="bank_transfer">銀行轉帳</Select.Option>
+              <Select.Option value="check">支票</Select.Option>
+              <Select.Option value="other">其他</Select.Option>
+            </Select>
+          </Form.Item>
+          <Form.Item
+            name="paymentStatus"
+            label="付款狀態"
+            rules={[{ required: true, message: '請選擇付款狀態' }]}
+          >
+            <Select>
+              <Select.Option value="pending">待付款</Select.Option>
+              <Select.Option value="processing">付款中</Select.Option>
+              <Select.Option value="paid">已付款</Select.Option>
+            </Select>
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   )
 }

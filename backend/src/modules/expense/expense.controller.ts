@@ -22,6 +22,7 @@ import { CreateExpenseRequestDto } from './dto/create-expense-request.dto';
 import { ApproveExpenseRequestDto } from './dto/approve-expense-request.dto';
 import { RejectExpenseRequestDto } from './dto/reject-expense-request.dto';
 import { SubmitExpenseFeedbackDto } from './dto/submit-feedback.dto';
+import { UpdatePaymentInfoDto } from './dto/update-payment-info.dto';
 import {
   CreateReimbursementItemDto,
   UpdateReimbursementItemDto,
@@ -140,6 +141,24 @@ export class ExpenseController {
       id,
       { id: user.id, roleCodes: this.extractRoleCodes(user) },
       data,
+    );
+  }
+
+  @Put('requests/:id/payment-info')
+  @ApiOperation({ summary: '更新費用申請付款資訊 (僅限管理員/會計)' })
+  @ApiResponse({ status: 200, description: '成功更新付款資訊' })
+  @Roles('ADMIN', 'ACCOUNTANT')
+  @UseGuards(RolesGuard)
+  async updatePaymentInfo(
+    @Param('id') id: string,
+    @Body() data: UpdatePaymentInfoDto,
+    @Req() req: Request,
+  ) {
+    const user = req.user as any;
+    return this.expenseService.updatePaymentInfo(
+      id,
+      data,
+      { id: user.id, roleCodes: this.extractRoleCodes(user) },
     );
   }
 

@@ -716,6 +716,11 @@ model ExpenseRequest {
   status               String    @default("pending") // draft, pending, approved, rejected, paid
   approvalUserId       String?   @map("approval_user_id")
   approvedAt           DateTime? @map("approved_at")
+
+  // 付款資訊
+  paymentMethod        String?   @map("payment_method") // cash, bank_transfer, check, other
+  paymentStatus        String    @default("pending") @map("payment_status") // pending, processing, paid
+
   suggestedAccountId   String?   @map("suggested_account_id")
   finalAccountId       String?   @map("final_account_id")
   suggestionConfidence Decimal   @default(0) @map("suggestion_confidence") @db.Decimal(5, 2)

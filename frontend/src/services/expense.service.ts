@@ -88,6 +88,8 @@ export interface ExpenseRequest {
   reimbursementItemId?: string | null
   finalAccountId?: string | null
   reimbursementItem?: ReimbursementItem | null
+  paymentMethod?: string | null
+  paymentStatus?: string
 }
 
 export interface ExpenseHistoryEntry {
@@ -297,6 +299,11 @@ export const expenseService = {
       `/expense/requests/${requestId}/reject`,
       payload,
     )
+    return response.data
+  },
+
+  updatePaymentInfo: async (id: string, data: { paymentMethod?: string; paymentStatus: string }) => {
+    const response = await api.put<ExpenseRequest>(`/expense/requests/${id}/payment-info`, data)
     return response.data
   },
 }

@@ -14,6 +14,7 @@ import { CreateExpenseRequestDto } from './dto/create-expense-request.dto';
 import { ApproveExpenseRequestDto } from './dto/approve-expense-request.dto';
 import { RejectExpenseRequestDto } from './dto/reject-expense-request.dto';
 import { SubmitExpenseFeedbackDto } from './dto/submit-feedback.dto';
+import { UpdatePaymentInfoDto } from './dto/update-payment-info.dto';
 import { AccountingClassifierService } from './accounting-classifier.service';
 import {
   CreateReimbursementItemDto,
@@ -415,6 +416,50 @@ Do not include any markdown formatting (like \`\`\`json), just the raw JSON stri
     }
 
     return result;
+  }
+
+  /**
+   * 更新費用申請的付款資訊
+   */
+  async updatePaymentInfo(
+    requestId: string,
+    data: UpdatePaymentInfoDto,
+    user: UserContext,
+  ) {
+    const request = await this.ensureExpenseRequest(requestId);
+
+    const updateData: Prisma.ExpenseRequestUpdateInput = {
+      paymentStatus: data.paymentStatus,
+    };
+
+    if (data.paymentMethod) {
+      updateData.paymentMethod = data.paymentMethod;
+    }
+
+    // 若付款狀態變更為已付款，且之前未付款，則更新主狀態為 paid
+    if (data.paymentStatus === 'paid' && request.paymentStatus !== 'paid') {
+      updateData.status = 'paid';
+    }
+
+    const updated = await this.prisma.expenseRequest.update({
+      where: { id: requestId },
+      data: updateData,
+    });
+
+    // 記錄操作歷史
+    await this.prisma.expenseRequestHistory.create({
+      data: {
+        expenseRequestId: requestId,
+        action: 'payment_update',
+        fromStatus: request.paymentStatus,
+        toStatus: data.paymentStatus,
+        actorId: user.id,
+        actorRoleCode: user.roleCodes?.[0],
+        note: `Payment info updated: Status=${data.paymentStatus}, Method=${data.paymentMethod || 'N/A'}`,
+      },
+    });
+
+    return updated;
   }
 
   /**
