@@ -83,15 +83,15 @@ const AttendanceAdminPage: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen p-6 md:p-10 w-full max-w-[1200px] mx-auto animate-[fadeInUp_0.4s_ease-out]">
+    <div className="max-w-[1200px] mx-auto space-y-6 animate-[fadeInUp_0.4s_ease-out]">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-end gap-4">
         <div>
-          <h1 className="text-3xl md:text-4xl font-semibold text-slate-900 mb-2">考勤管理總覽</h1>
-          <p className="text-slate-500 text-base">管理與監控每日員工出勤狀況</p>
+          <h1 className="text-2xl font-semibold text-slate-900 mb-1">考勤管理總覽</h1>
+          <p className="text-slate-500 text-sm">管理與監控每日員工出勤狀況</p>
         </div>
         <div className="flex items-center gap-3">
-          <GlassButton variant="secondary" className="flex items-center gap-2">
+          <GlassButton variant="secondary" className="flex items-center gap-2 h-10">
             <DownloadOutlined />
             <span>匯出報表</span>
           </GlassButton>
@@ -100,17 +100,17 @@ const AttendanceAdminPage: React.FC = () => {
               type="date" 
               value={selectedDate.format('YYYY-MM-DD')}
               onChange={(e) => setSelectedDate(dayjs(e.target.value))}
-              className="!py-2.5"
+              className="!py-2"
             />
           </div>
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10 w-full">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <GlassCard className="relative overflow-hidden group h-full">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <UserOutlined className="text-5xl text-slate-500" />
+            <UserOutlined className="text-6xl text-slate-500" />
           </div>
           <div className="text-sm text-slate-500 mb-2 font-medium">應到人數</div>
           <div className="text-3xl font-semibold text-slate-800 mb-1">{stats.total} <span className="text-sm font-normal text-slate-400">人</span></div>
@@ -118,7 +118,7 @@ const AttendanceAdminPage: React.FC = () => {
 
         <GlassCard className="relative overflow-hidden group h-full">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <CheckCircleOutlined className="text-5xl text-green-500" />
+            <CheckCircleOutlined className="text-6xl text-green-500" />
           </div>
           <div className="text-sm text-slate-500 mb-2 font-medium">實到人數</div>
           <div className="text-3xl font-semibold text-slate-800 mb-1">{stats.present} <span className="text-sm font-normal text-slate-400">人</span></div>
@@ -126,7 +126,7 @@ const AttendanceAdminPage: React.FC = () => {
 
         <GlassCard className="relative overflow-hidden group h-full">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <WarningOutlined className="text-5xl text-red-500" />
+            <WarningOutlined className="text-6xl text-red-500" />
           </div>
           <div className="text-sm text-slate-500 mb-2 font-medium">缺卡/未到</div>
           <div className="text-3xl font-semibold text-red-600 mb-1">{stats.missing} <span className="text-sm font-normal text-red-300">人</span></div>
@@ -134,7 +134,7 @@ const AttendanceAdminPage: React.FC = () => {
 
         <GlassCard className="relative overflow-hidden group h-full">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <ClockCircleOutlined className="text-5xl text-orange-500" />
+            <ClockCircleOutlined className="text-6xl text-orange-500" />
           </div>
           <div className="text-sm text-slate-500 mb-2 font-medium">遲到</div>
           <div className="text-3xl font-semibold text-orange-500 mb-1">{stats.late} <span className="text-sm font-normal text-orange-300">人</span></div>
@@ -143,16 +143,16 @@ const AttendanceAdminPage: React.FC = () => {
 
       {/* Main Content */}
       <GlassCard className="overflow-hidden p-0 w-full">
-        <div className="p-6 border-b border-white/20 flex flex-col md:flex-row justify-between items-center gap-4">
-          <h3 className="text-xl font-semibold text-slate-900">每日考勤明細</h3>
+        <div className="p-6 border-b border-white/20 flex flex-col md:flex-row justify-between items-center gap-4 bg-white/10">
+          <h3 className="text-lg font-semibold text-slate-800">每日考勤明細</h3>
           <div className="w-full md:w-72">
             <div className="relative">
-              <SearchOutlined className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+              <SearchOutlined className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
               <GlassInput 
                 placeholder="搜尋員工姓名..." 
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
-                className="!pl-10"
+                className="!pl-10 !py-2"
               />
             </div>
           </div>
@@ -162,19 +162,19 @@ const AttendanceAdminPage: React.FC = () => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-white/20 text-slate-500 text-sm border-b border-white/10">
-                <th className="p-4 font-medium">員工姓名</th>
+                <th className="p-4 font-medium pl-6">員工姓名</th>
                 <th className="p-4 font-medium">部門</th>
                 <th className="p-4 font-medium">上班打卡</th>
                 <th className="p-4 font-medium">下班打卡</th>
                 <th className="p-4 font-medium">工時</th>
                 <th className="p-4 font-medium">狀態</th>
-                <th className="p-4 font-medium">操作</th>
+                <th className="p-4 font-medium pr-6">操作</th>
               </tr>
             </thead>
             <tbody className="text-slate-700">
               {displayData.map((record: any, index: number) => (
-                <tr key={record.id || index} className="border-b border-white/10 hover:bg-white/10 transition-colors">
-                  <td className="p-4">
+                <tr key={record.id || index} className="border-b border-white/10 hover:bg-white/20 transition-colors">
+                  <td className="p-4 pl-6">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-xs shadow-md">
                         <UserOutlined />
@@ -207,7 +207,7 @@ const AttendanceAdminPage: React.FC = () => {
                   <td className="p-4">
                     {getStatusBadge(record.status)}
                   </td>
-                  <td className="p-4">
+                  <td className="p-4 pr-6">
                     <div className="flex gap-2">
                       <Tooltip title="查看詳情">
                         <button className="p-2 rounded-lg hover:bg-white/30 text-slate-500 hover:text-blue-600 transition-colors">
