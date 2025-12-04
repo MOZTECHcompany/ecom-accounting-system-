@@ -428,7 +428,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
             <div className="flex gap-2">
               <Tooltip title="快速核准">
                 <Button
-                  className="flex-1 bg-green-600 hover:!bg-green-500 border-green-600 hover:!border-green-500 text-white"
+                  className="flex-1 bg-green-500 hover:!bg-green-600 border-green-500 hover:!border-green-600 text-white"
                   size="small"
                   type="primary"
                   icon={<CheckCircleOutlined />}
@@ -437,10 +437,9 @@ const ExpenseReviewCenterPage: React.FC = () => {
               </Tooltip>
               <Tooltip title="駁回申請">
                 <Button
-                  className="flex-1"
+                  className="flex-1 bg-red-500 hover:!bg-red-600 border-red-500 hover:!border-red-600 text-white"
                   size="small"
                   type="primary"
-                  danger
                   icon={<CloseCircleOutlined />}
                   onClick={() => openActionModal('reject', record)}
                 />
