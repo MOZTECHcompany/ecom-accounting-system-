@@ -101,14 +101,14 @@ const EmployeeDashboardPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen p-6 md:p-10 max-w-[1100px] mx-auto animate-[fadeInUp_0.4s_ease-out]">
+    <div className="min-h-screen p-6 md:p-10 w-full max-w-[1200px] mx-auto animate-[fadeInUp_0.4s_ease-out]">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-10">
         <h1 className="text-3xl md:text-4xl font-semibold text-slate-900 mb-2">員工考勤儀表板</h1>
         <p className="text-slate-500 text-base">歡迎回來，請確認您的打卡狀態</p>
       </div>
       
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 w-full">
         {/* Left Column: Clock Widget & Actions */}
         <div className="lg:col-span-7 flex flex-col gap-8">
           {/* Clock Widget */}

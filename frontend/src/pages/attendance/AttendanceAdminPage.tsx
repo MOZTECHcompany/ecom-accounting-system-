@@ -83,9 +83,9 @@ const AttendanceAdminPage: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen p-6 md:p-10 max-w-[1100px] mx-auto animate-[fadeInUp_0.4s_ease-out]">
+    <div className="min-h-screen p-6 md:p-10 w-full max-w-[1200px] mx-auto animate-[fadeInUp_0.4s_ease-out]">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
         <div>
           <h1 className="text-3xl md:text-4xl font-semibold text-slate-900 mb-2">考勤管理總覽</h1>
           <p className="text-slate-500 text-base">管理與監控每日員工出勤狀況</p>
@@ -107,8 +107,8 @@ const AttendanceAdminPage: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <GlassCard className="relative overflow-hidden group">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10 w-full">
+        <GlassCard className="relative overflow-hidden group h-full">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <UserOutlined className="text-5xl text-slate-500" />
           </div>
@@ -116,7 +116,7 @@ const AttendanceAdminPage: React.FC = () => {
           <div className="text-3xl font-semibold text-slate-800 mb-1">{stats.total} <span className="text-sm font-normal text-slate-400">人</span></div>
         </GlassCard>
 
-        <GlassCard className="relative overflow-hidden group">
+        <GlassCard className="relative overflow-hidden group h-full">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <CheckCircleOutlined className="text-5xl text-green-500" />
           </div>
@@ -124,7 +124,7 @@ const AttendanceAdminPage: React.FC = () => {
           <div className="text-3xl font-semibold text-slate-800 mb-1">{stats.present} <span className="text-sm font-normal text-slate-400">人</span></div>
         </GlassCard>
 
-        <GlassCard className="relative overflow-hidden group">
+        <GlassCard className="relative overflow-hidden group h-full">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <WarningOutlined className="text-5xl text-red-500" />
           </div>
@@ -132,7 +132,7 @@ const AttendanceAdminPage: React.FC = () => {
           <div className="text-3xl font-semibold text-red-600 mb-1">{stats.missing} <span className="text-sm font-normal text-red-300">人</span></div>
         </GlassCard>
 
-        <GlassCard className="relative overflow-hidden group">
+        <GlassCard className="relative overflow-hidden group h-full">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <ClockCircleOutlined className="text-5xl text-orange-500" />
           </div>
@@ -142,7 +142,7 @@ const AttendanceAdminPage: React.FC = () => {
       </div>
 
       {/* Main Content */}
-      <GlassCard className="overflow-hidden p-0">
+      <GlassCard className="overflow-hidden p-0 w-full">
         <div className="p-6 border-b border-white/20 flex flex-col md:flex-row justify-between items-center gap-4">
           <h3 className="text-xl font-semibold text-slate-900">每日考勤明細</h3>
           <div className="w-full md:w-72">
