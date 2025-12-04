@@ -127,7 +127,7 @@ const LeaveRequestPage: React.FC = () => {
 
       <Row gutter={[24, 24]} className="mb-6">
         <Col xs={24} md={8}>
-          <Card bordered={false} className="shadow-sm rounded-2xl">
+          <Card bordered={false} className="shadow-sm" style={{ borderRadius: '16px' }}>
             <Statistic
               title="特休剩餘"
               value={10} // Mock data
@@ -137,7 +137,7 @@ const LeaveRequestPage: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card bordered={false} className="shadow-sm rounded-2xl">
+          <Card bordered={false} className="shadow-sm" style={{ borderRadius: '16px' }}>
             <Statistic
               title="本年度已休"
               value={3.5} // Mock data
@@ -147,7 +147,7 @@ const LeaveRequestPage: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card bordered={false} className="shadow-sm rounded-2xl">
+          <Card bordered={false} className="shadow-sm" style={{ borderRadius: '16px' }}>
             <Statistic
               title="待核准假單"
               value={requests.filter(r => r.status === LeaveStatus.SUBMITTED).length}
@@ -158,7 +158,7 @@ const LeaveRequestPage: React.FC = () => {
         </Col>
       </Row>
 
-      <Card className="shadow-md border-0 rounded-3xl" bordered={false} title="申請紀錄" headStyle={{ borderBottom: 'none', padding: '24px 24px 0' }} bodyStyle={{ padding: '24px' }}>
+      <Card className="shadow-md border-0" bordered={false} title="申請紀錄" headStyle={{ borderBottom: 'none', padding: '24px 24px 0' }} bodyStyle={{ padding: '24px' }} style={{ borderRadius: '24px' }}>
         <Table
           dataSource={requests}
           columns={columns}
@@ -173,7 +173,8 @@ const LeaveRequestPage: React.FC = () => {
         onCancel={() => setIsModalVisible(false)}
         footer={null}
         width={700}
-        className="rounded-2xl overflow-hidden"
+        className="overflow-hidden"
+        style={{ borderRadius: '16px' }}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} className="mt-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -108,7 +108,7 @@ const EmployeeDashboardPage: React.FC = () => {
       <Row gutter={[24, 24]}>
         {/* Left Column: Clock In/Out Action */}
         <Col xs={24} lg={14}>
-          <Card className="shadow-lg h-full border-0 rounded-3xl" bordered={false}>
+          <Card className="shadow-lg h-full border-0" bordered={false} style={{ borderRadius: '24px' }}>
             <div className="flex flex-col items-center justify-center py-12">
               <div className="text-center mb-10">
                 <div className="text-7xl font-bold text-gray-800 font-mono mb-4 tracking-wider">
@@ -126,7 +126,8 @@ const EmployeeDashboardPage: React.FC = () => {
                     type="success" 
                     showIcon 
                     icon={<EnvironmentOutlined />}
-                    className="text-center rounded-xl border-0 bg-green-50 text-green-700 py-2"
+                    className="text-center border-0 bg-green-50 text-green-700 py-2"
+                    style={{ borderRadius: '12px' }}
                   />
                 ) : (
                   <Alert 
@@ -134,42 +135,47 @@ const EmployeeDashboardPage: React.FC = () => {
                     type="warning" 
                     showIcon 
                     icon={<EnvironmentOutlined />}
-                    className="text-center rounded-xl border-0 bg-orange-50 text-orange-700 py-2"
+                    className="text-center border-0 bg-orange-50 text-orange-700 py-2"
+                    style={{ borderRadius: '12px' }}
                   />
                 )}
               </div>
 
               <div className="flex gap-8 justify-center w-full">
-                <Button
-                  type="primary"
-                  className="h-40 w-48 flex flex-col items-center justify-center bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 border-0 shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1 rounded-3xl"
+                <button
+                  className={`h-40 w-48 flex flex-col items-center justify-center border-0 shadow-xl transition-all rounded-3xl ${
+                    !location || loading 
+                      ? 'bg-gray-300 cursor-not-allowed' 
+                      : 'bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 hover:-translate-y-1 hover:shadow-2xl cursor-pointer'
+                  }`}
                   onClick={handleClockIn}
-                  loading={loading}
-                  disabled={!location}
+                  disabled={!location || loading}
                 >
                   <div className="bg-white/20 p-4 rounded-full mb-3">
                     <LoginOutlined className="text-3xl text-white" />
                   </div>
                   <span className="text-xl font-bold tracking-wide text-white">上班打卡</span>
-                </Button>
+                </button>
                 
-                <Button
-                  type="primary"
-                  className="h-40 w-48 flex flex-col items-center justify-center bg-gradient-to-br from-orange-400 to-orange-500 hover:from-orange-500 hover:to-orange-600 border-0 shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1 rounded-3xl"
+                <button
+                  className={`h-40 w-48 flex flex-col items-center justify-center border-0 shadow-xl transition-all rounded-3xl ${
+                    !location || loading 
+                      ? 'bg-gray-300 cursor-not-allowed' 
+                      : 'bg-gradient-to-br from-orange-400 to-orange-500 hover:from-orange-500 hover:to-orange-600 hover:-translate-y-1 hover:shadow-2xl cursor-pointer'
+                  }`}
                   onClick={handleClockOut}
-                  loading={loading}
-                  disabled={!location}
+                  disabled={!location || loading}
                 >
                   <div className="bg-white/20 p-4 rounded-full mb-3">
                     <LogoutOutlined className="text-3xl text-white" />
                   </div>
                   <span className="text-xl font-bold tracking-wide text-white">下班打卡</span>
-                </Button>
+                </button>
               </div>
 
               {lastAction && (
                 <div className="mt-10 animate-fade-in">
-                  <Tag color="success" className="px-6 py-2 text-lg rounded-full border-0 bg-green-100 text-green-700 flex items-center gap-2">
+                  <Tag color="success" className="px-6 py-2 text-lg border-0 bg-green-100 text-green-700 flex items-center gap-2" style={{ borderRadius: '50px' }}>
                     <CheckCircleOutlined /> 
                     <span>最新動作: {lastAction.type} ({lastAction.time})</span>
                   </Tag>
@@ -183,10 +189,10 @@ const EmployeeDashboardPage: React.FC = () => {
         <Col xs={24} lg={10}>
           <Row gutter={[0, 24]}>
             <Col span={24}>
-              <Card title="本月概況" className="shadow-lg border-0 rounded-3xl" bordered={false} headStyle={{ borderBottom: 'none', padding: '24px 24px 0' }} bodyStyle={{ padding: '24px' }}>
+              <Card title="本月概況" className="shadow-lg border-0" bordered={false} headStyle={{ borderBottom: 'none', padding: '24px 24px 0' }} bodyStyle={{ padding: '24px' }} style={{ borderRadius: '24px' }}>
                 <Row gutter={16}>
                   <Col span={12}>
-                    <div className="bg-blue-50 p-4 rounded-2xl">
+                    <div className="bg-blue-50 p-4" style={{ borderRadius: '16px' }}>
                       <Statistic
                         title={<span className="text-gray-500 font-medium">累積工時</span>}
                         value={0}
@@ -198,7 +204,7 @@ const EmployeeDashboardPage: React.FC = () => {
                     </div>
                   </Col>
                   <Col span={12}>
-                    <div className="bg-red-50 p-4 rounded-2xl">
+                    <div className="bg-red-50 p-4" style={{ borderRadius: '16px' }}>
                       <Statistic
                         title={<span className="text-gray-500 font-medium">遲到次數</span>}
                         value={0}
@@ -211,7 +217,7 @@ const EmployeeDashboardPage: React.FC = () => {
                 <div className="h-4"></div>
                 <Row gutter={16}>
                   <Col span={12}>
-                    <div className="bg-green-50 p-4 rounded-2xl">
+                    <div className="bg-green-50 p-4" style={{ borderRadius: '16px' }}>
                       <Statistic
                         title={<span className="text-gray-500 font-medium">特休餘額</span>}
                         value={10}
@@ -222,7 +228,7 @@ const EmployeeDashboardPage: React.FC = () => {
                     </div>
                   </Col>
                   <Col span={12}>
-                    <div className="bg-gray-50 p-4 rounded-2xl">
+                    <div className="bg-gray-50 p-4" style={{ borderRadius: '16px' }}>
                       <Statistic
                         title={<span className="text-gray-500 font-medium">本月請假</span>}
                         value={0}
@@ -236,7 +242,7 @@ const EmployeeDashboardPage: React.FC = () => {
             </Col>
 
             <Col span={24}>
-              <Card title="今日打卡紀錄" className="shadow-lg border-0 h-full rounded-3xl" bordered={false} headStyle={{ borderBottom: 'none', padding: '24px 24px 0' }} bodyStyle={{ padding: '24px' }}>
+              <Card title="今日打卡紀錄" className="shadow-lg border-0 h-full" bordered={false} headStyle={{ borderBottom: 'none', padding: '24px 24px 0' }} bodyStyle={{ padding: '24px' }} style={{ borderRadius: '24px' }}>
                 {todayRecords.length > 0 ? (
                   <Timeline
                     items={todayRecords.map((record, index) => ({
@@ -250,7 +256,7 @@ const EmployeeDashboardPage: React.FC = () => {
                     }))}
                   />
                 ) : (
-                  <div className="text-center text-gray-400 py-12 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                  <div className="text-center text-gray-400 py-12 bg-gray-50 border border-dashed border-gray-200" style={{ borderRadius: '16px' }}>
                     尚無今日紀錄
                   </div>
                 )}

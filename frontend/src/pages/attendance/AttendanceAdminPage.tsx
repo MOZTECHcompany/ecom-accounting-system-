@@ -162,7 +162,7 @@ const AttendanceAdminPage: React.FC = () => {
 
       <Row gutter={[24, 24]} className="mb-6">
         <Col xs={12} md={6}>
-          <Card bordered={false} className="shadow-sm rounded-2xl">
+          <Card bordered={false} className="shadow-sm" style={{ borderRadius: '16px' }}>
             <Statistic
               title="應到人數"
               value={stats.total}
@@ -172,7 +172,7 @@ const AttendanceAdminPage: React.FC = () => {
           </Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card bordered={false} className="shadow-sm rounded-2xl">
+          <Card bordered={false} className="shadow-sm" style={{ borderRadius: '16px' }}>
             <Statistic
               title="實到人數"
               value={stats.present}
@@ -183,7 +183,7 @@ const AttendanceAdminPage: React.FC = () => {
           </Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card bordered={false} className="shadow-sm rounded-2xl">
+          <Card bordered={false} className="shadow-sm" style={{ borderRadius: '16px' }}>
             <Statistic
               title="缺卡/未到"
               value={stats.missing}
@@ -194,7 +194,7 @@ const AttendanceAdminPage: React.FC = () => {
           </Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card bordered={false} className="shadow-sm rounded-2xl">
+          <Card bordered={false} className="shadow-sm" style={{ borderRadius: '16px' }}>
             <Statistic
               title="遲到"
               value={stats.late}
@@ -206,7 +206,7 @@ const AttendanceAdminPage: React.FC = () => {
         </Col>
       </Row>
 
-      <Card className="shadow-md border-0 rounded-3xl" bordered={false} headStyle={{ borderBottom: 'none', padding: '24px 24px 0' }} bodyStyle={{ padding: '24px' }}>
+      <Card className="shadow-md border-0" bordered={false} headStyle={{ borderBottom: 'none', padding: '24px 24px 0' }} bodyStyle={{ padding: '24px' }} style={{ borderRadius: '24px' }}>
         <div className="mb-4 flex justify-between items-center">
           <Title level={4} className="m-0">每日考勤明細</Title>
           <Input 
