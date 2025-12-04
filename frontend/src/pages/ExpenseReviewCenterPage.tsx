@@ -438,7 +438,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
               </Tooltip>
               <Tooltip title="駁回申請">
                 <Button
-                  className="flex-1 border-red-500 text-red-500 hover:!border-red-600 hover:!text-red-600"
+                  className="flex-1 border-red-500 text-red-500 hover:!border-red-600 hover:!text-red-600 hover:!bg-red-50"
                   size="small"
                   icon={<CloseCircleOutlined />}
                   onClick={() => openActionModal('reject', record)}
@@ -674,7 +674,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
                         <Button
                           type="link"
                           size="small"
-                          className="!p-0 h-auto"
+                          className="!p-0 h-auto text-blue-500 hover:text-blue-600"
                           onClick={() => navigate(`/ap/expenses?requestId=${request.id}`)}
                         >
                           詳情
