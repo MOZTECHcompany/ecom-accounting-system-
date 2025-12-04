@@ -526,7 +526,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
           <GlassButton onClick={() => navigate('/ap/expenses')} className="flex items-center gap-2">
             <FileSearchOutlined /> 回到費用申請
           </GlassButton>
-          <GlassButton onClick={() => void loadRequests()} loading={loading} className="flex items-center gap-2">
+          <GlassButton onClick={() => void loadRequests()} isLoading={loading} className="flex items-center gap-2">
             <ReloadOutlined /> 重新整理
           </GlassButton>
         </div>
