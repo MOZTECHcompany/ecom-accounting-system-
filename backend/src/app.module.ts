@@ -31,6 +31,7 @@ import { VendorModule } from './modules/vendor/vendor.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { AiModule } from './modules/ai/ai.module';
+import { AttendanceModule } from './modules/attendance/attendance.module';
 
 /**
  * AppModule
@@ -93,6 +94,7 @@ import { AiModule } from './modules/ai/ai.module';
     ReconciliationModule, // → BankingModule, AccountingModule (銀行對帳)
     NotificationModule,
     AiModule,
+    AttendanceModule,
   ],
   controllers: [AppController],
   providers: [

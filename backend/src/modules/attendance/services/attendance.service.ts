@@ -1,0 +1,143 @@
+import { Injectable, BadRequestException } from '@nestjs/common';
+import { PrismaService } from '../../../common/prisma/prisma.service';
+import { ClockInDto } from '../dto/clock-in.dto';
+import { ClockOutDto } from '../dto/clock-out.dto';
+import { ScheduleService } from './schedule.service';
+import { PolicyService } from './policy.service';
+import { GpsValidationStrategy } from '../strategies/gps-validation.strategy';
+import { IpValidationStrategy } from '../strategies/ip-validation.strategy';
+import { AttendanceEventType } from '@prisma/client';
+
+@Injectable()
+export class AttendanceService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scheduleService: ScheduleService,
+    private readonly policyService: PolicyService,
+    private readonly gpsStrategy: GpsValidationStrategy,
+    private readonly ipStrategy: IpValidationStrategy,
+  ) {}
+
+  async clockIn(userId: string, dto: ClockInDto) {
+    const employee = await this.prisma.employee.findUnique({
+      where: { userId },
+    });
+    if (!employee) {
+      throw new BadRequestException('Employee record not found for this user');
+    }
+
+    // TODO: Implement full validation logic with Policy and Schedule
+    
+    const record = await this.prisma.attendanceRecord.create({
+      data: {
+        entityId: employee.entityId,
+        employeeId: employee.id,
+        eventType: AttendanceEventType.CLOCK_IN,
+        method: dto.method,
+        timestamp: new Date(),
+        latitude: dto.latitude,
+        longitude: dto.longitude,
+        ipAddress: dto.ipAddress,
+        deviceInfo: dto.deviceInfo ?? undefined,
+        photoUrl: dto.photoUrl,
+        notes: dto.notes,
+      },
+    });
+
+    // Update Daily Summary
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    await this.prisma.attendanceDailySummary.upsert({
+      where: {
+        entityId_employeeId_workDate: {
+          entityId: employee.entityId,
+          employeeId: employee.id,
+          workDate: today,
+        },
+      },
+      update: {
+        clockInTime: record.timestamp,
+      },
+      create: {
+        entityId: employee.entityId,
+        employeeId: employee.id,
+        workDate: today,
+        clockInTime: record.timestamp,
+      },
+    });
+
+    return record;
+  }
+
+  async clockOut(userId: string, dto: ClockOutDto) {
+    const employee = await this.prisma.employee.findUnique({
+      where: { userId },
+    });
+    if (!employee) {
+      throw new BadRequestException('Employee record not found for this user');
+    }
+
+    const record = await this.prisma.attendanceRecord.create({
+      data: {
+        entityId: employee.entityId,
+        employeeId: employee.id,
+        eventType: AttendanceEventType.CLOCK_OUT,
+        method: dto.method,
+        timestamp: new Date(),
+        latitude: dto.latitude,
+        longitude: dto.longitude,
+        ipAddress: dto.ipAddress,
+        deviceInfo: dto.deviceInfo ?? undefined,
+        photoUrl: dto.photoUrl,
+        notes: dto.notes,
+      },
+    });
+
+    // Update Daily Summary
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Calculate worked minutes (simplified)
+    const summary = await this.prisma.attendanceDailySummary.findUnique({
+      where: {
+        entityId_employeeId_workDate: {
+          entityId: employee.entityId,
+          employeeId: employee.id,
+          workDate: today,
+        },
+      },
+    });
+
+    let workedMinutes = 0;
+    if (summary && summary.clockInTime) {
+      const diffMs = record.timestamp.getTime() - summary.clockInTime.getTime();
+      workedMinutes = Math.floor(diffMs / 60000);
+    }
+
+    await this.prisma.attendanceDailySummary.upsert({
+      where: {
+        entityId_employeeId_workDate: {
+          entityId: employee.entityId,
+          employeeId: employee.id,
+          workDate: today,
+        },
+      },
+      update: {
+        clockOutTime: record.timestamp,
+        workedMinutes: workedMinutes,
+        status: 'completed', // Simplified status update
+      },
+      create: {
+        entityId: employee.entityId,
+        employeeId: employee.id,
+        workDate: today,
+        clockOutTime: record.timestamp,
+        workedMinutes: 0,
+        status: 'completed',
+      },
+    });
+
+    return record;
+  }
+}
