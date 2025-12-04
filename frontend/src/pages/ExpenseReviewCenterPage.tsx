@@ -40,6 +40,10 @@ import {
   WarningOutlined,
 } from '@ant-design/icons'
 import dayjs, { Dayjs } from 'dayjs'
+import { GlassCard } from '../components/ui/GlassCard'
+import { GlassButton } from '../components/ui/GlassButton'
+import { GlassInput } from '../components/ui/GlassInput'
+import { GlassSelect } from '../components/ui/GlassSelect'
 import { useAuth } from '../contexts/AuthContext'
 import {
   expenseService,
@@ -508,187 +512,174 @@ const ExpenseReviewCenterPage: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="max-w-[1200px] mx-auto space-y-8 animate-[fadeInUp_0.4s_ease-out]">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <Title level={2} className="!mb-1 !font-light">
+          <h1 className="text-2xl font-semibold text-slate-900 mb-1">
             費用審核中心
-          </Title>
-          <Text className="text-gray-500">
+          </h1>
+          <p className="text-slate-500 text-sm">
             集中檢視所有待審核費用、設定優先順序並進行快速核准或駁回。
-          </Text>
+          </p>
         </div>
-        <Space wrap>
-          <Button icon={<FileSearchOutlined />} onClick={() => navigate('/ap/expenses')}>
-            回到費用申請
-          </Button>
-          <Button icon={<ReloadOutlined />} onClick={() => void loadRequests()} loading={loading}>
-            重新整理
-          </Button>
-        </Space>
+        <div className="flex gap-3">
+          <GlassButton onClick={() => navigate('/ap/expenses')} className="flex items-center gap-2">
+            <FileSearchOutlined /> 回到費用申請
+          </GlassButton>
+          <GlassButton onClick={() => void loadRequests()} loading={loading} className="flex items-center gap-2">
+            <ReloadOutlined /> 重新整理
+          </GlassButton>
+        </div>
       </div>
 
-      <Row gutter={[24, 24]}>
-        <Col xs={24} sm={12} lg={6}>
-          <Card bordered={false} className="shadow-sm hover:shadow-md transition-shadow h-full bg-blue-50/50 border-blue-100">
-            <Statistic
-              title={<span className="text-blue-600 font-medium">待審件數</span>}
-              value={pendingRequests.length}
-              prefix={<AuditOutlined className="text-blue-500" />}
-              suffix="件"
-              valueStyle={{ color: '#2563eb' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card bordered={false} className="shadow-sm hover:shadow-md transition-shadow h-full bg-red-50/50 border-red-100">
-            <Statistic
-              title={<span className="text-red-600 font-medium">急件</span>}
-              value={urgentQueue.length}
-              prefix={<FireOutlined className="text-red-500" />}
-              suffix="件"
-              valueStyle={{ color: '#dc2626' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card bordered={false} className="shadow-sm hover:shadow-md transition-shadow h-full bg-amber-50/50 border-amber-100">
-            <Statistic
-              title={<span className="text-amber-600 font-medium">待審金額 (TWD)</span>}
-              value={backlogAmount}
-              precision={0}
-              prefix={<ThunderboltOutlined className="text-amber-500" />}
-              valueStyle={{ color: '#d97706' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card bordered={false} className="shadow-sm hover:shadow-md transition-shadow h-full bg-purple-50/50 border-purple-100">
-            <Statistic
-              title={<span className="text-purple-600 font-medium">平均等待天數</span>}
-              value={averagePendingAge}
-              suffix="天"
-              valueStyle={{ color: '#9333ea' }}
-            />
-          </Card>
-        </Col>
-      </Row>
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full">
+        <GlassCard className="relative overflow-hidden group h-full">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <AuditOutlined className="text-6xl text-blue-500" />
+          </div>
+          <div className="text-sm text-slate-500 mb-2 font-medium">待審件數</div>
+          <div className="text-3xl font-semibold text-blue-600 mb-1">
+            {pendingRequests.length} <span className="text-sm font-normal text-slate-400">件</span>
+          </div>
+        </GlassCard>
 
-      <Card
-        bordered={false}
-        className="shadow-sm"
-        title={
-          <Space>
+        <GlassCard className="relative overflow-hidden group h-full">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <FireOutlined className="text-6xl text-red-500" />
+          </div>
+          <div className="text-sm text-slate-500 mb-2 font-medium">急件</div>
+          <div className="text-3xl font-semibold text-red-600 mb-1">
+            {urgentQueue.length} <span className="text-sm font-normal text-slate-400">件</span>
+          </div>
+        </GlassCard>
+
+        <GlassCard className="relative overflow-hidden group h-full">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <ThunderboltOutlined className="text-6xl text-amber-500" />
+          </div>
+          <div className="text-sm text-slate-500 mb-2 font-medium">待審金額 (TWD)</div>
+          <div className="text-3xl font-semibold text-amber-600 mb-1">
+            {backlogAmount.toLocaleString()}
+          </div>
+        </GlassCard>
+
+        <GlassCard className="relative overflow-hidden group h-full">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <WarningOutlined className="text-6xl text-purple-500" />
+          </div>
+          <div className="text-sm text-slate-500 mb-2 font-medium">平均等待天數</div>
+          <div className="text-3xl font-semibold text-purple-600 mb-1">
+            {averagePendingAge} <span className="text-sm font-normal text-slate-400">天</span>
+          </div>
+        </GlassCard>
+      </div>
+
+      {/* Filter Section */}
+      <GlassCard className="w-full p-6">
+        <div className="flex justify-between items-center mb-4">
+          <div className="flex items-center gap-2 text-slate-700 font-medium">
             <FilterOutlined /> 審核篩選
-          </Space>
-        }
-        extra={
-          <Button onClick={handleResetFilters}>
+          </div>
+          <Button type="link" onClick={handleResetFilters} className="text-slate-500 hover:text-blue-600 px-0">
             清除篩選
           </Button>
-        }
-      >
+        </div>
+        
         <Form
           layout="vertical"
           form={filterForm}
           onValuesChange={handleFiltersChange}
           initialValues={createDefaultFilters()}
         >
-          <Row gutter={[24, 24]}>
-            <Col xs={24} md={8}>
-              <Form.Item name="search" label="關鍵字" className="mb-0">
-                <Input allowClear placeholder="輸入描述或報銷項目" prefix={<FileSearchOutlined />} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item name="statuses" label="狀態" initialValue={['pending']} className="mb-0">
-                <Select
-                  mode="multiple"
-                  allowClear
-                  placeholder="選擇狀態"
-                  options={Object.entries(statusLabelMap).map(([value, label]) => ({
-                    value,
-                    label,
-                  }))}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item name="dateRange" label="申請期間" className="mb-0">
-                <RangePicker className="w-full" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item name="payeeType" label="受款人" initialValue="all" className="mb-0">
-                <Select
-                  options={[
-                    { label: '全部', value: 'all' },
-                    { label: '員工', value: 'employee' },
-                    { label: '廠商', value: 'vendor' },
-                  ]}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item name="priority" label="優先度" initialValue="all" className="mb-0">
-                <Select
-                  options={[
-                    { label: '全部', value: 'all' },
-                    { label: '一般', value: 'normal' },
-                    { label: '急件', value: 'urgent' },
-                  ]}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item name="minAmount" label="最低金額" className="mb-0">
-                <InputNumber className="w-full" min={0} placeholder="金額下限" />
-              </Form.Item>
-            </Col>
-          </Row>
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <Form.Item name="search" label="關鍵字" className="mb-0">
+              <Input allowClear placeholder="輸入描述或報銷項目" prefix={<FileSearchOutlined className="text-slate-400" />} className="rounded-xl" />
+            </Form.Item>
+            
+            <Form.Item name="statuses" label="狀態" initialValue={['pending']} className="mb-0">
+              <Select
+                mode="multiple"
+                allowClear
+                placeholder="選擇狀態"
+                options={Object.entries(statusLabelMap).map(([value, label]) => ({
+                  value,
+                  label,
+                }))}
+                className="rounded-xl"
+              />
+            </Form.Item>
+            
+            <Form.Item name="dateRange" label="申請期間" className="mb-0">
+              <RangePicker className="w-full rounded-xl" />
+            </Form.Item>
+            
+            <Form.Item name="payeeType" label="受款人" initialValue="all" className="mb-0">
+              <Select
+                options={[
+                  { label: '全部', value: 'all' },
+                  { label: '員工', value: 'employee' },
+                  { label: '廠商', value: 'vendor' },
+                ]}
+                className="rounded-xl"
+              />
+            </Form.Item>
+            
+            <Form.Item name="priority" label="優先度" initialValue="all" className="mb-0">
+              <Select
+                options={[
+                  { label: '全部', value: 'all' },
+                  { label: '一般', value: 'normal' },
+                  { label: '急件', value: 'urgent' },
+                ]}
+                className="rounded-xl"
+              />
+            </Form.Item>
+            
+            <Form.Item name="minAmount" label="最低金額" className="mb-0">
+              <InputNumber className="w-full rounded-xl" min={0} placeholder="金額下限" />
+            </Form.Item>
+          </div>
         </Form>
-      </Card>
+      </GlassCard>
 
-      <Row gutter={[24, 24]}>
-        <Col xs={24} xl={16}>
-          <Card bordered={false} className="shadow-sm h-full" bodyStyle={{ paddingTop: 12 }}>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <Title level={4} className="!mb-0">
-                  待審核清單
-                </Title>
-                <Text type="secondary">符合目前篩選的 {filteredRequests.length} 筆申請</Text>
-              </div>
-              <Tooltip title="透過 AI 建議覆蓋率掌握模型使用情況">
-                <div className="text-right">
-                  <Text type="secondary">AI 建議覆蓋率</Text>
-                  <Progress percent={aiCoverage} size="small" style={{ width: 160 }} />
-                </div>
-              </Tooltip>
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 w-full">
+        {/* Left Column: Review List */}
+        <GlassCard className="w-full p-0 overflow-hidden h-fit">
+          <div className="p-6 border-b border-white/20 flex justify-between items-center bg-white/10">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-800">待審核清單</h3>
+              <p className="text-slate-500 text-sm mt-1">符合目前篩選的 {filteredRequests.length} 筆申請</p>
             </div>
-            <Table
-              rowKey="id"
-              loading={loading}
-              columns={columns}
-              dataSource={filteredRequests}
-              pagination={{ pageSize: 8, showSizeChanger: false }}
-              rowClassName={(record) => (isUrgentRequest(record) ? 'bg-red-50/70' : '')}
-              locale={{ emptyText: <Empty description="沒有符合條件的申請" /> }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} xl={8}>
-          <Space direction="vertical" size={24} className="w-full">
-            <Card
-              bordered={false}
-              className="shadow-sm"
-              title={
-                <Space>
-                  <FireOutlined className="text-red-500" /> 急件提醒
-                </Space>
-              }
-              bodyStyle={{ minHeight: 180 }}
-            >
+            <Tooltip title="透過 AI 建議覆蓋率掌握模型使用情況">
+              <div className="text-right">
+                <div className="text-xs text-slate-500 mb-1">AI 建議覆蓋率</div>
+                <Progress percent={aiCoverage} size="small" style={{ width: 120 }} strokeColor="#3b82f6" />
+              </div>
+            </Tooltip>
+          </div>
+          
+          <Table
+            rowKey="id"
+            loading={loading}
+            columns={columns}
+            dataSource={filteredRequests}
+            pagination={{ pageSize: 10, showSizeChanger: false }}
+            rowClassName={(record) => (isUrgentRequest(record) ? 'bg-red-50/30' : 'hover:bg-white/20 transition-colors')}
+            locale={{ emptyText: <Empty description="沒有符合條件的申請" /> }}
+            className="w-full"
+          />
+        </GlassCard>
+
+        {/* Right Column: Urgent & Attention */}
+        <div className="flex flex-col gap-6">
+          <GlassCard className="w-full p-0 overflow-hidden">
+            <div className="p-4 border-b border-white/20 bg-red-50/30 flex items-center gap-2">
+              <FireOutlined className="text-red-500" />
+              <span className="font-medium text-red-700">急件提醒</span>
+            </div>
+            <div className="p-4">
               {urgentQueue.length === 0 ? (
                 <Empty description="目前沒有急件" image={Empty.PRESENTED_IMAGE_SIMPLE} />
               ) : (
@@ -696,10 +687,11 @@ const ExpenseReviewCenterPage: React.FC = () => {
                   {urgentQueue.slice(0, 4).map((request) => (
                     <div
                       key={request.id}
-                      className="p-3 bg-red-50 rounded-lg border border-red-100 hover:border-red-200 transition-colors"
+                      className="p-3 bg-white/40 rounded-xl border border-red-100 hover:border-red-200 transition-all hover:shadow-sm cursor-pointer"
+                      onClick={() => handleOpenDetail(request)}
                     >
                       <div className="flex justify-between items-start mb-2">
-                        <span className="font-medium text-gray-800 line-clamp-1">
+                        <span className="font-medium text-slate-800 line-clamp-1">
                           {request.reimbursementItem?.name || '未分類'}
                         </span>
                         <span className="font-mono font-medium text-red-600 whitespace-nowrap ml-2">
@@ -707,33 +699,24 @@ const ExpenseReviewCenterPage: React.FC = () => {
                         </span>
                       </div>
                       <div className="flex justify-between items-center text-xs">
-                        <span className="text-red-500 bg-red-100/50 px-1.5 py-0.5 rounded">
+                        <span className="text-red-600 bg-red-100/50 px-2 py-0.5 rounded-full">
                           到期：{request.dueDate ? dayjs(request.dueDate).format('MM/DD') : '未設定'}
                         </span>
-                        <Button
-                          type="link"
-                          size="small"
-                          className="!p-0 h-auto text-blue-500 hover:text-blue-600"
-                          onClick={() => handleOpenDetail(request)}
-                        >
-                          詳情
-                        </Button>
+                        <span className="text-blue-500">詳情 &rarr;</span>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-            </Card>
+            </div>
+          </GlassCard>
 
-            <Card
-              bordered={false}
-              className="shadow-sm"
-              title={
-                <Space>
-                  <WarningOutlined className="text-amber-500" /> 需注意/補件
-                </Space>
-              }
-            >
+          <GlassCard className="w-full p-0 overflow-hidden">
+            <div className="p-4 border-b border-white/20 bg-amber-50/30 flex items-center gap-2">
+              <WarningOutlined className="text-amber-500" />
+              <span className="font-medium text-amber-700">需注意 / 補件</span>
+            </div>
+            <div className="p-4">
               {flaggedRequests.length === 0 ? (
                 <Empty description="目前沒有需要補件的申請" image={Empty.PRESENTED_IMAGE_SIMPLE} />
               ) : (
@@ -741,22 +724,16 @@ const ExpenseReviewCenterPage: React.FC = () => {
                   {flaggedRequests.slice(0, 4).map((request) => (
                     <div
                       key={request.id}
-                      className="p-3 bg-amber-50 rounded-lg border border-amber-100 hover:border-amber-200 transition-colors"
+                      className="p-3 bg-white/40 rounded-xl border border-amber-100 hover:border-amber-200 transition-all hover:shadow-sm cursor-pointer"
+                      onClick={() => handleOpenDetail(request)}
                     >
                       <div className="flex justify-between items-start mb-1">
-                        <span className="font-medium text-gray-800 line-clamp-1">
+                        <span className="font-medium text-slate-800 line-clamp-1">
                           {request.reimbursementItem?.name || '未分類'}
                         </span>
-                        <Button
-                          type="link"
-                          size="small"
-                          className="!p-0 h-auto text-amber-600"
-                          onClick={() => handleOpenDetail(request)}
-                        >
-                          處理
-                        </Button>
+                        <span className="text-amber-600 text-xs bg-amber-100/50 px-2 py-0.5 rounded-full">處理</span>
                       </div>
-                      <div className="text-xs text-gray-500 space-y-1">
+                      <div className="text-xs text-slate-500 space-y-1 mt-2">
                         {isOverdue(request) && (
                           <div className="flex items-center gap-1 text-red-500">
                             <WarningOutlined /> 已逾期 {dayjs().diff(dayjs(request.dueDate), 'day')} 天
@@ -772,10 +749,10 @@ const ExpenseReviewCenterPage: React.FC = () => {
                   ))}
                 </div>
               )}
-            </Card>
-          </Space>
-        </Col>
-      </Row>
+            </div>
+          </GlassCard>
+        </div>
+      </div>
 
       <Drawer
         title="申請詳情"

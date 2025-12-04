@@ -32,6 +32,8 @@ import {
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
+import { GlassCard } from '../components/ui/GlassCard'
+import { GlassButton } from '../components/ui/GlassButton'
 import {
   expenseService,
   ReimbursementItem,
@@ -711,38 +713,44 @@ const ExpenseRequestsPage: React.FC = () => {
   ]
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-end">
-        <div>
-          <Title level={2} className="!mb-1 !font-light">費用申請</Title>
-          <Text className="text-gray-500">以標準化報銷項目提交費用，並串接智慧科目建議與審批歷程。</Text>
-        </div>
-        <Space>
-          {isAdmin && (
-            <Segmented
-              options={[
-                { label: '我的申請', value: 'mine' },
-                { label: '待審清單', value: 'pending' },
-              ]}
-              value={viewMode}
-              onChange={(value) => setViewMode(value as ViewMode)}
-            />
-          )}
-          <Button onClick={refreshRequests} disabled={listLoading}>
-            重新整理
-          </Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenDrawer}>
-            新增費用申請
-          </Button>
-        </Space>
+    <div className="max-w-[1200px] mx-auto space-y-8 animate-[fadeInUp_0.4s_ease-out]">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">費用申請</h1>
+        <p className="text-slate-500 text-sm max-w-3xl">
+          以標準化報銷項目提交費用，並串接智慧科目建議與審批歷程。
+        </p>
       </div>
 
-      <Card className="glass-card" bordered={false}>
-        <div className="flex justify-between items-center mb-3">
-          <Title level={4} className="!mb-0">
+      <GlassCard className="w-full p-0 overflow-hidden">
+        <div className="p-6 border-b border-white/20 flex flex-col md:flex-row justify-between items-center gap-4 bg-white/10">
+          <h3 className="text-lg font-semibold text-slate-800">
             {viewMode === 'mine' ? '我的費用申請' : '待審核申請'}
-          </Title>
+          </h3>
+          
+          <div className="flex items-center gap-3">
+            {isAdmin && (
+              <Segmented
+                options={[
+                  { label: '我的申請', value: 'mine' },
+                  { label: '待審清單', value: 'pending' },
+                ]}
+                value={viewMode}
+                onChange={(value) => setViewMode(value as ViewMode)}
+                className="glass-segment"
+              />
+            )}
+            <GlassButton onClick={refreshRequests} disabled={listLoading} className="px-4">
+              重新整理
+            </GlassButton>
+            <GlassButton 
+              onClick={handleOpenDrawer} 
+              className="flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700 border-none shadow-lg shadow-blue-500/30"
+            >
+              <PlusOutlined /> 新增費用申請
+            </GlassButton>
+          </div>
         </div>
+
         <Table
           rowKey="id"
           loading={listLoading}
@@ -750,8 +758,10 @@ const ExpenseRequestsPage: React.FC = () => {
           dataSource={requests}
           pagination={{ pageSize: 10, showSizeChanger: false }}
           locale={{ emptyText: '目前尚無費用申請紀錄' }}
+          className="w-full"
+          rowClassName="hover:bg-white/20 transition-colors"
         />
-      </Card>
+      </GlassCard>
 
       <Drawer
         title="新增費用申請"
