@@ -13,7 +13,8 @@ import {
   DollarOutlined,
   ImportOutlined,
   LogoutOutlined,
-  SettingOutlined
+  SettingOutlined,
+  ClockCircleOutlined
 } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
@@ -72,6 +73,16 @@ const Sidebar: React.FC<SidebarProps> = ({
       children: [
         { key: '/ap/expenses', label: '費用申請' },
         { key: '/ap/expense-review', label: '費用審核中心' },
+      ],
+    },
+    {
+      key: '/attendance',
+      icon: <ClockCircleOutlined />,
+      label: '考勤管理',
+      children: [
+        { key: '/attendance/dashboard', label: '打卡儀表板' },
+        { key: '/attendance/leaves', label: '請假申請' },
+        { key: '/attendance/admin', label: '考勤管理後台' },
       ],
     },
     {
