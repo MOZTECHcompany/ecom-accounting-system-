@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AttendanceIntegrationService } from '../attendance/services/integration.service';
+import { PrismaService } from '../../common/prisma/prisma.service';
 
 /**
  * 薪資管理服務
@@ -15,8 +16,31 @@ export class PayrollService {
   private readonly logger = new Logger(PayrollService.name);
 
   constructor(
+    private readonly prisma: PrismaService,
     private readonly attendanceIntegration: AttendanceIntegrationService,
   ) {}
+
+  async getEmployees(entityId?: string) {
+    return this.prisma.employee.findMany({
+      where: entityId ? { entityId } : undefined,
+      include: {
+        department: true,
+      },
+    });
+  }
+
+  async getDepartments(entityId?: string) {
+    return this.prisma.department.findMany({
+      where: entityId ? { entityId } : undefined,
+    });
+  }
+
+  async getPayrollRuns(entityId?: string) {
+    return this.prisma.payrollRun.findMany({
+      where: entityId ? { entityId } : undefined,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
   /**
    * 建立薪資批次
    */

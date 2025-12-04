@@ -27,11 +27,18 @@ import { PayrollService } from './payroll.service';
 export class PayrollController {
   constructor(private readonly payrollService: PayrollService) {}
 
+  @Get('departments')
+  @ApiOperation({ summary: '查詢部門列表' })
+  @ApiResponse({ status: 200, description: '成功取得部門列表' })
+  async getDepartments(@Query('entityId') entityId?: string) {
+    return this.payrollService.getDepartments(entityId);
+  }
+
   @Get('employees')
   @ApiOperation({ summary: '查詢員工列表' })
   @ApiResponse({ status: 200, description: '成功取得員工列表' })
   async getEmployees(@Query('entityId') entityId?: string) {
-    throw new Error('Not implemented');
+    return this.payrollService.getEmployees(entityId);
   }
 
   @Get('employees/:id')
@@ -48,6 +55,13 @@ export class PayrollController {
     throw new Error('Not implemented');
   }
 
+  @Get('runs')
+  @ApiOperation({ summary: '查詢薪資計算批次' })
+  @ApiResponse({ status: 200, description: '成功取得薪資計算批次' })
+  async getPayrollRuns(@Query('entityId') entityId?: string) {
+    return this.payrollService.getPayrollRuns(entityId);
+  }
+
   @Get('payrolls')
   @ApiOperation({ summary: '查詢薪資記錄列表' })
   @ApiResponse({ status: 200, description: '成功取得薪資記錄' })
@@ -56,7 +70,8 @@ export class PayrollController {
     @Query('year') year?: number,
     @Query('month') month?: number,
   ) {
-    throw new Error('Not implemented');
+    // This might be for individual payslips, keeping it for now but implementing basic return
+    return []; 
   }
 
   @Get('payrolls/:id')
