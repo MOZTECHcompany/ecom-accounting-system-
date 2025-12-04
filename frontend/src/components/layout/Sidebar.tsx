@@ -69,6 +69,10 @@ const Sidebar: React.FC<SidebarProps> = ({
       key: '/expenses',
       icon: <FileTextOutlined />,
       label: '費用與審批',
+      children: [
+        { key: '/ap/expenses', label: '費用申請' },
+        { key: '/ap/expense-review', label: '費用審核中心' },
+      ],
     },
     {
       key: '/payroll',
@@ -115,7 +119,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         <Menu
           mode="inline"
           selectedKeys={[location.pathname]}
-          defaultOpenKeys={['/partners']} // Optional: keep some submenus open
+          defaultOpenKeys={['/partners', '/expenses']} // Optional: keep some submenus open
           items={menuItems}
           onClick={handleMenuClick}
           className="!bg-transparent !border-none"

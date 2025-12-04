@@ -18,6 +18,7 @@ import BankingPage from './pages/BankingPage'
 import PayrollPage from './pages/PayrollPage'
 import EmployeesPage from './pages/EmployeesPage'
 import ExpenseRequestsPage from './pages/ExpenseRequestsPage'
+import ExpenseReviewCenterPage from './pages/ExpenseReviewCenterPage'
 import ReimbursementItemsAdminPage from './pages/ReimbursementItemsAdminPage'
 import ImportPage from './pages/ImportPage'
 import SystemSettingsPage from './pages/SystemSettingsPage'
@@ -47,6 +48,7 @@ const App: React.FC = () => {
                 <Route path="payroll/runs" element={<PayrollPage />} />
                 <Route path="payroll/employees" element={<EmployeesPage />} />
                 <Route path="ap/expenses" element={<ExpenseRequestsPage />} />
+                <Route path="ap/expense-review" element={<ExpenseReviewCenterPage />} />
                 <Route path="admin/access-control" element={<AccessControlPage />} />
                 <Route path="admin/reimbursement-items" element={<ReimbursementItemsAdminPage />} />
                 <Route path="admin/settings" element={<SystemSettingsPage />} />
