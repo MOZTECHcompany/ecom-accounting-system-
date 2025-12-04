@@ -83,7 +83,7 @@ const AttendanceAdminPage: React.FC = () => {
   ];
 
   return (
-    <div className="max-w-[1200px] mx-auto space-y-6 animate-[fadeInUp_0.4s_ease-out]">
+    <div className="w-full max-w-[1200px] mx-auto px-6 space-y-6 animate-[fadeInUp_0.4s_ease-out]">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-4">
         <div>
@@ -107,7 +107,7 @@ const AttendanceAdminPage: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 w-full">
         <GlassCard className="relative overflow-hidden group h-full">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <UserOutlined className="text-6xl text-slate-500" />
