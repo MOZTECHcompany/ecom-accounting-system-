@@ -35,6 +35,16 @@ export class CreateExpenseRequestDto {
   @IsString()
   entityId!: string;
 
+  @ApiPropertyOptional({ description: '受款人類型', enum: ['employee', 'vendor'] })
+  @IsOptional()
+  @IsIn(['employee', 'vendor'])
+  payeeType?: string;
+
+  @ApiPropertyOptional({ description: '付款方式', enum: ['cash', 'bank_transfer', 'check', 'other'] })
+  @IsOptional()
+  @IsIn(['cash', 'bank_transfer', 'check', 'other'])
+  paymentMethod?: string;
+
   @ApiPropertyOptional({ description: '供應商 ID' })
   @IsOptional()
   @IsUUID()

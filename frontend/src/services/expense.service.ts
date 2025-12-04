@@ -88,6 +88,7 @@ export interface ExpenseRequest {
   reimbursementItemId?: string | null
   finalAccountId?: string | null
   reimbursementItem?: ReimbursementItem | null
+  payeeType?: string | null
   paymentMethod?: string | null
   paymentStatus?: string
 }

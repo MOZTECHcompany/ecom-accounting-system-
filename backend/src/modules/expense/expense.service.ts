@@ -622,6 +622,8 @@ Do not include any markdown formatting (like \`\`\`json), just the raw JSON stri
 
     const requestData: Prisma.ExpenseRequestUncheckedCreateInput = {
       entityId: dto.entityId,
+      payeeType: dto.payeeType ?? null,
+      paymentMethod: dto.paymentMethod ?? null,
       vendorId: dto.vendorId ?? null,
       reimbursementItemId: dto.reimbursementItemId ?? null,
       amountOriginal: this.toDecimal(dto.amountOriginal),

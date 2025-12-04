@@ -287,11 +287,13 @@ const ExpenseRequestsPage: React.FC = () => {
       const payload = {
         entityId,
         reimbursementItemId: selectedItem.id,
+        payeeType: values.payeeType,
+        paymentMethod: values.paymentMethod,
         amountOriginal: values.amount,
         amountCurrency: 'TWD',
         description: values.description,
         receiptType: values.receiptType,
-        dueDate: values.expenseDate ? values.expenseDate.toISOString() : undefined,
+        dueDate: values.dueDate ? values.dueDate.toISOString() : undefined,
         metadata: values.expenseDate
           ? { expenseDate: values.expenseDate.format('YYYY-MM-DD') }
           : undefined,
@@ -635,6 +637,13 @@ const ExpenseRequestsPage: React.FC = () => {
       },
     },
     {
+      title: '預計付款日',
+      dataIndex: 'dueDate',
+      key: 'dueDate',
+      width: 120,
+      render: (date: string) => (date ? dayjs(date).format('YYYY-MM-DD') : '--'),
+    },
+    {
       title: '付款狀態',
       dataIndex: 'paymentStatus',
       key: 'paymentStatus',
@@ -753,6 +762,18 @@ const ExpenseRequestsPage: React.FC = () => {
         styles={{ body: { paddingBottom: 24 } }}
       >
         <Form layout="vertical" form={form} initialValues={{ amount: 0 }}>
+          <Form.Item
+            label="受款人類型"
+            name="payeeType"
+            initialValue="employee"
+            rules={[{ required: true, message: '請選擇受款人類型' }]}
+          >
+            <Radio.Group optionType="button" buttonStyle="solid">
+              <Radio.Button value="employee">員工代墊 (Reimbursement)</Radio.Button>
+              <Radio.Button value="vendor">廠商直付 (Direct Payment)</Radio.Button>
+            </Radio.Group>
+          </Form.Item>
+
           <div className="bg-blue-50 p-4 rounded-lg mb-6 border border-blue-100">
             <Form.Item label="備註說明" style={{ marginBottom: 0 }} required>
               <div className="mb-2 text-gray-500 text-xs">
@@ -839,6 +860,31 @@ const ExpenseRequestsPage: React.FC = () => {
                         form.setFieldsValue({ taxAmount: tax });
                     }
                 }}
+              />
+            </Form.Item>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Form.Item
+              label="預計付款日"
+              name="dueDate"
+              tooltip="若為廠商直付，請填寫應付款日期"
+            >
+              <DatePicker className="w-full" />
+            </Form.Item>
+            <Form.Item
+              label="付款方式"
+              name="paymentMethod"
+            >
+              <Select
+                allowClear
+                placeholder="選擇付款方式"
+                options={[
+                  { label: '現金', value: 'cash' },
+                  { label: '銀行轉帳', value: 'bank_transfer' },
+                  { label: '支票', value: 'check' },
+                  { label: '其他', value: 'other' },
+                ]}
               />
             </Form.Item>
           </div>

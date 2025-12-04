@@ -692,6 +692,7 @@ model ApInvoice {
 model ExpenseRequest {
   id                  String  @id @default(uuid())
   entityId            String  @map("entity_id")
+  payeeType           String? @map("payee_type") // employee, vendor
   vendorId            String? @map("vendor_id")
   reimbursementItemId String? @map("reimbursement_item_id")
   suggestedItemId     String? @map("suggested_item_id")
