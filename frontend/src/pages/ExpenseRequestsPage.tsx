@@ -713,7 +713,7 @@ const ExpenseRequestsPage: React.FC = () => {
   ]
 
   return (
-    <div className="w-full max-w-[1200px] mx-auto px-6 space-y-6 animate-[fadeInUp_0.4s_ease-out]">
+    <div className="space-y-6 animate-[fadeInUp_0.4s_ease-out]">
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold text-slate-900 mb-1">費用申請</h1>
         <p className="text-slate-500 text-sm max-w-3xl">

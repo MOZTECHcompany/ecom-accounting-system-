@@ -512,7 +512,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
   }
 
   return (
-    <div className="w-full max-w-[1200px] mx-auto px-6 space-y-6 animate-[fadeInUp_0.4s_ease-out]">
+    <div className="space-y-6 animate-[fadeInUp_0.4s_ease-out]">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900 mb-1">

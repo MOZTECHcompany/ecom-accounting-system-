@@ -83,7 +83,7 @@ const AttendanceAdminPage: React.FC = () => {
   ];
 
   return (
-    <div className="w-full max-w-[1200px] mx-auto px-6 space-y-6 animate-[fadeInUp_0.4s_ease-out]">
+    <div className="space-y-6 animate-[fadeInUp_0.4s_ease-out]">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-4">
         <div>
