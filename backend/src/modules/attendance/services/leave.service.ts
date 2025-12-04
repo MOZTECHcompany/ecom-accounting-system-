@@ -43,7 +43,8 @@ export class LeaveService {
       title: 'Leave Request Submitted',
       message: `Your leave request for ${dto.hours} hours has been submitted.`,
       type: 'LEAVE_REQUEST',
-      entityId: employee.entityId,
+      category: 'ATTENDANCE',
+      data: { entityId: employee.entityId },
     });
 
     // TODO: Notify Manager (Need hierarchy logic)
@@ -64,7 +65,8 @@ export class LeaveService {
         title: `Leave Request ${status}`,
         message: `Your leave request has been ${status.toLowerCase()}.`,
         type: 'LEAVE_STATUS_UPDATE',
-        entityId: request.entityId,
+        category: 'ATTENDANCE',
+        data: { entityId: request.entityId },
       });
     }
 

@@ -34,12 +34,12 @@ export class AttendanceIntegrationService {
     let leaveHours = 0;
 
     for (const summary of summaries) {
-      if (summary.workHours) regularHours += summary.workHours;
-      if (summary.overtimeHours) overtimeHours += summary.overtimeHours;
+      if (summary.workedMinutes) regularHours += summary.workedMinutes / 60;
+      if (summary.overtimeMinutes) overtimeHours += summary.overtimeMinutes / 60;
     }
 
     for (const leave of leaves) {
-      leaveHours += leave.hours;
+      leaveHours += Number(leave.hours);
     }
 
     return {
