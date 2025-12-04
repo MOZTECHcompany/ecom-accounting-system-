@@ -414,7 +414,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
       title: '操作',
       key: 'actions',
       fixed: 'right',
-      width: 140,
+      width: 160,
       render: (_value, record) => (
         <Space direction="vertical" size={8} className="w-full">
           <Button
@@ -438,9 +438,8 @@ const ExpenseReviewCenterPage: React.FC = () => {
               </Tooltip>
               <Tooltip title="駁回申請">
                 <Button
-                  className="flex-1"
+                  className="flex-1 border-red-500 text-red-500 hover:!border-red-600 hover:!text-red-600"
                   size="small"
-                  danger
                   icon={<CloseCircleOutlined />}
                   onClick={() => openActionModal('reject', record)}
                 />
@@ -633,7 +632,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
               columns={columns}
               dataSource={filteredRequests}
               pagination={{ pageSize: 8, showSizeChanger: false }}
-              scroll={{ x: 960 }}
+              scroll={{ x: 1000 }}
               rowClassName={(record) => (isUrgentRequest(record) ? 'bg-red-50/70' : '')}
               locale={{ emptyText: <Empty description="沒有符合條件的申請" /> }}
             />
