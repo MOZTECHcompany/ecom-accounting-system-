@@ -26,8 +26,8 @@ const App: React.FC = () => {
   return (
     <BrowserRouter>
       <ThemeProvider>
-        <AIProvider>
-          <AuthProvider>
+        <AuthProvider>
+          <AIProvider>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
             
@@ -56,9 +56,9 @@ const App: React.FC = () => {
                 <Route path="import" element={<ImportPage />} />
               </Route>
             </Route>
-          </Routes>
-          </AuthProvider>
-        </AIProvider>
+            </Routes>
+          </AIProvider>
+        </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
   )

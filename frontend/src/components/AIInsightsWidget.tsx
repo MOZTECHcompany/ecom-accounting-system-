@@ -18,9 +18,11 @@ const AIInsightsWidget: React.FC = () => {
     try {
       const data = await aiService.getDailyBriefing(entityId, selectedModelId)
       setInsight(data.insight)
-    } catch (error) {
-      console.error('Failed to fetch AI insight', error)
-      setInsight('暫時無法取得 AI 財務簡報。')
+    } catch (error: any) {
+      if (error.response?.status !== 401) {
+        console.error('Failed to fetch AI insight', error)
+        setInsight('暫時無法取得 AI 財務簡報。')
+      }
     } finally {
       setLoading(false)
     }

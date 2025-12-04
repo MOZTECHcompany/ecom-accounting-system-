@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { aiService, AiModel } from '../services/ai.service'
+import { useAuth } from './AuthContext'
 
 interface AIContextType {
   selectedModelId: string
@@ -11,6 +12,7 @@ interface AIContextType {
 const AIContext = createContext<AIContextType | undefined>(undefined)
 
 export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth()
   const [selectedModelId, setSelectedModelId] = useState<string>(() => {
     return localStorage.getItem('ai_selected_model') || 'gemini-2.0-flash'
   })
@@ -18,6 +20,11 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!user) {
+      setLoading(false)
+      return
+    }
+
     const fetchModels = async () => {
       try {
         const models = await aiService.getAvailableModels()
@@ -28,14 +35,17 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
            const defaultModel = models.find(m => m.id === 'gemini-2.0-flash') || models[0]
            setSelectedModelId(defaultModel.id)
         }
-      } catch (error) {
-        console.error('Failed to fetch AI models', error)
+      } catch (error: any) {
+        // Ignore 401 errors as they are handled by the API interceptor (redirect to login)
+        if (error.response?.status !== 401) {
+          console.error('Failed to fetch AI models', error)
+        }
       } finally {
         setLoading(false)
       }
     }
     fetchModels()
-  }, [])
+  }, [user]) // Re-fetch when user changes (logs in)
 
   useEffect(() => {
     localStorage.setItem('ai_selected_model', selectedModelId)

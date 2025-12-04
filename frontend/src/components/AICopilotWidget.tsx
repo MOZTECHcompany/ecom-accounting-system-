@@ -92,15 +92,17 @@ const AICopilotWidget: React.FC = () => {
         timestamp: new Date()
       }
       setMessages(prev => [...prev, aiMsg])
-    } catch (error) {
-      console.error('AI Chat Error', error)
-      const errorMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        type: 'ai',
-        content: "抱歉，我現在無法連線到 AI 服務，請稍後再試。",
-        timestamp: new Date()
+    } catch (error: any) {
+      if (error.response?.status !== 401) {
+        console.error('AI Chat Error', error)
+        const errorMsg: Message = {
+          id: (Date.now() + 1).toString(),
+          type: 'ai',
+          content: "抱歉，我現在無法連線到 AI 服務，請稍後再試。",
+          timestamp: new Date()
+        }
+        setMessages(prev => [...prev, errorMsg])
       }
-      setMessages(prev => [...prev, errorMsg])
     } finally {
       setIsTyping(false)
     }
