@@ -51,6 +51,13 @@ model User {
   accountingClassifierFeedbacks AccountingClassifierFeedback[]
   notifications                 Notification[]
 
+  // Attendance Relations
+  employee              Employee?
+  reviewedLeaveRequests LeaveRequest[] @relation("LeaveReviewer")
+  uploadedLeaveDocuments LeaveDocument[] @relation("LeaveDocumentUploader")
+  leaveRequestHistories LeaveRequestHistory[] @relation("LeaveHistoryActor")
+  resolvedAnomalies     AttendanceAnomaly[] @relation("AnomalyResolver")
+
   @@map("users")
 }
 
@@ -174,6 +181,15 @@ model Entity {
   approvalPolicies      ApprovalPolicy[]
   paymentTasks          PaymentTask[]
   classifierFeedbacks   AccountingClassifierFeedback[] @relation("EntityClassifierFeedback")
+
+  // Attendance Relations
+  attendancePolicies    AttendancePolicy[]
+  attendanceRecords     AttendanceRecord[]
+  attendanceSummaries   AttendanceDailySummary[]
+  leaveTypes            LeaveType[]
+  leaveBalances         LeaveBalance[]
+  leaveRequests         LeaveRequest[]
+  attendanceAnomalies   AttendanceAnomaly[]
 
   @@map("entities")
 }
@@ -847,6 +863,7 @@ model ApprovalPolicy {
   entity Entity               @relation(fields: [entityId], references: [id], onDelete: Cascade)
   steps  ApprovalPolicyStep[]
   items  ReimbursementItem[]
+  leaveTypes LeaveType[]
 
   @@index([entityId, isActive])
   @@map("approval_policies")
@@ -1199,12 +1216,15 @@ model Department {
   approvalSteps   ApprovalStep[]
 
   @@map("departments")
+
+  attendanceSchedules AttendanceSchedule[]
 }
 
 // 員工
 model Employee {
   id            String    @id @default(uuid())
   entityId      String    @map("entity_id")
+  userId        String?   @unique @map("user_id")
   employeeNo    String    @map("employee_no")
   name          String
   country       String // TW, CN
@@ -1225,8 +1245,17 @@ model Employee {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   entity       Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  user         User?         @relation(fields: [userId], references: [id])
   department   Department?   @relation(fields: [departmentId], references: [id])
   payrollItems PayrollItem[]
+
+  // Attendance Relations
+  attendanceSchedules AttendanceSchedule[]
+  attendanceRecords   AttendanceRecord[]
+  attendanceSummaries AttendanceDailySummary[]
+  leaveBalances       LeaveBalance[]
+  leaveRequests       LeaveRequest[]
+  attendanceAnomalies AttendanceAnomaly[]
 
   @@unique([entityId, employeeNo])
   @@index([entityId])
@@ -1458,4 +1487,257 @@ model Notification {
   @@map("notifications")
   @@index([userId])
   @@index([read])
+}
+
+// ============================================
+// 9. 考勤與請假管理 (Attendance & Leave)
+// ============================================
+
+enum AttendanceMethod {
+  MOBILE
+  WEB
+  KIOSK
+}
+
+enum AttendanceEventType {
+  CLOCK_IN
+  CLOCK_OUT
+  BREAK_START
+  BREAK_END
+}
+
+enum LeaveStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model AttendancePolicy {
+  id             String   @id @default(uuid())
+  entityId       String   @map("entity_id")
+  name           String
+  type           String   @default("office") // office, remote, hybrid
+  ipAllowList    Json?    @map("ip_allow_list") // CIDR blocks
+  geofence       Json?    // polygons or circle definitions
+  requiresPhoto  Boolean  @default(false) @map("requires_photo")
+  maxEarlyClock  Int      @default(15) @map("max_early_clock") // minutes before shift
+  maxLateClock   Int      @default(5)  @map("max_late_clock")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  entity    Entity               @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  schedules AttendanceSchedule[]
+
+  @@map("attendance_policies")
+}
+
+model AttendanceSchedule {
+  id             String   @id @default(uuid())
+  policyId       String   @map("policy_id")
+  departmentId   String?  @map("department_id")
+  employeeId     String?  @map("employee_id")
+  weekday        Int      // 0=Sun ... 6=Sat
+  shiftStart     String   @map("shift_start") // HH:mm, store as text for TZ simplicity
+  shiftEnd       String   @map("shift_end")
+  breakMinutes   Int      @default(60) @map("break_minutes")
+  allowRemote    Boolean  @default(false) @map("allow_remote")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  policy     AttendancePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  department Department?       @relation(fields: [departmentId], references: [id])
+  employee   Employee?         @relation(fields: [employeeId], references: [id])
+
+  attendanceRecords AttendanceRecord[]
+
+  @@index([departmentId])
+  @@index([employeeId])
+  @@map("attendance_schedules")
+}
+
+model AttendanceRecord {
+  id              String              @id @default(uuid())
+  entityId        String              @map("entity_id")
+  employeeId      String              @map("employee_id")
+  scheduleId      String?             @map("schedule_id")
+  eventType       AttendanceEventType @map("event_type")
+  method          AttendanceMethod
+  timestamp       DateTime
+  latitude        Decimal? @db.Decimal(10, 6)
+  longitude       Decimal? @db.Decimal(10, 6)
+  ipAddress       String?  @map("ip_address")
+  deviceInfo      Json?     @map("device_info")
+  photoUrl        String?   @map("photo_url")
+  isWithinFence   Boolean   @default(true) @map("is_within_fence")
+  isWithinIpRange Boolean   @default(true) @map("is_within_ip_range")
+  anomalyFlag     Boolean   @default(false) @map("anomaly_flag")
+  notes           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  entity   Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  employee Employee      @relation(fields: [employeeId], references: [id])
+  schedule AttendanceSchedule? @relation(fields: [scheduleId], references: [id])
+  anomalies AttendanceAnomaly[]
+
+  @@index([entityId, employeeId, timestamp])
+  @@index([anomalyFlag])
+  @@map("attendance_records")
+}
+
+model AttendanceDailySummary {
+  id             String   @id @default(uuid())
+  entityId       String   @map("entity_id")
+  employeeId     String   @map("employee_id")
+  workDate       DateTime @map("work_date")
+  clockInTime    DateTime? @map("clock_in_time")
+  clockOutTime   DateTime? @map("clock_out_time")
+  breakMinutes   Int       @default(0) @map("break_minutes")
+  workedMinutes  Int       @default(0) @map("worked_minutes")
+  overtimeMinutes Int      @default(0) @map("overtime_minutes")
+  status         String    @default("pending") // pending, completed, missing_clock
+  anomalyReason  String?   @map("anomaly_reason")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  entity   Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id])
+  anomalies AttendanceAnomaly[]
+
+  @@unique([entityId, employeeId, workDate])
+  @@map("attendance_daily_summaries")
+}
+
+model LeaveType {
+  id                 String   @id @default(uuid())
+  entityId           String   @map("entity_id")
+  code               String   // SICK, PERSONAL, ANNUAL, MENSTRUAL, MARRIAGE, FUNERAL, MATERNITY, PATERNITY, COMP_TIME, CUSTOM
+  name               String
+  requiresDocument   Boolean  @default(false) @map("requires_document")
+  documentExamples   String?  @map("document_examples")
+  maxDaysPerYear     Decimal? @map("max_days_per_year") @db.Decimal(5, 2)
+  minNoticeHours     Int?     @map("min_notice_hours")
+  paidPercentage     Decimal? @map("paid_percentage") @db.Decimal(5, 2)
+  autoApprovalHours  Int?     @map("auto_approval_hours")
+  approvalPolicyId   String?  @map("approval_policy_id")
+  requiresChildData  Boolean  @default(false) @map("requires_child_data") // for maternity/paternity
+  metadata           Json?
+  isActive           Boolean  @default(true) @map("is_active")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  entity        Entity         @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  approvalPolicy ApprovalPolicy? @relation(fields: [approvalPolicyId], references: [id], onDelete: SetNull)
+  leaveRequests  LeaveRequest[]
+  leaveBalances  LeaveBalance[]
+
+  @@unique([entityId, code])
+  @@map("leave_types")
+}
+
+model LeaveBalance {
+  id             String   @id @default(uuid())
+  entityId       String   @map("entity_id")
+  employeeId     String   @map("employee_id")
+  leaveTypeId    String   @map("leave_type_id")
+  year           Int
+  accruedHours   Decimal @default(0) @map("accrued_hours") @db.Decimal(6, 2)
+  usedHours      Decimal @default(0) @map("used_hours") @db.Decimal(6, 2)
+  carryOverHours Decimal @default(0) @map("carry_over_hours") @db.Decimal(6, 2)
+  pendingHours   Decimal @default(0) @map("pending_hours") @db.Decimal(6, 2)
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  entity     Entity     @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  employee   Employee   @relation(fields: [employeeId], references: [id])
+  leaveType  LeaveType  @relation(fields: [leaveTypeId], references: [id])
+
+  @@unique([entityId, employeeId, leaveTypeId, year])
+  @@map("leave_balances")
+}
+
+model LeaveRequest {
+  id               String     @id @default(uuid())
+  entityId         String     @map("entity_id")
+  employeeId       String     @map("employee_id")
+  leaveTypeId      String     @map("leave_type_id")
+  startAt          DateTime   @map("start_at")
+  endAt            DateTime   @map("end_at")
+  hours            Decimal    @db.Decimal(5, 2)
+  status           LeaveStatus @default(DRAFT)
+  reviewerId       String?    @map("reviewer_id")
+  reason           String?
+  location         String?    // domestic, overseas, remote city
+  requiredDocsMet  Boolean    @default(false) @map("required_docs_met")
+  metadata         Json?
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
+
+  entity     Entity     @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  employee   Employee   @relation(fields: [employeeId], references: [id])
+  leaveType  LeaveType  @relation(fields: [leaveTypeId], references: [id])
+  reviewer   User?      @relation("LeaveReviewer", fields: [reviewerId], references: [id])
+  documents  LeaveDocument[]
+  histories  LeaveRequestHistory[]
+
+  @@index([entityId, status])
+  @@index([employeeId])
+  @@map("leave_requests")
+}
+
+model LeaveDocument {
+  id            String   @id @default(uuid())
+  leaveRequestId String  @map("leave_request_id")
+  fileName      String   @map("file_name")
+  fileUrl       String   @map("file_url")
+  mimeType      String   @map("mime_type")
+  checksum      String?
+  docType       String?  // medical_note, travel_itinerary, certificate
+  uploadedBy    String   @map("uploaded_by")
+  uploadedAt    DateTime @default(now()) @map("uploaded_at")
+
+  leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
+  uploader     User         @relation("LeaveDocumentUploader", fields: [uploadedBy], references: [id])
+
+  @@map("leave_documents")
+}
+
+model LeaveRequestHistory {
+  id             String   @id @default(uuid())
+  leaveRequestId String   @map("leave_request_id")
+  action         String
+  fromStatus     LeaveStatus? @map("from_status")
+  toStatus       LeaveStatus? @map("to_status")
+  actorId        String?  @map("actor_id")
+  note           String?
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
+  actor        User?        @relation("LeaveHistoryActor", fields: [actorId], references: [id])
+
+  @@map("leave_request_histories")
+}
+
+model AttendanceAnomaly {
+  id             String   @id @default(uuid())
+  entityId       String   @map("entity_id")
+  employeeId     String   @map("employee_id")
+  summaryId      String?  @map("summary_id")
+  recordId       String?  @map("record_id")
+  type           String   // missing_clock, gps_mismatch, duplicate_ip, overtime_without_request
+  severity       String   @default("medium")
+  detectedAt     DateTime @default(now()) @map("detected_at")
+  resolvedStatus String   @default("open") @map("resolved_status")
+  resolverId     String?  @map("resolver_id")
+  resolutionNote String?  @map("resolution_note")
+
+  entity   Entity                 @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  employee Employee               @relation(fields: [employeeId], references: [id])
+  summary  AttendanceDailySummary? @relation(fields: [summaryId], references: [id])
+  record   AttendanceRecord?       @relation(fields: [recordId], references: [id])
+  resolver User?                   @relation("AnomalyResolver", fields: [resolverId], references: [id])
+
+  @@index([entityId, resolvedStatus])
+  @@map("attendance_anomalies")
 }

@@ -703,6 +703,101 @@ async function main() {
 
   console.log(`✅ Created 24 accounting periods (12 months × 2 entities)\n`);
 
+  // ============================================
+  // 10. 建立假別 (台灣)
+  // ============================================
+  console.log('🏖️ Creating leave types...');
+
+  const twLeaveTypes = [
+    {
+      code: 'SICK',
+      name: '病假',
+      requiresDocument: true,
+      maxDaysPerYear: 30,
+      paidPercentage: 50,
+      minNoticeHours: 0,
+    },
+    {
+      code: 'PERSONAL',
+      name: '事假',
+      requiresDocument: false,
+      maxDaysPerYear: 14,
+      paidPercentage: 0,
+      minNoticeHours: 24,
+    },
+    {
+      code: 'ANNUAL',
+      name: '特休',
+      requiresDocument: false,
+      paidPercentage: 100,
+      minNoticeHours: 24,
+    },
+    {
+      code: 'MENSTRUAL',
+      name: '生理假',
+      requiresDocument: false,
+      maxDaysPerYear: 12, // 1 day per month
+      paidPercentage: 50,
+      minNoticeHours: 0,
+    },
+    {
+      code: 'MARRIAGE',
+      name: '婚假',
+      requiresDocument: true,
+      maxDaysPerYear: 8,
+      paidPercentage: 100,
+      minNoticeHours: 168, // 1 week
+    },
+    {
+      code: 'FUNERAL',
+      name: '喪假',
+      requiresDocument: true,
+      paidPercentage: 100,
+      minNoticeHours: 0,
+    },
+    {
+      code: 'MATERNITY',
+      name: '產假',
+      requiresDocument: true,
+      maxDaysPerYear: 56, // 8 weeks
+      paidPercentage: 100,
+      minNoticeHours: 720, // 30 days
+      requiresChildData: true,
+    },
+    {
+      code: 'PATERNITY',
+      name: '陪產假',
+      requiresDocument: true,
+      maxDaysPerYear: 7,
+      paidPercentage: 100,
+      minNoticeHours: 48,
+      requiresChildData: true,
+    },
+  ];
+
+  for (const leave of twLeaveTypes) {
+    await prisma.leaveType.upsert({
+      where: {
+        entityId_code: {
+          entityId: taiwanEntity.id,
+          code: leave.code,
+        },
+      },
+      update: {},
+      create: {
+        entityId: taiwanEntity.id,
+        code: leave.code,
+        name: leave.name,
+        requiresDocument: leave.requiresDocument,
+        maxDaysPerYear: leave.maxDaysPerYear,
+        paidPercentage: leave.paidPercentage,
+        minNoticeHours: leave.minNoticeHours,
+        requiresChildData: leave.requiresChildData || false,
+      },
+    });
+  }
+  console.log(`✅ Created ${twLeaveTypes.length} leave types for Taiwan entity\n`);
+
   console.log('✨ Database seeding completed successfully!\n');
   console.log('📝 Summary:');
   console.log(`   - Entities: 2 (台灣公司, 大陸公司)`);
