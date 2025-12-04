@@ -489,41 +489,45 @@ const ExpenseReviewCenterPage: React.FC = () => {
 
       <Row gutter={[24, 24]}>
         <Col xs={24} sm={12} lg={6}>
-          <Card bordered={false} className="shadow-sm hover:shadow-md transition-shadow h-full">
+          <Card bordered={false} className="shadow-sm hover:shadow-md transition-shadow h-full bg-blue-50/50 border-blue-100">
             <Statistic
-              title="待審件數"
+              title={<span className="text-blue-600 font-medium">待審件數</span>}
               value={pendingRequests.length}
               prefix={<AuditOutlined className="text-blue-500" />}
               suffix="件"
+              valueStyle={{ color: '#2563eb' }}
             />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card bordered={false} className="shadow-sm hover:shadow-md transition-shadow h-full">
+          <Card bordered={false} className="shadow-sm hover:shadow-md transition-shadow h-full bg-red-50/50 border-red-100">
             <Statistic
-              title="急件"
+              title={<span className="text-red-600 font-medium">急件</span>}
               value={urgentQueue.length}
               prefix={<FireOutlined className="text-red-500" />}
               suffix="件"
+              valueStyle={{ color: '#dc2626' }}
             />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card bordered={false} className="shadow-sm hover:shadow-md transition-shadow h-full">
+          <Card bordered={false} className="shadow-sm hover:shadow-md transition-shadow h-full bg-amber-50/50 border-amber-100">
             <Statistic
-              title="待審金額 (TWD)"
+              title={<span className="text-amber-600 font-medium">待審金額 (TWD)</span>}
               value={backlogAmount}
               precision={0}
               prefix={<ThunderboltOutlined className="text-amber-500" />}
+              valueStyle={{ color: '#d97706' }}
             />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card bordered={false} className="shadow-sm hover:shadow-md transition-shadow h-full">
+          <Card bordered={false} className="shadow-sm hover:shadow-md transition-shadow h-full bg-purple-50/50 border-purple-100">
             <Statistic
-              title="平均等待天數"
+              title={<span className="text-purple-600 font-medium">平均等待天數</span>}
               value={averagePendingAge}
               suffix="天"
+              valueStyle={{ color: '#9333ea' }}
             />
           </Card>
         </Col>
@@ -538,7 +542,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
           </Space>
         }
         extra={
-          <Button type="link" onClick={handleResetFilters}>
+          <Button onClick={handleResetFilters}>
             清除篩選
           </Button>
         }
