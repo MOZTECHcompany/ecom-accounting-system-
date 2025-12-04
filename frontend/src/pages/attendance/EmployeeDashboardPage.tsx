@@ -101,28 +101,66 @@ const EmployeeDashboardPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen p-6 md:p-10 w-full max-w-[1200px] mx-auto animate-[fadeInUp_0.4s_ease-out]">
+    <div className="space-y-6 animate-[fadeInUp_0.4s_ease-out]">
       {/* Header */}
-      <div className="mb-10">
-        <h1 className="text-3xl md:text-4xl font-semibold text-slate-900 mb-2">員工考勤儀表板</h1>
-        <p className="text-slate-500 text-base">歡迎回來，請確認您的打卡狀態</p>
+      <div className="flex flex-col md:flex-row justify-between items-end gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900 mb-1">打卡儀表板</h1>
+          <p className="text-slate-500 text-sm">歡迎回來，請確認您的打卡狀態</p>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-slate-500 bg-white/30 px-3 py-1.5 rounded-full border border-white/20">
+          <ClockCircleOutlined />
+          <span>{currentTime.format('YYYY年MM月DD日 dddd')}</span>
+        </div>
       </div>
       
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 w-full">
-        {/* Left Column: Clock Widget & Actions */}
-        <div className="lg:col-span-7 flex flex-col gap-8">
-          {/* Clock Widget */}
-          <GlassCard className="flex flex-col items-center justify-center py-10">
-            <div className="text-[64px] font-light tracking-wider text-slate-900/80 leading-none">
-              {currentTime.format('HH:mm')}
-              <span className="text-3xl ml-2 text-slate-400">{currentTime.format('ss')}</span>
-            </div>
-            <div className="text-lg text-slate-500 mt-4 font-medium">
-              {currentTime.format('YYYY年MM月DD日 dddd')}
-            </div>
+      {/* Stats Grid - Moved to top like AP page */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 w-full">
+        <GlassCard className="relative overflow-hidden group h-full">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <ClockCircleOutlined className="text-6xl text-blue-500" />
+          </div>
+          <div className="text-sm text-slate-500 mb-2 font-medium">累積工時</div>
+          <div className="text-3xl font-semibold text-slate-800 mb-1">0 <span className="text-sm font-normal text-slate-400">小時</span></div>
+        </GlassCard>
 
+        <GlassCard className="relative overflow-hidden group h-full">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <WarningOutlined className="text-6xl text-red-500" />
+          </div>
+          <div className="text-sm text-slate-500 mb-2 font-medium">遲到次數</div>
+          <div className="text-3xl font-semibold text-slate-800 mb-1">0 <span className="text-sm font-normal text-slate-400">次</span></div>
+        </GlassCard>
+
+        <GlassCard className="relative overflow-hidden group h-full">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <EnvironmentOutlined className="text-6xl text-purple-500" />
+          </div>
+          <div className="text-sm text-slate-500 mb-2 font-medium">特休餘額</div>
+          <div className="text-3xl font-semibold text-slate-800 mb-1">10 <span className="text-sm font-normal text-slate-400">天</span></div>
+        </GlassCard>
+
+        <GlassCard className="relative overflow-hidden group h-full">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <LogoutOutlined className="text-6xl text-orange-500" />
+          </div>
+          <div className="text-sm text-slate-500 mb-2 font-medium">本月請假</div>
+          <div className="text-3xl font-semibold text-slate-800 mb-1">0 <span className="text-sm font-normal text-slate-400">小時</span></div>
+        </GlassCard>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full">
+        {/* Left Column: Clock Widget & Actions */}
+        <div className="lg:col-span-8 flex flex-col gap-6">
+          {/* Clock Widget */}
+          <GlassCard className="flex flex-col items-center justify-center py-12 w-full">
+            <div className="text-[80px] font-light tracking-wider text-slate-900/80 leading-none font-mono">
+              {currentTime.format('HH:mm')}
+              <span className="text-4xl ml-3 text-slate-400">{currentTime.format('ss')}</span>
+            </div>
+            
             {/* Location Status */}
-            <div className="mt-6">
+            <div className="mt-8">
               {location ? (
                 <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/10 text-green-600 text-sm font-medium border border-green-500/20">
                   <EnvironmentOutlined />
@@ -138,34 +176,37 @@ const EmployeeDashboardPage: React.FC = () => {
           </GlassCard>
 
           {/* Action Buttons */}
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-2 gap-6 w-full">
             <GlassButton 
               variant="primary" 
               size="lg" 
-              className="h-32 flex flex-col gap-3"
+              className="h-24 flex items-center justify-center gap-4 hover:scale-[1.02] transition-transform"
               onClick={handleClockIn}
               disabled={!location || loading}
             >
               <LoginOutlined className="text-3xl" />
-              <span className="text-xl">上班打卡</span>
+              <span className="text-2xl font-medium">上班打卡</span>
             </GlassButton>
 
             <GlassButton 
               variant="orange" 
               size="lg" 
-              className="h-32 flex flex-col gap-3"
+              className="h-24 flex items-center justify-center gap-4 hover:scale-[1.02] transition-transform"
               onClick={handleClockOut}
               disabled={!location || loading}
             >
               <LogoutOutlined className="text-3xl" />
-              <span className="text-xl">下班打卡</span>
+              <span className="text-2xl font-medium">下班打卡</span>
             </GlassButton>
           </div>
+        </div>
 
+        {/* Right Column: History */}
+        <div className="lg:col-span-4 flex flex-col gap-6">
           {/* Last Action Status */}
           {lastAction && (
             <div className="animate-[fadeInUp_0.3s_ease-out]">
-              <GlassCard className="py-4 px-6 flex items-center justify-between bg-green-50/30 border-green-200/30">
+              <GlassCard className="py-4 px-6 flex items-center justify-between bg-green-50/30 border-green-200/30 w-full">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white shadow-lg shadow-green-500/30">
                     <CheckCircleOutlined className="text-xl" />
@@ -175,57 +216,44 @@ const EmployeeDashboardPage: React.FC = () => {
                     <div className="text-lg font-semibold text-slate-800">{lastAction.type}</div>
                   </div>
                 </div>
-                <div className="text-2xl font-light text-slate-700">
+                <div className="text-2xl font-light text-slate-700 font-mono">
                   {lastAction.time}
                 </div>
               </GlassCard>
             </div>
           )}
-        </div>
 
-        {/* Right Column: Stats */}
-        <div className="lg:col-span-5 flex flex-col gap-6">
-          <GlassCard>
-            <h3 className="text-xl font-semibold text-slate-900 mb-6">本月狀況</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 rounded-2xl bg-blue-50/50 border border-blue-100">
-                <div className="text-sm text-slate-500 mb-1">累積工時</div>
-                <div className="text-2xl font-semibold text-slate-800">0 <span className="text-sm font-normal text-slate-400">小時</span></div>
-              </div>
-              <div className="p-4 rounded-2xl bg-red-50/50 border border-red-100">
-                <div className="text-sm text-slate-500 mb-1">遲到次數</div>
-                <div className="text-2xl font-semibold text-slate-800">0 <span className="text-sm font-normal text-slate-400">次</span></div>
-              </div>
-              <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-100">
-                <div className="text-sm text-slate-500 mb-1">特休餘額</div>
-                <div className="text-2xl font-semibold text-slate-800">10 <span className="text-sm font-normal text-slate-400">天</span></div>
-              </div>
-              <div className="p-4 rounded-2xl bg-orange-50/50 border border-orange-100">
-                <div className="text-sm text-slate-500 mb-1">本月請假</div>
-                <div className="text-2xl font-semibold text-slate-800">0 <span className="text-sm font-normal text-slate-400">小時</span></div>
-              </div>
+          <GlassCard className="flex-1 w-full">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-slate-900">今日打卡紀錄</h3>
+              <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
+                {todayRecords.length} 筆紀錄
+              </span>
             </div>
-          </GlassCard>
-
-          <GlassCard className="flex-1">
-            <h3 className="text-xl font-semibold text-slate-900 mb-4">今日打卡紀錄</h3>
+            
             {todayRecords.length > 0 ? (
               <div className="space-y-3">
                 {todayRecords.map((record, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-white/40 border border-white/40">
+                  <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-white/40 border border-white/40 hover:bg-white/60 transition-colors">
                     <div className="flex items-center gap-3">
-                      <div className={`w-2 h-2 rounded-full ${record.type === 'clock_in' ? 'bg-blue-500' : 'bg-orange-500'}`} />
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                        record.type === 'clock_in' 
+                          ? 'bg-blue-100 text-blue-600' 
+                          : 'bg-orange-100 text-orange-600'
+                      }`}>
+                        {record.type === 'clock_in' ? <LoginOutlined /> : <LogoutOutlined />}
+                      </div>
                       <span className="text-slate-700 font-medium">
                         {record.type === 'clock_in' ? '上班打卡' : '下班打卡'}
                       </span>
                     </div>
-                    <span className="text-slate-500 font-mono">{record.time}</span>
+                    <span className="text-slate-500 font-mono font-medium">{record.time}</span>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="h-32 flex flex-col items-center justify-center text-slate-400">
-                <ClockCircleOutlined className="text-2xl mb-2 opacity-50" />
+              <div className="h-48 flex flex-col items-center justify-center text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                <ClockCircleOutlined className="text-3xl mb-2 opacity-50" />
                 <span>尚無打卡紀錄</span>
               </div>
             )}
