@@ -42,15 +42,42 @@ body.dark {
 body {
   margin: 0;
   min-height: 100vh;
-  background-color: var(--bg-primary);
+  /* Apple-style gradient background */
+  background: radial-gradient(circle at 50% 0%, #F5F7FA 0%, #E9EEF5 50%, #E3E8EF 100%);
+  background-attachment: fixed;
   color: var(--text-primary);
   overflow-x: hidden;
   transition: background-color 0.3s ease, color 0.3s ease;
   -webkit-font-smoothing: antialiased; /* Glass Typography Requirement */
   -moz-osx-font-smoothing: grayscale;
-  
-  /* Mesh Gradient Background - Simplified for Orbs */
-  background: var(--bg-primary);
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.2);
 }
 
 /* Enhanced Glassmorphism Utilities */
@@ -63,12 +90,12 @@ body {
 }
 
 .glass-panel {
-  background: var(--glass-card-bg);
-  backdrop-filter: blur(40px) saturate(200%);
-  -webkit-backdrop-filter: blur(40px) saturate(200%);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow);
-  border-radius: var(--glass-radius);
+  background: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+  border-radius: 24px;
 }
 
 .glass-card {
@@ -176,22 +203,14 @@ body.dark {
 body {
   margin: 0;
   min-height: 100vh;
-  background-color: var(--bg-primary);
+  /* Apple-style gradient background */
+  background: radial-gradient(circle at 50% 0%, #F5F7FA 0%, #E9EEF5 50%, #E3E8EF 100%);
+  background-attachment: fixed;
   color: var(--text-primary);
   overflow-x: hidden;
   transition: background-color 0.3s ease, color 0.3s ease;
   -webkit-font-smoothing: antialiased; /* Glass Typography Requirement */
   -moz-osx-font-smoothing: grayscale;
-  
-  /* Mesh Gradient Background */
-  background: 
-    radial-gradient(at 0% 0%, rgba(235, 240, 255, 0.8) 0, transparent 50%), 
-    radial-gradient(at 50% 0%, rgba(240, 245, 255, 0.8) 0, transparent 50%), 
-    radial-gradient(at 100% 0%, rgba(225, 235, 250, 0.8) 0, transparent 50%);
-  background-color: #f0f4f8; /* Fallback pale blue-gray */
-  background-attachment: fixed;
-  background-size: 200% 200%; /* Allow movement */
-  animation: gradientMove 30s ease infinite;
 }
 
 @keyframes gradientMove {
@@ -200,17 +219,7 @@ body {
   100% { background-position: 0% 50%; }
 }
 
-body:not(.dark) {
-  /* Pale Gray-Blue Mesh Gradient */
-  background: 
-    radial-gradient(at 0% 0%, rgba(235, 240, 255, 0.8) 0, transparent 50%), 
-    radial-gradient(at 50% 0%, rgba(240, 245, 255, 0.8) 0, transparent 50%), 
-    radial-gradient(at 100% 0%, rgba(225, 235, 250, 0.8) 0, transparent 50%);
-  background-color: #f0f4f8; /* Fallback pale blue-gray */
-  background-attachment: fixed;
-  background-size: 200% 200%; /* Allow movement */
-  animation: gradientMove 30s ease infinite;
-}
+/* body:not(.dark) removed to use global body style */
 
 /* Enhanced Glassmorphism Utilities */
 .glass {
@@ -254,10 +263,11 @@ body:not(.dark) {
   margin: 16px;
   border-radius: 24px !important;
   height: calc(100vh - 32px) !important;
-  box-shadow: var(--glass-shadow);
-  border: 1px solid var(--glass-border);
-  backdrop-filter: blur(25px) saturate(180%);
-  -webkit-backdrop-filter: blur(25px) saturate(180%);
+  background: rgba(255, 255, 255, 0.3) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15) !important;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
 }
 
 .floating-sidebar::-webkit-scrollbar {
