@@ -22,6 +22,9 @@ import ExpenseReviewCenterPage from './pages/ExpenseReviewCenterPage'
 import ReimbursementItemsAdminPage from './pages/ReimbursementItemsAdminPage'
 import ImportPage from './pages/ImportPage'
 import SystemSettingsPage from './pages/SystemSettingsPage'
+import EmployeeDashboardPage from './pages/attendance/EmployeeDashboardPage'
+import LeaveRequestPage from './pages/attendance/LeaveRequestPage'
+import AttendanceAdminPage from './pages/attendance/AttendanceAdminPage'
 
 const App: React.FC = () => {
   return (
@@ -53,6 +56,11 @@ const App: React.FC = () => {
                 <Route path="admin/reimbursement-items" element={<ReimbursementItemsAdminPage />} />
                 <Route path="admin/settings" element={<SystemSettingsPage />} />
                 
+                {/* Attendance Routes */}
+                <Route path="attendance/dashboard" element={<EmployeeDashboardPage />} />
+                <Route path="attendance/leaves" element={<LeaveRequestPage />} />
+                <Route path="attendance/admin" element={<AttendanceAdminPage />} />
+
                 {/* Placeholder Routes */}
                 <Route path="customers" element={<div className="p-4">Customers Page (Coming Soon)</div>} />
                 <Route path="import" element={<ImportPage />} />
