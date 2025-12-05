@@ -92,6 +92,13 @@ export interface ExpenseRequest {
   paymentMethod?: string | null
   paymentStatus?: string
   metadata?: Record<string, any> | null
+  creator?: {
+    id: string
+    name: string
+    email: string
+  }
+  attachmentUrl?: string | null
+  evidenceFiles?: any[] | null
 }
 
 export interface ExpenseHistoryEntry {

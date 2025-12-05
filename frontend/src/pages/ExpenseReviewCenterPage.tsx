@@ -408,6 +408,17 @@ const ExpenseReviewCenterPage: React.FC = () => {
       ),
     },
     {
+      title: '申請人',
+      dataIndex: 'creator',
+      key: 'creator',
+      render: (_value, record) => (
+        <Space direction="vertical" size={0}>
+          <Text className="font-medium text-slate-700">{record.creator?.name || '—'}</Text>
+          <Text type="secondary" className="text-xs text-gray-500">{record.creator?.email}</Text>
+        </Space>
+      ),
+    },
+    {
       title: '金額',
       dataIndex: 'amountOriginal',
       key: 'amountOriginal',
@@ -813,6 +824,9 @@ const ExpenseReviewCenterPage: React.FC = () => {
                 <Descriptions.Item label="報銷項目">
                   {selectedRequest.reimbursementItem?.name || '--'}
                 </Descriptions.Item>
+                <Descriptions.Item label="申請人">
+                  {selectedRequest.creator?.name || '--'}
+                </Descriptions.Item>
                 <Descriptions.Item label="金額">
                   {selectedRequest.amountCurrency || 'TWD'} {toNumber(selectedRequest.amountOriginal).toLocaleString()}
                 </Descriptions.Item>
@@ -863,6 +877,35 @@ const ExpenseReviewCenterPage: React.FC = () => {
                   {selectedRequest.description || <Text type="secondary">—</Text>}
                 </Descriptions.Item>
               </Descriptions>
+            </GlassDrawerSection>
+
+            <GlassDrawerSection>
+              <div className="mb-4 font-semibold text-slate-800">單據憑證</div>
+              {selectedRequest.attachmentUrl ? (
+                <div className="rounded-lg overflow-hidden border border-slate-200 mb-2 bg-slate-50">
+                  <img 
+                    src={selectedRequest.attachmentUrl} 
+                    alt="Receipt" 
+                    className="w-full h-auto object-contain max-h-[400px]" 
+                    onClick={() => window.open(selectedRequest.attachmentUrl!, '_blank')}
+                    style={{ cursor: 'zoom-in' }}
+                  />
+                </div>
+              ) : (
+                <Empty description="無附件圖片" image={Empty.PRESENTED_IMAGE_SIMPLE} className="my-4" />
+              )}
+              {selectedRequest.evidenceFiles && Array.isArray(selectedRequest.evidenceFiles) && selectedRequest.evidenceFiles.length > 0 && (
+                 <div className="mt-2 space-y-2">
+                    {selectedRequest.evidenceFiles.map((file: any, index: number) => (
+                      <div key={index} className="flex items-center gap-2 text-sm text-blue-600">
+                        <FileSearchOutlined />
+                        <a href={file.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                          {file.name || `附件 ${index + 1}`}
+                        </a>
+                      </div>
+                    ))}
+                 </div>
+              )}
             </GlassDrawerSection>
 
             <GlassDrawerSection>
