@@ -38,6 +38,7 @@ import {
   ReloadOutlined,
   ThunderboltOutlined,
   WarningOutlined,
+  BulbOutlined,
 } from '@ant-design/icons'
 import dayjs, { Dayjs } from 'dayjs'
 import { GlassCard } from '../components/ui/GlassCard'
@@ -157,6 +158,8 @@ const ExpenseReviewCenterPage: React.FC = () => {
   const [selectedRequest, setSelectedRequest] = useState<ExpenseRequest | null>(null)
   const [history, setHistory] = useState<ExpenseHistoryEntry[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [reviewAccountId, setReviewAccountId] = useState<string | undefined>(undefined)
+  const [reviewRemark, setReviewRemark] = useState<string>('')
 
   const entityId = DEFAULT_ENTITY_ID
 
@@ -313,6 +316,32 @@ const ExpenseReviewCenterPage: React.FC = () => {
     setHistory([])
   }
 
+  useEffect(() => {
+    if (selectedRequest) {
+      setReviewAccountId(selectedRequest.suggestedAccount?.id || selectedRequest.finalAccount?.id)
+      setReviewRemark('')
+    }
+  }, [selectedRequest])
+
+  const handleDirectApprove = async () => {
+    if (!selectedRequest || !reviewAccountId) return
+    try {
+      setActionLoading(true)
+      await expenseService.approveExpenseRequest(selectedRequest.id, {
+        finalAccountId: reviewAccountId,
+        remark: reviewRemark.trim() || undefined,
+      })
+      message.success('已核准申請')
+      handleCloseDetail()
+      void loadRequests()
+    } catch (error) {
+      console.error(error)
+      message.error('核准失敗，請稍後再試')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   const openActionModal = (mode: ActionMode, request: ExpenseRequest) => {
     setActionState({ mode, request })
     actionForm.resetFields()
@@ -466,9 +495,9 @@ const ExpenseReviewCenterPage: React.FC = () => {
               block
               size="small"
               className="!bg-green-600/85 !backdrop-blur-md !border-green-400/30 !text-white !shadow-md hover:!bg-green-600/95 hover:!shadow-lg transition-all duration-300 flex items-center justify-center gap-1"
-              onClick={() => openActionModal('approve', record)}
+              onClick={() => handleOpenDetail(record)}
             >
-              <CheckCircleOutlined /> 核准
+              <CheckCircleOutlined /> 審核
             </Button>
           )}
           <div className="flex justify-between items-center gap-1">
@@ -780,29 +809,42 @@ const ExpenseReviewCenterPage: React.FC = () => {
                     {statusLabelMap[selectedRequest.status] || selectedRequest.status}
                   </Tag>
                 </Descriptions.Item>
-                <Descriptions.Item label="系統建議">
-                  {selectedRequest.suggestedAccount ? (
-                    <Space direction="vertical" size={0}>
-                      <span>
-                        {selectedRequest.suggestedAccount.code} · {selectedRequest.suggestedAccount.name}
-                      </span>
-                      {selectedRequest.suggestionConfidence && (
-                        <Text type="secondary" className="text-xs">
-                          信心 {(Number(selectedRequest.suggestionConfidence) * 100).toFixed(0)}%
-                        </Text>
+                <Descriptions.Item label="會計科目">
+                  {selectedRequest.status === 'pending' ? (
+                    <div className="space-y-2 py-1">
+                      <Select
+                        value={reviewAccountId}
+                        onChange={setReviewAccountId}
+                        options={accounts.map((account) => ({
+                          label: `${account.code} ｜ ${account.name}`,
+                          value: account.id,
+                        }))}
+                        showSearch
+                        optionFilterProp="label"
+                        placeholder="選擇會計科目"
+                        className="w-full"
+                        status={!reviewAccountId ? 'error' : undefined}
+                      />
+                      {selectedRequest.suggestedAccount && (
+                        <div className="text-xs text-slate-500 flex items-center gap-1">
+                          <BulbOutlined className="text-yellow-500" />
+                          AI 建議: {selectedRequest.suggestedAccount.code} {selectedRequest.suggestedAccount.name}
+                          {selectedRequest.suggestionConfidence && (
+                            <span className="text-slate-400">
+                              (信心 {(Number(selectedRequest.suggestionConfidence) * 100).toFixed(0)}%)
+                            </span>
+                          )}
+                        </div>
                       )}
-                    </Space>
+                    </div>
                   ) : (
-                    <Text type="secondary">—</Text>
-                  )}
-                </Descriptions.Item>
-                <Descriptions.Item label="最終科目">
-                  {selectedRequest.finalAccount ? (
                     <span>
-                      {selectedRequest.finalAccount.code} · {selectedRequest.finalAccount.name}
+                      {selectedRequest.finalAccount
+                        ? `${selectedRequest.finalAccount.code} · ${selectedRequest.finalAccount.name}`
+                        : selectedRequest.suggestedAccount
+                        ? `${selectedRequest.suggestedAccount.code} · ${selectedRequest.suggestedAccount.name}`
+                        : '未指定'}
                     </span>
-                  ) : (
-                    <Text type="secondary">尚未指定</Text>
                   )}
                 </Descriptions.Item>
                 <Descriptions.Item label="備註">
@@ -870,12 +912,11 @@ const ExpenseReviewCenterPage: React.FC = () => {
                   <Button
                     block
                     type="primary"
-                    className="!bg-green-600/85 !backdrop-blur-md !border-green-400/30 !text-white !shadow-md hover:!bg-green-600/95 hover:!shadow-lg transition-all duration-300 rounded-full"
+                    className="!bg-green-600/85 !backdrop-blur-md !border-green-400/30 !text-white !shadow-md hover:!bg-green-600/95 hover:!shadow-lg transition-all duration-300 rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
                     icon={<CheckCircleOutlined />}
-                    onClick={() => {
-                      handleCloseDetail()
-                      openActionModal('approve', selectedRequest)
-                    }}
+                    onClick={handleDirectApprove}
+                    disabled={!reviewAccountId}
+                    loading={actionLoading}
                   >
                     核准
                   </Button>
