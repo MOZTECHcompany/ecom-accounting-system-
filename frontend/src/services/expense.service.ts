@@ -91,6 +91,7 @@ export interface ExpenseRequest {
   payeeType?: string | null
   paymentMethod?: string | null
   paymentStatus?: string
+  metadata?: Record<string, any> | null
 }
 
 export interface ExpenseHistoryEntry {
