@@ -876,11 +876,6 @@ const ExpenseReviewCenterPage: React.FC = () => {
                 <Descriptions.Item label="備註">
                   {selectedRequest.description || <Text type="secondary">—</Text>}
                 </Descriptions.Item>
-                {(selectedRequest.metadata as any)?.isCustomsDuty && (
-                  <Descriptions.Item label="特殊標記">
-                    <Tag color="orange">關稅/進口稅費</Tag>
-                  </Descriptions.Item>
-                )}
               </Descriptions>
             </GlassDrawerSection>
 
