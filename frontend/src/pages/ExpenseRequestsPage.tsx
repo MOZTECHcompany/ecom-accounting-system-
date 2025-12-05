@@ -350,6 +350,7 @@ const ExpenseRequestsPage: React.FC = () => {
             taxId: values.taxId,
             isInvoicePending: values.isInvoicePending,
           } : {}),
+          isCustomsDuty: values.isCustomsDuty,
         },
         evidenceFiles: evidenceFiles.length > 0 ? evidenceFiles : undefined,
       }
@@ -1015,6 +1016,11 @@ const ExpenseRequestsPage: React.FC = () => {
           </GlassDrawerSection>
 
           <GlassDrawerSection>
+            <div className="mb-3">
+              <Form.Item name="isCustomsDuty" valuePropName="checked" noStyle>
+                <Checkbox>此筆費用包含關稅/進口稅費</Checkbox>
+              </Form.Item>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <Form.Item
                 label="稅別"
@@ -1241,6 +1247,11 @@ const ExpenseRequestsPage: React.FC = () => {
                 <Descriptions.Item label="備註">
                   {selectedRequest.description || <Text type="secondary">—</Text>}
                 </Descriptions.Item>
+                {(selectedRequest.metadata as any)?.isCustomsDuty && (
+                  <Descriptions.Item label="特殊標記">
+                    <Tag color="orange">關稅/進口稅費</Tag>
+                  </Descriptions.Item>
+                )}
               </Descriptions>
             </GlassDrawerSection>
 
