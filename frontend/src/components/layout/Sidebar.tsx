@@ -17,6 +17,7 @@ import {
   ClockCircleOutlined
 } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { GlassDrawer } from '../ui/GlassDrawer'
 import { useAuth } from '../../contexts/AuthContext'
 
 const { Sider, Content } = Layout
@@ -155,16 +156,14 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   if (isMobile) {
     return (
-      <Drawer
+      <GlassDrawer
         placement="left"
         onClose={() => setDrawerVisible(false)}
         open={drawerVisible}
         width={280}
-        styles={{ body: { padding: 0, backgroundColor: '#ffffff' } }}
-        closeIcon={null}
       >
         {MenuContent}
-      </Drawer>
+      </GlassDrawer>
     )
   }
 

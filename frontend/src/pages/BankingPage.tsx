@@ -25,6 +25,7 @@ import {
   DollarOutlined,
   WalletOutlined
 } from '@ant-design/icons'
+import { GlassDrawer, GlassDrawerSection } from '../components/ui/GlassDrawer'
 import { motion } from 'framer-motion'
 import dayjs from 'dayjs'
 import { bankingService } from '../services/banking.service'
@@ -134,44 +135,49 @@ const AccountsTab = () => {
         dataSource={accounts}
       />
 
-      <Drawer
+      <GlassDrawer
         title="新增銀行帳戶"
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        width={520}
-        extra={
-          <Space>
-            <Button onClick={() => setDrawerOpen(false)}>取消</Button>
-            <Button type="primary" onClick={handleCreate}>
-              建立
-            </Button>
-          </Space>
-        }
+        width={420}
       >
-        <Form form={form} layout="vertical">
-          <Card title="帳戶資訊" bordered={false} className="mb-4">
-            <Form.Item name="bankName" label="銀行名稱" rules={[{ required: true }]}>
-              <Input placeholder="例如：玉山銀行" />
-            </Form.Item>
-            <Form.Item name="accountNumber" label="帳號" rules={[{ required: true }]}>
-              <Input placeholder="例如：123-456-789" />
-            </Form.Item>
-          </Card>
-          
-          <Card title="設定" bordered={false}>
-            <Form.Item name="currency" label="幣別" initialValue="TWD">
-              <Select>
-                <Select.Option value="TWD">TWD</Select.Option>
-                <Select.Option value="USD">USD</Select.Option>
-                <Select.Option value="EUR">EUR</Select.Option>
-              </Select>
-            </Form.Item>
-            <Form.Item name="glAccountId" label="對應會計科目">
-              <Input placeholder="例如: 1101" />
-            </Form.Item>
-          </Card>
+        <Form form={form} layout="vertical" className="h-full flex flex-col">
+          <div className="flex-1 space-y-4">
+            <GlassDrawerSection>
+              <div className="mb-4 font-semibold text-slate-800">帳戶資訊</div>
+              <Form.Item name="bankName" label="銀行名稱" rules={[{ required: true }]}>
+                <Input placeholder="例如：玉山銀行" />
+              </Form.Item>
+              <Form.Item name="accountNumber" label="帳號" rules={[{ required: true }]}>
+                <Input placeholder="例如：123-456-789" />
+              </Form.Item>
+            </GlassDrawerSection>
+            
+            <GlassDrawerSection>
+              <div className="mb-4 font-semibold text-slate-800">設定</div>
+              <Form.Item name="currency" label="幣別" initialValue="TWD">
+                <Select>
+                  <Select.Option value="TWD">TWD</Select.Option>
+                  <Select.Option value="USD">USD</Select.Option>
+                  <Select.Option value="EUR">EUR</Select.Option>
+                </Select>
+              </Form.Item>
+              <Form.Item name="glAccountId" label="對應會計科目">
+                <Input placeholder="例如: 1101" />
+              </Form.Item>
+            </GlassDrawerSection>
+          </div>
+
+          <GlassDrawerSection>
+            <div className="flex justify-end gap-2">
+              <Button onClick={() => setDrawerOpen(false)} className="rounded-full">取消</Button>
+              <Button type="primary" onClick={handleCreate} className="rounded-full bg-blue-600 hover:bg-blue-500 border-none shadow-lg shadow-blue-200">
+                建立
+              </Button>
+            </div>
+          </GlassDrawerSection>
         </Form>
-      </Drawer>
+      </GlassDrawer>
     </div>
   )
 }

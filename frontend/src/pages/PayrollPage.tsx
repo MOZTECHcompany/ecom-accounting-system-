@@ -22,6 +22,7 @@ import {
   TeamOutlined,
   CalendarOutlined
 } from '@ant-design/icons'
+import { GlassDrawer, GlassDrawerSection } from '../components/ui/GlassDrawer'
 import { motion } from 'framer-motion'
 import dayjs from 'dayjs'
 import { payrollService } from '../services/payroll.service'
@@ -171,40 +172,45 @@ const PayrollPage: React.FC = () => {
         />
       </Card>
 
-      <Drawer
+      <GlassDrawer
         title="執行薪資計算"
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        width={520}
-        extra={
-          <Space>
-            <Button onClick={() => setDrawerOpen(false)}>取消</Button>
-            <Button type="primary" onClick={handleCreate}>
-              開始計算
-            </Button>
-          </Space>
-        }
+        width={420}
       >
-        <Form form={form} layout="vertical">
-          <Card title="計算參數" bordered={false} className="mb-4">
-            <Form.Item name="period" label="計薪期間" rules={[{ required: true }]}>
-              <DatePicker.RangePicker className="w-full" />
-            </Form.Item>
-            <Form.Item name="payDate" label="預計發薪日" rules={[{ required: true }]}>
-              <DatePicker className="w-full" />
-            </Form.Item>
-          </Card>
-          
-          <Card title="進階選項" bordered={false}>
-            <Form.Item label="包含獎金" name="includeBonus" valuePropName="checked" initialValue={true}>
-               <Input type="checkbox" className="w-4 h-4" />
-            </Form.Item>
-            <Text type="secondary">
-              系統將自動計算本期出勤、加班費與勞健保扣除額。
-            </Text>
-          </Card>
+        <Form form={form} layout="vertical" className="h-full flex flex-col">
+          <div className="flex-1 space-y-4">
+            <GlassDrawerSection>
+              <div className="mb-4 font-semibold text-slate-800">計算參數</div>
+              <Form.Item name="period" label="計薪期間" rules={[{ required: true }]}>
+                <DatePicker.RangePicker className="w-full" />
+              </Form.Item>
+              <Form.Item name="payDate" label="預計發薪日" rules={[{ required: true }]}>
+                <DatePicker className="w-full" />
+              </Form.Item>
+            </GlassDrawerSection>
+            
+            <GlassDrawerSection>
+              <div className="mb-4 font-semibold text-slate-800">進階選項</div>
+              <Form.Item label="包含獎金" name="includeBonus" valuePropName="checked" initialValue={true}>
+                 <Input type="checkbox" className="w-4 h-4" />
+              </Form.Item>
+              <Text type="secondary" className="text-xs">
+                系統將自動計算本期出勤、加班費與勞健保扣除額。
+              </Text>
+            </GlassDrawerSection>
+          </div>
+
+          <GlassDrawerSection>
+            <div className="flex justify-end gap-2">
+              <Button onClick={() => setDrawerOpen(false)} className="rounded-full">取消</Button>
+              <Button type="primary" onClick={handleCreate} className="rounded-full bg-blue-600 hover:bg-blue-500 border-none shadow-lg shadow-blue-200">
+                開始計算
+              </Button>
+            </div>
+          </GlassDrawerSection>
         </Form>
-      </Drawer>
+      </GlassDrawer>
     </motion.div>
   )
 }

@@ -28,6 +28,7 @@ import {
   StopOutlined,
   SearchOutlined,
 } from '@ant-design/icons'
+import { GlassDrawer, GlassDrawerSection } from '../components/ui/GlassDrawer'
 import { motion } from 'framer-motion'
 import { expenseService } from '../services/expense.service'
 import type {
@@ -379,133 +380,145 @@ const ReimbursementItemsAdminPage: React.FC = () => {
         />
       </Card>
 
-      <Drawer
+      <GlassDrawer
         title={editingItem ? '編輯報銷項目' : '新增報銷項目'}
         placement="right"
-        width={520}
+        width={420}
         onClose={handleDrawerClose}
         open={drawerOpen}
         destroyOnClose
-        footer={
-          <Space className="w-full justify-end">
-            <Button onClick={handleDrawerClose}>取消</Button>
-            <Button type="primary" loading={submitting} onClick={handleSubmit}>
-              儲存
-            </Button>
-          </Space>
-        }
       >
-        <Form layout="vertical" form={form} preserve={false}>
-          <Form.Item
-            label="實體 ID"
-            name="entityId"
-            rules={[{ required: true, message: '請輸入實體 ID' }]}
-          >
-            <Input placeholder="例如：tw-entity-001" />
-          </Form.Item>
+        <Form layout="vertical" form={form} preserve={false} className="h-full flex flex-col">
+          <div className="flex-1 space-y-4">
+            <GlassDrawerSection>
+              <Form.Item
+                label="實體 ID"
+                name="entityId"
+                rules={[{ required: true, message: '請輸入實體 ID' }]}
+              >
+                <Input placeholder="例如：tw-entity-001" />
+              </Form.Item>
 
-          <Form.Item
-            label="報銷項目名稱"
-            name="name"
-            rules={[{ required: true, message: '請輸入名稱' }]}
-          >
-            <Input maxLength={80} />
-          </Form.Item>
+              <Form.Item
+                label="報銷項目名稱"
+                name="name"
+                rules={[{ required: true, message: '請輸入名稱' }]}
+              >
+                <Input maxLength={80} />
+              </Form.Item>
 
-          <Form.Item
-            label="對應會計科目"
-            name="accountId"
-            rules={[{ required: true, message: '請選擇會計科目' }]}
-          >
-            <Select
-              showSearch
-              optionFilterProp="label"
-              placeholder="選擇會計科目"
-              options={accounts.map((account) => ({
-                label: `${account.code} ｜ ${account.name}`,
-                value: account.id,
-              }))}
-            />
-          </Form.Item>
+              <Form.Item
+                label="對應會計科目"
+                name="accountId"
+                rules={[{ required: true, message: '請選擇會計科目' }]}
+              >
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder="選擇會計科目"
+                  options={accounts.map((account) => ({
+                    label: `${account.code} ｜ ${account.name}`,
+                    value: account.id,
+                  }))}
+                />
+              </Form.Item>
 
-          <Form.Item label="描述" name="description">
-            <Input.TextArea rows={2} maxLength={200} placeholder="可選" />
-          </Form.Item>
+              <Form.Item label="描述" name="description">
+                <Input.TextArea rows={2} maxLength={200} placeholder="可選" />
+              </Form.Item>
 
-          <Form.Item label="關鍵字" name="keywords">
-            <Select mode="tags" tokenSeparators={[',']} placeholder="輸入後按 Enter 新增" />
-          </Form.Item>
+              <Form.Item label="關鍵字" name="keywords">
+                <Select mode="tags" tokenSeparators={[',']} placeholder="輸入後按 Enter 新增" />
+              </Form.Item>
 
-          <Form.Item label="金額上限 (TWD)" name="amountLimit">
-            <InputNumber min={0} style={{ width: '100%' }} placeholder="留空則不限" />
-          </Form.Item>
+              <Form.Item label="金額上限 (TWD)" name="amountLimit">
+                <InputNumber min={0} style={{ width: '100%' }} placeholder="留空則不限" />
+              </Form.Item>
+            </GlassDrawerSection>
 
-          <Form.Item
-            label="預設稅別"
-            name="defaultTaxType"
-          >
-            <Select allowClear options={[
-              { label: '應稅 5% (V5)', value: 'TAXABLE_5_PERCENT' },
-              { label: '不可扣抵 5% (VND)', value: 'NON_DEDUCTIBLE_5_PERCENT' },
-              { label: '零稅率 (Z0)', value: 'ZERO_RATED' },
-              { label: '免稅 (F0)', value: 'TAX_FREE' },
-            ]} />
-          </Form.Item>
+            <GlassDrawerSection>
+              <div className="mb-4 font-semibold text-slate-800">稅務與憑證</div>
+              <Form.Item
+                label="預設稅別"
+                name="defaultTaxType"
+              >
+                <Select allowClear options={[
+                  { label: '應稅 5% (V5)', value: 'TAXABLE_5_PERCENT' },
+                  { label: '不可扣抵 5% (VND)', value: 'NON_DEDUCTIBLE_5_PERCENT' },
+                  { label: '零稅率 (Z0)', value: 'ZERO_RATED' },
+                  { label: '免稅 (F0)', value: 'TAX_FREE' },
+                ]} />
+              </Form.Item>
 
-          <Form.Item
-            label="預設憑證類型"
-            name="defaultReceiptType"
-          >
-            <Select allowClear options={RECEIPT_TYPES.map((type) => ({ label: type, value: type }))} />
-          </Form.Item>
+              <Form.Item
+                label="預設憑證類型"
+                name="defaultReceiptType"
+              >
+                <Select allowClear options={RECEIPT_TYPES.map((type) => ({ label: type, value: type }))} />
+              </Form.Item>
 
-          <Form.Item label="允許的憑證類型" name="allowedReceiptTypes">
-            <Select
-              mode="multiple"
-              allowClear
-              options={RECEIPT_TYPES.map((type) => ({ label: type, value: type }))}
-            />
-          </Form.Item>
+              <Form.Item label="允許的憑證類型" name="allowedReceiptTypes">
+                <Select
+                  mode="multiple"
+                  allowClear
+                  options={RECEIPT_TYPES.map((type) => ({ label: type, value: type }))}
+                />
+              </Form.Item>
+            </GlassDrawerSection>
 
-          <Form.Item label="需要部門主管核准" name="requiresDepartmentHead" valuePropName="checked">
-            <Switch />
-          </Form.Item>
+            <GlassDrawerSection>
+              <div className="mb-4 font-semibold text-slate-800">審批設定</div>
+              <Form.Item label="需要部門主管核准" name="requiresDepartmentHead" valuePropName="checked">
+                <Switch />
+              </Form.Item>
 
-          <Form.Item label="審批角色代碼" name="approverRoleCodes">
-            <Select
-              mode="multiple"
-              allowClear
-              options={ROLE_OPTIONS.map((role) => ({ label: role, value: role }))}
-            />
-          </Form.Item>
+              <Form.Item label="審批角色代碼" name="approverRoleCodes">
+                <Select
+                  mode="multiple"
+                  allowClear
+                  options={ROLE_OPTIONS.map((role) => ({ label: role, value: role }))}
+                />
+              </Form.Item>
 
-          <Form.Item label="綁定審批政策" name="approvalPolicyId">
-            <Select
-              allowClear
-              placeholder="選擇審批政策"
-              options={policies.map((policy) => ({ label: policy.name, value: policy.id }))}
-            />
-          </Form.Item>
+              <Form.Item label="綁定審批政策" name="approvalPolicyId">
+                <Select
+                  allowClear
+                  placeholder="選擇審批政策"
+                  options={policies.map((policy) => ({ label: policy.name, value: policy.id }))}
+                />
+              </Form.Item>
+            </GlassDrawerSection>
 
-          <Divider />
+            <GlassDrawerSection>
+              <div className="mb-4 font-semibold text-slate-800">權限與狀態</div>
+              <Form.Item label="允許的角色" name="allowedRoles">
+                <Select
+                  mode="multiple"
+                  allowClear
+                  options={ROLE_OPTIONS.map((role) => ({ label: role, value: role }))}
+                />
+              </Form.Item>
 
-          <Form.Item label="允許的角色" name="allowedRoles">
-            <Select
-              mode="multiple"
-              allowClear
-              options={ROLE_OPTIONS.map((role) => ({ label: role, value: role }))}
-            />
-          </Form.Item>
+              <Form.Item label="允許的部門 ID" name="allowedDepartments">
+                <Select mode="tags" tokenSeparators={[',']} placeholder="輸入部門 ID" />
+              </Form.Item>
 
-          <Form.Item label="允許的部門 ID" name="allowedDepartments">
-            <Select mode="tags" tokenSeparators={[',']} placeholder="輸入部門 ID" />
-          </Form.Item>
+              <Form.Item label="啟用" name="isActive" valuePropName="checked">
+                <Switch />
+              </Form.Item>
+            </GlassDrawerSection>
+          </div>
 
-          <Form.Item label="啟用" name="isActive" valuePropName="checked">
-            <Switch />
-          </Form.Item>
+          <GlassDrawerSection>
+            <div className="flex justify-end gap-2">
+              <Button onClick={handleDrawerClose} className="rounded-full">取消</Button>
+              <Button type="primary" loading={submitting} onClick={handleSubmit} className="rounded-full bg-blue-600 hover:bg-blue-500 border-none shadow-lg shadow-blue-200">
+                儲存
+              </Button>
+            </div>
+          </GlassDrawerSection>
         </Form>
-      </Drawer>
+      </GlassDrawer>
     </motion.div>
   )
 }

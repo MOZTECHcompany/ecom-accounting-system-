@@ -32,6 +32,7 @@ import {
   DownloadOutlined,
   FireOutlined,
 } from '@ant-design/icons'
+import { GlassDrawer, GlassDrawerSection } from '../components/ui/GlassDrawer'
 import { motion } from 'framer-motion'
 import dayjs from 'dayjs'
 import * as XLSX from 'xlsx'
@@ -674,124 +675,130 @@ const ApInvoicesPage: React.FC = () => {
         />
       </Card>
 
-      <Drawer
+      <GlassDrawer
         title="登記供應商發票"
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         width={720}
-        extra={
-          <Space>
-            <Button onClick={() => setCreateOpen(false)}>取消</Button>
-            <Button type="primary" onClick={handleCreate}>
-              建立
-            </Button>
-          </Space>
-        }
       >
-        <Form form={form} layout="vertical">
-          <Card title="基本資訊" bordered={false} className="mb-4">
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item name="vendorId" label="供應商" rules={[{ required: true }]}>
-                  <Select
-                    showSearch
-                    placeholder="選擇供應商"
-                    loading={vendorsLoading}
-                    options={vendorOptions}
-                    optionFilterProp="label"
-                  />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item name="invoiceNo" label="發票號碼" rules={[{ required: true }]}>
-                  <Input />
-                </Form.Item>
-              </Col>
-            </Row>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item name="amountOriginal" label="發票金額" rules={[{ required: true }]}>
-                  <InputNumber
-                    className="w-full"
-                    min={0}
-                    prefix="$"
-                    precision={2}
-                    onChange={(value) => {
-                        const taxType = form.getFieldValue('taxType');
-                        if (value && (taxType === 'TAXABLE_5_PERCENT' || taxType === 'NON_DEDUCTIBLE_5_PERCENT')) {
-                            const tax = Math.round(Number(value) / 1.05 * 0.05);
-                            form.setFieldsValue({ taxAmount: tax });
-                        }
-                    }}
-                  />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item name="amountCurrency" label="幣別" initialValue="TWD">
-                  <Select options={[{ value: 'TWD' }, { value: 'USD' }, { value: 'JPY' }]} />
-                </Form.Item>
-              </Col>
-            </Row>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item name="taxType" label="稅別">
-                  <Select
-                    allowClear
-                    options={[
-                      { label: '應稅 5% (V5)', value: 'TAXABLE_5_PERCENT' },
-                      { label: '不可扣抵 5% (VND)', value: 'NON_DEDUCTIBLE_5_PERCENT' },
-                      { label: '零稅率 (Z0)', value: 'ZERO_RATED' },
-                      { label: '免稅 (F0)', value: 'TAX_FREE' },
-                    ]}
-                    onChange={(value) => {
-                       const amount = form.getFieldValue('amountOriginal');
-                       if (amount && (value === 'TAXABLE_5_PERCENT' || value === 'NON_DEDUCTIBLE_5_PERCENT')) {
-                           const tax = Math.round(amount / 1.05 * 0.05);
-                           form.setFieldsValue({ taxAmount: tax });
-                       } else {
-                           form.setFieldsValue({ taxAmount: 0 });
-                       }
-                    }}
-                  />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item name="taxAmount" label="稅額">
-                  <InputNumber className="w-full" min={0} precision={0} placeholder="自動計算" />
-                </Form.Item>
-              </Col>
-            </Row>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item name="invoiceDate" label="開立日期" rules={[{ required: true }]}>
-                  <DatePicker className="w-full" />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item name="dueDate" label="到期日" rules={[{ required: true }]}>
-                  <DatePicker className="w-full" />
-                </Form.Item>
-              </Col>
-            </Row>
-          </Card>
+        <Form form={form} layout="vertical" className="h-full flex flex-col">
+          <div className="flex-1 space-y-4">
+            <GlassDrawerSection>
+              <div className="mb-4 font-semibold text-slate-800">基本資訊</div>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item name="vendorId" label="供應商" rules={[{ required: true }]}>
+                    <Select
+                      showSearch
+                      placeholder="選擇供應商"
+                      loading={vendorsLoading}
+                      options={vendorOptions}
+                      optionFilterProp="label"
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="invoiceNo" label="發票號碼" rules={[{ required: true }]}>
+                    <Input />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item name="amountOriginal" label="發票金額" rules={[{ required: true }]}>
+                    <InputNumber
+                      className="w-full"
+                      min={0}
+                      prefix="$"
+                      precision={2}
+                      onChange={(value) => {
+                          const taxType = form.getFieldValue('taxType');
+                          if (value && (taxType === 'TAXABLE_5_PERCENT' || taxType === 'NON_DEDUCTIBLE_5_PERCENT')) {
+                              const tax = Math.round(Number(value) / 1.05 * 0.05);
+                              form.setFieldsValue({ taxAmount: tax });
+                          }
+                      }}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="amountCurrency" label="幣別" initialValue="TWD">
+                    <Select options={[{ value: 'TWD' }, { value: 'USD' }, { value: 'JPY' }]} />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item name="taxType" label="稅別">
+                    <Select
+                      allowClear
+                      options={[
+                        { label: '應稅 5% (V5)', value: 'TAXABLE_5_PERCENT' },
+                        { label: '不可扣抵 5% (VND)', value: 'NON_DEDUCTIBLE_5_PERCENT' },
+                        { label: '零稅率 (Z0)', value: 'ZERO_RATED' },
+                        { label: '免稅 (F0)', value: 'TAX_FREE' },
+                      ]}
+                      onChange={(value) => {
+                         const amount = form.getFieldValue('amountOriginal');
+                         if (amount && (value === 'TAXABLE_5_PERCENT' || value === 'NON_DEDUCTIBLE_5_PERCENT')) {
+                             const tax = Math.round(amount / 1.05 * 0.05);
+                             form.setFieldsValue({ taxAmount: tax });
+                         } else {
+                             form.setFieldsValue({ taxAmount: 0 });
+                         }
+                      }}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="taxAmount" label="稅額">
+                    <InputNumber className="w-full" min={0} precision={0} placeholder="自動計算" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item name="invoiceDate" label="開立日期" rules={[{ required: true }]}>
+                    <DatePicker className="w-full" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="dueDate" label="到期日" rules={[{ required: true }]}>
+                    <DatePicker className="w-full" />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </GlassDrawerSection>
 
-          <Card title="付款設定" bordered={false} className="mb-4">
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item name="paymentFrequency" label="付款頻率" initialValue="one_time">
-                  <Select options={PAYMENT_FREQUENCIES} />
-                </Form.Item>
-              </Col>
-            </Row>
-          </Card>
+            <GlassDrawerSection>
+              <div className="mb-4 font-semibold text-slate-800">付款設定</div>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item name="paymentFrequency" label="付款頻率" initialValue="one_time">
+                    <Select options={PAYMENT_FREQUENCIES} />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </GlassDrawerSection>
 
-          <Card title="其他" bordered={false}>
-            <Form.Item name="notes" label="備註">
-              <Input.TextArea rows={3} />
-            </Form.Item>
-          </Card>
+            <GlassDrawerSection>
+              <div className="mb-4 font-semibold text-slate-800">其他</div>
+              <Form.Item name="notes" label="備註">
+                <Input.TextArea rows={3} />
+              </Form.Item>
+            </GlassDrawerSection>
+          </div>
+
+          <GlassDrawerSection>
+            <div className="flex justify-end gap-2">
+              <Button onClick={() => setCreateOpen(false)} className="rounded-full">取消</Button>
+              <Button type="primary" onClick={handleCreate} className="rounded-full bg-blue-600 hover:bg-blue-500 border-none shadow-lg shadow-blue-200">
+                建立
+              </Button>
+            </div>
+          </GlassDrawerSection>
         </Form>
-      </Drawer>
+      </GlassDrawer>
 
       <Modal
         title="批次匯入應付發票"
@@ -951,7 +958,7 @@ const ApInvoicesPage: React.FC = () => {
         </Form>
       </Modal>
 
-      <Drawer
+      <GlassDrawer
         title="更新付款排程"
         open={editOpen}
         onClose={() => {
@@ -959,59 +966,64 @@ const ApInvoicesPage: React.FC = () => {
           setEditingInvoice(null)
           editForm.resetFields()
         }}
-        width={520}
-        extra={
-          <Space>
-            <Button onClick={() => setEditOpen(false)}>取消</Button>
-            <Button type="primary" onClick={handleUpdateRecurring}>
-              儲存
-            </Button>
-          </Space>
-        }
+        width={420}
       >
-        <Form form={editForm} layout="vertical">
-          <Form.Item name="paymentFrequency" label="付款頻率" rules={[{ required: true }]}>
-            <Select options={PAYMENT_FREQUENCIES} />
-          </Form.Item>
-          <Form.Item
-            name="dueDate"
-            label="最新到期日"
-            rules={[{ required: true, message: '請選擇到期日' }]}
-          >
-            <DatePicker className="w-full" />
-          </Form.Item>
-          <Form.Item
-            name="isRecurringMonthly"
-            label="每月循環提醒"
-            valuePropName="checked"
-          >
-            <Switch />
-          </Form.Item>
-          <Form.Item
-            name="recurringDayOfMonth"
-            label="每月扣款日"
-            dependencies={['isRecurringMonthly']}
-            rules={[
-              ({ getFieldValue }) => ({
-                validator(_, value) {
-                  if (!getFieldValue('isRecurringMonthly')) {
-                    return Promise.resolve()
-                  }
-                  if (value && value >= 1 && value <= 31) {
-                    return Promise.resolve()
-                  }
-                  return Promise.reject(new Error('請輸入 1-31 的日期'))
-                },
-              }),
-            ]}
-          >
-            <InputNumber className="w-full" min={1} max={31} />
-          </Form.Item>
-          <Form.Item name="notes" label="備註">
-            <Input.TextArea rows={3} />
-          </Form.Item>
+        <Form form={editForm} layout="vertical" className="h-full flex flex-col">
+          <div className="flex-1 space-y-4">
+            <GlassDrawerSection>
+              <Form.Item name="paymentFrequency" label="付款頻率" rules={[{ required: true }]}>
+                <Select options={PAYMENT_FREQUENCIES} />
+              </Form.Item>
+              <Form.Item
+                name="dueDate"
+                label="最新到期日"
+                rules={[{ required: true, message: '請選擇到期日' }]}
+              >
+                <DatePicker className="w-full" />
+              </Form.Item>
+              <Form.Item
+                name="isRecurringMonthly"
+                label="每月循環提醒"
+                valuePropName="checked"
+              >
+                <Switch />
+              </Form.Item>
+              <Form.Item
+                name="recurringDayOfMonth"
+                label="每月扣款日"
+                dependencies={['isRecurringMonthly']}
+                rules={[
+                  ({ getFieldValue }) => ({
+                    validator(_, value) {
+                      if (!getFieldValue('isRecurringMonthly')) {
+                        return Promise.resolve()
+                      }
+                      if (value && value >= 1 && value <= 31) {
+                        return Promise.resolve()
+                      }
+                      return Promise.reject(new Error('請輸入 1-31 的日期'))
+                    },
+                  }),
+                ]}
+              >
+                <InputNumber className="w-full" min={1} max={31} />
+              </Form.Item>
+              <Form.Item name="notes" label="備註">
+                <Input.TextArea rows={3} />
+              </Form.Item>
+            </GlassDrawerSection>
+          </div>
+
+          <GlassDrawerSection>
+            <div className="flex justify-end gap-2">
+              <Button onClick={() => setEditOpen(false)} className="rounded-full">取消</Button>
+              <Button type="primary" onClick={handleUpdateRecurring} className="rounded-full bg-blue-600 hover:bg-blue-500 border-none shadow-lg shadow-blue-200">
+                儲存
+              </Button>
+            </div>
+          </GlassDrawerSection>
         </Form>
-      </Drawer>
+      </GlassDrawer>
 
       <Modal
         title="記錄付款"

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { GlassDrawer, GlassDrawerSection } from '../components/ui/GlassDrawer'
 import {
   Button,
   Card,
@@ -246,113 +247,120 @@ const VendorsPage: React.FC = () => {
         />
       </Card>
 
-      <Drawer
+      <GlassDrawer
         title={editingVendor ? '編輯供應商' : '新增供應商'}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         width={720}
-        extra={
-          <Space>
-            <Button onClick={() => setDrawerOpen(false)}>取消</Button>
-            <Button type="primary" onClick={handleSubmit}>
-              {editingVendor ? '更新' : '新增'}
-            </Button>
-          </Space>
-        }
       >
         <Form
           form={form}
           layout="vertical"
+          className="h-full flex flex-col"
         >
-          <Card title="基本資料" bordered={false} className="mb-4">
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item
-                  name="code"
-                  label="供應商代碼"
-                  rules={[{ required: true, message: '請輸入代碼' }]}
-                >
-                  <Input placeholder="例如：V001" />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item
-                  name="name"
-                  label="供應商名稱"
-                  rules={[{ required: true, message: '請輸入名稱' }]}
-                >
-                  <Input placeholder="輸入公司名稱" />
-                </Form.Item>
-              </Col>
-            </Row>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item name="taxId" label="統一編號">
-                  <Input />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item name="isActive" label="狀態" valuePropName="checked">
-                  <Switch checkedChildren="啟用" unCheckedChildren="停用" />
-                </Form.Item>
-              </Col>
-            </Row>
-          </Card>
+          <div className="flex-1 space-y-4">
+            <GlassDrawerSection>
+              <div className="mb-4 font-semibold text-slate-800">基本資料</div>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="code"
+                    label="供應商代碼"
+                    rules={[{ required: true, message: '請輸入代碼' }]}
+                  >
+                    <Input placeholder="例如：V001" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="name"
+                    label="供應商名稱"
+                    rules={[{ required: true, message: '請輸入名稱' }]}
+                  >
+                    <Input placeholder="輸入公司名稱" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item name="taxId" label="統一編號">
+                    <Input />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="isActive" label="狀態" valuePropName="checked">
+                    <Switch checkedChildren="啟用" unCheckedChildren="停用" />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </GlassDrawerSection>
 
-          <Card title="聯絡資訊" bordered={false} className="mb-4">
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item name="contactPerson" label="聯絡人">
-                  <Input />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item name="phone" label="電話">
-                  <Input />
-                </Form.Item>
-              </Col>
-            </Row>
-            <Row gutter={16}>
-              <Col span={24}>
-                <Form.Item name="email" label="Email" rules={[{ type: 'email' }]}>
-                  <Input />
-                </Form.Item>
-              </Col>
-            </Row>
-            <Row gutter={16}>
-              <Col span={24}>
-                <Form.Item name="address" label="地址">
-                  <Input.TextArea rows={2} />
-                </Form.Item>
-              </Col>
-            </Row>
-          </Card>
+            <GlassDrawerSection>
+              <div className="mb-4 font-semibold text-slate-800">聯絡資訊</div>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item name="contactPerson" label="聯絡人">
+                    <Input />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="phone" label="電話">
+                    <Input />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Row gutter={16}>
+                <Col span={24}>
+                  <Form.Item name="email" label="Email" rules={[{ type: 'email' }]}>
+                    <Input />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Row gutter={16}>
+                <Col span={24}>
+                  <Form.Item name="address" label="地址">
+                    <Input.TextArea rows={2} />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </GlassDrawerSection>
 
-          <Card title="財務設定" bordered={false}>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item name="currency" label="預設幣別">
-                  <Select>
-                    <Option value="TWD">TWD - 新台幣</Option>
-                    <Option value="USD">USD - 美金</Option>
-                    <Option value="EUR">EUR - 歐元</Option>
-                    <Option value="JPY">JPY - 日圓</Option>
-                  </Select>
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item name="paymentTerms" label="付款條件">
-                  <Select>
-                    <Option value="NET30">月結 30 天</Option>
-                    <Option value="NET60">月結 60 天</Option>
-                    <Option value="COD">貨到付款</Option>
-                  </Select>
-                </Form.Item>
-              </Col>
-            </Row>
-          </Card>
+            <GlassDrawerSection>
+              <div className="mb-4 font-semibold text-slate-800">財務設定</div>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item name="currency" label="預設幣別">
+                    <Select>
+                      <Option value="TWD">TWD - 新台幣</Option>
+                      <Option value="USD">USD - 美金</Option>
+                      <Option value="EUR">EUR - 歐元</Option>
+                      <Option value="JPY">JPY - 日圓</Option>
+                    </Select>
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="paymentTerms" label="付款條件">
+                    <Select>
+                      <Option value="NET30">月結 30 天</Option>
+                      <Option value="NET60">月結 60 天</Option>
+                      <Option value="COD">貨到付款</Option>
+                    </Select>
+                  </Form.Item>
+                </Col>
+              </Row>
+            </GlassDrawerSection>
+          </div>
+
+          <GlassDrawerSection>
+            <div className="flex justify-end gap-2">
+              <Button onClick={() => setDrawerOpen(false)} className="rounded-full">取消</Button>
+              <Button type="primary" onClick={handleSubmit} className="rounded-full bg-blue-600 hover:bg-blue-500 border-none shadow-lg shadow-blue-200">
+                {editingVendor ? '更新' : '新增'}
+              </Button>
+            </div>
+          </GlassDrawerSection>
         </Form>
-      </Drawer>
+      </GlassDrawer>
     </div>
   )
 }

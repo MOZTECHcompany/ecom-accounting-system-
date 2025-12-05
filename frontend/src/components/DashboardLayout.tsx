@@ -18,6 +18,7 @@ import {
   ClockCircleOutlined
 } from '@ant-design/icons'
 import { AnimatePresence, motion } from 'framer-motion'
+import { GlassDrawer } from './ui/GlassDrawer'
 import { useAuth } from '../contexts/AuthContext'
 import CommandPalette from './CommandPalette'
 import AICopilotWidget from './AICopilotWidget'
@@ -248,13 +249,11 @@ const DashboardLayout: React.FC = () => {
           </div>
         </Sider>
       ) : (
-        <Drawer
+        <GlassDrawer
           placement="left"
           onClose={() => setMobileMenuOpen(false)}
           open={mobileMenuOpen}
           width={280}
-          styles={{ body: { padding: 0, background: 'var(--glass-bg)', backdropFilter: 'blur(20px)' } }}
-          closable={false}
         >
           <div className="h-16 flex items-center justify-center m-4 mb-8">
             <div className="flex items-center gap-3">
@@ -275,7 +274,7 @@ const DashboardLayout: React.FC = () => {
             className="px-2 bg-transparent border-none"
             onClick={() => setMobileMenuOpen(false)}
           />
-        </Drawer>
+        </GlassDrawer>
       )}
 
       <Layout style={{ 

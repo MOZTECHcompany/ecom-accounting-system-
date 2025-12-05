@@ -40,7 +40,8 @@ import {
   WarningOutlined,
 } from '@ant-design/icons'
 import dayjs, { Dayjs } from 'dayjs'
-import { GlassCard } from '../components/ui/GlassCard'
+import GlassCard from '../components/ui/GlassCard'
+import { GlassDrawer, GlassDrawerSection } from '../components/ui/GlassDrawer'
 import { GlassButton } from '../components/ui/GlassButton'
 import { GlassInput } from '../components/ui/GlassInput'
 import { GlassSelect } from '../components/ui/GlassSelect'
@@ -754,133 +755,136 @@ const ExpenseReviewCenterPage: React.FC = () => {
         </div>
       </div>
 
-      <Drawer
+      <GlassDrawer
         title="申請詳情"
         placement="right"
         onClose={handleCloseDetail}
         open={detailDrawerOpen}
-        width={520}
+        width={420}
         destroyOnClose
-        styles={{ body: { paddingBottom: 24 } }}
       >
         {!selectedRequest ? (
-          <Text type="secondary">請選擇申請查看詳情</Text>
+          <Text type="secondary" className="p-6 block">請選擇申請查看詳情</Text>
         ) : (
-          <>
-            <Descriptions bordered column={1} size="small" labelStyle={{ width: 120 }}>
-              <Descriptions.Item label="報銷項目">
-                {selectedRequest.reimbursementItem?.name || '--'}
-              </Descriptions.Item>
-              <Descriptions.Item label="金額">
-                {selectedRequest.amountCurrency || 'TWD'} {toNumber(selectedRequest.amountOriginal).toLocaleString()}
-              </Descriptions.Item>
-              <Descriptions.Item label="狀態">
-                <Tag color={statusColorMap[selectedRequest.status] || 'default'}>
-                  {statusLabelMap[selectedRequest.status] || selectedRequest.status}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="系統建議">
-                {selectedRequest.suggestedAccount ? (
-                  <Space direction="vertical" size={0}>
+          <div className="space-y-4">
+            <GlassDrawerSection>
+              <Descriptions bordered column={1} size="small" labelStyle={{ width: 100, background: 'transparent' }} contentStyle={{ background: 'transparent' }}>
+                <Descriptions.Item label="報銷項目">
+                  {selectedRequest.reimbursementItem?.name || '--'}
+                </Descriptions.Item>
+                <Descriptions.Item label="金額">
+                  {selectedRequest.amountCurrency || 'TWD'} {toNumber(selectedRequest.amountOriginal).toLocaleString()}
+                </Descriptions.Item>
+                <Descriptions.Item label="狀態">
+                  <Tag color={statusColorMap[selectedRequest.status] || 'default'} className="rounded-full px-2 border-none">
+                    {statusLabelMap[selectedRequest.status] || selectedRequest.status}
+                  </Tag>
+                </Descriptions.Item>
+                <Descriptions.Item label="系統建議">
+                  {selectedRequest.suggestedAccount ? (
+                    <Space direction="vertical" size={0}>
+                      <span>
+                        {selectedRequest.suggestedAccount.code} · {selectedRequest.suggestedAccount.name}
+                      </span>
+                      {selectedRequest.suggestionConfidence && (
+                        <Text type="secondary" className="text-xs">
+                          信心 {(Number(selectedRequest.suggestionConfidence) * 100).toFixed(0)}%
+                        </Text>
+                      )}
+                    </Space>
+                  ) : (
+                    <Text type="secondary">—</Text>
+                  )}
+                </Descriptions.Item>
+                <Descriptions.Item label="最終科目">
+                  {selectedRequest.finalAccount ? (
                     <span>
-                      {selectedRequest.suggestedAccount.code} · {selectedRequest.suggestedAccount.name}
+                      {selectedRequest.finalAccount.code} · {selectedRequest.finalAccount.name}
                     </span>
-                    {selectedRequest.suggestionConfidence && (
-                      <Text type="secondary">
-                        信心 {(Number(selectedRequest.suggestionConfidence) * 100).toFixed(0)}%
-                      </Text>
-                    )}
-                  </Space>
-                ) : (
-                  <Text type="secondary">—</Text>
-                )}
-              </Descriptions.Item>
-              <Descriptions.Item label="最終科目">
-                {selectedRequest.finalAccount ? (
-                  <span>
-                    {selectedRequest.finalAccount.code} · {selectedRequest.finalAccount.name}
-                  </span>
-                ) : (
-                  <Text type="secondary">尚未指定</Text>
-                )}
-              </Descriptions.Item>
-              <Descriptions.Item label="備註">
-                {selectedRequest.description || <Text type="secondary">—</Text>}
-              </Descriptions.Item>
-            </Descriptions>
+                  ) : (
+                    <Text type="secondary">尚未指定</Text>
+                  )}
+                </Descriptions.Item>
+                <Descriptions.Item label="備註">
+                  {selectedRequest.description || <Text type="secondary">—</Text>}
+                </Descriptions.Item>
+              </Descriptions>
+            </GlassDrawerSection>
 
-            <Divider />
-            <Title level={5} style={{ marginBottom: 16 }}>
-              歷程紀錄
-            </Title>
-            <div className="max-h-72 overflow-y-auto px-1 pt-1 pb-4">
-              <Timeline
-                mode="left"
-                pending={historyLoading ? '讀取中...' : undefined}
-                items={history.map((entry) => ({
-                  color:
-                    entry.action === 'approved'
-                      ? 'green'
-                      : entry.action === 'rejected'
-                      ? 'red'
-                      : 'blue',
-                  children: (
-                    <div className="pb-3">
-                      <div className="flex flex-wrap items-baseline justify-between gap-x-2 text-sm font-medium leading-relaxed">
-                        <span className="font-bold text-gray-700">
-                          {historyLabelMap[entry.action] || entry.action}
-                        </span>
-                        <span className="text-xs text-gray-400 whitespace-nowrap">
-                          {dayjs(entry.createdAt).format('YYYY/MM/DD HH:mm')}
-                        </span>
-                      </div>
-                      {entry.actor && (
-                        <div className="text-xs text-gray-500 mt-1">由 {entry.actor.name}</div>
-                      )}
-                      {entry.note && (
-                        <div className="text-sm mt-2 text-gray-600 break-words whitespace-pre-wrap leading-relaxed p-2 bg-gray-50 rounded-md border border-gray-100">
-                          {entry.note}
+            <GlassDrawerSection>
+              <div className="mb-4 font-semibold text-slate-800">歷程紀錄</div>
+              <div className="max-h-72 overflow-y-auto px-1 pt-1 pb-4">
+                <Timeline
+                  mode="left"
+                  pending={historyLoading ? '讀取中...' : undefined}
+                  items={history.map((entry) => ({
+                    color:
+                      entry.action === 'approved'
+                        ? 'green'
+                        : entry.action === 'rejected'
+                        ? 'red'
+                        : 'blue',
+                    children: (
+                      <div className="pb-3">
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-2 text-sm font-medium leading-relaxed">
+                          <span className="font-bold text-slate-700">
+                            {historyLabelMap[entry.action] || entry.action}
+                          </span>
+                          <span className="text-xs text-slate-400 whitespace-nowrap">
+                            {dayjs(entry.createdAt).format('YYYY/MM/DD HH:mm')}
+                          </span>
                         </div>
-                      )}
-                    </div>
-                  ),
-                }))}
-              />
-              {!historyLoading && history.length === 0 && (
-                <Text type="secondary">尚無歷程紀錄</Text>
-              )}
-            </div>
+                        {entry.actor && (
+                          <div className="text-xs text-slate-500 mt-1">由 {entry.actor.name}</div>
+                        )}
+                        {entry.note && (
+                          <div className="text-sm mt-2 text-slate-600 break-words whitespace-pre-wrap leading-relaxed p-2 bg-white/40 rounded-md border border-white/20">
+                            {entry.note}
+                          </div>
+                        )}
+                      </div>
+                    ),
+                  }))}
+                />
+                {!historyLoading && history.length === 0 && (
+                  <Text type="secondary">尚無歷程紀錄</Text>
+                )}
+              </div>
+            </GlassDrawerSection>
 
             {selectedRequest.status === 'pending' && (
-              <div className="mt-6 flex gap-3">
-                <Button
-                  block
-                  danger
-                  icon={<CloseCircleOutlined />}
-                  onClick={() => {
-                    handleCloseDetail()
-                    openActionModal('reject', selectedRequest)
-                  }}
-                >
-                  駁回
-                </Button>
-                <Button
-                  block
-                  type="primary"
-                  className="!bg-green-600/85 !backdrop-blur-md !border-green-400/30 !text-white !shadow-md hover:!bg-green-600/95 hover:!shadow-lg transition-all duration-300"
-                  icon={<CheckCircleOutlined />}
-                  onClick={() => {
-                    handleCloseDetail()
-                    openActionModal('approve', selectedRequest)
-                  }}
-                >
-                  核准
-                </Button>
-              </div>
+              <GlassDrawerSection>
+                <div className="flex gap-3">
+                  <Button
+                    block
+                    danger
+                    icon={<CloseCircleOutlined />}
+                    onClick={() => {
+                      handleCloseDetail()
+                      openActionModal('reject', selectedRequest)
+                    }}
+                    className="rounded-full"
+                  >
+                    駁回
+                  </Button>
+                  <Button
+                    block
+                    type="primary"
+                    className="!bg-green-600/85 !backdrop-blur-md !border-green-400/30 !text-white !shadow-md hover:!bg-green-600/95 hover:!shadow-lg transition-all duration-300 rounded-full"
+                    icon={<CheckCircleOutlined />}
+                    onClick={() => {
+                      handleCloseDetail()
+                      openActionModal('approve', selectedRequest)
+                    }}
+                  >
+                    核准
+                  </Button>
+                </div>
+              </GlassDrawerSection>
             )}
-          </>
+          </div>
         )}
-      </Drawer>
+      </GlassDrawer>
 
       <Modal
         open={Boolean(actionState.request)}

@@ -34,6 +34,7 @@ import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import { GlassCard } from '../components/ui/GlassCard'
 import { GlassButton } from '../components/ui/GlassButton'
+import { GlassDrawer, GlassDrawerSection } from '../components/ui/GlassDrawer'
 import {
   expenseService,
   ReimbursementItem,
@@ -763,31 +764,41 @@ const ExpenseRequestsPage: React.FC = () => {
         />
       </GlassCard>
 
-      <Drawer
+      <GlassDrawer
         title="新增費用申請"
         placement="right"
         onClose={() => setDrawerOpen(false)}
         open={drawerOpen}
-        width={520}
+        width={420}
         destroyOnClose
-        styles={{ body: { paddingBottom: 24 } }}
+        footer={
+          <div className="flex justify-end gap-3">
+            <GlassButton onClick={() => setDrawerOpen(false)}>取消</GlassButton>
+            <GlassButton variant="primary" isLoading={submitting} onClick={handleSubmit} className="px-6">
+              送出申請
+            </GlassButton>
+          </div>
+        }
       >
-        <Form layout="vertical" form={form} initialValues={{ amount: 0 }}>
-          <Form.Item
-            label="受款人類型"
-            name="payeeType"
-            initialValue="employee"
-            rules={[{ required: true, message: '請選擇受款人類型' }]}
-          >
-            <Radio.Group optionType="button" buttonStyle="solid">
-              <Radio.Button value="employee">員工代墊 (Reimbursement)</Radio.Button>
-              <Radio.Button value="vendor">廠商直付 (Direct Payment)</Radio.Button>
-            </Radio.Group>
-          </Form.Item>
+        <Form layout="vertical" form={form} initialValues={{ amount: 0 }} className="space-y-4">
+          <GlassDrawerSection>
+            <Form.Item
+              label="受款人類型"
+              name="payeeType"
+              initialValue="employee"
+              rules={[{ required: true, message: '請選擇受款人類型' }]}
+              className="mb-0"
+            >
+              <Radio.Group optionType="button" buttonStyle="solid" className="w-full flex">
+                <Radio.Button value="employee" className="flex-1 text-center">員工代墊</Radio.Button>
+                <Radio.Button value="vendor" className="flex-1 text-center">廠商直付</Radio.Button>
+              </Radio.Group>
+            </Form.Item>
+          </GlassDrawerSection>
 
-          <div className="bg-blue-50 p-4 rounded-lg mb-6 border border-blue-100">
+          <GlassDrawerSection>
             <Form.Item label="備註說明" style={{ marginBottom: 0 }} required>
-              <div className="mb-2 text-gray-500 text-xs">
+              <div className="mb-2 text-slate-500 text-xs">
                 請輸入費用內容（如：文具、計程車費 560），AI 將自動建議報銷項目並填入金額。
               </div>
               <Form.Item name="description" noStyle rules={[{ required: true, message: '請輸入備註說明' }]}>
@@ -795,29 +806,18 @@ const ExpenseRequestsPage: React.FC = () => {
                   rows={3}
                   placeholder="例如：搭計程車去拜訪客戶 560 元"
                   style={{ marginBottom: 12 }}
+                  className="rounded-xl bg-white/50 border-white/30 focus:bg-white/80"
                   onChange={(e) => {
                     const value = e.target.value
-                    // Strategy 1: Look for explicit currency suffixes (元, 塊, etc.) - works for "筆50塊"
                     let match = value.match(/(\d+(?:,\d{3})*(?:\.\d+)?)\s*(?:元|塊|TWD|NT|USD)/i)
-                    
-                    // Strategy 2: Look for explicit currency prefixes ($, NT$, etc.)
                     if (!match) {
                       match = value.match(/(?:\$|NT\$?|TWD)\s*(\d+(?:,\d{3})*(?:\.\d+)?)/i)
-                      // If matched, the number is in group 1
                     }
-
-                    // Strategy 3: Look for standalone numbers or numbers at the end (original logic)
                     if (!match) {
                       match = value.match(/(?:^|\s)(\d+(?:,\d{3})*(?:\.\d+)?)(?:\s|$)/)
                     }
 
                     if (match) {
-                      // In all regexes above, the number is in the first capturing group (index 1)
-                      // Note: For Strategy 2, we need to be careful about group indices if we change the regex.
-                      // Let's verify:
-                      // S1: (\d...) is group 1.
-                      // S2: (?:...) is non-capturing, (\d...) is group 1.
-                      // S3: (?:...) is non-capturing, (\d...) is group 1.
                       const amountStr = match[1].replace(/,/g, '')
                       const amount = parseFloat(amountStr)
                       if (!isNaN(amount)) {
@@ -827,146 +827,165 @@ const ExpenseRequestsPage: React.FC = () => {
                   }}
                 />
               </Form.Item>
-              <Button
+              <GlassButton
                 block
-                icon={<BulbOutlined />}
                 onClick={handlePredictCategory}
-                loading={predicting}
-                className="border-blue-200 text-blue-600 hover:!border-blue-400 hover:!text-blue-500 bg-white"
+                isLoading={predicting}
+                className="flex items-center justify-center gap-2 text-blue-600"
               >
-                AI 智能建議報銷項目
-              </Button>
+                <BulbOutlined /> AI 智能建議報銷項目
+              </GlassButton>
             </Form.Item>
-          </div>
+          </GlassDrawerSection>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Form.Item
-              label="發生日期"
-              name="expenseDate"
-              rules={[{ required: true, message: '請選擇發生日期' }]}
-            >
-              <DatePicker className="w-full" />
-            </Form.Item>
-            <Form.Item
-              label="金額（TWD）"
-              name="amount"
-              rules={[{ required: true, message: '請輸入金額' }]}
-              extra={<span className="text-orange-500 text-xs flex items-center gap-1"><ExclamationCircleOutlined /> 請務必再次確認金額</span>}
-            >
-              <InputNumber<number>
-                min={0}
-                precision={0}
-                className="w-full"
-                placeholder="請輸入金額"
-                formatter={(value) => (value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '')}
-                parser={(value) => {
-                  if (!value) return 0
-                  const numeric = Number(value.replace(/,/g, ''))
-                  return Number.isNaN(numeric) ? 0 : numeric
-                }}
-                onChange={(value) => {
-                    const taxType = form.getFieldValue('taxType');
-                    if (value && (taxType === 'TAXABLE_5_PERCENT' || taxType === 'NON_DEDUCTIBLE_5_PERCENT')) {
-                        const tax = Math.round(Number(value) / 1.05 * 0.05);
-                        form.setFieldsValue({ taxAmount: tax });
-                    }
-                }}
-              />
-            </Form.Item>
-          </div>
+          <GlassDrawerSection>
+            <div className="grid grid-cols-2 gap-4">
+              <Form.Item
+                label="發生日期"
+                name="expenseDate"
+                rules={[{ required: true, message: '請選擇發生日期' }]}
+                className="mb-0"
+              >
+                <DatePicker className="w-full rounded-xl" />
+              </Form.Item>
+              <Form.Item
+                label="金額（TWD）"
+                name="amount"
+                rules={[{ required: true, message: '請輸入金額' }]}
+                className="mb-0"
+                extra={<span className="text-orange-500 text-xs flex items-center gap-1 mt-1"><ExclamationCircleOutlined /> 請務必再次確認金額</span>}
+              >
+                <InputNumber<number>
+                  min={0}
+                  precision={0}
+                  className="w-full rounded-xl"
+                  placeholder="請輸入金額"
+                  formatter={(value) => (value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '')}
+                  parser={(value) => {
+                    if (!value) return 0
+                    const numeric = Number(value.replace(/,/g, ''))
+                    return Number.isNaN(numeric) ? 0 : numeric
+                  }}
+                  onChange={(value) => {
+                      const taxType = form.getFieldValue('taxType');
+                      if (value && (taxType === 'TAXABLE_5_PERCENT' || taxType === 'NON_DEDUCTIBLE_5_PERCENT')) {
+                          const tax = Math.round(Number(value) / 1.05 * 0.05);
+                          form.setFieldsValue({ taxAmount: tax });
+                      }
+                  }}
+                />
+              </Form.Item>
+            </div>
+          </GlassDrawerSection>
 
-          <div className="grid grid-cols-2 gap-4">
+          <GlassDrawerSection>
+            <div className="grid grid-cols-2 gap-4">
+              <Form.Item
+                label="預計付款日"
+                name="dueDate"
+                tooltip="若為廠商直付，請填寫應付款日期"
+                className="mb-0"
+              >
+                <DatePicker className="w-full rounded-xl" />
+              </Form.Item>
+              <Form.Item
+                label="付款方式"
+                name="paymentMethod"
+                className="mb-0"
+              >
+                <Select
+                  allowClear
+                  placeholder="選擇付款方式"
+                  className="rounded-xl"
+                  options={[
+                    { label: '現金', value: 'cash' },
+                    { label: '銀行轉帳', value: 'bank_transfer' },
+                    { label: '支票', value: 'check' },
+                    { label: '其他', value: 'other' },
+                  ]}
+                />
+              </Form.Item>
+            </div>
+          </GlassDrawerSection>
+
+          <GlassDrawerSection>
+            <div className="grid grid-cols-2 gap-4">
+              <Form.Item
+                label="稅別"
+                name="taxType"
+                className="mb-0"
+              >
+                <Select
+                  allowClear
+                  placeholder="選擇稅別"
+                  className="rounded-xl"
+                  options={[
+                    { label: '應稅 5% (V5)', value: 'TAXABLE_5_PERCENT' },
+                    { label: '不可扣抵 5% (VND)', value: 'NON_DEDUCTIBLE_5_PERCENT' },
+                    { label: '零稅率 (Z0)', value: 'ZERO_RATED' },
+                    { label: '免稅 (F0)', value: 'TAX_FREE' },
+                  ]}
+                  onChange={(value) => {
+                     const amount = form.getFieldValue('amount');
+                     if (amount && (value === 'TAXABLE_5_PERCENT' || value === 'NON_DEDUCTIBLE_5_PERCENT')) {
+                         const tax = Math.round(amount / 1.05 * 0.05);
+                         form.setFieldsValue({ taxAmount: tax });
+                     } else {
+                         form.setFieldsValue({ taxAmount: 0 });
+                     }
+                  }}
+                />
+              </Form.Item>
+              <Form.Item
+                label="稅額"
+                name="taxAmount"
+                className="mb-0"
+              >
+                <InputNumber min={0} precision={0} className="w-full rounded-xl" placeholder="自動計算" />
+              </Form.Item>
+            </div>
+          </GlassDrawerSection>
+
+          <GlassDrawerSection>
             <Form.Item
-              label="預計付款日"
-              name="dueDate"
-              tooltip="若為廠商直付，請填寫應付款日期"
-            >
-              <DatePicker className="w-full" />
-            </Form.Item>
-            <Form.Item
-              label="付款方式"
-              name="paymentMethod"
+              label="報銷項目"
+              name="reimbursementItemId"
+              rules={[{ required: true, message: '請選擇報銷項目' }]}
+              className="mb-4"
             >
               <Select
-                allowClear
-                placeholder="選擇付款方式"
-                options={[
-                  { label: '現金', value: 'cash' },
-                  { label: '銀行轉帳', value: 'bank_transfer' },
-                  { label: '支票', value: 'check' },
-                  { label: '其他', value: 'other' },
-                ]}
+                placeholder="請選擇報銷項目（可使用上方 AI 建議）"
+                onChange={handleReimbursementItemChange}
+                loading={listLoading}
+                showSearch
+                className="rounded-xl"
+                optionFilterProp="label"
+                options={reimbursementItems.map((item) => ({
+                  label: item.name,
+                  value: item.id,
+                }))}
               />
             </Form.Item>
-          </div>
 
-          <div className="grid grid-cols-2 gap-4">
             <Form.Item
-              label="稅別"
-              name="taxType"
+              label="憑證類型"
+              name="receiptType"
+              rules={[{ required: true, message: '請選擇憑證類型' }]}
+              className="mb-0"
             >
               <Select
-                allowClear
-                placeholder="選擇稅別"
-                options={[
-                  { label: '應稅 5% (V5)', value: 'TAXABLE_5_PERCENT' },
-                  { label: '不可扣抵 5% (VND)', value: 'NON_DEDUCTIBLE_5_PERCENT' },
-                  { label: '零稅率 (Z0)', value: 'ZERO_RATED' },
-                  { label: '免稅 (F0)', value: 'TAX_FREE' },
-                ]}
-                onChange={(value) => {
-                   const amount = form.getFieldValue('amount');
-                   if (amount && (value === 'TAXABLE_5_PERCENT' || value === 'NON_DEDUCTIBLE_5_PERCENT')) {
-                       const tax = Math.round(amount / 1.05 * 0.05);
-                       form.setFieldsValue({ taxAmount: tax });
-                   } else {
-                       form.setFieldsValue({ taxAmount: 0 });
-                   }
-                }}
+                placeholder={selectedItem ? '請選擇憑證類型' : '請先選擇報銷項目'}
+                disabled={!selectedItem}
+                className="rounded-xl"
+                options={
+                  allowedReceiptTypes?.map((type) => ({
+                    label: receiptTypeLabelMap[type] || type,
+                    value: type,
+                  })) || []
+                }
               />
             </Form.Item>
-            <Form.Item
-              label="稅額"
-              name="taxAmount"
-            >
-              <InputNumber min={0} precision={0} className="w-full" placeholder="自動計算" />
-            </Form.Item>
-          </div>
-
-          <Form.Item
-            label="報銷項目"
-            name="reimbursementItemId"
-            rules={[{ required: true, message: '請選擇報銷項目' }]}
-          >
-            <Select
-              placeholder="請選擇報銷項目（可使用上方 AI 建議）"
-              onChange={handleReimbursementItemChange}
-              loading={listLoading}
-              showSearch
-              optionFilterProp="label"
-              options={reimbursementItems.map((item) => ({
-                label: item.name,
-                value: item.id,
-              }))}
-            />
-          </Form.Item>
-
-          <Form.Item
-            label="憑證類型"
-            name="receiptType"
-            rules={[{ required: true, message: '請選擇憑證類型' }]}
-          >
-            <Select
-              placeholder={selectedItem ? '請選擇憑證類型' : '請先選擇報銷項目'}
-              disabled={!selectedItem}
-              options={
-                allowedReceiptTypes?.map((type) => ({
-                  label: receiptTypeLabelMap[type] || type,
-                  value: type,
-                })) || []
-              }
-            />
-          </Form.Item>
+          </GlassDrawerSection>
 
           <Form.Item
             noStyle
@@ -981,172 +1000,168 @@ const ExpenseRequestsPage: React.FC = () => {
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="grid grid-cols-2 gap-4 p-4 mb-4 bg-gray-50 rounded-lg border border-gray-100"
                 >
-                  <Form.Item
-                    label="發票號碼"
-                    name="invoiceNo"
-                    rules={[{ required: true, message: '請輸入發票號碼' }]}
-                    className="mb-0"
-                  >
-                    <Input placeholder="例如：AB-12345678" />
-                  </Form.Item>
-                  <Form.Item
-                    label="統一編號"
-                    name="taxId"
-                    className="mb-0"
-                  >
-                    <Input placeholder="賣方統編 (選填)" />
-                  </Form.Item>
+                  <GlassDrawerSection>
+                    <div className="grid grid-cols-2 gap-4">
+                      <Form.Item
+                        label="發票號碼"
+                        name="invoiceNo"
+                        rules={[{ required: true, message: '請輸入發票號碼' }]}
+                        className="mb-0"
+                      >
+                        <Input placeholder="例如：AB-12345678" className="rounded-xl" />
+                      </Form.Item>
+                      <Form.Item
+                        label="統一編號"
+                        name="taxId"
+                        className="mb-0"
+                      >
+                        <Input placeholder="賣方統編 (選填)" className="rounded-xl" />
+                      </Form.Item>
+                    </div>
+                  </GlassDrawerSection>
                 </motion.div>
               ) : null
             }}
           </Form.Item>
 
-          <Form.Item
-            label="憑證/單據照片"
-            name="files"
-            valuePropName="fileList"
-            getValueFromEvent={(e) => {
-              if (Array.isArray(e)) return e
-              return e?.fileList
-            }}
-          >
-            <Upload
-              listType="picture"
-              beforeUpload={() => false}
-              maxCount={5}
-              accept="image/*,.pdf"
+          <GlassDrawerSection>
+            <Form.Item
+              label="憑證/單據照片"
+              name="files"
+              valuePropName="fileList"
+              getValueFromEvent={(e) => {
+                if (Array.isArray(e)) return e
+                return e?.fileList
+              }}
+              className="mb-0"
             >
-              <Button icon={<UploadOutlined />}>上傳照片</Button>
-            </Upload>
-          </Form.Item>
+              <Upload
+                listType="picture"
+                beforeUpload={() => false}
+                maxCount={5}
+                accept="image/*,.pdf"
+              >
+                <GlassButton icon={<UploadOutlined />}>上傳照片</GlassButton>
+              </Upload>
+            </Form.Item>
 
-          {selectedItem && allowedReceiptTypes && (
-            <div className="mb-4 text-xs" style={{ color: 'var(--text-secondary)' }}>
-              <span className="mr-2">此報銷項目允許的憑證：</span>
-              <Space size={[4, 4]} wrap>
-                {allowedReceiptTypes.map((type) => (
-                  <Tag key={type} color="blue" bordered={false}>
-                    {receiptTypeLabelMap[type] || type}
-                  </Tag>
-                ))}
-              </Space>
-            </div>
-          )}
-
-          <div className="flex justify-end gap-2 mt-4">
-            <Button onClick={() => setDrawerOpen(false)}>取消</Button>
-            <Button type="primary" loading={submitting} onClick={handleSubmit} className="px-6">
-              送出申請
-            </Button>
-          </div>
+            {selectedItem && allowedReceiptTypes && (
+              <div className="mt-3 text-xs text-slate-500">
+                <span className="mr-2">此報銷項目允許的憑證：</span>
+                <Space size={[4, 4]} wrap>
+                  {allowedReceiptTypes.map((type) => (
+                    <Tag key={type} color="blue" bordered={false} className="rounded-full px-2">
+                      {receiptTypeLabelMap[type] || type}
+                    </Tag>
+                  ))}
+                </Space>
+              </div>
+            )}
+          </GlassDrawerSection>
         </Form>
-      </Drawer>
+      </GlassDrawer>
 
-      <Drawer
+      <GlassDrawer
         title="申請詳情"
         placement="right"
         onClose={handleCloseDetail}
         open={detailDrawerOpen}
-        width={520}
+        width={420}
         destroyOnClose
-        styles={{ body: { paddingBottom: 24 } }}
       >
         {!selectedRequest ? (
-          <Text type="secondary">請選擇申請查看詳情</Text>
+          <Text type="secondary" className="p-6 block">請選擇申請查看詳情</Text>
         ) : (
-          <>
-            <Descriptions bordered column={1} size="small" labelStyle={{ width: 120 }}>
-              <Descriptions.Item label="報銷項目">
-                {selectedRequest.reimbursementItem?.name || '--'}
-              </Descriptions.Item>
-              <Descriptions.Item label="金額">
-                {selectedRequest.amountCurrency || 'TWD'} {toNumber(selectedRequest.amountOriginal).toLocaleString()}
-              </Descriptions.Item>
-              <Descriptions.Item label="狀態">
-                <Tag color={statusMeta[selectedRequest.status]?.color || 'default'}>
-                  {statusMeta[selectedRequest.status]?.label || selectedRequest.status}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="系統建議">
-                {selectedRequest.suggestedAccount ? (
-                  <Space direction="vertical" size={0}>
+          <div className="space-y-4">
+            <GlassDrawerSection>
+              <Descriptions bordered column={1} size="small" labelStyle={{ width: 100, background: 'transparent' }} contentStyle={{ background: 'transparent' }}>
+                <Descriptions.Item label="報銷項目">
+                  {selectedRequest.reimbursementItem?.name || '--'}
+                </Descriptions.Item>
+                <Descriptions.Item label="金額">
+                  {selectedRequest.amountCurrency || 'TWD'} {toNumber(selectedRequest.amountOriginal).toLocaleString()}
+                </Descriptions.Item>
+                <Descriptions.Item label="狀態">
+                  <Tag color={statusMeta[selectedRequest.status]?.color || 'default'} className="rounded-full px-2 border-none">
+                    {statusMeta[selectedRequest.status]?.label || selectedRequest.status}
+                  </Tag>
+                </Descriptions.Item>
+                <Descriptions.Item label="系統建議">
+                  {selectedRequest.suggestedAccount ? (
+                    <Space direction="vertical" size={0}>
+                      <span>
+                        {selectedRequest.suggestedAccount.code} · {selectedRequest.suggestedAccount.name}
+                      </span>
+                      {selectedRequest.suggestionConfidence && (
+                        <Text type="secondary" className="text-xs">
+                          信心 {(Number(selectedRequest.suggestionConfidence) * 100).toFixed(0)}%
+                        </Text>
+                      )}
+                    </Space>
+                  ) : (
+                    <Text type="secondary">—</Text>
+                  )}
+                </Descriptions.Item>
+                <Descriptions.Item label="最終科目">
+                  {selectedRequest.finalAccount ? (
                     <span>
-                      {selectedRequest.suggestedAccount.code} · {selectedRequest.suggestedAccount.name}
+                      {selectedRequest.finalAccount.code} · {selectedRequest.finalAccount.name}
                     </span>
-                    {selectedRequest.suggestionConfidence && (
-                      <Text type="secondary">
-                        信心 {(Number(selectedRequest.suggestionConfidence) * 100).toFixed(0)}%
-                      </Text>
-                    )}
-                  </Space>
-                ) : (
-                  <Text type="secondary">—</Text>
-                )}
-              </Descriptions.Item>
-              <Descriptions.Item label="最終科目">
-                {selectedRequest.finalAccount ? (
-                  <span>
-                    {selectedRequest.finalAccount.code} · {selectedRequest.finalAccount.name}
-                  </span>
-                ) : (
-                  <Text type="secondary">尚未指定</Text>
-                )}
-              </Descriptions.Item>
-              <Descriptions.Item label="備註">
-                {selectedRequest.description || <Text type="secondary">—</Text>}
-              </Descriptions.Item>
-            </Descriptions>
+                  ) : (
+                    <Text type="secondary">尚未指定</Text>
+                  )}
+                </Descriptions.Item>
+                <Descriptions.Item label="備註">
+                  {selectedRequest.description || <Text type="secondary">—</Text>}
+                </Descriptions.Item>
+              </Descriptions>
+            </GlassDrawerSection>
 
-            <Divider />
-            <Title level={5} style={{ marginBottom: 16 }}>
-              歷程紀錄
-            </Title>
-            <div className="max-h-72 overflow-y-auto px-1 pt-1 pb-4">
-              <Timeline
-                mode="left"
-                pending={historyLoading ? '讀取中...' : undefined}
-                items={history.map((entry) => ({
-                  color:
-                    entry.action === 'approved'
-                      ? 'green'
-                      : entry.action === 'rejected'
-                      ? 'red'
-                      : 'blue',
-                  children: (
-                    <div className="pb-3">
-                      <div className="flex flex-wrap items-baseline justify-between gap-x-2 text-sm font-medium leading-relaxed">
-                        <span className="font-bold text-gray-700">
-                          {historyLabelMap[entry.action] || entry.action}
-                        </span>
-                        <span className="text-xs text-gray-400 whitespace-nowrap">
-                          {dayjs(entry.createdAt).format('YYYY/MM/DD HH:mm')}
-                        </span>
-                      </div>
-                      {entry.actor && (
-                        <div className="text-xs text-gray-500 mt-1">由 {entry.actor.name}</div>
-                      )}
-                      {entry.note && (
-                        <div className="text-sm mt-2 text-gray-600 break-words whitespace-pre-wrap leading-relaxed p-2 bg-gray-50 rounded-md border border-gray-100">
-                          {entry.note}
+            <GlassDrawerSection>
+              <div className="mb-4 font-semibold text-slate-800">歷程紀錄</div>
+              <div className="max-h-72 overflow-y-auto px-1 pt-1 pb-4">
+                <Timeline
+                  mode="left"
+                  pending={historyLoading ? '讀取中...' : undefined}
+                  items={history.map((entry) => ({
+                    color:
+                      entry.action === 'approved'
+                        ? 'green'
+                        : entry.action === 'rejected'
+                        ? 'red'
+                        : 'blue',
+                    children: (
+                      <div className="pb-3">
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-2 text-sm font-medium leading-relaxed">
+                          <span className="font-bold text-slate-700">
+                            {historyLabelMap[entry.action] || entry.action}
+                          </span>
+                          <span className="text-xs text-slate-400 whitespace-nowrap">
+                            {dayjs(entry.createdAt).format('YYYY/MM/DD HH:mm')}
+                          </span>
                         </div>
-                      )}
-                    </div>
-                  ),
-                }))}
-              />
-              {!historyLoading && history.length === 0 && (
-                <Text type="secondary">尚無歷程紀錄</Text>
-              )}
-            </div>
+                        {entry.actor && (
+                          <div className="text-xs text-slate-500 mt-1">由 {entry.actor.name}</div>
+                        )}
+                        {entry.note && (
+                          <div className="text-sm mt-2 text-slate-600 break-words whitespace-pre-wrap leading-relaxed p-2 bg-white/40 rounded-md border border-white/20">
+                            {entry.note}
+                          </div>
+                        )}
+                      </div>
+                    ),
+                  }))}
+                />
+                {!historyLoading && history.length === 0 && (
+                  <Text type="secondary">尚無歷程紀錄</Text>
+                )}
+              </div>
+            </GlassDrawerSection>
 
             {canReview && (
-              <>
-                <Divider />
-                <Title level={5} style={{ marginBottom: 16 }}>
-                  審核操作（管理員）
-                </Title>
+              <GlassDrawerSection>
+                <div className="mb-4 font-semibold text-slate-800">審核操作（管理員）</div>
                 <Form layout="vertical" form={approvalForm} requiredMark={false}>
                   <Form.Item label="最終會計科目" name="finalAccountId">
                     <Select
@@ -1174,24 +1189,25 @@ const ExpenseRequestsPage: React.FC = () => {
                     <Input.TextArea rows={2} placeholder="可填寫額外說明或要求" />
                   </Form.Item>
 
-                  <Space className="w-full justify-end">
-                    <Button danger onClick={handleRejectRequest} loading={rejectLoading}>
+                  <Space className="w-full justify-end pt-2">
+                    <Button danger onClick={handleRejectRequest} loading={rejectLoading} className="rounded-full">
                       駁回
                     </Button>
                     <Button
                       type="primary"
                       onClick={handleApproveRequest}
                       loading={approveLoading}
+                      className="rounded-full bg-blue-600 hover:bg-blue-500 border-none shadow-lg shadow-blue-200"
                     >
                       核准
                     </Button>
                   </Space>
                 </Form>
-              </>
+              </GlassDrawerSection>
             )}
-          </>
+          </div>
         )}
-      </Drawer>
+      </GlassDrawer>
 
       <Modal
         title="更新付款資訊"

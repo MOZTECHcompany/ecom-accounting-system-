@@ -27,6 +27,7 @@ import {
   ClockCircleOutlined,
   CheckCircleOutlined
 } from '@ant-design/icons'
+import { GlassDrawer, GlassDrawerSection } from '../components/ui/GlassDrawer'
 import { motion } from 'framer-motion'
 import dayjs from 'dayjs'
 import { arService } from '../services/ar.service'
@@ -263,98 +264,104 @@ const ArInvoicesPage: React.FC = () => {
         />
       </Card>
 
-      <Drawer
+      <GlassDrawer
         title={editingId ? "編輯發票" : "建立新發票"}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         width={720}
-        extra={
-          <Space>
-            <Button onClick={() => setDrawerOpen(false)}>取消</Button>
-            <Button type="primary" onClick={handleSubmit}>
-              {editingId ? "更新" : "建立"}
-            </Button>
-          </Space>
-        }
       >
-        <Form form={form} layout="vertical">
-          <Card title="基本資訊" bordered={false} className="mb-4">
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item name="customerId" label="客戶" rules={[{ required: true }]}>
-                  <Select placeholder="選擇客戶">
-                    <Select.Option value="CUST001">範例客戶 A</Select.Option>
-                    <Select.Option value="CUST002">範例客戶 B</Select.Option>
-                  </Select>
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item name="invoiceNo" label="發票號碼" rules={[{ required: true }]}>
-                  <Input />
-                </Form.Item>
-              </Col>
-            </Row>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item name="issueDate" label="開立日期" rules={[{ required: true }]}>
-                  <DatePicker className="w-full" />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item name="dueDate" label="到期日" rules={[{ required: true }]}>
-                  <DatePicker className="w-full" />
-                </Form.Item>
-              </Col>
-            </Row>
-          </Card>
-
-          <Card title="發票項目" bordered={false} className="mb-4">
-            <Form.List name="items">
-              {(fields, { add, remove }) => (
-                <>
-                  {fields.map(({ key, name, ...restField }) => (
-                    <Space key={key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
-                      <Form.Item
-                        {...restField}
-                        name={[name, 'description']}
-                        rules={[{ required: true, message: 'Missing description' }]}
-                      >
-                        <Input placeholder="項目說明" style={{ width: 240 }} />
-                      </Form.Item>
-                      <Form.Item
-                        {...restField}
-                        name={[name, 'quantity']}
-                        rules={[{ required: true, message: 'Missing quantity' }]}
-                      >
-                        <InputNumber placeholder="數量" min={1} />
-                      </Form.Item>
-                      <Form.Item
-                        {...restField}
-                        name={[name, 'unitPrice']}
-                        rules={[{ required: true, message: 'Missing price' }]}
-                      >
-                        <InputNumber placeholder="單價" min={0} />
-                      </Form.Item>
-                      <DeleteOutlined onClick={() => remove(name)} />
-                    </Space>
-                  ))}
-                  <Form.Item>
-                    <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
-                      新增項目
-                    </Button>
+        <Form form={form} layout="vertical" className="h-full flex flex-col">
+          <div className="flex-1 space-y-4">
+            <GlassDrawerSection>
+              <div className="mb-4 font-semibold text-slate-800">基本資訊</div>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item name="customerId" label="客戶" rules={[{ required: true }]}>
+                    <Select placeholder="選擇客戶">
+                      <Select.Option value="CUST001">範例客戶 A</Select.Option>
+                      <Select.Option value="CUST002">範例客戶 B</Select.Option>
+                    </Select>
                   </Form.Item>
-                </>
-              )}
-            </Form.List>
-          </Card>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="invoiceNo" label="發票號碼" rules={[{ required: true }]}>
+                    <Input />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item name="issueDate" label="開立日期" rules={[{ required: true }]}>
+                    <DatePicker className="w-full" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="dueDate" label="到期日" rules={[{ required: true }]}>
+                    <DatePicker className="w-full" />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </GlassDrawerSection>
 
-          <Card title="其他" bordered={false}>
-            <Form.Item name="notes" label="備註">
-              <Input.TextArea rows={3} />
-            </Form.Item>
-          </Card>
+            <GlassDrawerSection>
+              <div className="mb-4 font-semibold text-slate-800">發票項目</div>
+              <Form.List name="items">
+                {(fields, { add, remove }) => (
+                  <>
+                    {fields.map(({ key, name, ...restField }) => (
+                      <Space key={key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
+                        <Form.Item
+                          {...restField}
+                          name={[name, 'description']}
+                          rules={[{ required: true, message: 'Missing description' }]}
+                        >
+                          <Input placeholder="項目說明" style={{ width: 240 }} />
+                        </Form.Item>
+                        <Form.Item
+                          {...restField}
+                          name={[name, 'quantity']}
+                          rules={[{ required: true, message: 'Missing quantity' }]}
+                        >
+                          <InputNumber placeholder="數量" min={1} />
+                        </Form.Item>
+                        <Form.Item
+                          {...restField}
+                          name={[name, 'unitPrice']}
+                          rules={[{ required: true, message: 'Missing price' }]}
+                        >
+                          <InputNumber placeholder="單價" min={0} />
+                        </Form.Item>
+                        <DeleteOutlined onClick={() => remove(name)} />
+                      </Space>
+                    ))}
+                    <Form.Item>
+                      <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+                        新增項目
+                      </Button>
+                    </Form.Item>
+                  </>
+                )}
+              </Form.List>
+            </GlassDrawerSection>
+
+            <GlassDrawerSection>
+              <div className="mb-4 font-semibold text-slate-800">其他</div>
+              <Form.Item name="notes" label="備註">
+                <Input.TextArea rows={3} />
+              </Form.Item>
+            </GlassDrawerSection>
+          </div>
+
+          <GlassDrawerSection>
+            <div className="flex justify-end gap-2">
+              <Button onClick={() => setDrawerOpen(false)} className="rounded-full">取消</Button>
+              <Button type="primary" onClick={handleSubmit} className="rounded-full bg-blue-600 hover:bg-blue-500 border-none shadow-lg shadow-blue-200">
+                {editingId ? "更新" : "建立"}
+              </Button>
+            </div>
+          </GlassDrawerSection>
         </Form>
-      </Drawer>
+      </GlassDrawer>
     </motion.div>
   )
 }
