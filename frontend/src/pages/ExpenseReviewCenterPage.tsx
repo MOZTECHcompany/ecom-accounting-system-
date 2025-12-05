@@ -70,7 +70,7 @@ type FilterState = {
   maxAmount?: number
 }
 
-type ActionMode = 'approve' | 'reject'
+type ActionMode = 'reject'
 
 type ActionState = {
   mode: ActionMode
@@ -148,7 +148,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
   const [filters, setFilters] = useState<FilterState>(() => createDefaultFilters())
   const [filterForm] = Form.useForm()
   const [actionForm] = Form.useForm()
-  const [actionState, setActionState] = useState<ActionState>({ mode: 'approve', request: null })
+  const [actionState, setActionState] = useState<ActionState>({ mode: 'reject', request: null })
   const [actionLoading, setActionLoading] = useState(false)
   const [accounts, setAccounts] = useState<Account[]>([])
   const [accountsLoading, setAccountsLoading] = useState(false)
@@ -348,7 +348,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
   }
 
   const closeActionModal = () => {
-    setActionState({ mode: 'approve', request: null })
+    setActionState({ mode: 'reject', request: null })
     actionForm.resetFields()
   }
 
@@ -358,25 +358,16 @@ const ExpenseReviewCenterPage: React.FC = () => {
     }
     try {
       setActionLoading(true)
-      if (actionState.mode === 'approve') {
-        const values = await actionForm.validateFields(['finalAccountId', 'remark'])
-        await expenseService.approveExpenseRequest(actionState.request.id, {
-          finalAccountId: values.finalAccountId || undefined,
-          remark: values.remark?.trim() || undefined,
-        })
-        message.success('已快速核准該申請')
-      } else {
-        const values = await actionForm.validateFields(['reason', 'note'])
-        if (!values.reason || !values.reason.trim()) {
-          message.error('請輸入駁回原因')
-          return
-        }
-        await expenseService.rejectExpenseRequest(actionState.request.id, {
-          reason: values.reason.trim(),
-          note: values.note?.trim() || undefined,
-        })
-        message.success('已駁回該申請')
+      const values = await actionForm.validateFields(['reason', 'note'])
+      if (!values.reason || !values.reason.trim()) {
+        message.error('請輸入駁回原因')
+        return
       }
+      await expenseService.rejectExpenseRequest(actionState.request.id, {
+        reason: values.reason.trim(),
+        note: values.note?.trim() || undefined,
+      })
+      message.success('已駁回該申請')
       closeActionModal()
       void loadRequests()
     } catch (error) {
@@ -929,39 +920,16 @@ const ExpenseReviewCenterPage: React.FC = () => {
 
       <Modal
         open={Boolean(actionState.request)}
-        title={actionState.mode === 'approve' ? '快速核准' : '駁回申請'}
+        title="駁回申請"
         onCancel={closeActionModal}
         onOk={handleActionSubmit}
         confirmLoading={actionLoading}
-        okText={actionState.mode === 'approve' ? '核准' : '駁回'}
+        okText="駁回"
         okButtonProps={{
-          danger: actionState.mode === 'reject',
-          className:
-            actionState.mode === 'approve'
-              ? '!bg-green-600/85 !backdrop-blur-md !border-green-400/30 !text-white !shadow-md hover:!bg-green-600/95 hover:!shadow-lg transition-all duration-300'
-              : undefined,
+          danger: true,
         }}
       >
-        {!actionState.request ? null : actionState.mode === 'approve' ? (
-          <Form form={actionForm} layout="vertical">
-            <Form.Item name="finalAccountId" label="最終會計科目">
-              <Select
-                allowClear
-                placeholder="選擇科目 (選填)"
-                loading={accountsLoading}
-                options={accounts.map((account) => ({
-                  label: `${account.code} ｜ ${account.name}`,
-                  value: account.id,
-                }))}
-                showSearch
-                optionFilterProp="label"
-              />
-            </Form.Item>
-            <Form.Item name="remark" label="核准備註">
-              <Input.TextArea rows={3} placeholder="可填寫核准理由或注意事項" />
-            </Form.Item>
-          </Form>
-        ) : (
+        {!actionState.request ? null : (
           <Form form={actionForm} layout="vertical">
             <Form.Item
               name="reason"
