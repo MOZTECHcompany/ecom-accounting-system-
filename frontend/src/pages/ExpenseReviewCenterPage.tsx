@@ -39,6 +39,7 @@ import {
   ThunderboltOutlined,
   WarningOutlined,
   BulbOutlined,
+  ClockCircleOutlined,
 } from '@ant-design/icons'
 import dayjs, { Dayjs } from 'dayjs'
 import { GlassCard } from '../components/ui/GlassCard'
@@ -233,7 +234,14 @@ const ExpenseReviewCenterPage: React.FC = () => {
   const flaggedRequests = useMemo(
     () =>
       pendingRequests.filter(
-        (request) => !request.suggestedAccount || isOverdue(request),
+        (request) => {
+          const metadata = request.metadata as Record<string, any> || {}
+          const isInvoicePending = metadata.isInvoicePending === true
+          const daysSinceCreation = dayjs().diff(dayjs(request.createdAt), 'day')
+          const isInvoiceOverdue = isInvoicePending && daysSinceCreation > 20
+
+          return !request.suggestedAccount || isOverdue(request) || isInvoiceOverdue
+        },
       ),
     [pendingRequests],
   )
@@ -765,6 +773,19 @@ const ExpenseReviewCenterPage: React.FC = () => {
                             <WarningOutlined /> 缺少 AI 科目建議
                           </div>
                         )}
+                        {(() => {
+                          const metadata = request.metadata as Record<string, any> || {}
+                          const isInvoicePending = metadata.isInvoicePending === true
+                          const daysSinceCreation = dayjs().diff(dayjs(request.createdAt), 'day')
+                          if (isInvoicePending && daysSinceCreation > 20) {
+                            return (
+                              <div className="flex items-center gap-1 text-red-500">
+                                <ClockCircleOutlined /> 發票補正逾期 ({daysSinceCreation} 天)
+                              </div>
+                            )
+                          }
+                          return null
+                        })()}
                       </div>
                     </div>
                   ))}

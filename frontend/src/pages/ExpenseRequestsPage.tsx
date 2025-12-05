@@ -23,12 +23,14 @@ import {
   Upload,
   Tooltip,
   Modal,
+  Checkbox,
 } from 'antd'
 import {
   PlusOutlined,
   UploadOutlined,
   BulbOutlined,
   ExclamationCircleOutlined,
+  ClockCircleOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
@@ -346,6 +348,7 @@ const ExpenseRequestsPage: React.FC = () => {
           ...(values.receiptType === 'TAX_INVOICE' ? {
             invoiceNo: values.invoiceNo,
             taxId: values.taxId,
+            isInvoicePending: values.isInvoicePending,
           } : {}),
         },
         evidenceFiles: evidenceFiles.length > 0 ? evidenceFiles : undefined,
@@ -731,9 +734,25 @@ const ExpenseRequestsPage: React.FC = () => {
       title: '狀態',
       dataIndex: 'status',
       key: 'status',
-      render: (value: string) => {
+      render: (value: string, record) => {
         const meta = statusMeta[value] || { label: value, color: 'default' }
-        return <Tag color={meta.color}>{meta.label}</Tag>
+        const metadata = record.metadata as Record<string, any> || {}
+        const isInvoicePending = metadata.isInvoicePending === true
+        const daysSinceCreation = dayjs().diff(dayjs(record.createdAt), 'day')
+        const isInvoiceOverdue = isInvoicePending && daysSinceCreation > 20
+
+        return (
+          <Space direction="vertical" size={2}>
+            <Tag color={meta.color}>{meta.label}</Tag>
+            {isInvoicePending && (
+              <Tooltip title={isInvoiceOverdue ? `發票補正已逾期 ${daysSinceCreation} 天` : '發票後補中'}>
+                <Tag color={isInvoiceOverdue ? 'red' : 'orange'} className="flex items-center gap-1">
+                  <ClockCircleOutlined /> {isInvoiceOverdue ? '補正逾期' : '發票後補'}
+                </Tag>
+              </Tooltip>
+            )}
+          </Space>
+        )
       },
     },
     {
@@ -1076,10 +1095,14 @@ const ExpenseRequestsPage: React.FC = () => {
 
           <Form.Item
             noStyle
-            shouldUpdate={(prevValues, currentValues) => prevValues.receiptType !== currentValues.receiptType}
+            shouldUpdate={(prevValues, currentValues) => 
+              prevValues.receiptType !== currentValues.receiptType || 
+              prevValues.isInvoicePending !== currentValues.isInvoicePending
+            }
           >
             {({ getFieldValue }) => {
               const receiptType = getFieldValue('receiptType')
+              const isInvoicePending = getFieldValue('isInvoicePending')
               const showInvoiceFields = receiptType === 'TAX_INVOICE'
               
               return showInvoiceFields ? (
@@ -1089,21 +1112,34 @@ const ExpenseRequestsPage: React.FC = () => {
                   exit={{ opacity: 0, height: 0 }}
                 >
                   <GlassDrawerSection>
+                    <div className="mb-4">
+                      <Form.Item name="isInvoicePending" valuePropName="checked" noStyle>
+                        <Checkbox>發票後補 (暫無發票，需在 20 天內補正)</Checkbox>
+                      </Form.Item>
+                    </div>
                     <div className="grid grid-cols-2 gap-4">
                       <Form.Item
                         label="發票號碼"
                         name="invoiceNo"
-                        rules={[{ required: true, message: '請輸入發票號碼' }]}
+                        rules={[{ required: !isInvoicePending, message: '請輸入發票號碼' }]}
                         className="mb-0"
                       >
-                        <Input placeholder="例如：AB-12345678" className="rounded-xl" />
+                        <Input 
+                          placeholder="例如：AB-12345678" 
+                          className="rounded-xl" 
+                          disabled={isInvoicePending}
+                        />
                       </Form.Item>
                       <Form.Item
                         label="統一編號"
                         name="taxId"
                         className="mb-0"
                       >
-                        <Input placeholder="賣方統編 (選填)" className="rounded-xl" />
+                        <Input 
+                          placeholder="賣方統編 (選填)" 
+                          className="rounded-xl" 
+                          disabled={isInvoicePending}
+                        />
                       </Form.Item>
                     </div>
                   </GlassDrawerSection>
