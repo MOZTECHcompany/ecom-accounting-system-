@@ -58,6 +58,43 @@ const receiptTypeLabelMap: Record<string, string> = {
   INTERNAL_ONLY: '內部單據',
 }
 
+const TAIWAN_BANKS = [
+  { code: '004', name: '臺灣銀行' },
+  { code: '005', name: '土地銀行' },
+  { code: '006', name: '合作金庫' },
+  { code: '007', name: '第一銀行' },
+  { code: '008', name: '華南銀行' },
+  { code: '009', name: '彰化銀行' },
+  { code: '011', name: '上海商銀' },
+  { code: '012', name: '台北富邦' },
+  { code: '013', name: '國泰世華' },
+  { code: '017', name: '兆豐銀行' },
+  { code: '021', name: '花旗銀行' },
+  { code: '048', name: '王道銀行' },
+  { code: '050', name: '臺灣企銀' },
+  { code: '052', name: '渣打銀行' },
+  { code: '053', name: '台中銀行' },
+  { code: '054', name: '京城銀行' },
+  { code: '081', name: '匯豐銀行' },
+  { code: '102', name: '華泰銀行' },
+  { code: '103', name: '新光銀行' },
+  { code: '108', name: '陽信銀行' },
+  { code: '118', name: '板信銀行' },
+  { code: '147', name: '三信商銀' },
+  { code: '803', name: '聯邦銀行' },
+  { code: '805', name: '遠東商銀' },
+  { code: '806', name: '元大銀行' },
+  { code: '807', name: '永豐銀行' },
+  { code: '808', name: '玉山銀行' },
+  { code: '809', name: '凱基銀行' },
+  { code: '810', name: '星展銀行' },
+  { code: '812', name: '台新銀行' },
+  { code: '815', name: '日盛銀行' },
+  { code: '816', name: '安泰銀行' },
+  { code: '822', name: '中國信託' },
+  { code: '700', name: '中華郵政' },
+]
+
 const statusMeta: Record<
   string,
   {
@@ -298,9 +335,19 @@ const ExpenseRequestsPage: React.FC = () => {
         description: values.description,
         receiptType: values.receiptType,
         dueDate: values.dueDate ? values.dueDate.toISOString() : undefined,
-        metadata: values.expenseDate
-          ? { expenseDate: values.expenseDate.format('YYYY-MM-DD') }
-          : undefined,
+        metadata: {
+          ...(values.expenseDate ? { expenseDate: values.expenseDate.format('YYYY-MM-DD') } : {}),
+          paymentMethod: values.paymentMethod,
+          payeeType: values.payeeType,
+          ...(values.paymentMethod === 'bank_transfer' ? {
+            bankCode: values.bankCode,
+            bankAccount: values.bankAccount,
+          } : {}),
+          ...(values.receiptType === 'TAX_INVOICE' ? {
+            invoiceNo: values.invoiceNo,
+            taxId: values.taxId,
+          } : {}),
+        },
         evidenceFiles: evidenceFiles.length > 0 ? evidenceFiles : undefined,
       }
 
@@ -900,12 +947,52 @@ const ExpenseRequestsPage: React.FC = () => {
                   options={[
                     { label: '現金', value: 'cash' },
                     { label: '銀行轉帳', value: 'bank_transfer' },
+                    { label: '信用卡', value: 'credit_card' },
                     { label: '支票', value: 'check' },
                     { label: '其他', value: 'other' },
                   ]}
                 />
               </Form.Item>
             </div>
+            <Form.Item
+              noStyle
+              shouldUpdate={(prevValues, currentValues) => prevValues.paymentMethod !== currentValues.paymentMethod}
+            >
+              {({ getFieldValue }) => {
+                const paymentMethod = getFieldValue('paymentMethod')
+                return paymentMethod === 'bank_transfer' ? (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="grid grid-cols-2 gap-4 mt-4"
+                  >
+                    <Form.Item
+                      label="銀行代碼"
+                      name="bankCode"
+                      rules={[{ required: true, message: '請選擇銀行' }]}
+                      className="mb-0"
+                    >
+                      <Select
+                        showSearch
+                        placeholder="搜尋銀行"
+                        optionFilterProp="label"
+                        options={TAIWAN_BANKS.map(bank => ({ label: `${bank.code} ${bank.name}`, value: bank.code }))}
+                        className="rounded-xl"
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label="銀行帳號"
+                      name="bankAccount"
+                      rules={[{ required: true, message: '請輸入銀行帳號' }]}
+                      className="mb-0"
+                    >
+                      <Input placeholder="請輸入帳號" className="rounded-xl" />
+                    </Form.Item>
+                  </motion.div>
+                ) : null
+              }}
+            </Form.Item>
           </GlassDrawerSection>
 
           <GlassDrawerSection>
@@ -993,9 +1080,9 @@ const ExpenseRequestsPage: React.FC = () => {
           >
             {({ getFieldValue }) => {
               const receiptType = getFieldValue('receiptType')
-              const hasInvoice = receiptType === 'TAX_INVOICE' || receiptType === 'RECEIPT'
+              const showInvoiceFields = receiptType === 'TAX_INVOICE'
               
-              return hasInvoice ? (
+              return showInvoiceFields ? (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
