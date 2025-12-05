@@ -776,3 +776,21 @@ body.dark .glass-input {
 }
 
 
+
+/* Fix for Ant Design Select Dropdown Text Color on Hover/Active */
+/* 強制設定：當選項背景為深色時（hover/focus/active），文字顏色必須變成白色 */
+.ant-select-item-option-active,
+.ant-select-item-option-selected {
+  color: #ffffff !important;
+}
+
+/* 針對多選模式的選中狀態 */
+.ant-select-item-option-selected .ant-select-item-option-content {
+  color: #ffffff !important;
+}
+
+/* Fix for Ant Design Dropdown Menu Text Color on Hover/Active */
+.ant-dropdown-menu-item-active,
+.ant-dropdown-menu-item-selected {
+  color: #ffffff !important;
+}
