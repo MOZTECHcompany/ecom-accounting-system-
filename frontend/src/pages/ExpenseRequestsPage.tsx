@@ -345,7 +345,12 @@ const ExpenseRequestsPage: React.FC = () => {
             bankCode: values.bankCode,
             bankAccount: values.bankAccount,
           } : {}),
-          ...(values.receiptType === 'TAX_INVOICE' ? {
+          ...(values.payeeType === 'prepaid_customs' ? {
+            customsDeclarationNumber: values.customsDeclarationNumber,
+            isInvoicePending: true,
+            isPrepaidCustoms: true,
+          } : {}),
+          ...(values.receiptType === 'TAX_INVOICE' && values.payeeType !== 'prepaid_customs' ? {
             invoiceNo: values.invoiceNo,
             taxId: values.taxId,
             isInvoicePending: values.isInvoicePending,
@@ -858,9 +863,39 @@ const ExpenseRequestsPage: React.FC = () => {
               <Radio.Group optionType="button" buttonStyle="solid" className="w-full flex">
                 <Radio.Button value="employee" className="flex-1 text-center">員工代墊</Radio.Button>
                 <Radio.Button value="vendor" className="flex-1 text-center">廠商直付</Radio.Button>
+                <Radio.Button value="prepaid_customs" className="flex-1 text-center">關稅預付</Radio.Button>
               </Radio.Group>
             </Form.Item>
           </GlassDrawerSection>
+
+          <Form.Item
+            noStyle
+            shouldUpdate={(prevValues, currentValues) => prevValues.payeeType !== currentValues.payeeType}
+          >
+            {({ getFieldValue }) => {
+              const payeeType = getFieldValue('payeeType')
+              return payeeType === 'prepaid_customs' ? (
+                <GlassDrawerSection>
+                  <div className="mb-4">
+                    <Alert 
+                      message="關稅預付模式" 
+                      description="系統將自動標記為發票後補。請輸入報關單號，待取得正式進口報單與稅費單據後再行補件。" 
+                      type="info" 
+                      showIcon 
+                    />
+                  </div>
+                  <Form.Item
+                    label="報關單號"
+                    name="customsDeclarationNumber"
+                    rules={[{ required: true, message: '請輸入報關單號' }]}
+                    className="mb-0"
+                  >
+                    <Input placeholder="請輸入報關單號 (例如: AX/12/345/67890)" className="rounded-xl" />
+                  </Form.Item>
+                </GlassDrawerSection>
+              ) : null
+            }}
+          </Form.Item>
 
           <GlassDrawerSection>
             <Form.Item label="備註說明" style={{ marginBottom: 0 }} required>

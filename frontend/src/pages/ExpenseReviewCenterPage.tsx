@@ -460,6 +460,17 @@ const ExpenseReviewCenterPage: React.FC = () => {
               付款狀態：{record.paymentStatus}
             </Text>
           )}
+          {(() => {
+            const metadata = record.metadata as Record<string, any> || {}
+            if (metadata.isPrepaidCustoms) {
+              return (
+                <Tag color="purple" className="mt-1">
+                  關稅預付
+                </Tag>
+              )
+            }
+            return null
+          })()}
         </Space>
       ),
     },
@@ -876,6 +887,20 @@ const ExpenseReviewCenterPage: React.FC = () => {
                 <Descriptions.Item label="備註">
                   {selectedRequest.description || <Text type="secondary">—</Text>}
                 </Descriptions.Item>
+                {(() => {
+                  const metadata = selectedRequest.metadata as Record<string, any> || {}
+                  if (metadata.isPrepaidCustoms) {
+                    return (
+                      <Descriptions.Item label="報關單號">
+                        <Space>
+                          <Text copyable>{metadata.customsDeclarationNumber || '未填寫'}</Text>
+                          <Tag color="purple">關稅預付</Tag>
+                        </Space>
+                      </Descriptions.Item>
+                    )
+                  }
+                  return null
+                })()}
               </Descriptions>
             </GlassDrawerSection>
 
