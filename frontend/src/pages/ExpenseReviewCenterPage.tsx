@@ -40,7 +40,7 @@ import {
   WarningOutlined,
 } from '@ant-design/icons'
 import dayjs, { Dayjs } from 'dayjs'
-import GlassCard from '../components/ui/GlassCard'
+import { GlassCard } from '../components/ui/GlassCard'
 import { GlassDrawer, GlassDrawerSection } from '../components/ui/GlassDrawer'
 import { GlassButton } from '../components/ui/GlassButton'
 import { GlassInput } from '../components/ui/GlassInput'

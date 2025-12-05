@@ -828,7 +828,7 @@ const ExpenseRequestsPage: React.FC = () => {
                 />
               </Form.Item>
               <GlassButton
-                block
+                fullWidth
                 onClick={handlePredictCategory}
                 isLoading={predicting}
                 className="flex items-center justify-center gap-2 text-blue-600"
@@ -1042,7 +1042,10 @@ const ExpenseRequestsPage: React.FC = () => {
                 maxCount={5}
                 accept="image/*,.pdf"
               >
-                <GlassButton icon={<UploadOutlined />}>上傳照片</GlassButton>
+                <GlassButton>
+                  <UploadOutlined className="mr-2" />
+                  上傳照片
+                </GlassButton>
               </Upload>
             </Form.Item>
 
