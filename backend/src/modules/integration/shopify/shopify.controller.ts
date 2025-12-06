@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Headers, Post } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Post, Req } from '@nestjs/common';
 import { IsDateString, IsOptional, IsString } from 'class-validator';
 import { ShopifyService } from './shopify.service';
 import { createHmac } from 'crypto';
+import { Request } from 'express';
 
 class SyncRequestDto {
   @IsString()
@@ -47,9 +48,11 @@ export class ShopifyController {
   async webhook(
     @Headers('x-shopify-topic') topic: string,
     @Headers('x-shopify-hmac-sha256') hmac: string,
+    @Req() req: Request,
     @Body() payload: any,
   ) {
-    const computedHmac = this.computeHmac(JSON.stringify(payload));
+    const rawBody = (req as any)?.rawBody ? (req as any).rawBody : JSON.stringify(payload);
+    const computedHmac = this.computeHmac(rawBody);
     const hmacValid = hmac === computedHmac;
     return this.shopifyService.handleWebhook(topic, payload, hmacValid);
   }

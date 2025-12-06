@@ -4,17 +4,8 @@ import {
   ShopifyAdapter,
   ShopifyOrderPayload,
   ShopifyTransactionPayload,
-  ShopifyProductPayload,
-  ShopifyInventoryLevelPayload,
 } from './interfaces/shopify-adapter.interface';
 
-/**
- * ShopifyAdapter
- *
- * 備註：此處僅提供骨架與接口，實際呼叫 Shopify Admin API 時請補上 HTTP client（例如 fetch 或 axios）。
- * - 認證：使用 Admin API Access Token，Header: `X-Shopify-Access-Token`。
- * - API 版本：使用環境變數 `SHOPIFY_API_VERSION`，預設 2024-10。
- */
 @Injectable()
 export class ShopifyHttpAdapter implements ShopifyAdapter {
   private readonly logger = new Logger(ShopifyHttpAdapter.name);
@@ -28,12 +19,30 @@ export class ShopifyHttpAdapter implements ShopifyAdapter {
     this.apiVersion = this.configService.get<string>('SHOPIFY_API_VERSION', '2024-10');
   }
 
+  private get baseUrl() {
+    // Ensure shopDomain doesn't have https:// or .myshopify.com if user put it in
+    const domain = this.shopDomain.replace(/^https?:\/\//, '').replace(/.myshopify.com$/, '');
+    return `https://${domain}.myshopify.com/admin/api/${this.apiVersion}`;
+  }
+
+  private get headers() {
+    return {
+      'X-Shopify-Access-Token': this.token,
+      'Content-Type': 'application/json',
+    };
+  }
+
   async testConnection(): Promise<{ ok: boolean; message?: string }> {
     if (!this.shopDomain || !this.token) {
-      return { ok: false, message: 'SHOPIFY_SHOP 或 SHOPIFY_TOKEN 未設定' };
+      return { ok: false, message: 'SHOPIFY_SHOP or SHOPIFY_TOKEN not configured' };
     }
-    // TODO: 實際呼叫 Shopify Admin API `/shop.json` 做健康檢查
-    return { ok: true, message: 'Config loaded, pending real API call' };
+    try {
+      await this.request('GET', '/shop.json');
+      return { ok: true, message: 'Connection successful' };
+    } catch (error: any) {
+      this.logger.error(`Shopify connection failed: ${error.message}`);
+      return { ok: false, message: error.message };
+    }
   }
 
   async fetchOrders(params: {
@@ -42,12 +51,21 @@ export class ShopifyHttpAdapter implements ShopifyAdapter {
     limit?: number;
   }): Promise<ShopifyOrderPayload[]> {
     this.assertConfig();
-    // TODO: 呼叫 GET /admin/api/{version}/orders.json?status=any&updated_at_min=...&updated_at_max=...
-    // 1) 加入 created_at/updated_at 過濾
-    // 2) 分頁處理（link header cursor）
-    // 3) 將回應轉為 ShopifyOrderPayload
-    this.logger.warn('fetchOrders not implemented; returning empty list');
-    return [];
+    const query = new URLSearchParams({
+      status: 'any',
+      limit: (params.limit || 50).toString(),
+    });
+
+    if (params.since) query.append('updated_at_min', params.since.toISOString());
+    if (params.until) query.append('updated_at_max', params.until.toISOString());
+
+    try {
+      const data = await this.request('GET', `/orders.json?${query.toString()}`);
+      return (data.orders || []).map((order: any) => this.mapOrder(order));
+    } catch (error: any) {
+      this.logger.error(`Failed to fetch orders: ${error.message}`);
+      throw error;
+    }
   }
 
   async fetchTransactions(params: {
@@ -56,34 +74,88 @@ export class ShopifyHttpAdapter implements ShopifyAdapter {
     limit?: number;
   }): Promise<ShopifyTransactionPayload[]> {
     this.assertConfig();
-    // TODO: 呼叫 GET /admin/api/{version}/shopify_payments/balance/transactions.json 或 /orders/{id}/transactions.json
-    this.logger.warn('fetchTransactions not implemented; returning empty list');
-    return [];
+    // 1. Fetch orders in the range first
+    const orders = await this.fetchOrders(params);
+    const transactions: ShopifyTransactionPayload[] = [];
+
+    // 2. Fetch transactions for each order
+    // Note: This can be slow. In production, use a queue or GraphQL.
+    for (const order of orders) {
+      try {
+        const data = await this.request('GET', `/orders/${order.id}/transactions.json`);
+        const txs = (data.transactions || []).map((tx: any) => this.mapTransaction(tx, order.id));
+        transactions.push(...txs);
+      } catch (error: any) {
+        this.logger.error(`Failed to fetch transactions for order ${order.id}: ${error.message}`);
+        // Continue to next order
+      }
+    }
+
+    return transactions;
   }
 
-  async fetchProducts?(params: {
-    since?: Date;
-    limit?: number;
-  }): Promise<ShopifyProductPayload[]> {
-    this.assertConfig();
-    // TODO: 呼叫 GET /admin/api/{version}/products.json 並轉換為統一結構
-    this.logger.warn('fetchProducts not implemented; returning empty list');
-    return [];
-  }
+  private async request(method: string, path: string, body?: any) {
+    const url = `${this.baseUrl}${path}`;
+    const options: RequestInit = {
+      method,
+      headers: this.headers,
+      body: body ? JSON.stringify(body) : undefined,
+    };
 
-  async fetchInventoryLevels?(params: {
-    since?: Date;
-    limit?: number;
-  }): Promise<ShopifyInventoryLevelPayload[]> {
-    this.assertConfig();
-    // TODO: 呼叫 GET /admin/api/{version}/inventory_levels.json
-    this.logger.warn('fetchInventoryLevels not implemented; returning empty list');
-    return [];
+    const res = await fetch(url, options);
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Shopify API Error ${res.status}: ${text}`);
+    }
+    return res.json();
   }
 
   private assertConfig() {
     if (!this.shopDomain || !this.token) {
-      throw new Error('Shopify config missing: SHOPIFY_SHOP or SHOPIFY_TOKEN');
+      throw new Error('Shopify configuration missing');
     }
+  }
+
+  private mapOrder(raw: any): ShopifyOrderPayload {
+    return {
+      id: raw.id.toString(),
+      name: raw.name,
+      createdAt: raw.created_at,
+      updatedAt: raw.updated_at,
+      currency: raw.currency,
+      totalPrice: parseFloat(raw.total_price),
+      subtotalPrice: parseFloat(raw.subtotal_price),
+      totalDiscounts: parseFloat(raw.total_discounts),
+      totalTax: parseFloat(raw.total_tax),
+      status: raw.cancelled_at ? 'cancelled' : 'active',
+      financialStatus: raw.financial_status,
+      fulfillmentStatus: raw.fulfillment_status,
+      customerEmail: raw.email || raw.customer?.email,
+      customerId: raw.customer?.id?.toString(),
+      lineItems: (raw.line_items || []).map((item: any) => ({
+        id: item.id.toString(),
+        sku: item.sku,
+        title: item.title,
+        quantity: item.quantity,
+        price: parseFloat(item.price),
+        currency: raw.currency,
+        discount: parseFloat(item.total_discount),
+      })),
+    };
+  }
+
+  private mapTransaction(raw: any, orderId: string): ShopifyTransactionPayload {
+    return {
+      id: raw.id.toString(),
+      orderId: orderId,
+      kind: raw.kind,
+      status: raw.status,
+      amount: parseFloat(raw.amount),
+      currency: raw.currency,
+      processedAt: raw.processed_at || raw.created_at,
+      gateway: raw.gateway,
+      paymentMethod: raw.payment_details?.credit_card_company || raw.gateway,
+      source: raw.source_name,
+    };
   }
 }

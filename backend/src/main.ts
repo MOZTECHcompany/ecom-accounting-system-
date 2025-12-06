@@ -10,11 +10,21 @@ async function bootstrap() {
     cors: true,
   });
 
-  // Increase body limit for large file uploads
-  app.use(json({ limit: '50mb' }));
-  app.use(urlencoded({ extended: true, limit: '50mb' }));
-
   const configService = app.get(ConfigService);
+  const prefix = configService.get('API_PREFIX') || '/api/v1';
+
+  // Increase body limit for large file uploads and capture raw body for Shopify webhook HMAC
+  app.use(
+    json({
+      limit: '50mb',
+      verify: (req: any, res, buf) => {
+        if (req.originalUrl?.startsWith(`${prefix}/integrations/shopify/webhook`)) {
+          req.rawBody = buf.toString('utf8');
+        }
+      },
+    }),
+  );
+  app.use(urlencoded({ extended: true, limit: '50mb' }));
 
   // 全域驗證管道
   app.useGlobalPipes(
@@ -37,7 +47,6 @@ async function bootstrap() {
   console.log('Server restarting...');
 
   // API 前綴
-  const prefix = configService.get('API_PREFIX') || '/api/v1';
   app.setGlobalPrefix(prefix);
 
   // Swagger 文件設定（Production 也啟用）
