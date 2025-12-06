@@ -683,12 +683,49 @@ Do not include any markdown formatting (like \`\`\`json), just the raw JSON stri
         }
       : undefined;
 
-    return this.expenseRepository.createExpenseRequestGraph({
+    const result = await this.expenseRepository.createExpenseRequestGraph({
       requestData,
       history,
       approvalSteps,
       classifierFeedback,
     });
+
+    if (dto.priority === 'urgent') {
+      try {
+        const admins = await this.prisma.user.findMany({
+          where: {
+            roles: {
+              some: {
+                role: {
+                  code: { in: ['ADMIN', 'SUPER_ADMIN'] },
+                },
+              },
+            },
+          },
+        });
+
+        for (const admin of admins) {
+          await this.notificationService.create({
+            userId: admin.id,
+            title: '急件費用申請通知',
+            message: `收到一筆急件費用申請：${dto.description}，請盡速處理。`,
+            type: 'warning',
+            category: 'expense',
+            data: {
+              requestId: result.id,
+              entityId: dto.entityId,
+            },
+          });
+        }
+      } catch (error) {
+        this.logger.error(
+          `Failed to send urgent notifications: ${error.message}`,
+          error.stack,
+        );
+      }
+    }
+
+    return result;
   }
 
   async getExpenseRequestHistory(id: string) {
