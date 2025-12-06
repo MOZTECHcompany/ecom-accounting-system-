@@ -279,7 +279,7 @@ const UsersTab = ({ availableRoles }: UsersTabProps) => {
           </Title>
           <Text className="text-gray-500">新增、停用或調整使用者角色</Text>
         </div>
-        <GlassButton type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+        <GlassButton variant="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
           新增使用者
         </GlassButton>
       </div>
@@ -580,7 +580,7 @@ const RolesTab = ({
           </Title>
           <Text className="text-gray-500">建立角色並維護對應權限</Text>
         </div>
-        <GlassButton type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+        <GlassButton variant="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
           新增角色
         </GlassButton>
       </div>
@@ -805,7 +805,7 @@ const PermissionsTab = ({
           </Title>
           <Text className="text-gray-500">維護資源／操作清單</Text>
         </div>
-        <GlassButton type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+        <GlassButton variant="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
           新增權限
         </GlassButton>
       </div>
