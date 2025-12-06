@@ -540,33 +540,14 @@ const ExpenseReviewCenterPage: React.FC = () => {
       render: (_value, record) => (
         <div className="flex items-center justify-end gap-2">
           {record.status === 'pending' ? (
-            <>
-              <Button
-                type="primary"
-                size="middle"
-                className="!bg-green-600 hover:!bg-green-500 border-none shadow-sm flex items-center"
-                onClick={() => handleOpenDetail(record)}
-              >
-                <CheckCircleOutlined /> 審核
-              </Button>
-              <Button
-                type="default"
-                size="middle"
-                className="flex items-center"
-                onClick={() => handleOpenDetail(record)}
-              >
-                詳情
-              </Button>
-              <Button
-                danger
-                type="text"
-                size="middle"
-                className="flex items-center hover:bg-red-50"
-                onClick={() => openActionModal('reject', record)}
-              >
-                駁回
-              </Button>
-            </>
+            <Button
+              type="primary"
+              size="middle"
+              className="!bg-green-600 hover:!bg-green-500 border-none shadow-sm flex items-center"
+              onClick={() => handleOpenDetail(record)}
+            >
+              <CheckCircleOutlined /> 審核
+            </Button>
           ) : (
             <Button
               type="default"
