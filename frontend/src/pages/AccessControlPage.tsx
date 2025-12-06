@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Button,
-  Card,
   Form,
   Input,
   InputNumber,
@@ -16,6 +15,7 @@ import {
   Tag,
   Typography,
   message,
+  Tooltip,
 } from 'antd'
 import { 
   UserOutlined, 
@@ -24,7 +24,8 @@ import {
   PlusOutlined, 
   EditOutlined, 
   DeleteOutlined,
-  SettingOutlined
+  SettingOutlined,
+  SearchOutlined
 } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
@@ -32,12 +33,17 @@ import { usersService, CreateUserPayload, UpdateUserPayload } from '../services/
 import { rolesService, CreateRolePayload, UpdateRolePayload } from '../services/roles.service'
 import { permissionsService } from '../services/permissions.service'
 import { ManagedUser, PaginatedResult, Permission, Role, RolePermissionLink, UserRoleLink } from '../types'
+import { GlassCard } from '../components/ui/GlassCard'
+import { GlassButton } from '../components/ui/GlassButton'
+import { getResourceName, getActionName, getRoleName } from '../constants/translations'
 
 type TableColumn<T> = {
   title: React.ReactNode
   dataIndex?: string
   key: string
-  render?: (value: unknown, record: T) => React.ReactNode
+  render?: (value: any, record: T) => React.ReactNode
+  width?: string | number
+  align?: 'left' | 'center' | 'right'
 }
 
 type SimplePagination = {
@@ -194,10 +200,12 @@ const UsersTab = ({ availableRoles }: UsersTabProps) => {
     {
       title: '角色',
       key: 'roles',
-      render: (_value: unknown, record: ManagedUser) => (
+      render: (_value: any, record: ManagedUser) => (
         <Space wrap>
           {record.roles?.map((userRole: UserRoleLink) => (
-            <Tag key={userRole.roleId}>{userRole.role?.name || userRole.role?.code}</Tag>
+            <Tag key={userRole.roleId} color="blue">
+              {userRole.role?.name || getRoleName(userRole.role?.code || '')}
+            </Tag>
           ))}
         </Space>
       ),
@@ -206,51 +214,51 @@ const UsersTab = ({ availableRoles }: UsersTabProps) => {
       title: '狀態',
       dataIndex: 'isActive',
       key: 'status',
-      render: (_value: unknown, record: ManagedUser) => (
+      render: (_value: any, record: ManagedUser) => (
         <Tag color={record.isActive ? 'green' : 'red'}>{record.isActive ? '啟用' : '停用'}</Tag>
       ),
     },
     {
       title: '操作',
       key: 'actions',
-      render: (_value: unknown, record: ManagedUser) => (
+      render: (_value: any, record: ManagedUser) => (
         <Space size="small">
-          <Button
-            type="text"
-            icon={<SettingOutlined />}
-            onClick={() => {
-              setSelectedUser(record)
-              assignForm.setFieldsValue({
-                roleIds: record.roles?.map((link: UserRoleLink) => link.roleId) || [],
-              })
-              setAssignOpen(true)
-            }}
-          >
-            設定角色
-          </Button>
-          <Button
-            type="text"
-            icon={<EditOutlined />}
-            onClick={() => {
-              setSelectedUser(record)
-              editForm.setFieldsValue({
-                name: record.name,
-                isActive: record.isActive,
-                password: undefined,
-              })
-              setEditOpen(true)
-            }}
-          >
-            編輯
-          </Button>
+          <Tooltip title="設定角色">
+            <Button
+              type="text"
+              icon={<SettingOutlined />}
+              onClick={() => {
+                setSelectedUser(record)
+                assignForm.setFieldsValue({
+                  roleIds: record.roles?.map((link: UserRoleLink) => link.roleId) || [],
+                })
+                setAssignOpen(true)
+              }}
+            />
+          </Tooltip>
+          <Tooltip title="編輯">
+            <Button
+              type="text"
+              icon={<EditOutlined />}
+              onClick={() => {
+                setSelectedUser(record)
+                editForm.setFieldsValue({
+                  name: record.name,
+                  isActive: record.isActive,
+                  password: undefined,
+                })
+                setEditOpen(true)
+              }}
+            />
+          </Tooltip>
           {record.isActive ? (
             <Popconfirm
               title="確認停用此使用者？"
               onConfirm={() => toggleActive(record, false)}
             >
-              <Button type="text" danger icon={<DeleteOutlined />}>
-                停用
-              </Button>
+              <Tooltip title="停用">
+                <Button type="text" danger icon={<DeleteOutlined />} />
+              </Tooltip>
             </Popconfirm>
           ) : (
             <Button type="text" onClick={() => toggleActive(record, true)}>
@@ -263,7 +271,7 @@ const UsersTab = ({ availableRoles }: UsersTabProps) => {
   ]
 
   return (
-    <div className="glass-card p-6">
+    <GlassCard className="p-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div>
           <Title level={4} className="!mb-1 !font-light">
@@ -271,9 +279,9 @@ const UsersTab = ({ availableRoles }: UsersTabProps) => {
           </Title>
           <Text className="text-gray-500">新增、停用或調整使用者角色</Text>
         </div>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)} className="shadow-lg shadow-blue-500/30">
+        <GlassButton type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
           新增使用者
-        </Button>
+        </GlassButton>
       </div>
 
       <Table
@@ -289,7 +297,7 @@ const UsersTab = ({ availableRoles }: UsersTabProps) => {
           showSizeChanger: false,
           className: 'p-4'
         }}
-        onChange={(pagination: SimplePagination) => {
+        onChange={(pagination: any) => {
           const currentPage = pagination.current ?? 1
           fetchUsers(currentPage)
         }}
@@ -303,36 +311,42 @@ const UsersTab = ({ availableRoles }: UsersTabProps) => {
         onOk={handleCreate}
         destroyOnClose
         okText="建立"
+        width={500}
       >
-        <Form layout="vertical" form={createForm} initialValues={{ roleIds: [] }}>
-          <Form.Item name="name" label="姓名" rules={[{ required: true, message: '請輸入姓名' }]}>
-            <Input placeholder="輸入使用者姓名" />
-          </Form.Item>
-          <Form.Item
-            name="email"
-            label="電子郵件"
-            rules={[{ required: true, message: '請輸入電子郵件' }, { type: 'email', message: '電子郵件格式不正確' }]}
-          >
-            <Input placeholder="例如 user@example.com" />
-          </Form.Item>
-          <Form.Item
-            name="password"
-            label="初始密碼"
-            rules={[{ required: true, message: '請輸入密碼' }, { min: 8, message: '密碼至少 8 碼' }]}
-          >
-            <Input.Password placeholder="至少 8 碼" autoComplete="new-password" />
-          </Form.Item>
-          <Form.Item name="roleIds" label="指派角色">
-            <Select
-              mode="multiple"
-              placeholder="選擇角色"
-              options={availableRoles.map((role: Role) => ({
-                label: role.name || role.code,
-                value: role.id,
-              }))}
-              allowClear
-            />
-          </Form.Item>
+        <Form layout="vertical" form={createForm} initialValues={{ roleIds: [] }} className="pt-4">
+          <div className="bg-gray-50 p-4 rounded-lg mb-4 border border-gray-100">
+            <Form.Item name="name" label="姓名" rules={[{ required: true, message: '請輸入姓名' }]}>
+              <Input placeholder="輸入使用者姓名" className="rounded-md" />
+            </Form.Item>
+            <Form.Item
+              name="email"
+              label="電子郵件"
+              rules={[{ required: true, message: '請輸入電子郵件' }, { type: 'email', message: '電子郵件格式不正確' }]}
+            >
+              <Input placeholder="例如 user@example.com" className="rounded-md" />
+            </Form.Item>
+            <Form.Item
+              name="password"
+              label="初始密碼"
+              rules={[{ required: true, message: '請輸入密碼' }, { min: 8, message: '密碼至少 8 碼' }]}
+            >
+              <Input.Password placeholder="至少 8 碼" autoComplete="new-password" className="rounded-md" />
+            </Form.Item>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+            <Form.Item name="roleIds" label="指派角色" className="mb-0">
+              <Select
+                mode="multiple"
+                placeholder="選擇角色"
+                options={availableRoles.map((role: Role) => ({
+                  label: role.name || getRoleName(role.code),
+                  value: role.id,
+                }))}
+                allowClear
+                className="rounded-md"
+              />
+            </Form.Item>
+          </div>
         </Form>
       </Modal>
 
@@ -342,18 +356,22 @@ const UsersTab = ({ availableRoles }: UsersTabProps) => {
         onCancel={() => setAssignOpen(false)}
         onOk={handleAssignRoles}
         okText="儲存"
+        width={500}
       >
-        <Form form={assignForm} layout="vertical">
-          <Form.Item name="roleIds" label="角色">
-            <Select
-              mode="multiple"
-              placeholder="選擇角色"
-              options={availableRoles.map((role: Role) => ({
-                label: role.name || role.code,
-                value: role.id,
-              }))}
-            />
-          </Form.Item>
+        <Form form={assignForm} layout="vertical" className="pt-4">
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+            <Form.Item name="roleIds" label="角色" className="mb-0">
+              <Select
+                mode="multiple"
+                placeholder="選擇角色"
+                options={availableRoles.map((role: Role) => ({
+                  label: role.name || getRoleName(role.code),
+                  value: role.id,
+                }))}
+                className="rounded-md"
+              />
+            </Form.Item>
+          </div>
         </Form>
       </Modal>
 
@@ -363,25 +381,31 @@ const UsersTab = ({ availableRoles }: UsersTabProps) => {
         onCancel={() => setEditOpen(false)}
         onOk={handleEditUser}
         okText="儲存"
+        width={500}
       >
-        <Form form={editForm} layout="vertical">
-          <Form.Item name="name" label="姓名" rules={[{ required: true, message: '請輸入姓名' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="isActive" label="帳號狀態" valuePropName="checked">
-            <Switch checkedChildren="啟用" unCheckedChildren="停用" />
-          </Form.Item>
-          <Form.Item
-            name="password"
-            label="重設密碼"
-            rules={[{ min: 8, message: '密碼至少 8 碼' }]}
-            extra="若不需變更密碼，請留白"
-          >
-            <Input.Password autoComplete="new-password" />
-          </Form.Item>
+        <Form form={editForm} layout="vertical" className="pt-4">
+          <div className="bg-gray-50 p-4 rounded-lg mb-4 border border-gray-100">
+            <Form.Item name="name" label="姓名" rules={[{ required: true, message: '請輸入姓名' }]}>
+              <Input className="rounded-md" />
+            </Form.Item>
+            <Form.Item name="isActive" label="帳號狀態" valuePropName="checked" className="mb-0">
+              <Switch checkedChildren="啟用" unCheckedChildren="停用" />
+            </Form.Item>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+            <Form.Item
+              name="password"
+              label="重設密碼"
+              rules={[{ min: 8, message: '密碼至少 8 碼' }]}
+              extra="若不需變更密碼，請留白"
+              className="mb-0"
+            >
+              <Input.Password autoComplete="new-password" className="rounded-md" />
+            </Form.Item>
+          </div>
         </Form>
       </Modal>
-    </div>
+    </GlassCard>
   )
 }
 
@@ -463,70 +487,84 @@ const RolesTab = ({
   const permissionOptions = useMemo(
     () =>
       permissions.map((permission: Permission) => ({
-        label: `${permission.resource}:${permission.action}`,
+        label: `${getResourceName(permission.resource)} : ${getActionName(permission.action)}`,
         value: permission.id,
       })),
     [permissions],
   )
 
   const columns: TableColumn<Role>[] = [
-    { title: '代碼', dataIndex: 'code', key: 'code' },
-    { title: '名稱', dataIndex: 'name', key: 'name' },
+    { 
+      title: '代碼', 
+      dataIndex: 'code', 
+      key: 'code',
+      render: (value: string) => <Text code>{value}</Text>
+    },
+    { 
+      title: '名稱', 
+      dataIndex: 'name', 
+      key: 'name',
+      render: (value: string, record: Role) => (
+        <span className="font-medium">{value || getRoleName(record.code)}</span>
+      )
+    },
     {
       title: '階層',
       dataIndex: 'hierarchyLevel',
       key: 'hierarchyLevel',
-      render: (value: unknown) => (typeof value === 'number' ? value : '—'),
+      render: (value: any) => (typeof value === 'number' ? <Tag>{value}</Tag> : '—'),
     },
     {
       title: '權限數量',
       key: 'permissionCount',
-      render: (_value: unknown, record: Role) => record.permissions?.length ?? 0,
+      render: (_value: any, record: Role) => (
+        <Tag color="blue">{record.permissions?.length ?? 0}</Tag>
+      ),
     },
     {
       title: '操作',
       key: 'actions',
-      render: (_value: unknown, record: Role) => (
+      render: (_value: any, record: Role) => (
         <Space size="small">
-          <Button
-            type="text"
-            icon={<EditOutlined />}
-            onClick={() => {
-              setSelectedRole(record)
-              editForm.setFieldsValue({
-                code: record.code,
-                name: record.name,
-                description: record.description,
-                hierarchyLevel: record.hierarchyLevel,
-              })
-              setEditOpen(true)
-            }}
-          >
-            編輯
-          </Button>
-          <Button
-            type="text"
-            icon={<SettingOutlined />}
-            onClick={() => {
-              setSelectedRole(record)
-              permissionsForm.setFieldsValue({
-                permissionIds:
-                  record.permissions?.map((item: RolePermissionLink) => item.permissionId) || [],
-              })
-              setPermissionOpen(true)
-            }}
-          >
-            設定權限
-          </Button>
+          <Tooltip title="編輯">
+            <Button
+              type="text"
+              icon={<EditOutlined />}
+              onClick={() => {
+                setSelectedRole(record)
+                editForm.setFieldsValue({
+                  code: record.code,
+                  name: record.name,
+                  description: record.description,
+                  hierarchyLevel: record.hierarchyLevel,
+                })
+                setEditOpen(true)
+              }}
+            />
+          </Tooltip>
+          <Tooltip title="設定權限">
+            <Button
+              type="text"
+              icon={<SettingOutlined />}
+              onClick={() => {
+                setSelectedRole(record)
+                permissionsForm.setFieldsValue({
+                  permissionIds:
+                    record.permissions?.map((item: RolePermissionLink) => item.permissionId) || [],
+                })
+                setPermissionOpen(true)
+              }}
+            />
+          </Tooltip>
           <Popconfirm
             title="確認刪除此角色？"
             onConfirm={() => handleDelete(record)
             }
             disabled={record.code === 'SUPER_ADMIN'}
           >
-            <Button type="text" danger disabled={record.code === 'SUPER_ADMIN'} icon={<DeleteOutlined />}>
-              刪除
-            </Button>
+            <Tooltip title="刪除">
+              <Button type="text" danger disabled={record.code === 'SUPER_ADMIN'} icon={<DeleteOutlined />} />
+            </Tooltip>
           </Popconfirm>
         </Space>
       ),
@@ -534,7 +572,7 @@ const RolesTab = ({
   ]
 
   return (
-    <div className="glass-card p-6">
+    <GlassCard className="p-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div>
           <Title level={4} className="!mb-1 !font-light">
@@ -542,9 +580,9 @@ const RolesTab = ({
           </Title>
           <Text className="text-gray-500">建立角色並維護對應權限</Text>
         </div>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)} className="shadow-lg shadow-blue-500/30">
+        <GlassButton type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
           新增角色
-        </Button>
+        </GlassButton>
       </div>
 
       <Table
@@ -563,24 +601,29 @@ const RolesTab = ({
         onCancel={() => setCreateOpen(false)}
         onOk={handleCreate}
         okText="建立"
+        width={500}
       >
-        <Form layout="vertical" form={createForm}>
-          <Form.Item
-            name="code"
-            label="角色代碼"
-            rules={[{ required: true, message: '請輸入角色代碼' }, { pattern: /^[A-Z_]+$/, message: '僅允許大寫英文字與底線' }]}
-          >
-            <Input placeholder="例如 FINANCE_ADMIN" />
-          </Form.Item>
-          <Form.Item name="name" label="角色名稱" rules={[{ required: true, message: '請輸入角色名稱' }]}>
-            <Input placeholder="顯示名稱" />
-          </Form.Item>
-          <Form.Item name="description" label="描述">
-            <Input.TextArea rows={3} placeholder="簡短說明" />
-          </Form.Item>
-          <Form.Item name="hierarchyLevel" label="階層 (數字愈小代表權限愈高)">
-            <InputNumber min={1} style={{ width: '100%' }} placeholder="預設為 3" />
-          </Form.Item>
+        <Form layout="vertical" form={createForm} className="pt-4">
+          <div className="bg-gray-50 p-4 rounded-lg mb-4 border border-gray-100">
+            <Form.Item
+              name="code"
+              label="角色代碼"
+              rules={[{ required: true, message: '請輸入角色代碼' }, { pattern: /^[A-Z_]+$/, message: '僅允許大寫英文字與底線' }]}
+            >
+              <Input placeholder="例如 FINANCE_ADMIN" className="rounded-md" />
+            </Form.Item>
+            <Form.Item name="name" label="角色名稱" rules={[{ required: true, message: '請輸入角色名稱' }]}>
+              <Input placeholder="顯示名稱" className="rounded-md" />
+            </Form.Item>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+            <Form.Item name="description" label="描述">
+              <Input.TextArea rows={3} placeholder="簡短說明" className="rounded-md" />
+            </Form.Item>
+            <Form.Item name="hierarchyLevel" label="階層 (數字愈小代表權限愈高)" className="mb-0">
+              <InputNumber min={1} style={{ width: '100%' }} placeholder="預設為 3" className="rounded-md" />
+            </Form.Item>
+          </div>
         </Form>
       </Modal>
 
@@ -590,24 +633,29 @@ const RolesTab = ({
         onCancel={() => setEditOpen(false)}
         onOk={handleUpdate}
         okText="儲存"
+        width={500}
       >
-        <Form layout="vertical" form={editForm}>
-          <Form.Item
-            name="code"
-            label="角色代碼"
-            rules={[{ required: true, message: '請輸入角色代碼' }, { pattern: /^[A-Z_]+$/, message: '僅允許大寫英文字與底線' }]}
-          >
-            <Input />
-          </Form.Item>
-          <Form.Item name="name" label="角色名稱" rules={[{ required: true, message: '請輸入角色名稱' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="description" label="描述">
-            <Input.TextArea rows={3} />
-          </Form.Item>
-          <Form.Item name="hierarchyLevel" label="階層">
-            <InputNumber min={1} style={{ width: '100%' }} placeholder="預設為 3" />
-          </Form.Item>
+        <Form layout="vertical" form={editForm} className="pt-4">
+          <div className="bg-gray-50 p-4 rounded-lg mb-4 border border-gray-100">
+            <Form.Item
+              name="code"
+              label="角色代碼"
+              rules={[{ required: true, message: '請輸入角色代碼' }, { pattern: /^[A-Z_]+$/, message: '僅允許大寫英文字與底線' }]}
+            >
+              <Input className="rounded-md" />
+            </Form.Item>
+            <Form.Item name="name" label="角色名稱" rules={[{ required: true, message: '請輸入角色名稱' }]}>
+              <Input className="rounded-md" />
+            </Form.Item>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+            <Form.Item name="description" label="描述">
+              <Input.TextArea rows={3} className="rounded-md" />
+            </Form.Item>
+            <Form.Item name="hierarchyLevel" label="階層" className="mb-0">
+              <InputNumber min={1} style={{ width: '100%' }} placeholder="預設為 3" className="rounded-md" />
+            </Form.Item>
+          </div>
         </Form>
       </Modal>
 
@@ -618,19 +666,24 @@ const RolesTab = ({
         onOk={handleSetPermissions}
         okText="儲存"
         confirmLoading={loadingPermissions}
+        width={600}
       >
-        <Form form={permissionsForm} layout="vertical">
-          <Form.Item name="permissionIds" label="權限列表">
-            <Select
-              mode="multiple"
-              placeholder="選擇權限"
-              options={permissionOptions}
-              loading={loadingPermissions}
-            />
-          </Form.Item>
+        <Form form={permissionsForm} layout="vertical" className="pt-4">
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+            <Form.Item name="permissionIds" label="權限列表" className="mb-0">
+              <Select
+                mode="multiple"
+                placeholder="選擇權限"
+                options={permissionOptions}
+                loading={loadingPermissions}
+                className="rounded-md"
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
+          </div>
         </Form>
       </Modal>
-    </div>
+    </GlassCard>
   )
 }
 
@@ -693,33 +746,50 @@ const PermissionsTab = ({
   }
 
   const columns: TableColumn<Permission>[] = [
-    { title: '資源', dataIndex: 'resource', key: 'resource' },
-    { title: '操作', dataIndex: 'action', key: 'action' },
+    { 
+      title: '資源', 
+      dataIndex: 'resource', 
+      key: 'resource',
+      render: (value: string) => (
+        <Space>
+          <span className="font-medium">{getResourceName(value)}</span>
+          <Text type="secondary" className="text-xs">({value})</Text>
+        </Space>
+      )
+    },
+    { 
+      title: '操作', 
+      dataIndex: 'action', 
+      key: 'action',
+      render: (value: string) => (
+        <Tag color="blue">{getActionName(value)}</Tag>
+      )
+    },
     { title: '描述', dataIndex: 'description', key: 'description' },
     {
       title: '操作',
       key: 'actions',
-      render: (_value: unknown, record: Permission) => (
+      render: (_value: any, record: Permission) => (
         <Space size="small">
-          <Button
-            type="text"
-            icon={<EditOutlined />}
-            onClick={() => {
-              setSelectedPermission(record)
-              editForm.setFieldsValue({
-                resource: record.resource,
-                action: record.action,
-                description: record.description,
-              })
-              setEditOpen(true)
-            }}
-          >
-            編輯
-          </Button>
+          <Tooltip title="編輯">
+            <Button
+              type="text"
+              icon={<EditOutlined />}
+              onClick={() => {
+                setSelectedPermission(record)
+                editForm.setFieldsValue({
+                  resource: record.resource,
+                  action: record.action,
+                  description: record.description,
+                })
+                setEditOpen(true)
+              }}
+            />
+          </Tooltip>
           <Popconfirm title="確認刪除此權限？" onConfirm={() => handleDelete(record)}>
-            <Button type="text" danger icon={<DeleteOutlined />}>
-              刪除
-            </Button>
+            <Tooltip title="刪除">
+              <Button type="text" danger icon={<DeleteOutlined />} />
+            </Tooltip>
           </Popconfirm>
         </Space>
       ),
@@ -727,7 +797,7 @@ const PermissionsTab = ({
   ]
 
   return (
-    <div className="glass-card p-6">
+    <GlassCard className="p-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div>
           <Title level={4} className="!mb-1 !font-light">
@@ -735,9 +805,9 @@ const PermissionsTab = ({
           </Title>
           <Text className="text-gray-500">維護資源／操作清單</Text>
         </div>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)} className="shadow-lg shadow-blue-500/30">
+        <GlassButton type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
           新增權限
-        </Button>
+        </GlassButton>
       </div>
       <Table
         rowKey="id"
@@ -755,17 +825,22 @@ const PermissionsTab = ({
         onCancel={() => setCreateOpen(false)}
         onOk={handleCreate}
         okText="建立"
+        width={500}
       >
-        <Form layout="vertical" form={createForm}>
-          <Form.Item name="resource" label="資源" rules={[{ required: true, message: '請輸入資源名稱' }]}>
-            <Input placeholder="例如 users" />
-          </Form.Item>
-          <Form.Item name="action" label="操作" rules={[{ required: true, message: '請輸入操作名稱' }]}>
-            <Input placeholder="例如 create" />
-          </Form.Item>
-          <Form.Item name="description" label="描述">
-            <Input.TextArea rows={3} placeholder="可選" />
-          </Form.Item>
+        <Form layout="vertical" form={createForm} className="pt-4">
+          <div className="bg-gray-50 p-4 rounded-lg mb-4 border border-gray-100">
+            <Form.Item name="resource" label="資源" rules={[{ required: true, message: '請輸入資源名稱' }]}>
+              <Input placeholder="例如 users" className="rounded-md" />
+            </Form.Item>
+            <Form.Item name="action" label="操作" rules={[{ required: true, message: '請輸入操作名稱' }]}>
+              <Input placeholder="例如 create" className="rounded-md" />
+            </Form.Item>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+            <Form.Item name="description" label="描述" className="mb-0">
+              <Input.TextArea rows={3} placeholder="可選" className="rounded-md" />
+            </Form.Item>
+          </div>
         </Form>
       </Modal>
 
@@ -775,20 +850,25 @@ const PermissionsTab = ({
         onCancel={() => setEditOpen(false)}
         onOk={handleUpdate}
         okText="儲存"
+        width={500}
       >
-        <Form layout="vertical" form={editForm}>
-          <Form.Item name="resource" label="資源" rules={[{ required: true, message: '請輸入資源名稱' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="action" label="操作" rules={[{ required: true, message: '請輸入操作名稱' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="description" label="描述">
-            <Input.TextArea rows={3} />
-          </Form.Item>
+        <Form layout="vertical" form={editForm} className="pt-4">
+          <div className="bg-gray-50 p-4 rounded-lg mb-4 border border-gray-100">
+            <Form.Item name="resource" label="資源" rules={[{ required: true, message: '請輸入資源名稱' }]}>
+              <Input className="rounded-md" />
+            </Form.Item>
+            <Form.Item name="action" label="操作" rules={[{ required: true, message: '請輸入操作名稱' }]}>
+              <Input className="rounded-md" />
+            </Form.Item>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+            <Form.Item name="description" label="描述" className="mb-0">
+              <Input.TextArea rows={3} className="rounded-md" />
+            </Form.Item>
+          </div>
         </Form>
       </Modal>
-    </div>
+    </GlassCard>
   )
 }
 
