@@ -13,12 +13,18 @@ const SHOPIFY_CHANNEL_CODE = 'SHOPIFY';
 @Injectable()
 export class ShopifyService {
   private readonly logger = new Logger(ShopifyService.name);
+  private readonly defaultEntityId: string;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly adapter: ShopifyHttpAdapter,
     private readonly config: ConfigService,
   ) {}
+
+  onModuleInit() {
+    this.defaultEntityId =
+      this.config.get<string>('SHOPIFY_DEFAULT_ENTITY_ID') || 'tw-entity-001';
+  }
 
   async testConnection() {
     return this.adapter.testConnection();
@@ -135,8 +141,32 @@ export class ShopifyService {
   }
 
   async handleWebhook(event: string, payload: any, hmacValid: boolean) {
-    // TODO: 依據 event 分流處理，現階段僅記錄
     this.logger.log(`Received Shopify webhook ${event}, hmacValid=${hmacValid}`);
+
+    if (!hmacValid) {
+      return { received: false, event, hmacValid };
+    }
+
+    // 依事件類型觸發同步（保守策略：只針對訂單/付款相關事件）
+    const triggerEvents = [
+      'orders/create',
+      'orders/updated',
+      'orders/paid',
+      'refunds/create',
+      'fulfillments/create',
+      'fulfillments/update',
+    ];
+
+    if (triggerEvents.includes(event)) {
+      // 不帶日期，拉最新一批（adapter 預設 50 筆），確保不漏單
+      try {
+        await this.syncOrders({ entityId: this.defaultEntityId });
+        await this.syncTransactions({ entityId: this.defaultEntityId });
+      } catch (error) {
+        this.logger.error(`Auto-sync failed for event ${event}: ${error.message}`);
+      }
+    }
+
     return { received: true, event, hmacValid };
   }
 
