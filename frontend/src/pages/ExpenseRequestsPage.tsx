@@ -658,7 +658,14 @@ const ExpenseRequestsPage: React.FC = () => {
       key: 'reimbursementItem',
       fixed: 'left',
       render: (_, record) => (
-        <span className="font-medium text-gray-800">{record.reimbursementItem?.name || '--'}</span>
+        <div className="flex flex-col">
+          <span className="font-medium text-gray-800">{record.reimbursementItem?.name || '--'}</span>
+          <div className="sm:hidden mt-1">
+             <Tag color={statusMeta[record.status]?.color || 'default'} className="mr-0 text-[10px] px-1.5 leading-5 h-5 border-0">
+                {statusMeta[record.status]?.label || record.status}
+             </Tag>
+          </div>
+        </div>
       ),
     },
     {
@@ -744,6 +751,7 @@ const ExpenseRequestsPage: React.FC = () => {
       title: '狀態',
       dataIndex: 'status',
       key: 'status',
+      responsive: ['sm'],
       render: (value: string, record) => {
         const meta = statusMeta[value] || { label: value, color: 'default' }
         const metadata = record.metadata as Record<string, any> || {}

@@ -405,6 +405,14 @@ const ExpenseReviewCenterPage: React.FC = () => {
               {record.description}
             </Text>
           )}
+          <div className="sm:hidden mt-1">
+            <Tag 
+              color={statusColorMap[record.status] || 'default'} 
+              className="mr-0 text-[10px] px-1.5 leading-5 h-5 border-0"
+            >
+              {statusLabelMap[record.status] || record.status}
+            </Tag>
+          </div>
         </Space>
       ),
     },
@@ -434,6 +442,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
       title: '狀態',
       dataIndex: 'status',
       key: 'status',
+      responsive: ['sm'],
       render: (value: string) => (
         <Tag color={statusColorMap[value] || 'default'}>
           {statusLabelMap[value] || value}
@@ -726,7 +735,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
             rowClassName={(record) => (isUrgentRequest(record) ? 'bg-red-50/30' : 'hover:bg-white/20 transition-colors')}
             locale={{ emptyText: <Empty description="沒有符合條件的申請" /> }}
             className="w-full"
-            scroll={{ x: 1000 }}
+            scroll={{ x: 800 }}
           />
         </GlassCard>
 
