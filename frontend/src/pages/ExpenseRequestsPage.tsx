@@ -657,6 +657,7 @@ const ExpenseRequestsPage: React.FC = () => {
       dataIndex: ['reimbursementItem', 'name'],
       key: 'reimbursementItem',
       fixed: 'left',
+      className: '!bg-transparent',
       render: (_, record) => (
         <div className="flex flex-col">
           <span className="font-medium text-gray-800">{record.reimbursementItem?.name || '--'}</span>
@@ -784,6 +785,7 @@ const ExpenseRequestsPage: React.FC = () => {
       title: '操作',
       key: 'actions',
       fixed: 'right',
+      className: '!bg-transparent',
       render: (_: unknown, record) => (
         <Space>
           <Button type="link" size="small" onClick={() => handleOpenDetail(record)}>

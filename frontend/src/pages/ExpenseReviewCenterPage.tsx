@@ -395,6 +395,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
       dataIndex: 'reimbursementItem',
       key: 'reimbursementItem',
       fixed: 'left',
+      className: '!bg-transparent',
       render: (_value, record) => (
         <Space direction="vertical" size={0}>
           <span className="font-medium text-gray-800">
