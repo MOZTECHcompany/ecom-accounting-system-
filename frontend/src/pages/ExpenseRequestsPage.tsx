@@ -342,6 +342,7 @@ const ExpenseRequestsPage: React.FC = () => {
         description: values.description,
         receiptType: values.receiptType,
         dueDate: values.dueDate ? values.dueDate.toISOString() : undefined,
+        priority: values.isUrgent ? 'urgent' : 'normal',
         metadata: {
           ...(values.expenseDate ? { expenseDate: values.expenseDate.format('YYYY-MM-DD') } : {}),
           paymentMethod: values.paymentMethod,
@@ -998,6 +999,19 @@ const ExpenseRequestsPage: React.FC = () => {
                   }}
                 />
               </Form.Item>
+            </div>
+            <div className="mt-4">
+              <Form.Item name="isUrgent" valuePropName="checked" noStyle>
+                <Checkbox className="text-red-600 font-medium">
+                  <Space>
+                    <ExclamationCircleOutlined />
+                    標記為急件 (Urgent)
+                  </Space>
+                </Checkbox>
+              </Form.Item>
+              <div className="text-xs text-slate-500 mt-1 ml-6">
+                勾選此項將會通知管理員優先處理，請僅在緊急情況下使用。
+              </div>
             </div>
           </GlassDrawerSection>
 
