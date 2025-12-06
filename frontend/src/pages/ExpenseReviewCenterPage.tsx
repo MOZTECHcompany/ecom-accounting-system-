@@ -524,6 +524,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
       key: 'actions',
       width: 140,
       fixed: 'right',
+      className: '!bg-transparent',
       render: (_value, record) => (
         <div className="flex flex-col gap-2">
           {record.status === 'pending' && (
