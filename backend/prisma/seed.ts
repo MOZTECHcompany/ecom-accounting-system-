@@ -480,6 +480,12 @@ async function main() {
       allowedReceiptTypes: 'BANK_SLIP,INTERNAL_ONLY',
       allowedRoles: 'ADMIN,ACCOUNTANT',
     },
+    {
+      name: '進口關稅',
+      accountCode: '5122',
+      description: '進口貨物之關稅、報關費、商港服務費等',
+      allowedReceiptTypes: 'TAX_INVOICE,RECEIPT,BANK_SLIP',
+    },
   ];
 
   for (const item of twReimbursementItems) {
