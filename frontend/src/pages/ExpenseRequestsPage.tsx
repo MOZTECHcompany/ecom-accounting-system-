@@ -284,8 +284,12 @@ const ExpenseRequestsPage: React.FC = () => {
     const item = reimbursementItems.find((x) => x.id === id) || null
     setSelectedItem(item)
     
+    const isPrepaidCustoms = item?.name.includes('關稅預付') || item?.name.includes('Prepaid Customs')
+    
     const updates: any = {
-      receiptType: item?.defaultReceiptType,
+      receiptType: isPrepaidCustoms ? 'TAX_INVOICE' : item?.defaultReceiptType,
+      payeeType: isPrepaidCustoms ? 'vendor' : form.getFieldValue('payeeType'),
+      isInvoicePending: isPrepaidCustoms ? true : false,
     }
 
     if (item?.defaultTaxType) {
@@ -346,12 +350,12 @@ const ExpenseRequestsPage: React.FC = () => {
             bankCode: values.bankCode,
             bankAccount: values.bankAccount,
           } : {}),
-          ...(values.payeeType === 'prepaid_customs' ? {
+          ...(selectedItem?.name.includes('關稅預付') || selectedItem?.name.includes('Prepaid Customs') ? {
             customsDeclarationNumber: values.customsDeclarationNumber,
             isInvoicePending: true,
             isPrepaidCustoms: true,
           } : {}),
-          ...(values.receiptType === 'TAX_INVOICE' && values.payeeType !== 'prepaid_customs' ? {
+          ...(values.receiptType === 'TAX_INVOICE' && !(selectedItem?.name.includes('關稅預付') || selectedItem?.name.includes('Prepaid Customs')) ? {
             invoiceNo: values.invoiceNo,
             taxId: values.taxId,
             isInvoicePending: values.isInvoicePending,
@@ -865,18 +869,20 @@ const ExpenseRequestsPage: React.FC = () => {
               <Radio.Group optionType="button" buttonStyle="solid" className="w-full flex">
                 <Radio.Button value="employee" className="flex-1 text-center">員工代墊</Radio.Button>
                 <Radio.Button value="vendor" className="flex-1 text-center">廠商直付</Radio.Button>
-                <Radio.Button value="prepaid_customs" className="flex-1 text-center">關稅預付</Radio.Button>
               </Radio.Group>
             </Form.Item>
           </GlassDrawerSection>
 
           <Form.Item
             noStyle
-            shouldUpdate={(prevValues, currentValues) => prevValues.payeeType !== currentValues.payeeType}
+            shouldUpdate={(prevValues, currentValues) => prevValues.reimbursementItemId !== currentValues.reimbursementItemId}
           >
             {({ getFieldValue }) => {
-              const payeeType = getFieldValue('payeeType')
-              return payeeType === 'prepaid_customs' ? (
+              const itemId = getFieldValue('reimbursementItemId')
+              const item = reimbursementItems.find(i => i.id === itemId)
+              const isPrepaidCustoms = item?.name.includes('關稅預付') || item?.name.includes('Prepaid Customs')
+              
+              return isPrepaidCustoms ? (
                 <GlassDrawerSection>
                   <div className="mb-4">
                     <Alert 
@@ -900,7 +906,7 @@ const ExpenseRequestsPage: React.FC = () => {
           </Form.Item>
 
           <GlassDrawerSection>
-            <Form.Item label="備註說明" style={{ marginBottom: 0 }} required>
+            <Form.Item label="AI 智慧報銷說明" style={{ marginBottom: 0 }} required>
               <div className="mb-2 text-slate-500 text-xs">
                 請輸入費用內容（如：文具、計程車費 560），AI 將自動建議報銷項目並填入金額。
               </div>
@@ -925,6 +931,20 @@ const ExpenseRequestsPage: React.FC = () => {
                       const amount = parseFloat(amountStr)
                       if (!isNaN(amount)) {
                         form.setFieldValue('amount', amount)
+                      }
+                    }
+                    
+                    // Auto-detect Prepaid Customs
+                    if (value.includes('關稅') || value.includes('報關')) {
+                      const customsItem = reimbursementItems.find(i => i.name.includes('關稅預付') || i.name.includes('Prepaid Customs'))
+                      if (customsItem) {
+                        form.setFieldsValue({ 
+                          reimbursementItemId: customsItem.id,
+                          payeeType: 'vendor',
+                          receiptType: 'TAX_INVOICE',
+                          isInvoicePending: true
+                        })
+                        setSelectedItem(customsItem)
                       }
                     }
                   }}
