@@ -791,11 +791,6 @@ const ExpenseRequestsPage: React.FC = () => {
           <Button type="link" size="small" onClick={() => handleOpenDetail(record)}>
             查看
           </Button>
-          {isAdmin && record.status === 'approved' && (
-             <Button type="link" size="small" onClick={() => handleOpenPayment(record)}>
-               付款
-             </Button>
-          )}
         </Space>
       ),
     },
@@ -813,21 +808,10 @@ const ExpenseRequestsPage: React.FC = () => {
       <GlassCard className="w-full p-0 overflow-hidden">
         <div className="p-6 border-b border-white/20 flex flex-col md:flex-row justify-between items-center gap-4 bg-white/10">
           <h3 className="text-lg font-semibold text-slate-800">
-            {viewMode === 'mine' ? '我的費用申請' : '待審核申請'}
+            我的費用申請
           </h3>
           
           <div className="flex items-center gap-3">
-            {isAdmin && (
-              <Segmented
-                options={[
-                  { label: '我的申請', value: 'mine' },
-                  { label: '待審清單', value: 'pending' },
-                ]}
-                value={viewMode}
-                onChange={(value) => setViewMode(value as ViewMode)}
-                className="glass-segment"
-              />
-            )}
             <GlassButton onClick={refreshRequests} disabled={listLoading} className="px-4">
               重新整理
             </GlassButton>
@@ -1338,89 +1322,25 @@ const ExpenseRequestsPage: React.FC = () => {
               </div>
             </GlassDrawerSection>
 
-            {canReview && (
+            {selectedRequest.status === 'paid' && (
               <GlassDrawerSection>
-                <div className="mb-4 font-semibold text-slate-800">審核操作（管理員）</div>
-                <Form layout="vertical" form={approvalForm} requiredMark={false}>
-                  <Form.Item label="最終會計科目" name="finalAccountId">
-                    <Select
-                      allowClear
-                      showSearch
-                      placeholder="選擇最終會計科目"
-                      loading={accountsLoading}
-                      optionFilterProp="label"
-                      options={accounts.map((account) => ({
-                        label: `${account.code} ｜ ${account.name}`,
-                        value: account.id,
-                      }))}
-                    />
-                  </Form.Item>
-
-                  <Form.Item label="核准備註" name="remark">
-                    <Input.TextArea rows={2} placeholder="可填寫核准說明" />
-                  </Form.Item>
-
-                  <Form.Item label="駁回原因" name="rejectReason" tooltip="駁回時必填">
-                    <Input.TextArea rows={2} placeholder="若要駁回請輸入原因" />
-                  </Form.Item>
-
-                  <Form.Item label="駁回補充說明" name="rejectNote">
-                    <Input.TextArea rows={2} placeholder="可填寫額外說明或要求" />
-                  </Form.Item>
-
-                  <Space className="w-full justify-end pt-2">
-                    <Button danger onClick={handleRejectRequest} loading={rejectLoading} className="rounded-full">
-                      駁回
-                    </Button>
-                    <Button
-                      type="primary"
-                      onClick={handleApproveRequest}
-                      loading={approveLoading}
-                      className="rounded-full bg-blue-600 hover:bg-blue-500 border-none shadow-lg shadow-blue-200"
-                    >
-                      核准
-                    </Button>
-                  </Space>
-                </Form>
+                <div className="mb-4 font-semibold text-slate-800">付款資訊</div>
+                <Descriptions bordered column={1} size="small" labelStyle={{ width: 100, background: 'transparent' }} contentStyle={{ background: 'transparent' }}>
+                  <Descriptions.Item label="付款銀行">
+                    {selectedRequest.paymentBankName || '--'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="帳號末五碼">
+                    {selectedRequest.paymentAccountLast5 || '--'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="付款方式">
+                    {selectedRequest.paymentMethod || '--'}
+                  </Descriptions.Item>
+                </Descriptions>
               </GlassDrawerSection>
             )}
           </div>
         )}
       </GlassDrawer>
-
-      <Modal
-        title="更新付款資訊"
-        open={paymentModalOpen}
-        onOk={handlePaymentSubmit}
-        onCancel={() => setPaymentModalOpen(false)}
-        confirmLoading={submitting}
-      >
-        <Form form={paymentForm} layout="vertical">
-          <Form.Item
-            name="paymentMethod"
-            label="付款方式"
-            rules={[{ required: true, message: '請選擇付款方式' }]}
-          >
-            <Select>
-              <Select.Option value="cash">現金</Select.Option>
-              <Select.Option value="bank_transfer">銀行轉帳</Select.Option>
-              <Select.Option value="check">支票</Select.Option>
-              <Select.Option value="other">其他</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item
-            name="paymentStatus"
-            label="付款狀態"
-            rules={[{ required: true, message: '請選擇付款狀態' }]}
-          >
-            <Select>
-              <Select.Option value="pending">待付款</Select.Option>
-              <Select.Option value="processing">付款中</Select.Option>
-              <Select.Option value="paid">已付款</Select.Option>
-            </Select>
-          </Form.Item>
-        </Form>
-      </Modal>
     </div>
   )
 }

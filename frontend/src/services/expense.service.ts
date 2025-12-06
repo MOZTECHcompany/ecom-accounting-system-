@@ -91,6 +91,8 @@ export interface ExpenseRequest {
   payeeType?: string | null
   paymentMethod?: string | null
   paymentStatus?: string
+  paymentBankName?: string | null
+  paymentAccountLast5?: string | null
   metadata?: Record<string, any> | null
   creator?: {
     id: string
@@ -311,7 +313,12 @@ export const expenseService = {
     return response.data
   },
 
-  updatePaymentInfo: async (id: string, data: { paymentMethod?: string; paymentStatus: string }) => {
+  updatePaymentInfo: async (id: string, data: { 
+    paymentMethod?: string; 
+    paymentStatus: string;
+    paymentBankName?: string;
+    paymentAccountLast5?: string;
+  }) => {
     const response = await api.put<ExpenseRequest>(`/expense/requests/${id}/payment-info`, data)
     return response.data
   },

@@ -737,6 +737,8 @@ model ExpenseRequest {
   // 付款資訊
   paymentMethod        String?   @map("payment_method") // cash, bank_transfer, check, other
   paymentStatus        String    @default("pending") @map("payment_status") // pending, processing, paid
+  paymentBankName      String?   @map("payment_bank_name") // 實際付款銀行名稱
+  paymentAccountLast5  String?   @map("payment_account_last_5") // 實際付款帳號末五碼
 
   suggestedAccountId   String?   @map("suggested_account_id")
   finalAccountId       String?   @map("final_account_id")

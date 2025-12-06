@@ -11,4 +11,14 @@ export class UpdatePaymentInfoDto {
   @IsString()
   @IsEnum(['pending', 'processing', 'paid'])
   paymentStatus: string;
+
+  @ApiPropertyOptional({ description: '付款銀行名稱' })
+  @IsString()
+  @IsOptional()
+  paymentBankName?: string;
+
+  @ApiPropertyOptional({ description: '付款帳號末五碼' })
+  @IsString()
+  @IsOptional()
+  paymentAccountLast5?: string;
 }
