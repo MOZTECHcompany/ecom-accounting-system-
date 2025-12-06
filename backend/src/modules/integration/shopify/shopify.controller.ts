@@ -2,7 +2,7 @@ import { Body, Controller, Get, Headers, Post, Req } from '@nestjs/common';
 import { IsDateString, IsOptional, IsString } from 'class-validator';
 import { ShopifyService } from './shopify.service';
 import { createHmac } from 'crypto';
-import { Request } from 'express';
+import type { Request } from 'express';
 
 class SyncRequestDto {
   @IsString()

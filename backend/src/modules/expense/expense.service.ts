@@ -436,14 +436,6 @@ Do not include any markdown formatting (like \`\`\`json), just the raw JSON stri
       updateData.paymentMethod = data.paymentMethod;
     }
 
-    if (data.paymentBankName) {
-      updateData.paymentBankName = data.paymentBankName;
-    }
-
-    if (data.paymentAccountLast5) {
-      updateData.paymentAccountLast5 = data.paymentAccountLast5;
-    }
-
     // 若付款狀態變更為已付款，且之前未付款，則更新主狀態為 paid
     if (data.paymentStatus === 'paid' && request.paymentStatus !== 'paid') {
       updateData.status = 'paid';

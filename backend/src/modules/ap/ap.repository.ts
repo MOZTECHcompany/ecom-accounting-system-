@@ -69,8 +69,6 @@ export class ApRepository {
         data: {
           paymentStatus: status,
           paymentMethod: 'bank_transfer',
-          paymentBankName: bankInfo.bankName,
-          paymentAccountLast5: bankInfo.accountLast5,
         },
       });
     }
