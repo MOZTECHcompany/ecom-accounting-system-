@@ -618,44 +618,44 @@ const ExpenseReviewCenterPage: React.FC = () => {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full">
-        <GlassCard className="relative overflow-hidden group h-full">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <AuditOutlined className="text-6xl text-blue-500" />
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 w-full">
+        <GlassCard className="relative overflow-hidden group h-full p-4 md:p-6">
+          <div className="absolute top-0 right-0 p-2 md:p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <AuditOutlined className="text-4xl md:text-6xl text-blue-500" />
           </div>
-          <div className="text-sm text-slate-500 mb-2 font-medium">待審件數</div>
-          <div className="text-3xl font-semibold text-blue-600 mb-1">
-            {pendingRequests.length} <span className="text-sm font-normal text-slate-400">件</span>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="relative overflow-hidden group h-full">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <FireOutlined className="text-6xl text-red-500" />
-          </div>
-          <div className="text-sm text-slate-500 mb-2 font-medium">急件</div>
-          <div className="text-3xl font-semibold text-red-600 mb-1">
-            {urgentQueue.length} <span className="text-sm font-normal text-slate-400">件</span>
+          <div className="text-xs md:text-sm text-slate-500 mb-1 md:mb-2 font-medium">待審件數</div>
+          <div className="text-xl md:text-3xl font-semibold text-blue-600 mb-1">
+            {pendingRequests.length} <span className="text-xs md:text-sm font-normal text-slate-400">件</span>
           </div>
         </GlassCard>
 
-        <GlassCard className="relative overflow-hidden group h-full">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <ThunderboltOutlined className="text-6xl text-amber-500" />
+        <GlassCard className="relative overflow-hidden group h-full p-4 md:p-6">
+          <div className="absolute top-0 right-0 p-2 md:p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <FireOutlined className="text-4xl md:text-6xl text-red-500" />
           </div>
-          <div className="text-sm text-slate-500 mb-2 font-medium">待審金額 (TWD)</div>
-          <div className="text-3xl font-semibold text-amber-600 mb-1">
+          <div className="text-xs md:text-sm text-slate-500 mb-1 md:mb-2 font-medium">急件</div>
+          <div className="text-xl md:text-3xl font-semibold text-red-600 mb-1">
+            {urgentQueue.length} <span className="text-xs md:text-sm font-normal text-slate-400">件</span>
+          </div>
+        </GlassCard>
+
+        <GlassCard className="relative overflow-hidden group h-full p-4 md:p-6">
+          <div className="absolute top-0 right-0 p-2 md:p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <ThunderboltOutlined className="text-4xl md:text-6xl text-amber-500" />
+          </div>
+          <div className="text-xs md:text-sm text-slate-500 mb-1 md:mb-2 font-medium">待審金額</div>
+          <div className="text-xl md:text-3xl font-semibold text-amber-600 mb-1 truncate">
             {backlogAmount.toLocaleString()}
           </div>
         </GlassCard>
 
-        <GlassCard className="relative overflow-hidden group h-full">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <WarningOutlined className="text-6xl text-purple-500" />
+        <GlassCard className="relative overflow-hidden group h-full p-4 md:p-6">
+          <div className="absolute top-0 right-0 p-2 md:p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <WarningOutlined className="text-4xl md:text-6xl text-purple-500" />
           </div>
-          <div className="text-sm text-slate-500 mb-2 font-medium">平均等待天數</div>
-          <div className="text-3xl font-semibold text-purple-600 mb-1">
-            {averagePendingAge} <span className="text-sm font-normal text-slate-400">天</span>
+          <div className="text-xs md:text-sm text-slate-500 mb-1 md:mb-2 font-medium">平均等待</div>
+          <div className="text-xl md:text-3xl font-semibold text-purple-600 mb-1">
+            {averagePendingAge} <span className="text-xs md:text-sm font-normal text-slate-400">天</span>
           </div>
         </GlassCard>
       </div>
@@ -826,30 +826,138 @@ const ExpenseReviewCenterPage: React.FC = () => {
 
       {/* Bottom Row: Review List (Full Width) */}
       <GlassCard className="w-full p-0 overflow-hidden h-fit">
-          <div className="p-6 border-b border-white/20 flex justify-between items-center bg-white/10">
+          <div className="p-4 md:p-6 border-b border-white/20 flex justify-between items-center bg-white/10">
             <div>
               <h3 className="text-lg font-semibold text-slate-800">待審核清單</h3>
               <p className="text-slate-500 text-sm mt-1">符合目前篩選的 {filteredRequests.length} 筆申請</p>
             </div>
             <Tooltip title="透過 AI 建議覆蓋率掌握模型使用情況">
-              <div className="text-right">
+              <div className="text-right hidden md:block">
                 <div className="text-xs text-slate-500 mb-1">AI 建議覆蓋率</div>
                 <Progress percent={aiCoverage} size="small" style={{ width: 120 }} strokeColor="#3b82f6" />
               </div>
             </Tooltip>
           </div>
           
-          <Table
-            rowKey="id"
-            loading={loading}
-            columns={columns}
-            dataSource={filteredRequests}
-            pagination={{ pageSize: 10, showSizeChanger: false }}
-            rowClassName={(record) => (isUrgentRequest(record) ? 'bg-red-50/30' : 'hover:bg-white/20 transition-colors')}
-            locale={{ emptyText: <Empty description="沒有符合條件的申請" /> }}
-            className="w-full"
-            scroll={{ x: 1200 }}
-          />
+          {/* Desktop Table View */}
+          <div className="hidden md:block">
+            <Table
+              rowKey="id"
+              loading={loading}
+              columns={columns}
+              dataSource={filteredRequests}
+              pagination={{ pageSize: 10, showSizeChanger: false }}
+              rowClassName={(record) => (isUrgentRequest(record) ? 'bg-red-50/30' : 'hover:bg-white/20 transition-colors')}
+              locale={{ emptyText: <Empty description="沒有符合條件的申請" /> }}
+              className="w-full"
+              scroll={{ x: 1200 }}
+            />
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="block md:hidden p-4 space-y-4 bg-slate-50/50">
+            {loading ? (
+              <div className="text-center py-8 text-slate-500">載入中...</div>
+            ) : filteredRequests.length === 0 ? (
+              <Empty description="沒有符合條件的申請" />
+            ) : (
+              filteredRequests.map((request) => (
+                <div 
+                  key={request.id} 
+                  className={`bg-white rounded-xl shadow-sm border overflow-hidden ${
+                    isUrgentRequest(request) ? 'border-red-200 shadow-red-100' : 'border-slate-100'
+                  }`}
+                >
+                  {/* Card Header */}
+                  <div className={`px-4 py-3 flex justify-between items-center border-b ${
+                    isUrgentRequest(request) ? 'bg-red-50/30 border-red-100' : 'bg-slate-50/50 border-slate-100'
+                  }`}>
+                    <span className="font-medium text-slate-800 truncate max-w-[60%]">
+                      {request.reimbursementItem?.name || '未分類'}
+                    </span>
+                    <Tag color={statusColorMap[request.status] || 'default'} className="mr-0">
+                      {statusLabelMap[request.status] || request.status}
+                    </Tag>
+                  </div>
+
+                  {/* Card Body */}
+                  <div className="p-4 space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div className="space-y-1">
+                        <div className="text-xs text-slate-500">申請人</div>
+                        <div className="font-medium text-slate-700">{request.creator?.name || '—'}</div>
+                      </div>
+                      <div className="space-y-1 text-right">
+                        <div className="text-xs text-slate-500">金額</div>
+                        <div className="font-mono font-semibold text-lg text-slate-800">
+                          ${toNumber(request.amountOriginal).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+
+                    {request.suggestedAccount && (
+                      <div className="bg-blue-50/50 rounded-lg p-2 flex items-center gap-2 border border-blue-100">
+                        <BulbOutlined className="text-blue-500" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-blue-600 font-medium truncate">
+                            AI 建議: {request.suggestedAccount.code} {request.suggestedAccount.name}
+                          </div>
+                        </div>
+                        <div className="text-[10px] text-blue-400 whitespace-nowrap">
+                          {(Number(request.suggestionConfidence) * 100).toFixed(0)}%
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {request.priority === 'urgent' && <Tag color="red">急件</Tag>}
+                      {request.dueDate && (
+                        <Tag color={isOverdue(request) ? 'red' : 'blue'}>
+                          到期 {dayjs(request.dueDate).format('MM/DD')}
+                        </Tag>
+                      )}
+                      <span className="text-xs text-slate-400 ml-auto self-center">
+                        等待 {dayjs().diff(dayjs(request.createdAt), 'day')} 天
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card Footer - Actions */}
+                  <div className="grid grid-cols-2 border-t border-slate-100 divide-x divide-slate-100">
+                    {request.status === 'pending' ? (
+                      <>
+                        <button
+                          onClick={() => handleOpenDetail(request)}
+                          className="col-span-2 py-3 bg-green-600 text-white font-medium active:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                        >
+                          <CheckCircleOutlined /> 核准 / 審核
+                        </button>
+                        <button
+                          onClick={() => handleOpenDetail(request)}
+                          className="py-3 text-slate-600 font-medium active:bg-slate-50 transition-colors flex items-center justify-center gap-2 hover:bg-slate-50"
+                        >
+                          <FileSearchOutlined /> 詳情
+                        </button>
+                        <button
+                          onClick={() => openActionModal('reject', request)}
+                          className="py-3 text-red-600 font-medium active:bg-red-50 transition-colors flex items-center justify-center gap-2 hover:bg-red-50"
+                        >
+                          <CloseCircleOutlined /> 駁回
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => handleOpenDetail(request)}
+                        className="col-span-2 py-3 text-slate-600 font-medium active:bg-slate-50 transition-colors flex items-center justify-center gap-2"
+                      >
+                        查看詳情
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
       </GlassCard>
 
       <GlassDrawer
