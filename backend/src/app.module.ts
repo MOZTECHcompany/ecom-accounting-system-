@@ -33,6 +33,7 @@ import { InventoryModule } from './modules/inventory/inventory.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { AiModule } from './modules/ai/ai.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
+import { ShopifyIntegrationModule } from './modules/integration/shopify/shopify.module';
 
 /**
  * AppModule
@@ -93,6 +94,7 @@ import { AttendanceModule } from './modules/attendance/attendance.module';
     // 5. 整合模組（外部服務整合）
     InvoicingModule, // → SalesModule, ArModule (電子發票)
     ReconciliationModule, // → BankingModule, AccountingModule (銀行對帳)
+    ShopifyIntegrationModule,
     NotificationModule,
     AiModule,
     AttendanceModule,

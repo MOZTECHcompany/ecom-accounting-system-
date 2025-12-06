@@ -1,0 +1,279 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../../../common/prisma/prisma.service';
+import { Decimal } from '@prisma/client/runtime/library';
+import {
+  ShopifyOrderPayload,
+  ShopifyTransactionPayload,
+} from './interfaces/shopify-adapter.interface';
+import { ShopifyHttpAdapter } from './shopify.adapter';
+
+const SHOPIFY_CHANNEL_CODE = 'SHOPIFY';
+
+@Injectable()
+export class ShopifyService {
+  private readonly logger = new Logger(ShopifyService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly adapter: ShopifyHttpAdapter,
+    private readonly config: ConfigService,
+  ) {}
+
+  async testConnection() {
+    return this.adapter.testConnection();
+  }
+
+  async syncOrders(params: { entityId: string; since?: Date; until?: Date }) {
+    const orders = await this.adapter.fetchOrders({
+      since: params.since,
+      until: params.until,
+    });
+
+    const channel = await this.ensureSalesChannel(params.entityId);
+    let created = 0;
+    let updated = 0;
+
+    for (const order of orders) {
+      const result = await this.upsertSalesOrder(params.entityId, channel.id, order);
+      if (result === 'created') created++;
+      if (result === 'updated') updated++;
+    }
+
+    return {
+      success: true,
+      fetched: orders.length,
+      created,
+      updated,
+    };
+  }
+
+  async syncTransactions(params: { entityId: string; since?: Date; until?: Date }) {
+    const transactions = await this.adapter.fetchTransactions({
+      since: params.since,
+      until: params.until,
+    });
+
+    const channel = await this.ensureSalesChannel(params.entityId);
+    let created = 0;
+    let updated = 0;
+
+    for (const tx of transactions) {
+      const result = await this.upsertPayment(params.entityId, channel.id, tx);
+      if (result === 'created') created++;
+      if (result === 'updated') updated++;
+    }
+
+    return {
+      success: true,
+      fetched: transactions.length,
+      created,
+      updated,
+    };
+  }
+
+  async handleWebhook(event: string, payload: any, hmacValid: boolean) {
+    // TODO: 依據 event 分流處理，現階段僅記錄
+    this.logger.log(`Received Shopify webhook ${event}, hmacValid=${hmacValid}`);
+    return { received: true, event, hmacValid };
+  }
+
+  private async ensureSalesChannel(entityId: string) {
+    const existing = await this.prisma.salesChannel.findFirst({
+      where: { entityId, code: SHOPIFY_CHANNEL_CODE },
+    });
+
+    if (existing) return existing;
+
+    return this.prisma.salesChannel.create({
+      data: {
+        entityId,
+        name: 'Shopify',
+        code: SHOPIFY_CHANNEL_CODE,
+        type: 'shopify',
+        defaultCurrency: this.config.get<string>('DEFAULT_CURRENCY', 'TWD'),
+      },
+    });
+  }
+
+  private async upsertSalesOrder(
+    entityId: string,
+    channelId: string,
+    order: ShopifyOrderPayload,
+  ): Promise<'created' | 'updated'> {
+    const existing = await this.prisma.salesOrder.findFirst({
+      where: {
+        entityId,
+        channelId,
+        externalOrderId: order.id,
+      },
+    });
+
+    const totals = this.buildOrderTotals(order);
+
+    if (existing) {
+      await this.prisma.salesOrder.update({
+        where: { id: existing.id },
+        data: {
+          orderDate: new Date(order.createdAt),
+          totalGrossOriginal: totals.totalGrossOriginal,
+          totalGrossCurrency: totals.currency,
+          totalGrossFxRate: totals.fxRate,
+          totalGrossBase: totals.totalGrossBase,
+          taxAmountOriginal: totals.taxAmountOriginal,
+          taxAmountCurrency: totals.currency,
+          taxAmountFxRate: totals.fxRate,
+          taxAmountBase: totals.taxAmountBase,
+          discountAmountOriginal: totals.discountAmountOriginal,
+          discountAmountCurrency: totals.currency,
+          discountAmountFxRate: totals.fxRate,
+          discountAmountBase: totals.discountAmountBase,
+          shippingFeeOriginal: totals.shippingFeeOriginal,
+          shippingFeeCurrency: totals.currency,
+          shippingFeeFxRate: totals.fxRate,
+          shippingFeeBase: totals.shippingFeeBase,
+          status: this.mapShopifyStatus(order.status, order.financialStatus),
+          hasInvoice: existing.hasInvoice,
+          notes: order.name || existing.notes,
+        },
+      });
+      return 'updated';
+    }
+
+    await this.prisma.salesOrder.create({
+      data: {
+        entityId,
+        channelId,
+        externalOrderId: order.id,
+        orderDate: new Date(order.createdAt),
+        totalGrossOriginal: totals.totalGrossOriginal,
+        totalGrossCurrency: totals.currency,
+        totalGrossFxRate: totals.fxRate,
+        totalGrossBase: totals.totalGrossBase,
+        taxAmountOriginal: totals.taxAmountOriginal,
+        taxAmountCurrency: totals.currency,
+        taxAmountFxRate: totals.fxRate,
+        taxAmountBase: totals.taxAmountBase,
+        discountAmountOriginal: totals.discountAmountOriginal,
+        discountAmountCurrency: totals.currency,
+        discountAmountFxRate: totals.fxRate,
+        discountAmountBase: totals.discountAmountBase,
+        shippingFeeOriginal: totals.shippingFeeOriginal,
+        shippingFeeCurrency: totals.currency,
+        shippingFeeFxRate: totals.fxRate,
+        shippingFeeBase: totals.shippingFeeBase,
+        status: this.mapShopifyStatus(order.status, order.financialStatus),
+        hasInvoice: false,
+      },
+    });
+    return 'created';
+  }
+
+  private buildOrderTotals(order: ShopifyOrderPayload) {
+    const currency = order.currency || 'TWD';
+    const fxRate = this.dec(order.currency === 'TWD' ? 1 : 1); // 預留匯率外部配置
+    const totalGross = this.dec(order.totalPrice || 0);
+    const taxAmount = this.dec(order.totalTax || 0);
+    const discount = this.dec(order.totalDiscounts || 0);
+    const shipping = this.dec(order.shippingLinesTotal || 0);
+
+    return {
+      currency,
+      fxRate,
+      totalGrossOriginal: totalGross,
+      totalGrossBase: totalGross.mul(fxRate),
+      taxAmountOriginal: taxAmount,
+      taxAmountBase: taxAmount.mul(fxRate),
+      discountAmountOriginal: discount,
+      discountAmountBase: discount.mul(fxRate),
+      shippingFeeOriginal: shipping,
+      shippingFeeBase: shipping.mul(fxRate),
+    };
+  }
+
+  private async upsertPayment(
+    entityId: string,
+    channelId: string,
+    tx: ShopifyTransactionPayload,
+  ): Promise<'created' | 'updated'> {
+    const currency = tx.currency || 'TWD';
+    const fxRate = this.dec(currency === 'TWD' ? 1 : 1);
+    const amount = this.dec(tx.amount || 0);
+    const platformFee = this.dec(tx.fee || 0);
+    const gatewayFee = this.dec(0);
+    const shippingFee = this.dec(0);
+    const net = amount.sub(platformFee).sub(gatewayFee).sub(shippingFee);
+
+    const existing = await this.prisma.payment.findFirst({
+      where: {
+        entityId,
+        channelId,
+        payoutBatchId: tx.payoutId || tx.id,
+      },
+    });
+
+    const salesOrder = tx.orderId
+      ? await this.prisma.salesOrder.findFirst({
+          where: {
+            entityId,
+            channelId,
+            externalOrderId: tx.orderId,
+          },
+        })
+      : null;
+
+    const data = {
+      entityId,
+      channelId,
+      salesOrderId: salesOrder?.id ?? null,
+      payoutBatchId: tx.payoutId || tx.id,
+      channel: 'SHOPIFY',
+      payoutDate: new Date(tx.payoutDate || tx.processedAt),
+      amountGrossOriginal: amount,
+      amountGrossCurrency: currency,
+      amountGrossFxRate: fxRate,
+      amountGrossBase: amount.mul(fxRate),
+      feePlatformOriginal: platformFee,
+      feePlatformCurrency: currency,
+      feePlatformFxRate: fxRate,
+      feePlatformBase: platformFee.mul(fxRate),
+      feeGatewayOriginal: gatewayFee,
+      feeGatewayCurrency: currency,
+      feeGatewayFxRate: fxRate,
+      feeGatewayBase: gatewayFee.mul(fxRate),
+      shippingFeePaidOriginal: shippingFee,
+      shippingFeePaidCurrency: currency,
+      shippingFeePaidFxRate: fxRate,
+      shippingFeePaidBase: shippingFee.mul(fxRate),
+      amountNetOriginal: net,
+      amountNetCurrency: currency,
+      amountNetFxRate: fxRate,
+      amountNetBase: net.mul(fxRate),
+      reconciledFlag: false,
+      bankAccountId: null,
+    };
+
+    if (existing) {
+      await this.prisma.payment.update({
+        where: { id: existing.id },
+        data,
+      });
+      return 'updated';
+    }
+
+    await this.prisma.payment.create({ data });
+    return 'created';
+  }
+
+  private mapShopifyStatus(status?: string, financialStatus?: string) {
+    const s = status?.toLowerCase() || financialStatus?.toLowerCase() || 'pending';
+    if (s.includes('paid') || s.includes('captured')) return 'completed';
+    if (s.includes('refunded')) return 'refunded';
+    if (s.includes('cancel')) return 'cancelled';
+    return 'pending';
+  }
+
+  private dec(value: number | string | Decimal) {
+    return new Decimal(value || 0);
+  }
+}
