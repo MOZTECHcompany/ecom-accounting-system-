@@ -42,7 +42,7 @@ export const apService = {
 
   recordPayment: async (
     id: string,
-    data: { amount: number; paymentDate?: string; newStatus?: string },
+    data: { amount: number; paymentDate?: string; newStatus?: string; bankAccountId?: string },
   ) => {
     const response = await api.post<ApInvoice>(`/ap/invoices/${id}/pay`, data)
     return response.data
