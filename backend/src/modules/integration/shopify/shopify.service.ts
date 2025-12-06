@@ -13,7 +13,7 @@ const SHOPIFY_CHANNEL_CODE = 'SHOPIFY';
 @Injectable()
 export class ShopifyService {
   private readonly logger = new Logger(ShopifyService.name);
-  private readonly defaultEntityId: string;
+  private defaultEntityId: string;
 
   constructor(
     private readonly prisma: PrismaService,
