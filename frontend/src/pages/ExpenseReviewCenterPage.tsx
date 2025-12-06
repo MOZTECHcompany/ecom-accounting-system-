@@ -394,15 +394,15 @@ const ExpenseReviewCenterPage: React.FC = () => {
       title: '費用項目',
       dataIndex: 'reimbursementItem',
       key: 'reimbursementItem',
-      fixed: 'left',
-      className: '!bg-transparent',
+      width: '20%',
+      className: '!bg-transparent align-middle',
       render: (_value, record) => (
-        <Space direction="vertical" size={0}>
-          <span className="font-medium text-gray-800">
+        <div className="flex flex-col justify-center h-full">
+          <span className="font-medium text-gray-800 text-base">
             {record.reimbursementItem?.name || '—'}
           </span>
           {record.description && (
-            <Text type="secondary" className="text-xs text-gray-500">
+            <Text type="secondary" className="text-xs text-gray-500 line-clamp-1">
               {record.description}
             </Text>
           )}
@@ -414,27 +414,32 @@ const ExpenseReviewCenterPage: React.FC = () => {
               {statusLabelMap[record.status] || record.status}
             </Tag>
           </div>
-        </Space>
+        </div>
       ),
     },
     {
       title: '申請人',
       dataIndex: 'creator',
       key: 'creator',
+      width: '12%',
       responsive: ['sm'],
+      className: 'align-middle',
       render: (_value, record) => (
-        <Space direction="vertical" size={0}>
+        <div className="flex flex-col justify-center">
           <Text className="font-medium text-slate-700">{record.creator?.name || '—'}</Text>
           <Text type="secondary" className="text-xs text-gray-500">{record.creator?.email}</Text>
-        </Space>
+        </div>
       ),
     },
     {
       title: '金額',
       dataIndex: 'amountOriginal',
       key: 'amountOriginal',
+      width: '10%',
+      align: 'right',
+      className: 'align-middle',
       render: (_value, record) => (
-        <Text className="font-mono">
+        <Text className="font-mono font-semibold text-slate-700">
           {(record.amountCurrency || 'TWD') + ' ' + toNumber(record.amountOriginal).toLocaleString()}
         </Text>
       ),
@@ -443,78 +448,85 @@ const ExpenseReviewCenterPage: React.FC = () => {
       title: '狀態',
       dataIndex: 'status',
       key: 'status',
+      width: '8%',
+      align: 'center',
       responsive: ['sm'],
+      className: 'align-middle',
       render: (value: string) => (
-        <Tag color={statusColorMap[value] || 'default'}>
+        <Tag color={statusColorMap[value] || 'default'} className="mx-0">
           {statusLabelMap[value] || value}
         </Tag>
       ),
     },
     {
-      title: '付款 / 優先度',
+      title: '優先度 / 付款',
       key: 'priority',
+      width: '15%',
       responsive: ['md'],
+      className: 'align-middle',
       render: (_value, record) => (
-        <Space direction="vertical" size={0}>
-          <Space size={6}>
-            {record.priority && (
-              <Tag color={record.priority === 'urgent' ? 'red' : 'default'}>
-                {record.priority === 'urgent' ? '急件' : '一般'}
-              </Tag>
+        <div className="flex flex-col gap-1">
+          <div className="flex gap-1 flex-wrap items-center">
+            {record.priority === 'urgent' && (
+              <Tag color="red" className="mr-0">急件</Tag>
             )}
             {record.dueDate && (
-              <Tag color={isOverdue(record) ? 'red' : 'blue'}>
+              <Tag color={isOverdue(record) ? 'red' : 'blue'} className="mr-0">
                 到期 {dayjs(record.dueDate).format('MM/DD')}
               </Tag>
             )}
-          </Space>
+          </div>
           {record.paymentStatus && (
             <Text type="secondary" className="text-xs">
-              付款狀態：{record.paymentStatus}
+              {record.paymentStatus}
             </Text>
           )}
           {(() => {
             const metadata = record.metadata as Record<string, any> || {}
             if (metadata.isPrepaidCustoms) {
               return (
-                <Tag color="purple" className="mt-1">
+                <Tag color="purple" className="mt-1 mr-0">
                   關稅預付
                 </Tag>
               )
             }
             return null
           })()}
-        </Space>
+        </div>
       ),
     },
     {
       title: 'AI 建議',
       key: 'ai',
+      width: '15%',
       responsive: ['lg'],
+      className: 'align-middle',
       render: (_value, record) => {
         if (!record.suggestedAccount) {
-          return <Tag bordered={false}>—</Tag>
+          return <Text type="secondary" className="text-xs">—</Text>
         }
         const confidence = Number(record.suggestionConfidence ?? 0)
         return (
-          <Space direction="vertical" size={0}>
-            <Space size={4}>
-              <Tag color="blue" bordered={false}>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+              <Tag color="blue" bordered={false} className="mr-0">
                 {record.suggestedAccount.code}
               </Tag>
-              <Text>{record.suggestedAccount.name}</Text>
-            </Space>
-            <Text type="secondary" className="text-xs">
+              <Text className="text-sm">{record.suggestedAccount.name}</Text>
+            </div>
+            <Text type="secondary" className="text-xs mt-0.5">
               信心 {(confidence * 100).toFixed(0)}%
             </Text>
-          </Space>
+          </div>
         )
       },
     },
     {
       title: '等待天數',
       key: 'aging',
+      width: '8%',
       responsive: ['md'],
+      className: 'align-middle',
       render: (_value, record) => (
         <Text>{dayjs().diff(dayjs(record.createdAt), 'day')} 天</Text>
       ),
@@ -522,43 +534,48 @@ const ExpenseReviewCenterPage: React.FC = () => {
     {
       title: '操作',
       key: 'actions',
-      width: 140,
+      width: 280,
       fixed: 'right',
-      className: '!bg-transparent',
+      className: '!bg-transparent align-middle',
       render: (_value, record) => (
-        <div className="flex flex-col gap-2">
-          {record.status === 'pending' && (
-            <Button
-              type="primary"
-              block
-              size="small"
-              className="!bg-green-600/85 !backdrop-blur-md !border-green-400/30 !text-white !shadow-md hover:!bg-green-600/95 hover:!shadow-lg transition-all duration-300 flex items-center justify-center gap-1"
-              onClick={() => handleOpenDetail(record)}
-            >
-              <CheckCircleOutlined /> 審核
-            </Button>
-          )}
-          <div className="flex justify-between items-center gap-1">
-            <Button
-              type="text"
-              size="small"
-              className="text-gray-500 hover:text-blue-600 hover:bg-blue-50 flex-1 flex items-center justify-center gap-1"
-              onClick={() => handleOpenDetail(record)}
-            >
-              <FileSearchOutlined /> 詳情
-            </Button>
-            {record.status === 'pending' && (
+        <div className="flex items-center justify-end gap-2">
+          {record.status === 'pending' ? (
+            <>
               <Button
-                type="text"
+                type="primary"
+                size="middle"
+                className="!bg-green-600 hover:!bg-green-500 border-none shadow-sm flex items-center"
+                onClick={() => handleOpenDetail(record)}
+              >
+                <CheckCircleOutlined /> 審核
+              </Button>
+              <Button
+                type="default"
+                size="middle"
+                className="flex items-center"
+                onClick={() => handleOpenDetail(record)}
+              >
+                詳情
+              </Button>
+              <Button
                 danger
-                size="small"
-                className="flex-1 flex items-center justify-center gap-1 hover:bg-red-50"
+                type="text"
+                size="middle"
+                className="flex items-center hover:bg-red-50"
                 onClick={() => openActionModal('reject', record)}
               >
-                <CloseCircleOutlined /> 駁回
+                駁回
               </Button>
-            )}
-          </div>
+            </>
+          ) : (
+            <Button
+              type="default"
+              size="middle"
+              onClick={() => handleOpenDetail(record)}
+            >
+              查看詳情
+            </Button>
+          )}
         </div>
       ),
     },
