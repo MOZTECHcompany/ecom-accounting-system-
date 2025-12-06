@@ -956,18 +956,51 @@ const ExpenseReviewCenterPage: React.FC = () => {
             <GlassDrawerSection>
               <Descriptions bordered column={1} size="small" labelStyle={{ width: 100, background: 'transparent' }} contentStyle={{ background: 'transparent' }}>
                 <Descriptions.Item label="報銷項目">
-                  {selectedRequest.reimbursementItem?.name || '--'}
+                  <span className="font-medium text-slate-800 text-base">
+                    {selectedRequest.reimbursementItem?.name || '--'}
+                  </span>
                 </Descriptions.Item>
                 <Descriptions.Item label="申請人">
-                  {selectedRequest.creator?.name || '--'}
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{selectedRequest.creator?.name || '--'}</span>
+                    <span className="text-xs text-slate-400">{selectedRequest.creator?.email}</span>
+                  </div>
                 </Descriptions.Item>
+                <Descriptions.Item label="申請日期">
+                  {dayjs(selectedRequest.createdAt).format('YYYY/MM/DD HH:mm')}
+                </Descriptions.Item>
+                {selectedRequest.dueDate && (
+                  <Descriptions.Item label="預計付款">
+                    <span className={isOverdue(selectedRequest) ? 'text-red-600 font-medium' : ''}>
+                      {dayjs(selectedRequest.dueDate).format('YYYY/MM/DD')}
+                      {isOverdue(selectedRequest) && ' (已逾期)'}
+                    </span>
+                  </Descriptions.Item>
+                )}
                 <Descriptions.Item label="金額">
-                  {selectedRequest.amountCurrency || 'TWD'} {toNumber(selectedRequest.amountOriginal).toLocaleString()}
+                  <span className="font-mono font-semibold text-lg text-slate-700">
+                    {selectedRequest.amountCurrency || 'TWD'} {toNumber(selectedRequest.amountOriginal).toLocaleString()}
+                  </span>
                 </Descriptions.Item>
+                {(selectedRequest.paymentBankName || selectedRequest.paymentAccountLast5) && (
+                  <Descriptions.Item label="收款帳戶">
+                    <div className="flex flex-col">
+                      <span>{selectedRequest.paymentBankName || '未指定銀行'}</span>
+                      {selectedRequest.paymentAccountLast5 && (
+                        <span className="text-xs text-slate-500">
+                          帳號末五碼: {selectedRequest.paymentAccountLast5}
+                        </span>
+                      )}
+                    </div>
+                  </Descriptions.Item>
+                )}
                 <Descriptions.Item label="狀態">
-                  <Tag color={statusColorMap[selectedRequest.status] || 'default'} className="rounded-full px-2 border-none">
-                    {statusLabelMap[selectedRequest.status] || selectedRequest.status}
-                  </Tag>
+                  <div className="flex gap-2 items-center">
+                    <Tag color={statusColorMap[selectedRequest.status] || 'default'} className="rounded-full px-2 border-none mr-0">
+                      {statusLabelMap[selectedRequest.status] || selectedRequest.status}
+                    </Tag>
+                    {selectedRequest.priority === 'urgent' && <Tag color="red" className="rounded-full px-2 border-none mr-0">急件</Tag>}
+                  </div>
                 </Descriptions.Item>
                 <Descriptions.Item label="會計科目">
                   {selectedRequest.status === 'pending' ? (

@@ -32,6 +32,9 @@ export class ApRepository {
             reimbursementItem: {
               select: { name: true },
             },
+            creator: {
+              select: { name: true },
+            },
           },
         },
       },
@@ -41,6 +44,37 @@ export class ApRepository {
 
   async findPaymentTaskById(id: string) {
     return this.prisma.paymentTask.findUnique({ where: { id } });
+  }
+
+  async findBankAccount(id: string) {
+    return this.prisma.bankAccount.findUnique({ where: { id } });
+  }
+
+  async updatePaymentTaskWithBankInfo(
+    taskId: string,
+    status: string,
+    bankInfo?: { bankName: string; accountLast5: string },
+  ) {
+    const task = await this.prisma.paymentTask.update({
+      where: { id: taskId },
+      data: {
+        status,
+        paidDate: status === 'paid' ? new Date() : null,
+      },
+    });
+
+    if (task.expenseRequestId && bankInfo) {
+      await this.prisma.expenseRequest.update({
+        where: { id: task.expenseRequestId },
+        data: {
+          paymentStatus: status,
+          paymentMethod: 'bank_transfer',
+          paymentBankName: bankInfo.bankName,
+          paymentAccountLast5: bankInfo.accountLast5,
+        },
+      });
+    }
+    return task;
   }
 
   async updatePaymentTaskStatus(taskId: string, status: string) {

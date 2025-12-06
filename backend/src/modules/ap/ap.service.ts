@@ -42,7 +42,9 @@ export class ApService {
       vendorId: task.vendorId || 'EMP-REIMBURSE',
       vendor: task.vendor || {
         id: 'EMP-REIMBURSE',
-        name: '員工報銷 / 零用金',
+        name: task.expenseRequest?.creator?.name
+          ? `${task.expenseRequest.creator.name} (員工報銷)`
+          : '員工報銷 / 零用金',
         code: 'EMP',
       },
       amountOriginal: task.amountOriginal,
@@ -124,6 +126,31 @@ export class ApService {
     const task = await this.apRepository.findPaymentTaskById(invoiceId);
     if (task) {
       const status = data.newStatus === 'paid' ? 'paid' : 'pending';
+
+      let bankInfo;
+      if (data.bankAccountId) {
+        const bankAccount = await this.apRepository.findBankAccount(
+          data.bankAccountId,
+        );
+        if (bankAccount) {
+          const accountNo = bankAccount.accountNo || '';
+          const last5 =
+            accountNo.length > 5 ? accountNo.slice(-5) : accountNo;
+          bankInfo = {
+            bankName: bankAccount.bankName,
+            accountLast5: last5,
+          };
+        }
+      }
+
+      if (bankInfo) {
+        return this.apRepository.updatePaymentTaskWithBankInfo(
+          invoiceId,
+          status,
+          bankInfo,
+        );
+      }
+
       return this.apRepository.updatePaymentTaskStatus(invoiceId, status);
     }
 

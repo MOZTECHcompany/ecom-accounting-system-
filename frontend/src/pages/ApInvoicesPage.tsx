@@ -38,7 +38,8 @@ import dayjs from 'dayjs'
 import * as XLSX from 'xlsx'
 import { apService } from '../services/ap.service'
 import { vendorService } from '../services/vendor.service'
-import { ApInvoice, ApInvoiceAlerts, Vendor } from '../types'
+import { bankingService } from '../services/banking.service'
+import { ApInvoice, ApInvoiceAlerts, Vendor, BankAccount } from '../types'
 
 const { Title, Text } = Typography
 const STATUS_COLORS: Record<string, string> = {
@@ -80,6 +81,7 @@ const ApInvoicesPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [vendors, setVendors] = useState<Vendor[]>([])
   const [vendorsLoading, setVendorsLoading] = useState(false)
+  const [banks, setBanks] = useState<BankAccount[]>([])
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [paymentInvoice, setPaymentInvoice] = useState<ApInvoice | null>(null)
   const [batchUploading, setBatchUploading] = useState(false)
@@ -130,6 +132,9 @@ const ApInvoicesPage: React.FC = () => {
 
   useEffect(() => {
     fetchInvoices()
+    bankingService.getAccounts().then((res) => {
+      if (Array.isArray(res)) setBanks(res)
+    }).catch(console.error)
   }, [])
 
   useEffect(() => {
@@ -408,6 +413,7 @@ const ApInvoicesPage: React.FC = () => {
         amount: Number(values.amount),
         paymentDate: values.paymentDate?.toISOString(),
         newStatus: values.newStatus,
+        bankAccountId: values.bankAccountId,
       })
       message.success('付款已記錄')
       setPaymentOpen(false)
@@ -1047,6 +1053,19 @@ const ApInvoicesPage: React.FC = () => {
           />
         )}
         <Form form={paymentForm} layout="vertical">
+          <Form.Item
+            name="bankAccountId"
+            label="付款銀行"
+            rules={[{ required: true, message: '請選擇付款銀行' }]}
+          >
+            <Select
+              placeholder="選擇銀行帳戶"
+              options={banks.map((b) => ({
+                label: `${b.bankName} (${b.accountNo})`,
+                value: b.id,
+              }))}
+            />
+          </Form.Item>
           <Form.Item
             name="amount"
             label="付款金額"
