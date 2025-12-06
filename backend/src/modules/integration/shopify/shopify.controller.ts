@@ -1,10 +1,23 @@
-import { Body, Controller, Get, Headers, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Post, Query, Req } from '@nestjs/common';
 import { IsDateString, IsOptional, IsString } from 'class-validator';
 import { ShopifyService } from './shopify.service';
 import { createHmac } from 'crypto';
 import type { Request } from 'express';
 
 class SyncRequestDto {
+  @IsString()
+  entityId!: string;
+
+  @IsOptional()
+  @IsDateString()
+  since?: string;
+
+  @IsOptional()
+  @IsDateString()
+  until?: string;
+}
+
+class SummaryQueryDto {
   @IsString()
   entityId!: string;
 
@@ -41,6 +54,15 @@ export class ShopifyController {
       entityId: body.entityId,
       since: body.since ? new Date(body.since) : undefined,
       until: body.until ? new Date(body.until) : undefined,
+    });
+  }
+
+  @Get('summary')
+  async summary(@Query() query: SummaryQueryDto) {
+    return this.shopifyService.getSummary({
+      entityId: query.entityId,
+      since: query.since ? new Date(query.since) : undefined,
+      until: query.until ? new Date(query.until) : undefined,
     });
   }
 

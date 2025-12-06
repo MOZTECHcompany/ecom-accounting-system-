@@ -72,6 +72,68 @@ export class ShopifyService {
     };
   }
 
+  async getSummary(params: { entityId: string; since?: Date; until?: Date }) {
+    const { entityId, since, until } = params;
+
+    const dateFilter = (field: string) => {
+      const filter: any = {};
+      if (since) filter.gte = since;
+      if (until) filter.lte = until;
+      return Object.keys(filter).length ? { [field]: filter } : {};
+    };
+
+    const [ordersAgg, paymentsAgg, ordersCount] = await Promise.all([
+      this.prisma.salesOrder.aggregate({
+        where: {
+          entityId,
+          ...dateFilter('orderDate'),
+        },
+        _sum: {
+          totalGrossOriginal: true,
+          taxAmountOriginal: true,
+          discountAmountOriginal: true,
+          shippingFeeOriginal: true,
+        },
+      }),
+      this.prisma.payment.aggregate({
+        where: {
+          entityId,
+          ...dateFilter('payoutDate'),
+        },
+        _sum: {
+          amountGrossOriginal: true,
+          amountNetOriginal: true,
+          feePlatformOriginal: true,
+        },
+      }),
+      this.prisma.salesOrder.count({
+        where: {
+          entityId,
+          ...dateFilter('orderDate'),
+        },
+      }),
+    ]);
+
+    const num = (value: any) => (value ? Number(value) : 0);
+
+    return {
+      entityId,
+      range: { since: since?.toISOString() || null, until: until?.toISOString() || null },
+      orders: {
+        count: ordersCount,
+        gross: num(ordersAgg._sum.totalGrossOriginal),
+        tax: num(ordersAgg._sum.taxAmountOriginal),
+        discount: num(ordersAgg._sum.discountAmountOriginal),
+        shipping: num(ordersAgg._sum.shippingFeeOriginal),
+      },
+      payouts: {
+        gross: num(paymentsAgg._sum.amountGrossOriginal),
+        net: num(paymentsAgg._sum.amountNetOriginal),
+        platformFee: num(paymentsAgg._sum.feePlatformOriginal),
+      },
+    };
+  }
+
   async handleWebhook(event: string, payload: any, hmacValid: boolean) {
     // TODO: 依據 event 分流處理，現階段僅記錄
     this.logger.log(`Received Shopify webhook ${event}, hmacValid=${hmacValid}`);
