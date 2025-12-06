@@ -332,6 +332,12 @@ const ExpenseRequestsPage: React.FC = () => {
         }),
       )
 
+      const isPrepaidCustoms = selectedItem && (
+        selectedItem.name.includes('關稅預付') || 
+        selectedItem.name.includes('Prepaid Customs') || 
+        (selectedItem.name.includes('關稅') && values.isInvoicePending)
+      )
+
       const payload = {
         entityId,
         reimbursementItemId: selectedItem.id,
@@ -351,12 +357,12 @@ const ExpenseRequestsPage: React.FC = () => {
             bankCode: values.bankCode,
             bankAccount: values.bankAccount,
           } : {}),
-          ...(selectedItem?.name.includes('關稅預付') || selectedItem?.name.includes('Prepaid Customs') ? {
+          ...(isPrepaidCustoms ? {
             customsDeclarationNumber: values.customsDeclarationNumber,
             isInvoicePending: true,
             isPrepaidCustoms: true,
           } : {}),
-          ...(values.receiptType === 'TAX_INVOICE' && !(selectedItem?.name.includes('關稅預付') || selectedItem?.name.includes('Prepaid Customs')) ? {
+          ...(values.receiptType === 'TAX_INVOICE' && !isPrepaidCustoms ? {
             invoiceNo: values.invoiceNo,
             taxId: values.taxId,
             isInvoicePending: values.isInvoicePending,
@@ -881,7 +887,11 @@ const ExpenseRequestsPage: React.FC = () => {
             {({ getFieldValue }) => {
               const itemId = getFieldValue('reimbursementItemId')
               const item = reimbursementItems.find(i => i.id === itemId)
-              const isPrepaidCustoms = item?.name.includes('關稅預付') || item?.name.includes('Prepaid Customs')
+              const isPrepaidCustoms = item && (
+                item.name.includes('關稅預付') || 
+                item.name.includes('Prepaid Customs') || 
+                (item.name.includes('關稅') && getFieldValue('isInvoicePending') === true)
+              )
               
               return isPrepaidCustoms ? (
                 <GlassDrawerSection>
@@ -937,7 +947,11 @@ const ExpenseRequestsPage: React.FC = () => {
                     
                     // Auto-detect Prepaid Customs
                     if (value.includes('關稅') || value.includes('報關')) {
-                      const customsItem = reimbursementItems.find(i => i.name.includes('關稅預付') || i.name.includes('Prepaid Customs'))
+                      let customsItem = reimbursementItems.find(i => i.name.includes('關稅預付') || i.name.includes('Prepaid Customs'))
+                      if (!customsItem) {
+                        customsItem = reimbursementItems.find(i => i.name.includes('進口關稅') || i.name.includes('Import Customs'))
+                      }
+
                       if (customsItem) {
                         form.setFieldsValue({ 
                           reimbursementItemId: customsItem.id,

@@ -486,6 +486,12 @@ async function main() {
       description: '進口貨物之關稅、報關費、商港服務費等',
       allowedReceiptTypes: 'TAX_INVOICE,RECEIPT,BANK_SLIP',
     },
+    {
+      name: '關稅預付',
+      accountCode: '5122',
+      description: '預付進口關稅，需後補稅單',
+      allowedReceiptTypes: 'TAX_INVOICE',
+    },
   ];
 
   for (const item of twReimbursementItems) {
