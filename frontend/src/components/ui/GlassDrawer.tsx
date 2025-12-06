@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Drawer, DrawerProps } from 'antd';
 import { CloseOutlined } from '@ant-design/icons';
 import { GlassButton } from './GlassButton';
@@ -15,10 +15,21 @@ export const GlassDrawer: React.FC<GlassDrawerProps> = ({
   width = 380,
   ...props 
 }) => {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 640);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  const drawerWidth = isMobile ? '100%' : width;
+
   return (
     <Drawer
       {...props}
-      width={width}
+      width={drawerWidth}
       onClose={onClose}
       closeIcon={null}
       title={null} // We'll render a custom header

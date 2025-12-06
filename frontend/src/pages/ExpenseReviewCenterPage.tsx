@@ -394,6 +394,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
       title: '費用項目',
       dataIndex: 'reimbursementItem',
       key: 'reimbursementItem',
+      fixed: 'left',
       render: (_value, record) => (
         <Space direction="vertical" size={0}>
           <span className="font-medium text-gray-800">
@@ -411,6 +412,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
       title: '申請人',
       dataIndex: 'creator',
       key: 'creator',
+      responsive: ['sm'],
       render: (_value, record) => (
         <Space direction="vertical" size={0}>
           <Text className="font-medium text-slate-700">{record.creator?.name || '—'}</Text>
@@ -441,6 +443,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
     {
       title: '付款 / 優先度',
       key: 'priority',
+      responsive: ['md'],
       render: (_value, record) => (
         <Space direction="vertical" size={0}>
           <Space size={6}>
@@ -477,6 +480,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
     {
       title: 'AI 建議',
       key: 'ai',
+      responsive: ['lg'],
       render: (_value, record) => {
         if (!record.suggestedAccount) {
           return <Tag bordered={false}>—</Tag>
@@ -500,6 +504,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
     {
       title: '等待天數',
       key: 'aging',
+      responsive: ['md'],
       render: (_value, record) => (
         <Text>{dayjs().diff(dayjs(record.createdAt), 'day')} 天</Text>
       ),
@@ -508,6 +513,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
       title: '操作',
       key: 'actions',
       width: 140,
+      fixed: 'right',
       render: (_value, record) => (
         <div className="flex flex-col gap-2">
           {record.status === 'pending' && (
@@ -720,6 +726,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
             rowClassName={(record) => (isUrgentRequest(record) ? 'bg-red-50/30' : 'hover:bg-white/20 transition-colors')}
             locale={{ emptyText: <Empty description="沒有符合條件的申請" /> }}
             className="w-full"
+            scroll={{ x: 1000 }}
           />
         </GlassCard>
 

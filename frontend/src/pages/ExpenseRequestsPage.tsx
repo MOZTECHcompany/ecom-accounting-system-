@@ -656,6 +656,7 @@ const ExpenseRequestsPage: React.FC = () => {
       title: '報銷項目',
       dataIndex: ['reimbursementItem', 'name'],
       key: 'reimbursementItem',
+      fixed: 'left',
       render: (_, record) => (
         <span className="font-medium text-gray-800">{record.reimbursementItem?.name || '--'}</span>
       ),
@@ -676,6 +677,7 @@ const ExpenseRequestsPage: React.FC = () => {
     {
       title: '智能建議',
       key: 'suggestedAccount',
+      responsive: ['lg'],
       render: (_: unknown, record) => {
         if (!record.suggestedAccount) {
           return <Text type="secondary">—</Text>
@@ -701,6 +703,7 @@ const ExpenseRequestsPage: React.FC = () => {
       dataIndex: 'dueDate',
       key: 'dueDate',
       width: 120,
+      responsive: ['md'],
       render: (date: string) => (date ? dayjs(date).format('YYYY-MM-DD') : '--'),
     },
     {
@@ -708,6 +711,7 @@ const ExpenseRequestsPage: React.FC = () => {
       dataIndex: 'paymentStatus',
       key: 'paymentStatus',
       width: 120,
+      responsive: ['sm'],
       sorter: (a, b) => (a.paymentStatus || '').localeCompare(b.paymentStatus || ''),
       render: (status: string, record) => {
         const map: Record<string, { text: string; color: string }> = {
@@ -765,11 +769,13 @@ const ExpenseRequestsPage: React.FC = () => {
       title: '申請時間',
       dataIndex: 'createdAt',
       key: 'createdAt',
+      responsive: ['xl'],
       render: (value: string) => dayjs(value).format('YYYY-MM-DD HH:mm'),
     },
     {
       title: '操作',
       key: 'actions',
+      fixed: 'right',
       render: (_: unknown, record) => (
         <Space>
           <Button type="link" size="small" onClick={() => handleOpenDetail(record)}>
@@ -833,6 +839,7 @@ const ExpenseRequestsPage: React.FC = () => {
           locale={{ emptyText: '目前尚無費用申請紀錄' }}
           className="w-full"
           rowClassName="hover:bg-white/20 transition-colors"
+          scroll={{ x: 800 }}
         />
       </GlassCard>
 
