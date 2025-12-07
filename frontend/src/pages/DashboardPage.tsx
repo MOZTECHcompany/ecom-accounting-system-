@@ -19,17 +19,26 @@ const { Title, Text } = Typography
 
 const DASHBOARD_TZ = 'Asia/Taipei'
 
+// Build today range in a target timezone and return UTC ISO strings
 function getTodayRangeInTimezone(timezone: string) {
   const now = new Date()
-  const tzNow = new Date(now.toLocaleString('en-US', { timeZone: timezone }))
-  const start = new Date(tzNow)
-  start.setHours(0, 0, 0, 0)
-  const end = new Date(tzNow)
-  end.setHours(23, 59, 59, 999)
-  // Convert back to UTC ISO string for API
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now)
+
+  const year = Number(parts.find((p) => p.type === 'year')?.value)
+  const month = Number(parts.find((p) => p.type === 'month')?.value)
+  const day = Number(parts.find((p) => p.type === 'day')?.value)
+
+  const startUtc = Date.UTC(year, month - 1, day, 0, 0, 0, 0)
+  const endUtc = Date.UTC(year, month - 1, day, 23, 59, 59, 999)
+
   return {
-    since: new Date(start.getTime() - (start.getTimezoneOffset() * 60000)).toISOString(),
-    until: new Date(end.getTime() - (end.getTimezoneOffset() * 60000)).toISOString(),
+    since: new Date(startUtc).toISOString(),
+    until: new Date(endUtc).toISOString(),
   }
 }
 
@@ -46,10 +55,12 @@ const DashboardPage: React.FC = () => {
   useEffect(() => {
     // Constrain summary to "today" in the dashboard timezone (Asia/Taipei)
     const { since, until } = getTodayRangeInTimezone(DASHBOARD_TZ)
+    const storedEntityId = localStorage.getItem('entityId')?.trim()
 
     const fetchSummary = async () => {
       try {
         const summary = await shopifyService.summary({
+          entityId: storedEntityId,
           since,
           until,
         })
