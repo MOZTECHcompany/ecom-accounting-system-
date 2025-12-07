@@ -22,6 +22,8 @@ const DASHBOARD_TZ = 'Asia/Taipei'
 // Build today range in a target timezone and return UTC ISO strings
 function getTodayRangeInTimezone(timezone: string) {
   const now = new Date()
+
+  // Extract Y/M/D as seen in the target timezone
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: timezone,
     year: 'numeric',
@@ -33,12 +35,17 @@ function getTodayRangeInTimezone(timezone: string) {
   const month = Number(parts.find((p) => p.type === 'month')?.value)
   const day = Number(parts.find((p) => p.type === 'day')?.value)
 
-  const startUtc = Date.UTC(year, month - 1, day, 0, 0, 0, 0)
-  const endUtc = Date.UTC(year, month - 1, day, 23, 59, 59, 999)
+  // Compute offset between target timezone and UTC (ms)
+  const tzNow = new Date(now.toLocaleString('en-US', { timeZone: timezone }))
+  const offsetMs = tzNow.getTime() - now.getTime()
+
+  // Local midnight in target TZ expressed in UTC: subtract the offset
+  const startUtcMs = Date.UTC(year, month - 1, day, 0, 0, 0, 0) - offsetMs
+  const endUtcMs = Date.UTC(year, month - 1, day, 23, 59, 59, 999) - offsetMs
 
   return {
-    since: new Date(startUtc).toISOString(),
-    until: new Date(endUtc).toISOString(),
+    since: new Date(startUtcMs).toISOString(),
+    until: new Date(endUtcMs).toISOString(),
   }
 }
 
