@@ -28,9 +28,18 @@ const DashboardPage: React.FC = () => {
   const [lastUpdated, setLastUpdated] = useState<string | null>(null)
 
   useEffect(() => {
+    // Constrain summary to "today" to match the card labels (今日)
+    const startOfToday = new Date()
+    startOfToday.setHours(0, 0, 0, 0)
+    const endOfToday = new Date()
+    endOfToday.setHours(23, 59, 59, 999)
+
     const fetchSummary = async () => {
       try {
-        const summary = await shopifyService.summary()
+        const summary = await shopifyService.summary({
+          since: startOfToday.toISOString(),
+          until: endOfToday.toISOString(),
+        })
         // Map backend summary to dashboard KPIs
         setRevenue(summary.orders.gross)
         setReceivables(summary.payouts.gross)
