@@ -23,23 +23,31 @@ const DASHBOARD_TZ = 'Asia/Taipei'
 function getTodayRangeInTimezone(timezone: string) {
   const now = new Date()
 
-  // Extract Y/M/D as seen in the target timezone
+  // Extract Y/M/D and current H/M/S in target timezone
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: timezone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
   }).formatToParts(now)
 
-  const year = Number(parts.find((p) => p.type === 'year')?.value)
-  const month = Number(parts.find((p) => p.type === 'month')?.value)
-  const day = Number(parts.find((p) => p.type === 'day')?.value)
+  const getPart = (type: string) => Number(parts.find((p) => p.type === type)?.value || 0)
+  const year = getPart('year')
+  const month = getPart('month')
+  const day = getPart('day')
+  const hour = getPart('hour')
+  const minute = getPart('minute')
+  const second = getPart('second')
 
-  // Compute offset between target timezone and UTC (ms)
-  const tzNow = new Date(now.toLocaleString('en-US', { timeZone: timezone }))
-  const offsetMs = tzNow.getTime() - now.getTime()
+  // Offset in ms between target TZ wall-clock and UTC at this moment
+  const localMillis = Date.UTC(year, month - 1, day, hour, minute, second)
+  const offsetMs = localMillis - now.getTime()
 
-  // Local midnight in target TZ expressed in UTC: subtract the offset
+  // Local midnight in target TZ expressed in UTC: subtract the offset from UTC midnight
   const startUtcMs = Date.UTC(year, month - 1, day, 0, 0, 0, 0) - offsetMs
   const endUtcMs = Date.UTC(year, month - 1, day, 23, 59, 59, 999) - offsetMs
 
