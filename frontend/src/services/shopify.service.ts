@@ -9,6 +9,23 @@ export type ShopifySyncResult = {
   updated: number
 }
 
+export type ShopifySummary = {
+  entityId: string
+  range: { since: string | null; until: string | null }
+  orders: {
+    count: number
+    gross: number
+    tax: number
+    discount: number
+    shipping: number
+  }
+  payouts: {
+    gross: number
+    net: number
+    platformFee: number
+  }
+}
+
 export const shopifyService = {
   async health(): Promise<{ ok: boolean; message?: string }> {
     const response = await api.get('/integrations/shopify/health')
@@ -30,6 +47,17 @@ export const shopifyService = {
       since: params.since,
       until: params.until,
     })
+    return response.data
+  },
+
+  async summary(params?: { entityId?: string; since?: string; until?: string }): Promise<ShopifySummary> {
+    const entityId = params?.entityId?.trim() || DEFAULT_ENTITY_ID
+    const query = new URLSearchParams()
+    query.append('entityId', entityId)
+    if (params?.since) query.append('since', params.since)
+    if (params?.until) query.append('until', params.until)
+
+    const response = await api.get(`/integrations/shopify/summary?${query.toString()}`)
     return response.data
   },
 }

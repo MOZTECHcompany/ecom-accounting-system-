@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Row, Col, Statistic, Typography, Tag, Button, Timeline, Card, Avatar } from 'antd'
+import { Row, Col, Statistic, Typography, Tag, Button, Timeline, Card, Avatar, message } from 'antd'
 import { 
   DollarOutlined, 
   ShoppingOutlined, 
@@ -13,57 +13,39 @@ import { motion } from 'framer-motion'
 import FinancialHealthWidget from '../components/FinancialHealthWidget'
 import PageSkeleton from '../components/PageSkeleton'
 import AIInsightsWidget from '../components/AIInsightsWidget'
+import { shopifyService } from '../services/shopify.service'
 
 const { Title, Text } = Typography
 
 const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true)
-  
-  // Living Data State
-  const [revenue, setRevenue] = useState(128930)
-  const [receivables, setReceivables] = useState(456780)
-  const [expenses, setExpenses] = useState(234000)
-  const [pendingDocs, setPendingDocs] = useState(15)
+
+  // Live Data State (from API)
+  const [revenue, setRevenue] = useState(0)
+  const [receivables, setReceivables] = useState(0)
+  const [expenses, setExpenses] = useState(0)
+  const [pendingDocs, setPendingDocs] = useState(0)
   const [lastUpdated, setLastUpdated] = useState<string | null>(null)
 
   useEffect(() => {
-    // Simulate data loading
-    const timer = setTimeout(() => {
-      setLoading(false)
-    }, 1500)
-    return () => clearTimeout(timer)
-  }, [])
-
-  // Living Data Simulation
-  useEffect(() => {
-    if (loading) return
-
-    const interval = setInterval(() => {
-      const rand = Math.random()
-      
-      if (rand < 0.3) {
-        setRevenue(prev => prev + Math.floor(Math.random() * 500))
+    const fetchSummary = async () => {
+      try {
+        const summary = await shopifyService.summary()
+        // Map backend summary to dashboard KPIs
+        setRevenue(summary.orders.gross)
+        setReceivables(summary.payouts.gross)
+        setExpenses(summary.payouts.platformFee)
+        setPendingDocs(summary.orders.count)
         setLastUpdated('revenue')
-      } else if (rand < 0.5) {
-        setReceivables(prev => prev + Math.floor(Math.random() * 200))
-        setLastUpdated('receivables')
-      } else if (rand < 0.7) {
-        setExpenses(prev => prev + Math.floor(Math.random() * 150))
-        setLastUpdated('expenses')
-      } else {
-        // Occasionally change pending docs
-        if (Math.random() > 0.5) {
-             setPendingDocs(prev => prev + (Math.random() > 0.5 ? 1 : -1))
-             setLastUpdated('pendingDocs')
-        }
+      } catch (error: any) {
+        message.error(error?.response?.data?.message || '讀取儀表板資料失敗')
+      } finally {
+        setLoading(false)
       }
+    }
 
-      // Reset highlight after animation
-      setTimeout(() => setLastUpdated(null), 1000)
-    }, 2500)
-
-    return () => clearInterval(interval)
-  }, [loading])
+    fetchSummary()
+  }, [])
 
   if (loading) {
     return <PageSkeleton />
@@ -113,12 +95,13 @@ const DashboardPage: React.FC = () => {
             <Statistic
               title={<span className="label-text font-medium">今日銷售額</span>}
               value={revenue}
+              precision={2}
               prefix="$"
               className={`kpi-number transition-colors duration-300 ${lastUpdated === 'revenue' ? 'animate-flash-text' : ''}`}
               valueStyle={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '28px' }}
             />
             <div className="mt-2 text-sm text-gray-400">
-              最近 7 天: $892,100
+              來源：Shopify orders.gross
             </div>
           </motion.div>
         </Col>
@@ -138,14 +121,15 @@ const DashboardPage: React.FC = () => {
               </Tag>
             </div>
             <Statistic
-              title={<span className="label-text font-medium">未收款應收帳款</span>}
+              title={<span className="label-text font-medium">平台撥款總額</span>}
               value={receivables}
+              precision={2}
               prefix="$"
               className={`kpi-number transition-colors duration-300 ${lastUpdated === 'receivables' ? 'animate-flash-text' : ''}`}
               valueStyle={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '28px' }}
             />
             <div className="mt-2 text-sm text-gray-400">
-              逾期金額: <span className="text-red-500">$125,000</span>
+              來源：Shopify payouts.gross
             </div>
           </motion.div>
         </Col>
@@ -162,14 +146,15 @@ const DashboardPage: React.FC = () => {
               </div>
             </div>
             <Statistic
-              title={<span className="label-text font-medium">本月費用總額</span>}
+              title={<span className="label-text font-medium">平台費用</span>}
               value={expenses}
+              precision={2}
               prefix="$"
               className={`kpi-number transition-colors duration-300 ${lastUpdated === 'expenses' ? 'animate-flash-text' : ''}`}
               valueStyle={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '28px' }}
             />
             <div className="mt-2 text-sm text-gray-400">
-              預算達成率: <span className="text-blue-500">85%</span>
+              來源：Shopify payouts.platformFee
             </div>
           </motion.div>
         </Col>
@@ -189,13 +174,13 @@ const DashboardPage: React.FC = () => {
               </Tag>
             </div>
             <Statistic
-              title={<span className="label-text font-medium">待處理單據</span>}
+              title={<span className="label-text font-medium">訂單數</span>}
               value={pendingDocs}
               className={`kpi-number transition-colors duration-300 ${lastUpdated === 'pendingDocs' ? 'animate-flash-text' : ''}`}
               valueStyle={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '28px' }}
             />
             <div className="mt-2 text-sm text-gray-400">
-              包含發票與報銷單
+              來源：Shopify orders.count
             </div>
           </motion.div>
         </Col>
