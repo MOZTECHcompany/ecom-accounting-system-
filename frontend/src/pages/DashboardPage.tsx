@@ -17,6 +17,22 @@ import { shopifyService } from '../services/shopify.service'
 
 const { Title, Text } = Typography
 
+const DASHBOARD_TZ = 'Asia/Taipei'
+
+function getTodayRangeInTimezone(timezone: string) {
+  const now = new Date()
+  const tzNow = new Date(now.toLocaleString('en-US', { timeZone: timezone }))
+  const start = new Date(tzNow)
+  start.setHours(0, 0, 0, 0)
+  const end = new Date(tzNow)
+  end.setHours(23, 59, 59, 999)
+  // Convert back to UTC ISO string for API
+  return {
+    since: new Date(start.getTime() - (start.getTimezoneOffset() * 60000)).toISOString(),
+    until: new Date(end.getTime() - (end.getTimezoneOffset() * 60000)).toISOString(),
+  }
+}
+
 const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true)
 
@@ -28,17 +44,14 @@ const DashboardPage: React.FC = () => {
   const [lastUpdated, setLastUpdated] = useState<string | null>(null)
 
   useEffect(() => {
-    // Constrain summary to "today" to match the card labels (今日)
-    const startOfToday = new Date()
-    startOfToday.setHours(0, 0, 0, 0)
-    const endOfToday = new Date()
-    endOfToday.setHours(23, 59, 59, 999)
+    // Constrain summary to "today" in the dashboard timezone (Asia/Taipei)
+    const { since, until } = getTodayRangeInTimezone(DASHBOARD_TZ)
 
     const fetchSummary = async () => {
       try {
         const summary = await shopifyService.summary({
-          since: startOfToday.toISOString(),
-          until: endOfToday.toISOString(),
+          since,
+          until,
         })
         // Map backend summary to dashboard KPIs
         setRevenue(summary.orders.gross)
