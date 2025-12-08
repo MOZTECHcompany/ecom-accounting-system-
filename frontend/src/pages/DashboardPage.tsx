@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Row, Col, Statistic, Typography, Tag, Button, Timeline, Card, Avatar, message } from 'antd'
+import { Row, Col, Statistic, Typography, Tag, Button, Timeline, Card, Avatar, message, Radio } from 'antd'
 import { 
   DollarOutlined, 
   ShoppingOutlined, 
@@ -18,6 +18,8 @@ import { shopifyService } from '../services/shopify.service'
 const { Title, Text } = Typography
 
 const DASHBOARD_TZ = 'Asia/Taipei'
+
+type RangeMode = 'all' | 'today'
 
 // Build today range in a target timezone and return UTC ISO strings
 function getTodayRangeInTimezone(timezone: string) {
@@ -59,6 +61,7 @@ function getTodayRangeInTimezone(timezone: string) {
 
 const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true)
+  const [rangeMode, setRangeMode] = useState<RangeMode>('all')
 
   // Live Data State (from API)
   const [revenue, setRevenue] = useState(0)
@@ -68,9 +71,8 @@ const DashboardPage: React.FC = () => {
   const [lastUpdated, setLastUpdated] = useState<string | null>(null)
 
   useEffect(() => {
-    // Constrain summary to "today" in the dashboard timezone (Asia/Taipei)
-    const { since, until } = getTodayRangeInTimezone(DASHBOARD_TZ)
     const storedEntityId = localStorage.getItem('entityId')?.trim()
+    const { since, until } = rangeMode === 'today' ? getTodayRangeInTimezone(DASHBOARD_TZ) : { since: undefined, until: undefined }
 
     const fetchSummary = async () => {
       try {
@@ -93,7 +95,7 @@ const DashboardPage: React.FC = () => {
     }
 
     fetchSummary()
-  }, [])
+  }, [rangeMode])
 
   if (loading) {
     return <PageSkeleton />
@@ -119,8 +121,19 @@ const DashboardPage: React.FC = () => {
             歡迎回來，管理員。這是您今天的財務健康概況。
           </Text>
         </div>
-        <div className="text-right hidden sm:block">
-          <Text className="text-gray-400 text-xs">System Status: Operational</Text>
+        <div className="flex flex-col sm:items-end gap-2">
+          <Radio.Group
+            size="small"
+            value={rangeMode}
+            onChange={(e) => {
+              setLoading(true)
+              setRangeMode(e.target.value)
+            }}
+          >
+            <Radio.Button value="all">全部期間</Radio.Button>
+            <Radio.Button value="today">今天</Radio.Button>
+          </Radio.Group>
+          <Text className="text-gray-400 text-xs hidden sm:block">System Status: Operational</Text>
         </div>
       </div>
       
