@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Row, Col, Statistic, Typography, Tag, Button, Timeline, Card, Avatar, message, Radio } from 'antd'
+import { Row, Col, Statistic, Typography, Tag, Button, Timeline, Card, Avatar, message, Radio, DatePicker } from 'antd'
 import { 
   DollarOutlined, 
   ShoppingOutlined, 
@@ -7,61 +7,59 @@ import {
   FileTextOutlined,
   ClockCircleOutlined,
   UserOutlined,
-  CheckCircleOutlined
+  CheckCircleOutlined,
+  SyncOutlined,
 } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import FinancialHealthWidget from '../components/FinancialHealthWidget'
 import PageSkeleton from '../components/PageSkeleton'
 import AIInsightsWidget from '../components/AIInsightsWidget'
 import { shopifyService } from '../services/shopify.service'
+import dayjs, { Dayjs } from 'dayjs'
+import utc from 'dayjs/plugin/utc'
+import timezone from 'dayjs/plugin/timezone'
 
 const { Title, Text } = Typography
+const { RangePicker } = DatePicker
 
 const DASHBOARD_TZ = 'Asia/Taipei'
 
-type RangeMode = 'all' | 'today'
+dayjs.extend(utc)
+dayjs.extend(timezone)
+dayjs.tz.setDefault(DASHBOARD_TZ)
 
-// Build today range in a target timezone and return UTC ISO strings
-function getTodayRangeInTimezone(timezone: string) {
-  const now = new Date()
+type RangeMode = 'all' | 'today' | 'last7d' | 'custom'
+type CustomRange = [Dayjs, Dayjs] | null
+type RangeValue = [Dayjs | null, Dayjs | null] | null
 
-  // Extract Y/M/D and current H/M/S in target timezone
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  }).formatToParts(now)
-
-  const getPart = (type: string) => Number(parts.find((p) => p.type === type)?.value || 0)
-  const year = getPart('year')
-  const month = getPart('month')
-  const day = getPart('day')
-  const hour = getPart('hour')
-  const minute = getPart('minute')
-  const second = getPart('second')
-
-  // Offset in ms between target TZ wall-clock and UTC at this moment
-  const localMillis = Date.UTC(year, month - 1, day, hour, minute, second)
-  const offsetMs = localMillis - now.getTime()
-
-  // Local midnight in target TZ expressed in UTC: subtract the offset from UTC midnight
-  const startUtcMs = Date.UTC(year, month - 1, day, 0, 0, 0, 0) - offsetMs
-  const endUtcMs = Date.UTC(year, month - 1, day, 23, 59, 59, 999) - offsetMs
-
-  return {
-    since: new Date(startUtcMs).toISOString(),
-    until: new Date(endUtcMs).toISOString(),
+function resolveRange(mode: RangeMode, timezone: string, customRange: CustomRange) {
+  if (mode === 'today') {
+    const start = dayjs().tz(timezone).startOf('day')
+    const end = dayjs().tz(timezone).endOf('day')
+    return { since: start.toISOString(), until: end.toISOString() }
   }
+
+  if (mode === 'last7d') {
+    const end = dayjs().tz(timezone).endOf('day')
+    const start = end.subtract(6, 'day').startOf('day')
+    return { since: start.toISOString(), until: end.toISOString() }
+  }
+
+  if (mode === 'custom' && customRange && customRange[0] && customRange[1]) {
+    const start = customRange[0].tz(timezone, true).startOf('day')
+    const end = customRange[1].tz(timezone, true).endOf('day')
+    return { since: start.toISOString(), until: end.toISOString() }
+  }
+
+  return { since: undefined, until: undefined }
 }
 
 const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true)
-  const [rangeMode, setRangeMode] = useState<RangeMode>('all')
+  const [rangeMode, setRangeMode] = useState<RangeMode>('today')
+  const [customRange, setCustomRange] = useState<CustomRange>(null)
+  const [refreshToken, setRefreshToken] = useState(0)
+  const [syncing, setSyncing] = useState(false)
 
   // Live Data State (from API)
   const [revenue, setRevenue] = useState(0)
@@ -71,16 +69,27 @@ const DashboardPage: React.FC = () => {
   const [lastUpdated, setLastUpdated] = useState<string | null>(null)
 
   useEffect(() => {
+    if (rangeMode === 'custom' && (!customRange?.[0] || !customRange?.[1])) {
+      setLoading(false)
+      return
+    }
+
     const storedEntityId = localStorage.getItem('entityId')?.trim()
-    const { since, until } = rangeMode === 'today' ? getTodayRangeInTimezone(DASHBOARD_TZ) : { since: undefined, until: undefined }
+    const { since, until } = resolveRange(rangeMode, DASHBOARD_TZ, customRange)
+
+    let ignore = false
 
     const fetchSummary = async () => {
+      setLoading(true)
       try {
         const summary = await shopifyService.summary({
           entityId: storedEntityId,
           since,
           until,
         })
+
+        if (ignore) return
+
         // Map backend summary to dashboard KPIs
         setRevenue(summary.orders.gross)
         setReceivables(summary.payouts.gross)
@@ -88,14 +97,52 @@ const DashboardPage: React.FC = () => {
         setPendingDocs(summary.orders.count)
         setLastUpdated('revenue')
       } catch (error: any) {
-        message.error(error?.response?.data?.message || '讀取儀表板資料失敗')
+        if (!ignore) {
+          message.error(error?.response?.data?.message || '讀取儀表板資料失敗')
+        }
       } finally {
-        setLoading(false)
+        if (!ignore) {
+          setLoading(false)
+        }
       }
     }
 
     fetchSummary()
-  }, [rangeMode])
+
+    return () => {
+      ignore = true
+    }
+  }, [rangeMode, customRange, refreshToken])
+
+  const handleCustomRangeChange = (value: RangeValue) => {
+    if (!value || !value[0] || !value[1]) {
+      setCustomRange(null)
+      return
+    }
+    setCustomRange([value[0], value[1]])
+  }
+
+  const handleManualSync = async () => {
+    const storedEntityId = localStorage.getItem('entityId')?.trim()
+    setSyncing(true)
+    try {
+      const [ordersResult, transactionsResult] = await Promise.all([
+        shopifyService.syncOrders({ entityId: storedEntityId }),
+        shopifyService.syncTransactions({ entityId: storedEntityId }),
+      ])
+
+      message.success(
+        `同步完成：訂單 ${ordersResult.created + ordersResult.updated} 筆，撥款 ${
+          transactionsResult.created + transactionsResult.updated
+        } 筆`,
+      )
+      setRefreshToken((prev) => prev + 1)
+    } catch (error: any) {
+      message.error(error?.response?.data?.message || '同步失敗，請稍後再試')
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   if (loading) {
     return <PageSkeleton />
@@ -121,18 +168,42 @@ const DashboardPage: React.FC = () => {
             歡迎回來，管理員。這是您今天的財務健康概況。
           </Text>
         </div>
-        <div className="flex flex-col sm:items-end gap-2">
-          <Radio.Group
-            size="small"
-            value={rangeMode}
-            onChange={(e) => {
-              setLoading(true)
-              setRangeMode(e.target.value)
-            }}
-          >
-            <Radio.Button value="all">全部期間</Radio.Button>
-            <Radio.Button value="today">今天</Radio.Button>
-          </Radio.Group>
+        <div className="flex flex-col sm:items-end gap-2 w-full sm:w-auto">
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto sm:items-center sm:justify-end">
+            <Radio.Group
+              size="small"
+              value={rangeMode}
+              onChange={(e) => {
+                const nextMode = e.target.value as RangeMode
+                setRangeMode(nextMode)
+                if (nextMode === 'custom' && (!customRange?.[0] || !customRange?.[1])) {
+                  message.info('請選擇自訂日期區間')
+                }
+              }}
+            >
+              <Radio.Button value="today">今天</Radio.Button>
+              <Radio.Button value="last7d">最近 7 天</Radio.Button>
+              <Radio.Button value="all">全部期間</Radio.Button>
+              <Radio.Button value="custom">自訂</Radio.Button>
+            </Radio.Group>
+            <Button
+              type="primary"
+              icon={<SyncOutlined />}
+              loading={syncing}
+              onClick={handleManualSync}
+            >
+              即時同步
+            </Button>
+          </div>
+          <RangePicker
+            disabled={rangeMode !== 'custom'}
+            value={customRange}
+            onChange={handleCustomRangeChange}
+            format="YYYY/MM/DD"
+            allowClear
+            className="w-full sm:w-auto"
+            placeholder={['開始日期', '結束日期']}
+          />
           <Text className="text-gray-400 text-xs hidden sm:block">System Status: Operational</Text>
         </div>
       </div>
