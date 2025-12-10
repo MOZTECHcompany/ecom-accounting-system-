@@ -36,6 +36,7 @@ import { AiModule } from './modules/ai/ai.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { ShopifyIntegrationModule } from './modules/integration/shopify/shopify.module';
 import { PurchaseModule } from './modules/purchase/purchase.module';
+import { AssemblyModule } from './modules/assembly/assembly.module';
 
 /**
  * AppModule
@@ -102,6 +103,7 @@ import { PurchaseModule } from './modules/purchase/purchase.module';
     AiModule,
     AttendanceModule,
     PurchaseModule,
+    AssemblyModule,
   ],
   controllers: [AppController],
   providers: [

@@ -73,12 +73,59 @@ export class CostService {
   }
 
   /**
-   * 記錄進貨成本
+   * 記錄進貨成本並更新移動平均成本
+   * 觸發時機：採購收貨 (Purchase Order Receive)
    */
   async recordPurchaseCost(purchaseOrderId: string) {
-    // TODO: 計算進貨總成本（含運費、關稅等）
-    // TODO: 產生進貨成本分錄
-    // TODO: 呼叫 InventoryService.adjustStock 依進貨明細入庫
+    const po = await this.prisma.purchaseOrder.findUnique({
+      where: { id: purchaseOrderId },
+      include: { items: true },
+    });
+
+    if (!po) throw new Error('Purchase Order not found');
+
+    for (const item of po.items) {
+      const product = await this.prisma.product.findUnique({
+        where: { id: item.productId },
+      });
+
+      if (!product) continue;
+
+      // 1. 取得當前庫存快照 (已由 InventoryService 增加數量)
+      // 這裡簡化計算，假設所有倉庫總庫存
+      const inventorySnapshots = await this.prisma.inventorySnapshot.findMany({
+        where: { productId: item.productId },
+      });
+      const totalQtyOnHand = inventorySnapshots.reduce((sum, snap) => sum + Number(snap.qtyOnHand), 0);
+      
+      // 2. 回推舊庫存數量
+      const newQty = Number(item.qty);
+      const oldQty = totalQtyOnHand - newQty;
+      
+      // 3. 計算移動平均成本
+      const oldCost = Number(product.movingAverageCost);
+      const newUnitCost = Number(item.unitCostBase); // 使用本位幣成本
+
+      let newMovingAvg = newUnitCost;
+      if (oldQty > 0) {
+        newMovingAvg = ((oldQty * oldCost) + (newQty * newUnitCost)) / totalQtyOnHand;
+      }
+
+      // 4. 更新產品成本資訊
+      await this.prisma.product.update({
+        where: { id: item.productId },
+        data: {
+          latestPurchasePrice: newUnitCost,
+          movingAverageCost: newMovingAvg,
+        },
+      });
+    }
+
+    // 5. 產生會計分錄 (借：存貨 / 貸：應付帳款-暫估)
+    // 注意：這裡僅示範邏輯，實際應呼叫 AccountingService.createJournalEntry
+    // 為了避免循環依賴，這裡暫時略過直接呼叫 AccountingService，
+    // 實務上建議透過 EventEmitter 或將 JournalEntry 邏輯獨立
+    this.logger.log(`Updated cost for PO ${purchaseOrderId}`);
   }
 
   /**

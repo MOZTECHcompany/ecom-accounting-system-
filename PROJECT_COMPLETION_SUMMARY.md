@@ -425,6 +425,22 @@
 - 支援 OEM 代工模式的複雜成本結構
 - 單品級別的序號追蹤能力
 
+### ✅ 第 17 部分：組裝與生產管理 (Assembly & Manufacturing)
+**狀態**: 已完成
+
+**1. 組裝模組 (Assembly Module)**
+- ✅ **AssemblyService**: 實作組裝單管理
+  - `create()`: 建立組裝單 (支援 ASSEMBLE/DISASSEMBLE)
+  - `executeOrder()`: 執行組裝，自動扣除子元件庫存並產生成品庫存
+- ✅ **成本自動結轉**:
+  - 組裝完成時，自動計算所有子元件的加權平均成本
+  - 將成本結轉至成品 (Finished Good) 的 `movingAverageCost`
+- ✅ **AssemblyController**: 提供 API 介面
+
+**產出**:
+- 完整的「採購零件 -> 委外組裝 -> 成品入庫」閉環
+- 支援「客供料」模式的庫存管理
+
 ---
 
 ## 📊 整體完成度
