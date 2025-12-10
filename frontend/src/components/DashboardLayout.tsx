@@ -68,7 +68,7 @@ const DashboardLayout: React.FC = () => {
       label: '銷售管理',
       children: [
         { key: '/sales/orders', label: '銷售訂單', onClick: () => navigate('/sales/orders') },
-        { key: '/sales/customers', label: '客戶管理' },
+        { key: '/sales/customers', label: '客戶管理', onClick: () => navigate('/sales/customers') },
       ],
     },
     {

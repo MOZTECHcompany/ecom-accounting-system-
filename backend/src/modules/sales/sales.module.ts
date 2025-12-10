@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { SalesController } from './sales.controller';
+import { CustomerController } from './customer.controller';
 import { SalesService } from './sales.service';
 import { SalesOrderService } from './services/sales-order.service';
+import { CustomerService } from './customer.service';
 import { PrismaModule } from '../../common/prisma/prisma.module';
 import { AccountingModule } from '../accounting/accounting.module'; // 依賴：產生會計分錄
 import { InventoryModule } from '../inventory/inventory.module';
@@ -28,8 +30,8 @@ import { InventoryModule } from '../inventory/inventory.module';
  */
 @Module({
   imports: [PrismaModule, AccountingModule, InventoryModule],
-  controllers: [SalesController],
-  providers: [SalesService, SalesOrderService],
+  controllers: [SalesController, CustomerController],
+  providers: [SalesService, SalesOrderService, CustomerService],
   exports: [SalesService, SalesOrderService],
 })
 export class SalesModule {}
