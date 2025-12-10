@@ -26,6 +26,9 @@ import SystemSettingsPage from './pages/SystemSettingsPage'
 import EmployeeDashboardPage from './pages/attendance/EmployeeDashboardPage'
 import LeaveRequestPage from './pages/attendance/LeaveRequestPage'
 import AttendanceAdminPage from './pages/attendance/AttendanceAdminPage'
+import ProductsPage from './pages/ProductsPage'
+import PurchaseOrdersPage from './pages/PurchaseOrdersPage'
+import AssemblyPage from './pages/AssemblyPage'
 
 const App: React.FC = () => {
   return (
@@ -62,6 +65,11 @@ const App: React.FC = () => {
                 <Route path="attendance/dashboard" element={<EmployeeDashboardPage />} />
                 <Route path="attendance/leaves" element={<LeaveRequestPage />} />
                 <Route path="attendance/admin" element={<AttendanceAdminPage />} />
+
+                {/* Supply Chain Routes */}
+                <Route path="inventory/products" element={<ProductsPage />} />
+                <Route path="purchasing/orders" element={<PurchaseOrdersPage />} />
+                <Route path="manufacturing/assembly" element={<AssemblyPage />} />
 
                 {/* Placeholder Routes */}
                 <Route path="customers" element={<div className="p-4">Customers Page (Coming Soon)</div>} />

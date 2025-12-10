@@ -15,7 +15,10 @@ import {
   MenuOutlined,
   LeftOutlined,
   RightOutlined,
-  ClockCircleOutlined
+  ClockCircleOutlined,
+  BoxPlotOutlined,
+  ShopOutlined,
+  ToolOutlined
 } from '@ant-design/icons'
 import { AnimatePresence, motion } from 'framer-motion'
 import { GlassDrawer } from './ui/GlassDrawer'
@@ -66,6 +69,31 @@ const DashboardLayout: React.FC = () => {
       children: [
         { key: '/sales/orders', label: '銷售訂單', onClick: () => navigate('/sales/orders') },
         { key: '/sales/customers', label: '客戶管理' },
+      ],
+    },
+    {
+      key: 'inventory',
+      icon: <BoxPlotOutlined />,
+      label: '庫存管理',
+      children: [
+        { key: '/inventory/products', label: '產品與庫存', onClick: () => navigate('/inventory/products') },
+      ],
+    },
+    {
+      key: 'purchasing',
+      icon: <ShopOutlined />,
+      label: '採購管理',
+      children: [
+        { key: '/purchasing/orders', label: '採購訂單', onClick: () => navigate('/purchasing/orders') },
+        { key: '/vendors', label: '供應商管理', onClick: () => navigate('/vendors') },
+      ],
+    },
+    {
+      key: 'manufacturing',
+      icon: <ToolOutlined />,
+      label: '製造管理',
+      children: [
+        { key: '/manufacturing/assembly', label: '組裝工單', onClick: () => navigate('/manufacturing/assembly') },
       ],
     },
     {
