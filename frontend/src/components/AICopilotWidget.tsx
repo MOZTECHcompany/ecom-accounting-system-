@@ -8,7 +8,8 @@ import {
   BarChartOutlined,
   SearchOutlined,
   AudioOutlined,
-  PictureOutlined
+  PictureOutlined,
+  DollarOutlined
 } from '@ant-design/icons'
 import { motion, AnimatePresence } from 'framer-motion'
 import { aiService } from '../services/ai.service'
@@ -39,9 +40,9 @@ interface Message {
 }
 
 const SUGGESTED_PROMPTS = [
+  { icon: <DollarOutlined />, text: "查詢 Power Bank 成本" },
   { icon: <BarChartOutlined />, text: "分析本月銷售趨勢" },
   { icon: <SearchOutlined />, text: "查詢未付款訂單" },
-  { icon: <BulbOutlined />, text: "如何提升客單價？" },
 ]
 
 const AICopilotWidget: React.FC = () => {
@@ -52,7 +53,7 @@ const AICopilotWidget: React.FC = () => {
     {
       id: 'welcome',
       type: 'ai',
-      content: "你好！我是 Gemini 財務助手。我可以協助你分析數據、查詢訂單或解答系統問題。",
+      content: "你好！我是 Gemini 3.0 財務助手。我可以協助你查詢產品成本、分析銷售數據或解答系統問題。",
       timestamp: new Date()
     }
   ])
@@ -167,7 +168,7 @@ const AICopilotWidget: React.FC = () => {
                       Gemini
                     </div>
                     <div className="text-[10px] text-gray-400 font-medium tracking-wide">
-                      ADVANCED MODEL
+                      GEMINI 3.0 PRO
                     </div>
                   </div>
                 </div>
