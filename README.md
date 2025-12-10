@@ -39,6 +39,19 @@
 
 ## 🆕 最近更新
 
+- **2025-12-10 — 前端整合與實作 (Frontend Integration & Implementation)**：
+  - **核心模組實作 (Core Modules Implementation)**：
+    - **Inventory (庫存)**：`ProductsPage` 已連接後端 API，顯示即時庫存數據。
+    - **Purchasing (採購)**：`PurchaseOrdersPage` 已連接後端 API，支援採購單管理。
+    - **Manufacturing (製造)**：`AssemblyPage` 已連接後端 API，支援組裝單與 BOM 管理。
+    - **Sales (銷售)**：`SalesPage` 已連接後端 API，取代 Mock Data，支援訂單列表與看板模式。
+    - **Customers (客戶)**：全新實作 `CustomersPage` 與 `CustomerService`，支援完整 CRUD 操作。
+  - **報表中心 (Reports Center)**：
+    - **Financial Statements**：`ReportsPage` 已連接會計模組，即時產生損益表 (Income Statement) 與資產負債表 (Balance Sheet)。
+    - **Expense Analysis**：基於損益表數據自動生成費用分析圖表。
+  - **AI 安全性 (AI Security)**：
+    - 強化 AI 工具權限控制，敏感財務數據 (銀行餘額、薪資、成本) 僅限 `SUPER_ADMIN` 存取。
+
 - **2025-12-10 — 供應鏈與成本管理升級 (Supply Chain & Costing)**：
   - **產品建構 (Product Construction)**：
     - 支援 **BOM (物料清單)**：定義組合商品 (Bundle) 與製成品 (Manufactured) 的結構。
