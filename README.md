@@ -39,6 +39,11 @@
 
 ## 🆕 最近更新
 
+- **2025-12-10 — 產品變體支援 (Product Variants Support)**：
+  - **資料庫架構**：新增 `parentId` 與 `attributes` 欄位，支援主產品與變體 (如顏色、尺寸) 的階層關係。
+  - **前端介面**：`ProductsPage` 新增變體建立功能，支援動態屬性 (Dynamic Attributes) 輸入。
+  - **API 整合**：更新 Product Service 與 DTO 以支援變體資料的寫入與讀取。
+
 - **2025-12-10 — 前端整合與實作 (Frontend Integration & Implementation)**：
   - **核心模組實作 (Core Modules Implementation)**：
     - **Inventory (庫存)**：`ProductsPage` 已連接後端 API，顯示即時庫存數據。

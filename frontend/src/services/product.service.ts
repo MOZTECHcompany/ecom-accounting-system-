@@ -13,6 +13,8 @@ export interface Product {
   movingAverageCost: number
   latestPurchasePrice: number
   inventorySnapshots?: any[]
+  parentId?: string
+  attributes?: any
 }
 
 export interface CreateProductDto {
@@ -23,6 +25,8 @@ export interface CreateProductDto {
   unit: string
   minStockLevel?: number
   safetyStockLevel?: number
+  parentId?: string
+  attributes?: any
 }
 
 export const productService = {

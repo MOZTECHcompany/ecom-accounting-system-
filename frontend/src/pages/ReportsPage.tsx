@@ -51,6 +51,17 @@ const { TabPane } = Tabs
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d']
 
+interface ReportRow {
+  key: string
+  category: string
+  amount: number | null
+  percentage?: string
+  type?: string
+  isHeader?: boolean
+  isTotal?: boolean
+  isNet?: boolean
+}
+
 const ReportsPage: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([dayjs().startOf('year'), dayjs()])
@@ -85,11 +96,11 @@ const ReportsPage: React.FC = () => {
   }
 
   // Transform Income Statement Data
-  const getPLData = () => {
+  const getPLData = (): ReportRow[] => {
     if (!incomeStatement) return []
     const totalRev = incomeStatement.totalRevenue || 1 // Avoid division by zero
     
-    const revenues = incomeStatement.revenues.map(r => ({
+    const revenues: ReportRow[] = incomeStatement.revenues.map(r => ({
       key: r.code,
       category: r.name,
       amount: r.amount,
@@ -97,7 +108,7 @@ const ReportsPage: React.FC = () => {
       type: 'revenue'
     }))
 
-    const expenses = incomeStatement.expenses.map(e => ({
+    const expenses: ReportRow[] = incomeStatement.expenses.map(e => ({
       key: e.code,
       category: e.name,
       amount: e.amount, // Keep positive for display, but logic knows it's expense
@@ -117,7 +128,7 @@ const ReportsPage: React.FC = () => {
   }
 
   // Transform Balance Sheet Data
-  const getBSData = () => {
+  const getBSData = (): ReportRow[] => {
     if (!balanceSheet) return []
     
     const assets = balanceSheet.assets.map(a => ({ ...a, type: 'asset' }))

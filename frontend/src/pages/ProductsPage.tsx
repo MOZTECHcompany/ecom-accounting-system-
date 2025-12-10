@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Card, Typography, Table, Button, Tag, Space, Modal, Form, Input, Select, InputNumber, message } from 'antd'
-import { PlusOutlined, BarcodeOutlined, ReloadOutlined } from '@ant-design/icons'
+import { PlusOutlined, BarcodeOutlined, ReloadOutlined, MinusCircleOutlined } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import { productService, Product } from '../services/product.service'
 
@@ -31,7 +31,13 @@ const ProductsPage: React.FC = () => {
 
   const handleCreate = async (values: any) => {
     try {
-      await productService.create(values)
+      const { attributesList, ...rest } = values
+      const attributes = attributesList?.reduce((acc: any, curr: any) => {
+        if (curr.key) acc[curr.key] = curr.value
+        return acc
+      }, {})
+
+      await productService.create({ ...rest, attributes })
       message.success('產品建立成功')
       setIsModalVisible(false)
       form.resetFields()
@@ -121,6 +127,46 @@ const ProductsPage: React.FC = () => {
           <Form.Item name="minStockLevel" label="最低庫存水位">
             <InputNumber className="w-full" min={0} />
           </Form.Item>
+
+          <Form.Item name="parentId" label="主產品 (若為變體)">
+            <Select allowClear showSearch optionFilterProp="children">
+              {products.map(p => (
+                <Option key={p.id} value={p.id}>{p.name} ({p.sku})</Option>
+              ))}
+            </Select>
+          </Form.Item>
+          
+          <Typography.Text strong>變體屬性 (例如: Color: Red)</Typography.Text>
+          <Form.List name="attributesList">
+            {(fields, { add, remove }) => (
+              <>
+                {fields.map(({ key, name, ...restField }) => (
+                  <Space key={key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
+                    <Form.Item
+                      {...restField}
+                      name={[name, 'key']}
+                      rules={[{ required: true, message: 'Missing key' }]}
+                    >
+                      <Input placeholder="屬性 (如: Color)" />
+                    </Form.Item>
+                    <Form.Item
+                      {...restField}
+                      name={[name, 'value']}
+                      rules={[{ required: true, message: 'Missing value' }]}
+                    >
+                      <Input placeholder="值 (如: Red)" />
+                    </Form.Item>
+                    <MinusCircleOutlined onClick={() => remove(name)} />
+                  </Space>
+                ))}
+                <Form.Item>
+                  <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+                    新增屬性
+                  </Button>
+                </Form.Item>
+              </>
+            )}
+          </Form.List>
         </Form>
       </Modal>
     </motion.div>

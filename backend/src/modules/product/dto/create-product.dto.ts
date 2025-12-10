@@ -35,6 +35,13 @@ export class CreateProductDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @IsString()
+  @IsOptional()
+  parentId?: string;
+
+  @IsOptional()
+  attributes?: any;
 }
 
 export class UpdateProductDto {
@@ -67,4 +74,11 @@ export class UpdateProductDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @IsString()
+  @IsOptional()
+  parentId?: string;
+
+  @IsOptional()
+  attributes?: any;
 }

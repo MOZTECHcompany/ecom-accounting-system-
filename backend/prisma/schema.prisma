@@ -413,10 +413,18 @@ model Product {
   movingAverageCost  Decimal                @default(0) @map("moving_average_cost") @db.Decimal(18, 4)
   latestPurchasePrice Decimal               @default(0) @map("latest_purchase_price") @db.Decimal(18, 4)
 
+  // Variant Support
+  parentId           String?                @map("parent_id")
+  attributes         Json?                  @map("attributes") // e.g. { "Color": "Red", "Size": "L" }
+  
+  parent             Product?               @relation("ProductVariants", fields: [parentId], references: [id])
+  variants           Product[]              @relation("ProductVariants")
+
   serialNumbers      InventorySerialNumber[]
 
   @@unique([entityId, sku])
   @@index([entityId])
+  @@index([parentId])
   @@map("products")
 }
 
