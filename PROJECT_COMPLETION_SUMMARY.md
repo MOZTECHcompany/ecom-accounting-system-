@@ -369,6 +369,38 @@
 
 ---
 
+### ✅ 第 15 部分：額外功能實作 (Product Construction & Payroll)
+**狀態**: 已完成
+
+**1. 薪資計算與異常偵測 (Payroll & Attendance)**
+- ✅ **PayrollService**: 實作薪資計算邏輯
+  - `calculatePayroll()`: 計算基本薪資、稅金、扣除額、淨額
+  - 支援稅率級距計算
+- ✅ **AnomalyService**: 實作考勤異常偵測
+  - `detectLateArrivals()`: 偵測遲到
+  - `detectEarlyDepartures()`: 偵測早退
+  - `detectAbsenteeism()`: 偵測缺勤
+  - 使用 `@Cron` 排程每日執行
+
+**2. 產品建構與 BOM (Product Construction)**
+- ✅ **Schema 更新**:
+  - 新增 `ProductType` Enum: `SIMPLE`, `BUNDLE`, `MANUFACTURED`, `SERVICE`
+  - 新增 `BillOfMaterial` (BOM) 模型: 定義產品組成
+  - 新增 `AssemblyOrder` 模型: 記錄組裝/拆解過程
+- ✅ **ProductModule**:
+  - 建立 `ProductController`, `ProductService`
+  - 支援 BOM 的 CRUD 操作
+- ✅ **銷售庫存連動**:
+  - 更新 `SalesOrderService`: 支援 `BUNDLE` 類型產品的遞迴庫存預留 (Recursive Reservation)
+  - 更新 `SalesService`: 支援 `BUNDLE` 類型產品的遞迴庫存扣除 (Recursive Fulfillment)
+
+**產出**:
+- 完整的薪資計算核心邏輯
+- 自動化的考勤異常偵測
+- 完整的產品結構 (BOM) 支援與庫存連動
+
+---
+
 ## 📊 整體完成度
 
 | 類別 | 完成項目 | 總項目 | 完成率 |

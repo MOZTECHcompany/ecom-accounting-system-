@@ -3,6 +3,8 @@ import { PrismaService } from '../../../common/prisma/prisma.service';
 import { JournalService } from '../../accounting/services/journal.service';
 import { Decimal } from '@prisma/client/runtime/library';
 import { InventoryService } from '../../inventory/inventory.service';
+import { ProductType } from '@prisma/client';
+import { ProductType } from '@prisma/client';
 
 /**
  * SalesOrderService
@@ -125,15 +127,14 @@ export class SalesOrderService {
 
     // 若有提供 warehouseId，建立訂單後預留庫存
     if (data.warehouseId) {
-      for (const item of data.items) {
-        await this.inventoryService.reserveStock({
-          entityId: data.entityId,
-          warehouseId: data.warehouseId,
-          productId: item.productId,
-          quantity: item.qty,
-          referenceType: 'SALES_ORDER',
-          referenceId: order.id,
-        });
+      for (const item of order.items) {
+        await this.reserveInventoryForItem(
+          data.entityId,
+          data.warehouseId,
+          order.id,
+          item.product,
+          Number(item.qty),
+        );
       }
       this.logger.log(
         `Reserved inventory for sales order ${order.id} in warehouse ${data.warehouseId}`,
@@ -142,6 +143,54 @@ export class SalesOrderService {
 
     return order;
   }
+
+  /**
+   * 遞迴預留庫存 (支援 Bundle 展開)
+   */
+  private async reserveInventoryForItem(
+    entityId: string,
+    warehouseId: string,
+    orderId: string,
+    product: any,
+    qty: number,
+  ) {
+    if (product.type === ProductType.BUNDLE) {
+      // 展開 BOM
+      const bom = await this.prisma.billOfMaterial.findMany({
+        where: { parentId: product.id },
+        include: { child: true },
+      });
+
+      if (bom.length === 0) {
+        this.logger.warn(`Bundle product ${product.sku} has no BOM components defined.`);
+        return;
+      }
+
+      for (const component of bom) {
+        const requiredQty = Number(component.quantity) * qty;
+        await this.reserveInventoryForItem(
+          entityId,
+          warehouseId,
+          orderId,
+          component.child,
+          requiredQty,
+        );
+      }
+    } else {
+      if (product.type === ProductType.SERVICE) return;
+
+      await this.inventoryService.reserveStock({
+        entityId,
+        warehouseId,
+        productId: product.id,
+        quantity: qty,
+        referenceType: 'SALES_ORDER',
+        referenceId: orderId,
+      });
+    }
+  }
+
+
 
   /**
    * 完成訂單並產生收入分錄

@@ -362,17 +362,31 @@ model Vendor {
   @@map("vendors")
 }
 
+// 商品類型
+enum ProductType {
+  SIMPLE        // 一般商品
+  BUNDLE        // 組合商品 (虛擬，扣子件庫存)
+  MANUFACTURED  // 製成品 (需組裝，有 BOM)
+  SERVICE       // 服務 (無庫存)
+}
+
 // 商品
 model Product {
-  id          String   @id @default(uuid())
-  entityId    String   @map("entity_id")
+  id          String      @id @default(uuid())
+  entityId    String      @map("entity_id")
   sku         String
   name        String
+  type        ProductType @default(SIMPLE)
   category    String?
   description String?
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  // 價格與成本
+  salesPrice  Decimal     @default(0) @map("sales_price") @db.Decimal(18, 2)
+  purchaseCost Decimal    @default(0) @map("purchase_cost") @db.Decimal(18, 2)
+
+  isActive    Boolean     @default(true) @map("is_active")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
 
   entity             Entity                 @relation(fields: [entityId], references: [id], onDelete: Cascade)
   salesOrderItems    SalesOrderItem[]
@@ -382,10 +396,66 @@ model Product {
   invoiceLines       InvoiceLine[]
   inventorySnapshots InventorySnapshot[]
   inventoryMovements InventoryTransaction[]
+  
+  // BOM Relations
+  bomParent          BillOfMaterial[]       @relation("BomParent")
+  bomChildren        BillOfMaterial[]       @relation("BomChild")
+  
+  // Assembly Relations
+  assemblyOrders     AssemblyOrder[]        @relation("AssemblyProduct")
 
   @@unique([entityId, sku])
   @@index([entityId])
   @@map("products")
+}
+
+// 物料清單 (BOM)
+model BillOfMaterial {
+  id          String   @id @default(uuid())
+  entityId    String   @map("entity_id")
+  parentId    String   @map("parent_id") // 父商品 (Bundle or Manufactured)
+  childId     String   @map("child_id")  // 子商品 (Component)
+  quantity    Decimal  @db.Decimal(18, 4) // 每個父商品需要多少子商品
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  entity      Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  parent      Product  @relation("BomParent", fields: [parentId], references: [id], onDelete: Cascade)
+  child       Product  @relation("BomChild", fields: [childId], references: [id])
+
+  @@unique([parentId, childId])
+  @@index([parentId])
+  @@map("bill_of_materials")
+}
+
+// 組裝/拆解單
+model AssemblyOrder {
+  id          String   @id @default(uuid())
+  entityId    String   @map("entity_id")
+  orderNo     String   @unique @map("order_no")
+  productId   String   @map("product_id") // 要生產/拆解的商品
+  warehouseId String   @map("warehouse_id")
+  quantity    Decimal  @db.Decimal(18, 2)
+  type        String   @default("ASSEMBLE") // ASSEMBLE (組裝), DISASSEMBLE (拆解)
+  status      String   @default("DRAFT")    // DRAFT, CONFIRMED, COMPLETED, CANCELLED
+  
+  // 成本相關
+  totalCostBase Decimal @default(0) @map("total_cost_base") @db.Decimal(18, 2)
+  
+  notes       String?
+  occurredAt  DateTime @default(now()) @map("occurred_at")
+  createdBy   String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  entity      Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  product     Product  @relation("AssemblyProduct", fields: [productId], references: [id])
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  creator     User     @relation(fields: [createdBy], references: [id])
+
+  @@index([entityId, status])
+  @@map("assembly_orders")
 }
 
 // 倉庫（多倉管理：公司倉、3PL、平台倉等）

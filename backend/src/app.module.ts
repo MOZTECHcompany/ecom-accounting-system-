@@ -30,6 +30,7 @@ import { InvoicingModule } from './modules/invoicing/invoicing.module';
 import { ReconciliationModule } from './modules/reconciliation/reconciliation.module';
 import { VendorModule } from './modules/vendor/vendor.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
+import { ProductModule } from './modules/product/product.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { AiModule } from './modules/ai/ai.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
@@ -74,6 +75,7 @@ import { ShopifyIntegrationModule } from './modules/integration/shopify/shopify.
     EntitiesModule,
     VendorModule,
     InventoryModule,
+    ProductModule,
 
     // 2. 核心會計模組（被其他模組依賴）
     AccountingModule,

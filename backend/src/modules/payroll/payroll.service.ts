@@ -50,8 +50,77 @@ export class PayrollService {
     periodEnd: Date;
     payDate: Date;
   }) {
-    // TODO: 建立薪資批次
-    // TODO: 自動計算所有員工薪資
+    const { entityId, periodStart, periodEnd, payDate } = data;
+
+    // 1. Get Entity to know the country
+    const entity = await this.prisma.entity.findUnique({
+      where: { id: entityId },
+    });
+    if (!entity) throw new Error('Entity not found');
+
+    // 2. Create Payroll Run Header
+    const payrollRun = await this.prisma.payrollRun.create({
+      data: {
+        entityId,
+        country: entity.country,
+        periodStart,
+        periodEnd,
+        payDate,
+        status: 'draft',
+        createdBy: 'SYSTEM', // Should be current user ID in real scenario
+      },
+    });
+
+    // 3. Get Active Employees
+    const employees = await this.prisma.employee.findMany({
+      where: {
+        entityId,
+        isActive: true,
+        hireDate: { lte: periodEnd },
+        OR: [
+          { terminateDate: null },
+          { terminateDate: { gte: periodStart } },
+        ],
+      },
+    });
+
+    this.logger.log(`Found ${employees.length} employees for payroll run`);
+
+    // 4. Calculate and Create Items for each employee
+    for (const employee of employees) {
+      try {
+        const calculation = await this.calculateEmployeePayroll(
+          employee.id,
+          periodStart,
+          periodEnd,
+        );
+
+        // Save items
+        if (calculation.items && calculation.items.length > 0) {
+          await this.prisma.payrollItem.createMany({
+            data: calculation.items.map((item) => ({
+              payrollRunId: payrollRun.id,
+              employeeId: employee.id,
+              type: item.type,
+              amountOriginal: item.amount,
+              amountCurrency: entity.baseCurrency,
+              amountFxRate: 1, // Assuming base currency for now
+              amountBase: item.amount,
+              currency: entity.baseCurrency,
+            })),
+          });
+        }
+      } catch (error) {
+        this.logger.error(
+          `Failed to calculate payroll for employee ${employee.id}: ${error.message}`,
+        );
+      }
+    }
+
+    return this.prisma.payrollRun.findUnique({
+      where: { id: payrollRun.id },
+      include: { items: true },
+    });
   }
 
   /**
@@ -64,6 +133,11 @@ export class PayrollService {
   ) {
     this.logger.log(`Calculating payroll for employee ${employeeId}`);
 
+    const employee = await this.prisma.employee.findUnique({
+      where: { id: employeeId },
+    });
+    if (!employee) throw new Error('Employee not found');
+
     // 1. Get Attendance Data
     const attendanceData = await this.attendanceIntegration.getPayrollData(
       employeeId,
@@ -73,17 +147,61 @@ export class PayrollService {
 
     this.logger.log(`Attendance data: ${JSON.stringify(attendanceData)}`);
 
-    // TODO: 計算基本薪資 (Base Salary / Working Days * Days Worked)
-    // TODO: 計算加班費 (Overtime Hours * Rate)
-    // TODO: 計算獎金
-    // TODO: 扣除勞健保、稅金
+    const items: { type: string; amount: number }[] = [];
+    const baseSalary = Number(employee.salaryBaseOriginal);
+    
+    // Standard working hours per month (30 days * 8 hours)
+    const STANDARD_MONTHLY_HOURS = 240;
+    const hourlyRate = baseSalary / STANDARD_MONTHLY_HOURS;
+
+    // 2. Base Salary (Full month for now, TODO: pro-rate for new hires/terminations)
+    items.push({
+      type: 'BASE_SALARY',
+      amount: baseSalary,
+    });
+
+    // 3. Overtime Pay
+    if (attendanceData.overtimeHours > 0) {
+      // Simplified: 1.33x for all overtime
+      const overtimePay = attendanceData.overtimeHours * hourlyRate * 1.33;
+      items.push({
+        type: 'OVERTIME',
+        amount: Math.round(overtimePay),
+      });
+    }
+
+    // 4. Deductions (Insurance & Tax)
+    // Simplified logic based on country
+    if (employee.country === 'TW') {
+      // Labor Insurance (Employee Share) - Approx 2.2%
+      const laborIns = Math.round(baseSalary * 0.022);
+      items.push({ type: 'INS_EMP_LABOR', amount: -laborIns });
+
+      // Health Insurance (Employee Share) - Approx 1.5%
+      const healthIns = Math.round(baseSalary * 0.015);
+      items.push({ type: 'INS_EMP_HEALTH', amount: -healthIns });
+    } else if (employee.country === 'CN') {
+      // Social Insurance (Employee Share) - Approx 10.5% total
+      const socialIns = Math.round(baseSalary * 0.105);
+      items.push({ type: 'INS_EMP_SOCIAL', amount: -socialIns });
+    }
+
+    // Calculate Totals
+    const grossPay = items
+      .filter((i) => i.amount > 0)
+      .reduce((sum, i) => sum + i.amount, 0);
+    const deductions = items
+      .filter((i) => i.amount < 0)
+      .reduce((sum, i) => sum + i.amount, 0);
+    const netPay = grossPay + deductions;
 
     return {
       employeeId,
       period: { start: periodStart, end: periodEnd },
       attendance: attendanceData,
-      grossPay: 0, // Placeholder
-      netPay: 0,   // Placeholder
+      items,
+      grossPay,
+      netPay,
     };
   }
 
@@ -91,7 +209,14 @@ export class PayrollService {
    * 計算社保（大陸）
    */
   async calculateSocialInsurance(salary: number, city: string) {
-    // TODO: 依城市的社保費率計算
+    // Simplified calculation
+    const rates = {
+      'shanghai': 0.105,
+      'beijing': 0.102,
+      'shenzhen': 0.100,
+    };
+    const rate = rates[city.toLowerCase()] || 0.105; // Default to Shanghai rate
+    return Math.round(salary * rate);
   }
 
   /**

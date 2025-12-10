@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { InventoryService } from '../inventory/inventory.service';
+import { ProductType } from '@prisma/client';
 
 /**
  * SalesService
@@ -66,7 +67,11 @@ export class SalesService {
 
     const order = await this.prisma.salesOrder.findUnique({
       where: { id: salesOrderId },
-      include: { items: true },
+      include: { 
+        items: {
+          include: { product: true }
+        } 
+      },
     });
 
     if (!order || order.entityId !== entityId) {
@@ -74,31 +79,74 @@ export class SalesService {
     }
 
     for (const item of order.items) {
-      const qty = item.qty;
+      await this.fulfillInventoryForItem(
+        entityId,
+        warehouseId,
+        salesOrderId,
+        item.product,
+        Number(item.qty)
+      );
+    }
+
+    return { success: true };
+  }
+
+  /**
+   * 遞迴扣減庫存 (支援 Bundle 展開)
+   */
+  private async fulfillInventoryForItem(
+    entityId: string,
+    warehouseId: string,
+    orderId: string,
+    product: any,
+    qty: number,
+  ) {
+    if (product.type === ProductType.BUNDLE) {
+      // 展開 BOM
+      const bom = await this.prisma.billOfMaterial.findMany({
+        where: { parentId: product.id },
+        include: { child: true },
+      });
+
+      if (bom.length === 0) {
+        this.logger.warn(`Bundle product ${product.sku} has no BOM components defined.`);
+        return;
+      }
+
+      for (const component of bom) {
+        const requiredQty = Number(component.quantity) * qty;
+        await this.fulfillInventoryForItem(
+          entityId,
+          warehouseId,
+          orderId,
+          component.child,
+          requiredQty,
+        );
+      }
+    } else {
+      if (product.type === ProductType.SERVICE) return;
 
       // 1) 釋放預留庫存
       await this.inventoryService.releaseReservedStock({
         entityId,
         warehouseId,
-        productId: item.productId,
+        productId: product.id,
         quantity: qty,
         referenceType: 'SALES_ORDER',
-        referenceId: salesOrderId,
+        referenceId: orderId,
       });
 
       // 2) 實際出庫
       await this.inventoryService.adjustStock({
         entityId,
         warehouseId,
-        productId: item.productId,
+        productId: product.id,
         quantity: qty,
         direction: 'OUT',
         referenceType: 'SALES_ORDER',
-        referenceId: salesOrderId,
+        referenceId: orderId,
         reason: 'Sales order shipment',
       });
     }
-
-    return { success: true };
   }
 }

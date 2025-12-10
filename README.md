@@ -39,6 +39,22 @@
 
 ## 🆕 最近更新
 
+- **2025-12-10 — 薪資計算核心與出勤異常偵測 (Payroll & Anomaly Detection)**：
+  - **薪資計算核心 (Payroll Calculation)**：
+    - **自動批次處理**：實作 `createPayrollRun`，可一次性為所有在職員工建立薪資單。
+    - **薪資結構自動化**：
+      - **基本薪資**：依據員工設定的 `salaryBaseOriginal` 自動帶入。
+      - **加班費**：自動讀取考勤數據，依據 `1.33` 倍率計算加班費。
+      - **勞健保/社保**：針對台灣 (TW) 與中國 (CN) 實作基礎扣除額邏輯（勞保、健保、社保）。
+    - **結果產出**：自動生成 `PayrollItem` 明細，包含應發與應扣項目，完成從「打卡」到「發薪」的閉環。
+  - **出勤異常偵測 (Attendance Anomaly Detection)**：
+    - **每日自動排程**：實作 Midnight Cron Job，每日自動檢查前一日出勤狀況。
+    - **異常類型偵測**：
+      - **忘記打卡 (Missing Clock Out)**：偵測有上班卡但無下班卡的紀錄。
+      - **遲到 (Late Arrival)**：比對排班表，超過 5 分鐘寬限期即標記為遲到。
+      - **早退 (Early Departure)**：比對排班表，早於下班時間打卡即標記為早退。
+    - **自動通知**：發現異常時，系統自動透過 `NotificationService` 發送通知給員工。
+
 - **2025-12-10 — 應付帳款中心 (AP Hub) 整合與優化**：
   - **介面整合**：將「費用報銷 (Expense Payment)」與「應付帳款 (Accounts Payable)」合併為單一入口 `AccountsPayablePage`，消除功能重疊與混淆。
   - **功能增強**：
