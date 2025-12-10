@@ -51,9 +51,23 @@ Instructions:
       return { reply: '抱歉，我暫時無法理解您的需求。' };
     }
 
-    // 2. Execute Tool
+    // 2. Permission Check & Execute Tool
     let toolResult = null;
     let toolData = null;
+
+    // Check permissions for sensitive tools
+    if (intent.tool === 'get_product_cost') {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        include: { roles: { include: { role: true } } },
+      });
+      
+      const isSuperAdmin = user?.roles.some(r => r.role.code === 'SUPER_ADMIN');
+      
+      if (!isSuperAdmin) {
+        return { reply: '抱歉，您沒有權限查詢產品成本資訊。此功能僅限超級管理員 (SUPER_ADMIN) 使用。' };
+      }
+    }
 
     if (intent.tool === 'get_sales_stats') {
       toolData = await this.getSalesStats(entityId, intent.params.startDate, intent.params.endDate);
