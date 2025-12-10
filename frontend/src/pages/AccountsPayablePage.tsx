@@ -304,7 +304,10 @@ const AccountsPayablePage: React.FC = () => {
           <Text className="text-gray-500">集中管理所有待付款項，包含員工報銷與廠商發票</Text>
         </div>
         <div className="flex gap-2">
-          <GlassButton onClick={loadData} icon={<ClockCircleOutlined />}>重新整理</GlassButton>
+          <GlassButton onClick={loadData}>
+            <ClockCircleOutlined className="mr-2" />
+            重新整理
+          </GlassButton>
         </div>
       </div>
 
