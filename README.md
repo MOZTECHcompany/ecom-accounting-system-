@@ -39,6 +39,20 @@
 
 ## 🆕 最近更新
 
+- **2025-12-10 — 應付帳款中心 (AP Hub) 整合與優化**：
+  - **介面整合**：將「費用報銷 (Expense Payment)」與「應付帳款 (Accounts Payable)」合併為單一入口 `AccountsPayablePage`，消除功能重疊與混淆。
+  - **功能增強**：
+    - 新增分頁切換 (Tabs)：支援「費用報銷」與「採購發票」雙模式。
+    - 新增儀表板統計 (Dashboard Stats)：前端即時計算待付款總額、逾期款項與待處理筆數。
+    - 統一付款體驗：整合員工報銷與廠商付款的彈窗介面。
+  - **系統優化**：
+    - 移除左側選單中冗餘的「應付帳款」按鈕，統一由「費用付款」進入。
+    - 棄用舊版 `ApInvoicesPage` 並實作自動轉址 (Redirect)。
+    - 修復前端建置錯誤與元件屬性問題。
+  - **API 整合 (Frontend Integration)**：
+    - 整合 `GET /ap/invoices` 與 `GET /expenses` (status=approved) 於同一視圖。
+    - 統一調用 `apService.recordPayment` 與 `expenseService.payExpenseRequest` 處理付款邏輯。
+
 - **2025-12-06 — 關稅預付功能與行動裝置體驗優化**：
   - **新功能：關稅預付 (Prepaid Customs)**：
     - 新增 `prepaid_customs` 受款人與 `customsDeclarationNumber` 欄位。
