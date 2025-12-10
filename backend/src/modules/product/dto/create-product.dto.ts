@@ -42,6 +42,14 @@ export class CreateProductDto {
 
   @IsOptional()
   attributes?: any;
+
+  @IsString()
+  @IsNotEmpty()
+  barcode: string;
+
+  @IsString()
+  @IsOptional()
+  sn?: string;
 }
 
 export class UpdateProductDto {

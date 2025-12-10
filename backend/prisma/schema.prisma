@@ -417,6 +417,10 @@ model Product {
   parentId           String?                @map("parent_id")
   attributes         Json?                  @map("attributes") // e.g. { "Color": "Red", "Size": "L" }
   
+  // Barcode & Identification
+  barcode            String?                @map("barcode") // International Barcode (EAN/UPC)
+  sn                 String?                @map("sn")      // SN Code / Model Number
+
   parent             Product?               @relation("ProductVariants", fields: [parentId], references: [id])
   variants           Product[]              @relation("ProductVariants")
 

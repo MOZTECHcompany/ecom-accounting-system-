@@ -15,6 +15,8 @@ export interface Product {
   inventorySnapshots?: any[]
   parentId?: string
   attributes?: any
+  barcode?: string
+  sn?: string
 }
 
 export interface CreateProductDto {
@@ -27,6 +29,8 @@ export interface CreateProductDto {
   safetyStockLevel?: number
   parentId?: string
   attributes?: any
+  barcode: string
+  sn?: string
 }
 
 export const productService = {

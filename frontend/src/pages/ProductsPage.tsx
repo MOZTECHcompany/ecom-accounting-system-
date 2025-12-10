@@ -49,6 +49,7 @@ const ProductsPage: React.FC = () => {
 
   const columns = [
     { title: 'SKU', dataIndex: 'sku', key: 'sku' },
+    { title: '國際條碼', dataIndex: 'barcode', key: 'barcode' },
     { title: '名稱', dataIndex: 'name', key: 'name' },
     { 
       title: '類型', 
@@ -109,6 +110,12 @@ const ProductsPage: React.FC = () => {
         <Form form={form} layout="vertical" onFinish={handleCreate}>
           <Form.Item name="sku" label="SKU" rules={[{ required: true }]}>
             <Input placeholder="例如: PB-001" />
+          </Form.Item>
+          <Form.Item name="barcode" label="國際條碼 (Barcode)" rules={[{ required: true, message: '國際條碼為必填' }]}>
+            <Input placeholder="例如: 4710000000000" prefix={<BarcodeOutlined />} />
+          </Form.Item>
+          <Form.Item name="sn" label="SN 碼 (選填)">
+            <Input placeholder="例如: Model-SN-001" />
           </Form.Item>
           <Form.Item name="name" label="產品名稱" rules={[{ required: true }]}>
             <Input placeholder="例如: Power Bank 10000mAh" />
