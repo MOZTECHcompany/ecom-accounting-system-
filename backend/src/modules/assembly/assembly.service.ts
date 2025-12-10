@@ -106,7 +106,8 @@ export class AssemblyService {
         entityId,
         warehouseId: order.warehouseId,
         productId: component.childId,
-        quantity: -requiredQty, // Negative for deduction
+        quantity: requiredQty, // Positive quantity, direction determines sign
+        direction: 'OUT',
         reason: `Assembly Order: ${order.orderNo}`,
         referenceType: 'ASSEMBLY',
         referenceId: order.id,
@@ -124,6 +125,7 @@ export class AssemblyService {
       warehouseId: order.warehouseId,
       productId: product.id,
       quantity: qty,
+      direction: 'IN',
       reason: `Assembly Order Output: ${order.orderNo}`,
       referenceType: 'ASSEMBLY',
       referenceId: order.id,

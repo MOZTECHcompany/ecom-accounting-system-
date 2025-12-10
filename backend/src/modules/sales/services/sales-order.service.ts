@@ -4,7 +4,6 @@ import { JournalService } from '../../accounting/services/journal.service';
 import { Decimal } from '@prisma/client/runtime/library';
 import { InventoryService } from '../../inventory/inventory.service';
 import { ProductType } from '@prisma/client';
-import { ProductType } from '@prisma/client';
 
 /**
  * SalesOrderService

@@ -100,6 +100,7 @@ export class PurchaseService {
         warehouseId,
         productId: item.productId,
         quantity: Number(item.qty),
+        direction: 'IN',
         reason: `Purchase Order Receive: ${po.id}`,
         referenceType: 'PURCHASE_ORDER',
         referenceId: po.id,
