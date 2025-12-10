@@ -27,15 +27,17 @@ Current Date: ${dayjs().format('YYYY-MM-DD')}
 Available Tools:
 1. get_sales_stats(startDate: string, endDate: string) - Get total sales amount and count.
 2. get_expense_stats(startDate: string, endDate: string, status?: string) - Get total expense amount and count. Status can be 'pending', 'approved', 'rejected', 'paid', 'draft'.
-3. general_chat() - For greetings or questions not related to data.
+3. get_product_cost(productName: string) - Get the floating cost and stock info of a product.
+4. general_chat() - For greetings or questions not related to data.
 
 Instructions:
 1. Determine the user's intent.
 2. If they ask for data (sales, expenses, "last month", "yesterday"), map to a tool.
-3. Calculate start/end dates based on natural language (e.g., "last month" -> 2025-11-01 to 2025-11-30).
-4. If no date is specified, default to the current month (start of month to today).
-5. If the user asks for "pending" or "waiting" expenses, set status to 'pending'.
-6. Return JSON ONLY: { "tool": "TOOL_NAME", "params": { ... }, "reply": "Optional conversational filler" }
+3. If they ask about product cost, price, or stock (e.g., "How much is the power bank cost?", "Stock of iPhone cable"), map to 'get_product_cost'.
+4. Calculate start/end dates based on natural language (e.g., "last month" -> 2025-11-01 to 2025-11-30).
+5. If no date is specified, default to the current month (start of month to today).
+6. If the user asks for "pending" or "waiting" expenses, set status to 'pending'.
+7. Return JSON ONLY: { "tool": "TOOL_NAME", "params": { ... }, "reply": "Optional conversational filler" }
 `;
 
     const aiResponse = await this.aiService.generateContent(prompt, modelId);
@@ -59,6 +61,13 @@ Instructions:
     } else if (intent.tool === 'get_expense_stats') {
       toolData = await this.getExpenseStats(entityId, intent.params.startDate, intent.params.endDate, intent.params.status);
       toolResult = `Expenses: TWD ${toolData.total} (${toolData.count} requests)`;
+    } else if (intent.tool === 'get_product_cost') {
+      toolData = await this.getProductCost(entityId, intent.params.productName);
+      if (!toolData) {
+        toolResult = `Product '${intent.params.productName}' not found.`;
+      } else {
+        toolResult = `Product: ${toolData.name} (${toolData.sku})\nFloating Cost: TWD ${toolData.movingAverageCost}\nLatest Purchase Price: TWD ${toolData.latestPurchasePrice}\nStock: ${toolData.stock} units`;
+      }
     } else {
       // General chat
       return { reply: intent.reply || '您好！我是您的 AI 財務助手。' };
@@ -113,12 +122,40 @@ Keep it professional and concise.
 
     const data = await this.prisma.expenseRequest.aggregate({
       where,
-      _sum: { amountBase: true },
+      _sum: { amountOriginal: true },
       _count: { id: true },
     });
     return {
-      total: data._sum.amountBase || 0,
+      total: data._sum.amountOriginal || 0,
       count: data._count.id || 0,
+    };
+  }
+
+  private async getProductCost(entityId: string, productName: string) {
+    // Fuzzy search for product
+    const product = await this.prisma.product.findFirst({
+      where: {
+        entityId,
+        OR: [
+          { name: { contains: productName, mode: 'insensitive' } },
+          { sku: { contains: productName, mode: 'insensitive' } },
+        ],
+      },
+      include: {
+        inventorySnapshots: true,
+      },
+    });
+
+    if (!product) return null;
+
+    const totalStock = product.inventorySnapshots.reduce((sum, snap) => sum + Number(snap.qtyOnHand), 0);
+
+    return {
+      name: product.name,
+      sku: product.sku,
+      movingAverageCost: Number(product.movingAverageCost),
+      latestPurchasePrice: Number(product.latestPurchasePrice),
+      stock: totalStock,
     };
   }
 }

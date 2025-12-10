@@ -484,6 +484,22 @@
 - ✅ `TESTING_CHECKLIST.md` - 測試檢查清單（新建）
 - ✅ `PROJECT_COMPLETION_SUMMARY.md` - 本文件（新建）
 
+### ✅ 第 18 部分：AI 財務助手升級 (AI Copilot Enhancement)
+**狀態**: 已完成
+
+**1. 產品成本查詢能力**
+- ✅ **AiCopilotService**: 新增 `get_product_cost` 工具
+  - 支援自然語言查詢產品成本與庫存 (例如：「請問行動電源的成本是多少？」)
+  - 自動模糊搜尋產品名稱或 SKU
+  - 回傳即時的 `movingAverageCost` (浮動成本) 與 `latestPurchasePrice` (最新進貨價)
+
+**2. 智能對話整合**
+- ✅ **Prompt Engineering**: 優化 System Prompt，使其能理解供應鏈相關問題
+- ✅ **多工具調度**: AI 可根據問題自動選擇查詢銷售、費用或產品成本
+
+**產出**:
+- 實現「AI 會計師」願景，讓管理者能透過對話隨時掌握產品真實成本與庫存狀況
+
 ---
 
 ## 🎯 技術亮點
