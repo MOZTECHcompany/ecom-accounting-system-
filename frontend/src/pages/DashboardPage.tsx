@@ -28,7 +28,7 @@ dayjs.extend(utc)
 dayjs.extend(timezone)
 dayjs.tz.setDefault(DASHBOARD_TZ)
 
-type RangeMode = 'all' | 'today' | 'last7d' | 'custom'
+type RangeMode = 'all' | 'today' | 'yesterday' | 'last7d' | 'custom'
 type CustomRange = [Dayjs, Dayjs] | null
 type RangeValue = [Dayjs | null, Dayjs | null] | null
 
@@ -36,6 +36,12 @@ function resolveRange(mode: RangeMode, timezone: string, customRange: CustomRang
   if (mode === 'today') {
     const start = dayjs().tz(timezone).startOf('day')
     const end = dayjs().tz(timezone).endOf('day')
+    return { since: start.toISOString(), until: end.toISOString() }
+  }
+
+  if (mode === 'yesterday') {
+    const start = dayjs().tz(timezone).subtract(1, 'day').startOf('day')
+    const end = dayjs().tz(timezone).subtract(1, 'day').endOf('day')
     return { since: start.toISOString(), until: end.toISOString() }
   }
 
@@ -168,10 +174,9 @@ const DashboardPage: React.FC = () => {
             歡迎回來，管理員。這是您今天的財務健康概況。
           </Text>
         </div>
-        <div className="flex flex-col sm:items-end gap-2 w-full sm:w-auto">
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto sm:items-center sm:justify-end">
+        <div className="flex flex-col sm:items-end gap-3 w-full sm:w-auto">
+          <div className="flex flex-wrap justify-end gap-2 items-center">
             <Radio.Group
-              size="small"
               value={rangeMode}
               onChange={(e) => {
                 const nextMode = e.target.value as RangeMode
@@ -180,31 +185,47 @@ const DashboardPage: React.FC = () => {
                   message.info('請選擇自訂日期區間')
                 }
               }}
+              className="shadow-sm"
             >
               <Radio.Button value="today">今天</Radio.Button>
+              <Radio.Button value="yesterday">昨天</Radio.Button>
               <Radio.Button value="last7d">最近 7 天</Radio.Button>
               <Radio.Button value="all">全部期間</Radio.Button>
               <Radio.Button value="custom">自訂</Radio.Button>
             </Radio.Group>
+
             <Button
               type="primary"
-              icon={<SyncOutlined />}
+              icon={<SyncOutlined spin={syncing} />}
               loading={syncing}
               onClick={handleManualSync}
+              className="bg-black hover:bg-gray-800 border-none shadow-sm"
             >
-              即時同步
+              {syncing ? '同步中...' : '即時同步'}
             </Button>
           </div>
-          <RangePicker
-            disabled={rangeMode !== 'custom'}
-            value={customRange}
-            onChange={handleCustomRangeChange}
-            format="YYYY/MM/DD"
-            allowClear
-            className="w-full sm:w-auto"
-            placeholder={['開始日期', '結束日期']}
-          />
-          <Text className="text-gray-400 text-xs hidden sm:block">System Status: Operational</Text>
+
+          {rangeMode === 'custom' && (
+            <motion.div
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="w-full sm:w-auto"
+            >
+              <RangePicker
+                value={customRange}
+                onChange={handleCustomRangeChange}
+                format="YYYY/MM/DD"
+                allowClear
+                className="w-full shadow-sm"
+                placeholder={['開始日期', '結束日期']}
+              />
+            </motion.div>
+          )}
+
+          <div className="flex items-center gap-2 text-xs text-gray-400">
+            <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+            System Status: Operational
+          </div>
         </div>
       </div>
       
