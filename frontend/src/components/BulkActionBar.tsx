@@ -1,28 +1,25 @@
 import React from 'react'
 import { Button, Space, Tooltip, Badge } from 'antd'
-import { 
-  DeleteOutlined, 
-  ExportOutlined, 
-  CheckCircleOutlined, 
-  CloseCircleOutlined,
-  PrinterOutlined
-} from '@ant-design/icons'
 import { motion, AnimatePresence } from 'framer-motion'
+
+export interface BulkAction {
+  label: string
+  onClick: () => void
+  type?: 'primary' | 'default' | 'dashed' | 'link' | 'text'
+  icon?: React.ReactNode
+  danger?: boolean
+}
 
 interface BulkActionBarProps {
   selectedCount: number
   onClear: () => void
-  onExport: () => void
-  onDelete: () => void
-  onComplete: () => void
+  actions: BulkAction[]
 }
 
 const BulkActionBar: React.FC<BulkActionBarProps> = ({ 
   selectedCount, 
   onClear, 
-  onExport, 
-  onDelete,
-  onComplete
+  actions
 }) => {
   return (
     <AnimatePresence>
@@ -44,42 +41,19 @@ const BulkActionBar: React.FC<BulkActionBarProps> = ({
             </div>
             
             <Space size="large">
-              <Tooltip title="批次完成">
-                <Button 
-                  type="text" 
-                  icon={<CheckCircleOutlined className="text-green-400 text-lg" />} 
-                  className="text-white hover:bg-white/10"
-                  onClick={onComplete}
-                />
-              </Tooltip>
-              
-              <Tooltip title="匯出選取項目">
-                <Button 
-                  type="text" 
-                  icon={<ExportOutlined className="text-blue-400 text-lg" />} 
-                  className="text-white hover:bg-white/10"
-                  onClick={onExport}
-                />
-              </Tooltip>
-
-              <Tooltip title="列印">
-                <Button 
-                  type="text" 
-                  icon={<PrinterOutlined className="text-gray-300 text-lg" />} 
-                  className="text-white hover:bg-white/10"
-                />
-              </Tooltip>
-              
-              <div className="w-px h-4 bg-white/20 mx-2" />
-              
-              <Tooltip title="批次刪除">
-                <Button 
-                  type="text" 
-                  icon={<DeleteOutlined className="text-red-400 text-lg" />} 
-                  className="text-white hover:bg-white/10"
-                  onClick={onDelete}
-                />
-              </Tooltip>
+              {actions.map((action, index) => (
+                <Tooltip key={index} title={action.label}>
+                  <Button 
+                    type={action.type === 'primary' ? 'primary' : 'text'}
+                    danger={action.danger}
+                    icon={action.icon}
+                    className={action.type === 'primary' ? '' : "text-white hover:bg-white/10"}
+                    onClick={action.onClick}
+                  >
+                    {action.type === 'primary' ? action.label : null}
+                  </Button>
+                </Tooltip>
+              ))}
             </Space>
           </div>
         </motion.div>
