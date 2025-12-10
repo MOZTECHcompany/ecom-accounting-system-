@@ -188,8 +188,6 @@ const ExpenseRequestsPage: React.FC = () => {
 
   const [form] = Form.useForm()
   const [approvalForm] = Form.useForm()
-  const [paymentModalOpen, setPaymentModalOpen] = useState(false)
-  const [paymentForm] = Form.useForm()
 
   const roleKey = useMemo(() => (user?.roles ?? []).join(','), [user])
   const resolvedRoles = useMemo(() => (roleKey ? roleKey.split(',').filter(Boolean) : []), [roleKey])
@@ -632,33 +630,6 @@ const ExpenseRequestsPage: React.FC = () => {
     ?.split(',')
     .map((x) => x.trim())
     .filter(Boolean)
-
-  const handleOpenPayment = (record: ExpenseRequest) => {
-    setSelectedRequest(record)
-    paymentForm.setFieldsValue({
-      paymentMethod: record.paymentMethod,
-      paymentStatus: record.paymentStatus || 'pending',
-    })
-    setPaymentModalOpen(true)
-  }
-
-  const handlePaymentSubmit = async () => {
-    try {
-      const values = await paymentForm.validateFields()
-      if (!selectedRequest) return
-      
-      setSubmitting(true)
-      await expenseService.updatePaymentInfo(selectedRequest.id, values)
-      message.success('付款資訊已更新')
-      setPaymentModalOpen(false)
-      refreshRequests()
-    } catch (error) {
-      console.error(error)
-      message.error('更新失敗')
-    } finally {
-      setSubmitting(false)
-    }
-  }
 
   const canReview = Boolean(isAdmin && selectedRequest?.status === 'pending')
 

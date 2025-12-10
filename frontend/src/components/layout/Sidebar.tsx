@@ -74,6 +74,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       children: [
         { key: '/ap/expenses', label: '費用申請' },
         { key: '/ap/expense-review', label: '費用審核中心' },
+        { key: '/ap/payable', label: '應付帳款 (AP)' },
       ],
     },
     {
