@@ -35,6 +35,7 @@ import { NotificationModule } from './modules/notification/notification.module';
 import { AiModule } from './modules/ai/ai.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { ShopifyIntegrationModule } from './modules/integration/shopify/shopify.module';
+import { PurchaseModule } from './modules/purchase/purchase.module';
 
 /**
  * AppModule
@@ -100,6 +101,7 @@ import { ShopifyIntegrationModule } from './modules/integration/shopify/shopify.
     NotificationModule,
     AiModule,
     AttendanceModule,
+    PurchaseModule,
   ],
   controllers: [AppController],
   providers: [

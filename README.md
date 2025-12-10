@@ -39,6 +39,18 @@
 
 ## 🆕 最近更新
 
+- **2025-12-10 — 供應鏈與成本管理升級 (Supply Chain & Costing)**：
+  - **產品建構 (Product Construction)**：
+    - 支援 **BOM (物料清單)**：定義組合商品 (Bundle) 與製成品 (Manufactured) 的結構。
+    - 支援 **組裝單 (Assembly Order)**：管理從零件到成品的生產過程。
+    - 支援 **序號追蹤 (Serial Number)**：單品級別的 SN 碼全生命週期管理 (入庫/出貨/退貨)。
+  - **浮動成本計算 (Floating Cost)**：
+    - 實作遞迴成本計算引擎，自動展開 BOM 計算真實成本。
+    - 支援多幣別匯率換算與服務費 (如包裝費) 加總。
+  - **採購模組 (Purchase Module)**：
+    - 新增 `PurchaseModule`，支援採購單建立與收貨流程。
+    - 收貨時自動觸發庫存入庫與成本記錄。
+
 - **2025-12-10 — 薪資計算核心與出勤異常偵測 (Payroll & Anomaly Detection)**：
   - **薪資計算核心 (Payroll Calculation)**：
     - **自動批次處理**：實作 `createPayrollRun`，可一次性為所有在職員工建立薪資單。

@@ -399,6 +399,32 @@
 - 自動化的考勤異常偵測
 - 完整的產品結構 (BOM) 支援與庫存連動
 
+### ✅ 第 16 部分：進階供應鏈與成本管理 (Advanced Supply Chain & Costing)
+**狀態**: 已完成
+
+**1. 採購模組 (Purchase Module)**
+- ✅ **PurchaseService**: 實作採購單管理
+  - `create()`: 建立採購單 (支援多幣別)
+  - `receiveOrder()`: 採購收貨，自動觸發庫存入庫與成本記錄
+- ✅ **PurchaseController**: 提供 API 介面
+- ✅ **DTO**: `CreatePurchaseOrderDto` 支援巢狀商品明細驗證
+
+**2. 浮動成本計算 (Floating Cost)**
+- ✅ **CostService 升級**:
+  - `calculateFloatingCost()`: 遞迴計算產品即時成本
+  - 支援 BOM 展開：自動加總子元件成本 + 服務費 (如包裝費)
+  - 支援多幣別匯率換算
+
+**3. 序號追蹤 (Serial Number Tracking)**
+- ✅ **Schema 更新**:
+  - 新增 `InventorySerialNumber` 模型
+  - 支援產品 SN 碼的全生命週期追蹤 (入庫 -> 在庫 -> 出貨 -> 退貨)
+
+**產出**:
+- 完整的採購 -> 入庫 -> 成本計算流程
+- 支援 OEM 代工模式的複雜成本結構
+- 單品級別的序號追蹤能力
+
 ---
 
 ## 📊 整體完成度
