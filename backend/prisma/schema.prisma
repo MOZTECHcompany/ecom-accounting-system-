@@ -57,6 +57,7 @@ model User {
   uploadedLeaveDocuments LeaveDocument[] @relation("LeaveDocumentUploader")
   leaveRequestHistories LeaveRequestHistory[] @relation("LeaveHistoryActor")
   resolvedAnomalies     AttendanceAnomaly[] @relation("AnomalyResolver")
+  createdAssemblyOrders AssemblyOrder[]
 
   @@map("users")
 }
@@ -190,6 +191,9 @@ model Entity {
   leaveBalances         LeaveBalance[]
   leaveRequests         LeaveRequest[]
   attendanceAnomalies   AttendanceAnomaly[]
+  inventorySerialNumbers InventorySerialNumber[]
+  billOfMaterials       BillOfMaterial[]
+  assemblyOrders        AssemblyOrder[]
 
   @@map("entities")
 }
@@ -507,6 +511,8 @@ model Warehouse {
   entity    Entity                 @relation(fields: [entityId], references: [id], onDelete: Cascade)
   snapshots InventorySnapshot[]
   movements InventoryTransaction[]
+  inventorySerialNumbers InventorySerialNumber[]
+  assemblyOrders AssemblyOrder[]
 
   @@unique([entityId, code])
   @@index([entityId])
