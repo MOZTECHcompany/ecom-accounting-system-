@@ -83,7 +83,6 @@ const DashboardLayout: React.FC = () => {
       label: '應付帳款',
       children: [
         { key: '/vendors', label: '供應商管理', onClick: () => navigate('/vendors') },
-        { key: '/ap/invoices', label: '應付帳款', onClick: () => navigate('/purchasing/invoices') },
         { key: '/ap/payable', label: '費用付款', onClick: () => navigate('/ap/payable') },
         { key: '/ap/expenses', label: '費用申請', onClick: () => navigate('/ap/expenses') },
         { key: '/ap/expense-review', label: '費用審核中心', onClick: () => navigate('/ap/expense-review') },
