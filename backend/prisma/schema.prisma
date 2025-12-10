@@ -404,9 +404,44 @@ model Product {
   // Assembly Relations
   assemblyOrders     AssemblyOrder[]        @relation("AssemblyProduct")
 
+  // Costing & Tracking
+  hasSerialNumbers   Boolean                @default(false) @map("has_serial_numbers")
+  movingAverageCost  Decimal                @default(0) @map("moving_average_cost") @db.Decimal(18, 4)
+  latestPurchasePrice Decimal               @default(0) @map("latest_purchase_price") @db.Decimal(18, 4)
+
+  serialNumbers      InventorySerialNumber[]
+
   @@unique([entityId, sku])
   @@index([entityId])
   @@map("products")
+}
+
+// 庫存序號追蹤 (SN)
+model InventorySerialNumber {
+  id          String   @id @default(uuid())
+  entityId    String   @map("entity_id")
+  productId   String   @map("product_id")
+  warehouseId String?  @map("warehouse_id") // 如果已出貨，可能為 null 或特定「已出貨」倉
+  serialNumber String  @map("serial_number")
+  status      String   @default("AVAILABLE") // AVAILABLE, RESERVED, SOLD, DEFECTIVE, RETURNED
+  
+  // 追蹤資訊
+  inboundRefType  String? @map("inbound_ref_type") // PURCHASE_ORDER, ASSEMBLY
+  inboundRefId    String? @map("inbound_ref_id")
+  outboundRefType String? @map("outbound_ref_type") // SALES_ORDER, ASSEMBLY
+  outboundRefId   String? @map("outbound_ref_id")
+  
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  entity    Entity     @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  product   Product    @relation(fields: [productId], references: [id])
+  warehouse Warehouse? @relation(fields: [warehouseId], references: [id])
+
+  @@unique([entityId, productId, serialNumber])
+  @@index([serialNumber])
+  @@index([status])
+  @@map("inventory_serial_numbers")
 }
 
 // 物料清單 (BOM)
