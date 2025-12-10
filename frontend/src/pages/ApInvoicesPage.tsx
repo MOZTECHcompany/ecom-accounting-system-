@@ -70,6 +70,19 @@ const CSV_FIELD_MAP = {
 }
 
 const ApInvoicesPage: React.FC = () => {
+  // Redirect to new AP page
+  useEffect(() => {
+    window.location.href = '/ap/payable?tab=invoices'
+  }, [])
+
+  return null
+}
+
+export default ApInvoicesPage
+
+/* Deprecated Code Below */
+/*
+const ApInvoicesPage_Deprecated: React.FC = () => {
   const [invoices, setInvoices] = useState<ApInvoice[]>([])
   const [alerts, setAlerts] = useState<ApInvoiceAlerts | null>(null)
   const [loading, setLoading] = useState(false)
@@ -1073,20 +1086,11 @@ const ApInvoicesPage: React.FC = () => {
           >
             <InputNumber className="w-full" min={0} prefix="$" precision={2} />
           </Form.Item>
-          <Form.Item
-            name="paymentDate"
-            label="付款日期"
-            rules={[{ required: true, message: '請選擇付款日期' }]}
-          >
-            <DatePicker className="w-full" />
-          </Form.Item>
-          <Form.Item name="newStatus" label="更新狀態" rules={[{ required: true }]}>
-            <Select options={PAYMENT_STATUS_OPTIONS} />
-          </Form.Item>
         </Form>
       </Modal>
     </motion.div>
   )
 }
 
-export default ApInvoicesPage
+export default ApInvoicesPage_Deprecated
+*/

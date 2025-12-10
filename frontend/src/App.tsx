@@ -47,7 +47,7 @@ const App: React.FC = () => {
                 
                 {/* New Module Routes */}
                 <Route path="sales/invoices" element={<ArInvoicesPage />} />
-                <Route path="purchasing/invoices" element={<ApInvoicesPage />} />
+                {/* <Route path="purchasing/invoices" element={<ApInvoicesPage />} /> */}
                 <Route path="banking" element={<BankingPage />} />
                 <Route path="payroll/runs" element={<PayrollPage />} />
                 <Route path="payroll/employees" element={<EmployeesPage />} />

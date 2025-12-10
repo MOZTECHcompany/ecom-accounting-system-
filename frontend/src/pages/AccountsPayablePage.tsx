@@ -14,7 +14,10 @@ import {
   Tabs,
   DatePicker,
   InputNumber,
-  Tooltip
+  Tooltip,
+  Statistic,
+  Row,
+  Col
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
@@ -24,7 +27,8 @@ import {
   FileTextOutlined,
   ShopOutlined,
   ClockCircleOutlined,
-  ExclamationCircleOutlined
+  ExclamationCircleOutlined,
+  WarningOutlined
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { GlassCard } from '../components/ui/GlassCard'
@@ -34,7 +38,7 @@ import { expenseService, type ExpenseRequest } from '../services/expense.service
 import { apService } from '../services/ap.service'
 import { bankingService } from '../services/banking.service'
 import type { BankAccount, ApInvoice } from '../types'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 
 const { Title, Text } = Typography
 
@@ -42,12 +46,13 @@ const DEFAULT_ENTITY_ID = import.meta.env.VITE_DEFAULT_ENTITY_ID?.trim() || 'tw-
 
 const AccountsPayablePage: React.FC = () => {
   const { user } = useAuth()
+  const [searchParams] = useSearchParams()
   const isAdmin = useMemo(
     () => (user?.roles ?? []).some((role) => role === 'SUPER_ADMIN' || role === 'ADMIN'),
     [user],
   )
 
-  const [activeTab, setActiveTab] = useState('expenses')
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'expenses')
   const [expenseRequests, setExpenseRequests] = useState<ExpenseRequest[]>([])
   const [invoices, setInvoices] = useState<ApInvoice[]>([])
   const [loading, setLoading] = useState(true)
@@ -93,11 +98,30 @@ const AccountsPayablePage: React.FC = () => {
     }
   }, [isAdmin, loadData])
 
+  // Calculate totals
+  const totalExpenseAmount = useMemo(() => 
+    expenseRequests.reduce((sum, req) => sum + Number(req.amountOriginal), 0),
+    [expenseRequests]
+  )
+
+  const totalInvoiceAmount = useMemo(() => 
+    invoices.reduce((sum, inv) => sum + Number(inv.amountOriginal), 0),
+    [invoices]
+  )
+
+  const overdueCount = useMemo(() => {
+    const now = dayjs()
+    const overdueExpenses = expenseRequests.filter(r => r.dueDate && dayjs(r.dueDate).isBefore(now, 'day')).length
+    const overdueInvoices = invoices.filter(i => i.dueDate && dayjs(i.dueDate).isBefore(now, 'day')).length
+    return overdueExpenses + overdueInvoices
+  }, [expenseRequests, invoices])
+
   const handleOpenExpensePayment = (record: ExpenseRequest) => {
     setSelectedExpense(record)
     setSelectedInvoice(null)
     form.resetFields()
     form.setFieldsValue({
+
       amount: record.amountOriginal,
       paymentDate: dayjs()
     })
@@ -311,6 +335,42 @@ const AccountsPayablePage: React.FC = () => {
         </div>
       </div>
 
+      {/* Summary Cards */}
+      <Row gutter={16}>
+        <Col span={8}>
+          <GlassCard className="h-full flex flex-col justify-center">
+            <Statistic 
+              title="待付總額 (Total Payable)" 
+              value={totalExpenseAmount + totalInvoiceAmount} 
+              precision={0}
+              prefix={<DollarOutlined />}
+              suffix="TWD"
+              valueStyle={{ color: '#3f8600' }}
+            />
+          </GlassCard>
+        </Col>
+        <Col span={8}>
+          <GlassCard className="h-full flex flex-col justify-center">
+            <Statistic 
+              title="待處理單據 (Pending Items)" 
+              value={expenseRequests.length + invoices.length} 
+              suffix="筆"
+            />
+          </GlassCard>
+        </Col>
+        <Col span={8}>
+          <GlassCard className="h-full flex flex-col justify-center">
+            <Statistic 
+              title="已逾期 (Overdue)" 
+              value={overdueCount} 
+              valueStyle={{ color: '#cf1322' }}
+              prefix={<WarningOutlined />}
+              suffix="筆"
+            />
+          </GlassCard>
+        </Col>
+      </Row>
+
       <GlassCard className="p-0 overflow-hidden min-h-[600px]">
         <Tabs
           activeKey={activeTab}
@@ -321,7 +381,7 @@ const AccountsPayablePage: React.FC = () => {
               key: 'expenses',
               label: (
                 <span className="flex items-center gap-2">
-                  <FileTextOutlined /> 費用報銷
+                  <FileTextOutlined /> 費用報銷 (員工)
                   <Tag className="ml-1 rounded-full bg-green-100 text-green-600 border-none">{expenseRequests.length}</Tag>
                 </span>
               ),
@@ -340,7 +400,7 @@ const AccountsPayablePage: React.FC = () => {
               key: 'invoices',
               label: (
                 <span className="flex items-center gap-2">
-                  <ShopOutlined /> 採購發票
+                  <ShopOutlined /> 採購發票 (廠商)
                   <Tag className="ml-1 rounded-full bg-blue-100 text-blue-600 border-none">{invoices.length}</Tag>
                 </span>
               ),
