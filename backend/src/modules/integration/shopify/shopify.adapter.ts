@@ -51,17 +51,41 @@ export class ShopifyHttpAdapter implements ShopifyAdapter {
     limit?: number;
   }): Promise<ShopifyOrderPayload[]> {
     this.assertConfig();
-    const query = new URLSearchParams({
-      status: 'any',
-      limit: (params.limit || 50).toString(),
-    });
+    const limit = params.limit || 250; // Default to 250 for better throughput
+    let path = `/orders.json?status=any&limit=${limit}`;
 
-    if (params.since) query.append('updated_at_min', params.since.toISOString());
-    if (params.until) query.append('updated_at_max', params.until.toISOString());
+    if (params.since) path += `&updated_at_min=${params.since.toISOString()}`;
+    if (params.until) path += `&updated_at_max=${params.until.toISOString()}`;
+
+    let allOrders: ShopifyOrderPayload[] = [];
+    let hasNext = true;
 
     try {
-      const data = await this.request('GET', `/orders.json?${query.toString()}`);
-      return (data.orders || []).map((order: any) => this.mapOrder(order));
+      while (hasNext) {
+        const { body, headers } = await this.request('GET', path);
+        const orders = (body.orders || []).map((order: any) => this.mapOrder(order));
+        allOrders = allOrders.concat(orders);
+
+        // Check Link header for pagination
+        const linkHeader = headers.get('Link');
+        if (linkHeader) {
+          const nextLink = linkHeader.split(',').find((s) => s.includes('rel="next"'));
+          if (nextLink) {
+            const match = nextLink.match(/<([^>]+)>/);
+            if (match) {
+              // Use the full URL from the link header
+              path = match[1];
+            } else {
+              hasNext = false;
+            }
+          } else {
+            hasNext = false;
+          }
+        } else {
+          hasNext = false;
+        }
+      }
+      return allOrders;
     } catch (error: any) {
       this.logger.error(`Failed to fetch orders: ${error.message}`);
       throw error;
@@ -82,8 +106,8 @@ export class ShopifyHttpAdapter implements ShopifyAdapter {
     // Note: This can be slow. In production, use a queue or GraphQL.
     for (const order of orders) {
       try {
-        const data = await this.request('GET', `/orders/${order.id}/transactions.json`);
-        const txs = (data.transactions || []).map((tx: any) => this.mapTransaction(tx, order.id));
+        const { body } = await this.request('GET', `/orders/${order.id}/transactions.json`);
+        const txs = (body.transactions || []).map((tx: any) => this.mapTransaction(tx, order.id));
         transactions.push(...txs);
       } catch (error: any) {
         this.logger.error(`Failed to fetch transactions for order ${order.id}: ${error.message}`);
@@ -94,8 +118,9 @@ export class ShopifyHttpAdapter implements ShopifyAdapter {
     return transactions;
   }
 
-  private async request(method: string, path: string, body?: any) {
-    const url = `${this.baseUrl}${path}`;
+  private async request(method: string, path: string, body?: any): Promise<{ body: any; headers: Headers }> {
+    // Handle absolute URLs (for pagination) or relative paths
+    const url = path.startsWith('https://') ? path : `${this.baseUrl}${path}`;
     const options: RequestInit = {
       method,
       headers: this.headers,
@@ -107,7 +132,7 @@ export class ShopifyHttpAdapter implements ShopifyAdapter {
       const text = await res.text();
       throw new Error(`Shopify API Error ${res.status}: ${text}`);
     }
-    return res.json();
+    return { body: await res.json(), headers: res.headers };
   }
 
   private assertConfig() {
