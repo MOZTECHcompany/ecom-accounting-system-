@@ -48,6 +48,11 @@ model User {
   approvalPolicySteps           ApprovalPolicyStep[]
   approvalSteps                 ApprovalStep[]
   expenseRequestHistories       ExpenseRequestHistory[]
+  
+  // WMS Relations
+  pickedOrders                  SalesOrder[]                   @relation("OrderPicker")
+  packedOrders                  SalesOrder[]                   @relation("OrderPacker")
+
   accountingClassifierFeedbacks AccountingClassifierFeedback[]
   notifications                 Notification[]
 
@@ -612,12 +617,20 @@ model SalesOrder {
   hasInvoice          Boolean  @default(false) @map("has_invoice")
   invoiceId           String?  @map("invoice_id")
   notes               String?
+  
+  // WMS Integration
+  pickerId            String?  @map("picker_id")
+  packerId            String?  @map("packer_id")
+  completedAt         DateTime? @map("completed_at")
+
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
   entity    Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
   channel   SalesChannel     @relation(fields: [channelId], references: [id])
   customer  Customer?        @relation(fields: [customerId], references: [id])
+  picker    User?            @relation("OrderPicker", fields: [pickerId], references: [id])
+  packer    User?            @relation("OrderPacker", fields: [packerId], references: [id])
   items     SalesOrderItem[]
   shipments Shipment[]
   payments  Payment[]
