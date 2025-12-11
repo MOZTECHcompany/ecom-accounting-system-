@@ -16,7 +16,8 @@ export interface Product {
   parentId?: string
   attributes?: any
   barcode?: string
-  sn?: string
+  modelNumber?: string
+  hasSerialNumbers?: boolean
 }
 
 export interface CreateProductDto {
@@ -30,7 +31,8 @@ export interface CreateProductDto {
   parentId?: string
   attributes?: any
   barcode: string
-  sn?: string
+  modelNumber?: string
+  hasSerialNumbers?: boolean
 }
 
 export const productService = {

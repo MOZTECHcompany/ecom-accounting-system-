@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Typography, Table, Button, Tag, Space, Modal, Form, Input, Select, InputNumber, message } from 'antd'
+import { Card, Typography, Table, Button, Tag, Space, Modal, Form, Input, Select, InputNumber, message, Checkbox } from 'antd'
 import { PlusOutlined, BarcodeOutlined, ReloadOutlined, MinusCircleOutlined } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import { productService, Product } from '../services/product.service'
@@ -50,12 +50,18 @@ const ProductsPage: React.FC = () => {
   const columns = [
     { title: 'SKU', dataIndex: 'sku', key: 'sku' },
     { title: '國際條碼', dataIndex: 'barcode', key: 'barcode' },
+    { title: '原廠型號', dataIndex: 'modelNumber', key: 'modelNumber' },
     { title: '名稱', dataIndex: 'name', key: 'name' },
     { 
       title: '類型', 
       dataIndex: 'type', 
       key: 'type',
-      render: (type: string) => <Tag>{type}</Tag>
+      render: (type: string, record: Product) => (
+        <Space>
+          <Tag>{type}</Tag>
+          {record.hasSerialNumbers && <Tag color="blue">SN追蹤</Tag>}
+        </Space>
+      )
     },
     { title: '單位', dataIndex: 'unit', key: 'unit' },
     { 
@@ -114,8 +120,11 @@ const ProductsPage: React.FC = () => {
           <Form.Item name="barcode" label="國際條碼 (Barcode)" rules={[{ required: true, message: '國際條碼為必填' }]}>
             <Input placeholder="例如: 4710000000000" prefix={<BarcodeOutlined />} />
           </Form.Item>
-          <Form.Item name="sn" label="SN 碼 (選填)">
-            <Input placeholder="例如: Model-SN-001" />
+          <Form.Item name="modelNumber" label="原廠型號 (Model No.)">
+            <Input placeholder="例如: A2890" />
+          </Form.Item>
+          <Form.Item name="hasSerialNumbers" valuePropName="checked">
+            <Checkbox>啟用單品序號追蹤 (Serial Number Tracking)</Checkbox>
           </Form.Item>
           <Form.Item name="name" label="產品名稱" rules={[{ required: true }]}>
             <Input placeholder="例如: Power Bank 10000mAh" />

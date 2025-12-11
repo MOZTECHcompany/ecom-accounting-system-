@@ -419,7 +419,7 @@ model Product {
   
   // Barcode & Identification
   barcode            String?                @map("barcode") // International Barcode (EAN/UPC)
-  sn                 String?                @map("sn")      // SN Code / Model Number
+  modelNumber        String?                @map("model_number") // Manufacturer Part Number (MPN) / Model No.
 
   parent             Product?               @relation("ProductVariants", fields: [parentId], references: [id])
   variants           Product[]              @relation("ProductVariants")

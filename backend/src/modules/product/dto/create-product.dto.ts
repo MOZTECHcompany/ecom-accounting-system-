@@ -49,7 +49,11 @@ export class CreateProductDto {
 
   @IsString()
   @IsOptional()
-  sn?: string;
+  modelNumber?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  hasSerialNumbers?: boolean;
 }
 
 export class UpdateProductDto {
