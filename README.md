@@ -39,6 +39,14 @@
 
 ## 🆕 最近更新
 
+- **2025-12-11 — 序號追蹤與產品識別升級 (Serial Number & Identification Upgrade)**：
+  - **架構優化**：
+    - 將 `sn` 欄位更名為 `modelNumber` (原廠型號)，明確區分「產品型號」與「單品序號」。
+    - 啟用 `hasSerialNumbers` (序號追蹤) 機制，支援「一機一序號」的保固與溯源管理。
+    - 新增 `barcode` (國際條碼) 為必填欄位，符合零售業標準。
+  - **前端優化**：
+    - 新增產品介面支援上述欄位設定，並提供視覺化標籤識別需追蹤序號之商品。
+
 - **2025-12-10 — 產品變體支援 (Product Variants Support)**：
   - **資料庫架構**：新增 `parentId` 與 `attributes` 欄位，支援主產品與變體 (如顏色、尺寸) 的階層關係。
   - **前端介面**：`ProductsPage` 新增變體建立功能，支援動態屬性 (Dynamic Attributes) 輸入。
