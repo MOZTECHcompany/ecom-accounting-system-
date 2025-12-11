@@ -420,6 +420,15 @@ model Product {
   // Barcode & Identification
   barcode            String?                @map("barcode") // International Barcode (EAN/UPC)
   modelNumber        String?                @map("model_number") // Manufacturer Part Number (MPN) / Model No.
+  hsCode             String?                @map("hs_code") // Harmonized System Code
+  countryOfOrigin    String?                @map("country_of_origin") // ISO 3166-1 alpha-2 code
+
+  // Physical Dimensions & Weight
+  packageLength      Decimal?               @map("package_length") @db.Decimal(10, 2) // cm
+  packageWidth       Decimal?               @map("package_width") @db.Decimal(10, 2) // cm
+  packageHeight      Decimal?               @map("package_height") @db.Decimal(10, 2) // cm
+  grossWeight        Decimal?               @map("gross_weight") @db.Decimal(10, 3) // kg
+  netWeight          Decimal?               @map("net_weight") @db.Decimal(10, 3) // kg
 
   parent             Product?               @relation("ProductVariants", fields: [parentId], references: [id])
   variants           Product[]              @relation("ProductVariants")

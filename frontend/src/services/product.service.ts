@@ -18,6 +18,13 @@ export interface Product {
   barcode?: string
   modelNumber?: string
   hasSerialNumbers?: boolean
+  hsCode?: string
+  countryOfOrigin?: string
+  packageLength?: number
+  packageWidth?: number
+  packageHeight?: number
+  grossWeight?: number
+  netWeight?: number
 }
 
 export interface CreateProductDto {
@@ -33,6 +40,13 @@ export interface CreateProductDto {
   barcode: string
   modelNumber?: string
   hasSerialNumbers?: boolean
+  hsCode?: string
+  countryOfOrigin?: string
+  packageLength?: number
+  packageWidth?: number
+  packageHeight?: number
+  grossWeight?: number
+  netWeight?: number
 }
 
 export const productService = {

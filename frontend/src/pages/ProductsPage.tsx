@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Typography, Table, Button, Tag, Space, Modal, Form, Input, Select, InputNumber, message, Checkbox } from 'antd'
+import { Card, Typography, Table, Button, Tag, Space, Modal, Form, Input, Select, InputNumber, message, Checkbox, Divider, Row, Col } from 'antd'
 import { PlusOutlined, BarcodeOutlined, ReloadOutlined, MinusCircleOutlined } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import { productService, Product } from '../services/product.service'
@@ -143,6 +143,51 @@ const ProductsPage: React.FC = () => {
           <Form.Item name="minStockLevel" label="最低庫存水位">
             <InputNumber className="w-full" min={0} />
           </Form.Item>
+
+          <Divider orientation="left">物流與包裝資訊</Divider>
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item name="packageLength" label="包裝長度 (CM)">
+                <InputNumber className="w-full" min={0} placeholder="長" />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="packageWidth" label="包裝寬度 (CM)">
+                <InputNumber className="w-full" min={0} placeholder="寬" />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="packageHeight" label="包裝高度 (CM)">
+                <InputNumber className="w-full" min={0} placeholder="高" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="grossWeight" label="毛重 (KG)">
+                <InputNumber className="w-full" min={0} step={0.001} placeholder="含包裝重量" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="netWeight" label="淨重 (KG)">
+                <InputNumber className="w-full" min={0} step={0.001} placeholder="產品本體重量" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Divider orientation="left">報關資訊</Divider>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="hsCode" label="HS Code (海關編碼)">
+                <Input placeholder="例如: 8504.40.90" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="countryOfOrigin" label="原產地 (Country of Origin)">
+                <Input placeholder="例如: TW, CN" />
+              </Form.Item>
+            </Col>
+          </Row>
 
           <Form.Item name="parentId" label="主產品 (若為變體)">
             <Select allowClear showSearch optionFilterProp="children">

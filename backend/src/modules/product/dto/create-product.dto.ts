@@ -54,6 +54,39 @@ export class CreateProductDto {
   @IsBoolean()
   @IsOptional()
   hasSerialNumbers?: boolean;
+
+  @IsString()
+  @IsOptional()
+  hsCode?: string;
+
+  @IsString()
+  @IsOptional()
+  countryOfOrigin?: string;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  packageLength?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  packageWidth?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  packageHeight?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  grossWeight?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  netWeight?: number;
 }
 
 export class UpdateProductDto {
@@ -93,4 +126,37 @@ export class UpdateProductDto {
 
   @IsOptional()
   attributes?: any;
+
+  @IsString()
+  @IsOptional()
+  hsCode?: string;
+
+  @IsString()
+  @IsOptional()
+  countryOfOrigin?: string;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  packageLength?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  packageWidth?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  packageHeight?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  grossWeight?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  netWeight?: number;
 }
