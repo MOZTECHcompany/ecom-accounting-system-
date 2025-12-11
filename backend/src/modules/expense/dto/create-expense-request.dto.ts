@@ -91,6 +91,11 @@ export class CreateExpenseRequestDto {
   @IsString()
   description!: string;
 
+  @ApiPropertyOptional({ description: '備註' })
+  @IsOptional()
+  @IsString()
+  remarks?: string;
+
   @ApiPropertyOptional({ description: '優先順序', enum: ['normal', 'urgent'] })
   @IsOptional()
   @IsIn(['normal', 'urgent'])

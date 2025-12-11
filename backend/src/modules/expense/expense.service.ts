@@ -634,6 +634,7 @@ Do not include any markdown formatting (like \`\`\`json), just the raw JSON stri
       taxAmount: this.toDecimal(taxAmount),
       dueDate: dto.dueDate ?? null,
       description: dto.description,
+      remarks: dto.remarks ?? null,
       priority: dto.priority ?? 'normal',
       attachmentUrl: dto.attachmentUrl ?? null,
       evidenceFiles: this.toJsonArray(dto.evidenceFiles),

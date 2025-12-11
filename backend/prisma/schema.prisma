@@ -847,6 +847,7 @@ model ExpenseRequest {
 
   dueDate              DateTime? @map("due_date")
   description          String
+  remarks              String?   @map("remarks")
   priority             String    @default("normal") // normal, urgent
   attachmentUrl        String?   @map("attachment_url")
   evidenceFiles        Json?     @map("evidence_files")

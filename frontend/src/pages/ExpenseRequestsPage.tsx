@@ -344,6 +344,7 @@ const ExpenseRequestsPage: React.FC = () => {
         amountOriginal: values.amount,
         amountCurrency: 'TWD',
         description: values.description,
+        remarks: values.remarks,
         receiptType: values.receiptType,
         dueDate: values.dueDate ? values.dueDate.toISOString() : undefined,
         priority: values.isUrgent ? 'urgent' : 'normal',
@@ -944,6 +945,16 @@ const ExpenseRequestsPage: React.FC = () => {
               >
                 <BulbOutlined /> AI 智能建議報銷項目
               </GlassButton>
+            </Form.Item>
+          </GlassDrawerSection>
+
+          <GlassDrawerSection>
+            <Form.Item label="備註" name="remarks" style={{ marginBottom: 0 }}>
+              <Input.TextArea
+                rows={2}
+                placeholder="例如：飲料五箱、餅乾三箱"
+                className="rounded-xl bg-white/50 border-white/30 focus:bg-white/80"
+              />
             </Form.Item>
           </GlassDrawerSection>
 

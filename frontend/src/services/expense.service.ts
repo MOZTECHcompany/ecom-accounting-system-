@@ -77,6 +77,7 @@ export interface ExpenseRequest {
   amountFxRate: number | string
   amountBase: number | string
   description: string
+  remarks?: string | null
   status: string
   priority: string
   dueDate?: string | null
@@ -150,6 +151,7 @@ export interface CreateExpenseRequestPayload {
   amountFxRate?: number
   dueDate?: string
   description: string
+  remarks?: string
   receiptType?: string
   metadata?: Record<string, unknown>
   departmentId?: string
