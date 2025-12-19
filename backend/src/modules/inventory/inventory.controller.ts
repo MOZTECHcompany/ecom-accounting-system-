@@ -10,6 +10,12 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
 
+  @Get('warehouses')
+  @ApiOperation({ summary: '查詢倉庫列表' })
+  getWarehouses(@Query('entityId') entityId: string) {
+    return this.inventoryService.getWarehouses(entityId);
+  }
+
   @Get('snapshots')
   @ApiOperation({ summary: '取得指定商品在各倉庫的庫存快照' })
   getSnapshots(

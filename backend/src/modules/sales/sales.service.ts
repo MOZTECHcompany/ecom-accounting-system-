@@ -62,8 +62,9 @@ export class SalesService {
     entityId: string;
     warehouseId: string;
     salesOrderId: string;
+    itemSerialNumbers?: Record<string, string[]>;
   }) {
-    const { entityId, warehouseId, salesOrderId } = params;
+    const { entityId, warehouseId, salesOrderId, itemSerialNumbers } = params;
 
     const order = await this.prisma.salesOrder.findUnique({
       where: { id: salesOrderId },
@@ -79,6 +80,25 @@ export class SalesService {
     }
 
     for (const item of order.items) {
+      // 處理序號
+      if (item.product.hasSerialNumbers) {
+        const sns = itemSerialNumbers?.[item.id] || [];
+        if (sns.length !== Number(item.qty)) {
+          throw new Error(
+            `Product ${item.product.sku} requires ${item.qty} serial numbers, but got ${sns.length}`,
+          );
+        }
+
+        await this.inventoryService.markSerialNumbersAsSold({
+          entityId,
+          warehouseId,
+          productId: item.productId,
+          serialNumbers: sns,
+          outboundRefType: 'SALES_ORDER',
+          outboundRefId: salesOrderId,
+        });
+      }
+
       await this.fulfillInventoryForItem(
         entityId,
         warehouseId,

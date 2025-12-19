@@ -28,6 +28,16 @@ export class InventoryService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
+   * 查詢倉庫列表
+   */
+  async getWarehouses(entityId: string) {
+    return this.prisma.warehouse.findMany({
+      where: { entityId, isActive: true },
+      orderBy: { code: 'asc' },
+    });
+  }
+
+  /**
    * 取得指定商品在所有倉庫的庫存快照
    */
   async getSnapshotsForProduct(entityId: string, productId: string) {
@@ -282,6 +292,66 @@ export class InventoryService {
     await this.prisma.inventorySerialNumber.createMany({
       data,
       skipDuplicates: true, 
+    });
+  }
+
+  /**
+   * 將序號標記為已售出 (Outbound)
+   */
+  async markSerialNumbersAsSold(params: {
+    entityId: string;
+    warehouseId: string;
+    productId: string;
+    serialNumbers: string[];
+    outboundRefType: string;
+    outboundRefId: string;
+  }) {
+    const {
+      entityId,
+      warehouseId,
+      productId,
+      serialNumbers,
+      outboundRefType,
+      outboundRefId,
+    } = params;
+
+    if (!serialNumbers || serialNumbers.length === 0) {
+      return;
+    }
+
+    // 1. 驗證所有序號是否存在且狀態為 AVAILABLE
+    const existingSNs = await this.prisma.inventorySerialNumber.findMany({
+      where: {
+        entityId,
+        productId,
+        warehouseId,
+        serialNumber: { in: serialNumbers },
+        status: 'AVAILABLE',
+      },
+    });
+
+    if (existingSNs.length !== serialNumbers.length) {
+      const foundSNs = existingSNs.map((sn) => sn.serialNumber);
+      const missingSNs = serialNumbers.filter((sn) => !foundSNs.includes(sn));
+      throw new Error(
+        `Some serial numbers are invalid or not available: ${missingSNs.join(', ')}`,
+      );
+    }
+
+    // 2. 更新狀態
+    await this.prisma.inventorySerialNumber.updateMany({
+      where: {
+        entityId,
+        productId,
+        warehouseId,
+        serialNumber: { in: serialNumbers },
+      },
+      data: {
+        status: 'SOLD',
+        warehouseId: null, // 移出倉庫
+        outboundRefType,
+        outboundRefId,
+      },
     });
   }
 }

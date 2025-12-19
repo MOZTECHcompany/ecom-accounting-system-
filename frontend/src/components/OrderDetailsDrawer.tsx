@@ -1,5 +1,5 @@
-import React from 'react'
-import { Descriptions, Steps, Button, Tag, Divider, List, Avatar, Typography } from 'antd'
+import React, { useState } from 'react'
+import { Descriptions, Steps, Button, Tag, Divider, List, Avatar, Typography, Space } from 'antd'
 import { GlassDrawer, GlassDrawerSection } from './ui/GlassDrawer'
 import { 
   PrinterOutlined, 
@@ -9,8 +9,10 @@ import {
   CreditCardOutlined,
   CarOutlined,
   CheckCircleOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  SendOutlined
 } from '@ant-design/icons'
+import FulfillOrderModal from './FulfillOrderModal'
 
 const { Title, Text } = Typography
 
@@ -18,12 +20,16 @@ interface OrderDetailsDrawerProps {
   open: boolean
   onClose: () => void
   order: any
+  onUpdate?: () => void
 }
 
-const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, order }) => {
+const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, order, onUpdate }) => {
+  const [fulfillModalOpen, setFulfillModalOpen] = useState(false)
+
   if (!order) return null
 
   return (
+    <>
       <GlassDrawer
         title={
           <div className="flex items-center justify-between w-full pr-8">
@@ -34,6 +40,16 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
             <Space>
               <Button icon={<PrinterOutlined />} className="rounded-full">列印</Button>
               <Button icon={<MailOutlined />} className="rounded-full">寄送發票</Button>
+              {order.status !== 'completed' && (
+                <Button 
+                  type="primary" 
+                  icon={<SendOutlined />}
+                  className="rounded-full bg-green-600 hover:bg-green-500 border-none shadow-lg shadow-green-200"
+                  onClick={() => setFulfillModalOpen(true)}
+                >
+                  出貨
+                </Button>
+              )}
               <Button type="primary" className="rounded-full bg-blue-600 hover:bg-blue-500 border-none shadow-lg shadow-blue-200">退款/售後</Button>
             </Space>
           </div>
@@ -142,8 +158,17 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
           </GlassDrawerSection>
         </div>
       </GlassDrawer>
+      <FulfillOrderModal 
+        open={fulfillModalOpen} 
+        onClose={() => setFulfillModalOpen(false)} 
+        onSuccess={() => {
+          setFulfillModalOpen(false)
+          onUpdate?.()
+        }}
+        order={order}
+      />
+    </>
   )
 }
 
-import { Space } from 'antd'
 export default OrderDetailsDrawer

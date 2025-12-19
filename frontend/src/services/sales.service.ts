@@ -32,5 +32,12 @@ export const salesService = {
   async complete(id: string) {
     const response = await api.post<SalesOrder>(`/sales/orders/${id}/complete`)
     return response.data
+  },
+
+  async fulfill(id: string, data: { warehouseId: string; itemSerialNumbers?: Record<string, string[]> }, entityId: string) {
+    const response = await api.post(`/sales/orders/${id}/fulfill`, data, {
+      params: { entityId }
+    })
+    return response.data
   }
 }

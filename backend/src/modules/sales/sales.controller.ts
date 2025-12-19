@@ -19,6 +19,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { SalesService } from './sales.service';
 import { SalesOrderService } from './services/sales-order.service';
 import { CreateSalesOrderDto } from './dto/create-sales-order.dto';
+import { FulfillSalesOrderDto } from './dto/fulfill-sales-order.dto';
 /**
  * SalesController 銷售控制器
  */
@@ -71,6 +72,25 @@ export class SalesController {
     @CurrentUser('id') userId: string,
   ) {
     return this.salesOrderService.createSalesOrder(dto, userId);
+  }
+
+  /**
+   * 訂單出貨 (扣減庫存)
+   */
+  @Post('orders/:id/fulfill')
+  @ApiOperation({ summary: '訂單出貨 (扣減庫存)' })
+  @ApiQuery({ name: 'entityId', required: true })
+  async fulfillSalesOrder(
+    @Param('id', ParseUUIDPipe) orderId: string,
+    @Query('entityId', ParseUUIDPipe) entityId: string,
+    @Body() dto: FulfillSalesOrderDto,
+  ) {
+    return this.salesService.fulfillSalesOrder({
+      entityId,
+      warehouseId: dto.warehouseId,
+      salesOrderId: orderId,
+      itemSerialNumbers: dto.itemSerialNumbers,
+    });
   }
 
   /**

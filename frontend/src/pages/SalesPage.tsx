@@ -273,7 +273,8 @@ const SalesPage: React.FC = () => {
       <OrderDetailsDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        order={selectedOrder as any} // Type casting for now as OrderDetailsDrawer might expect different type
+        order={selectedOrder as any}
+        onUpdate={fetchOrders}
       />
     </motion.div>
   )
