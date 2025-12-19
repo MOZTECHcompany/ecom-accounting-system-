@@ -2,23 +2,26 @@ import api from './api'
 
 export interface PurchaseOrder {
   id: string
-  poNumber: string
+  // poNumber: string // Backend doesn't seem to have poNumber, it uses id or maybe I missed it. Schema has id.
   vendorId: string
   vendor: { name: string }
-  status: 'DRAFT' | 'ORDERED' | 'RECEIVED' | 'CANCELLED'
-  totalAmount: number
-  currency: string
+  status: 'pending' | 'received' | 'completed' | 'cancelled'
+  totalAmountOriginal: number
+  totalAmountCurrency: string
   orderDate: string
-  expectedDate?: string
   items: PurchaseOrderItem[]
 }
 
 export interface PurchaseOrderItem {
   id: string
   productId: string
-  product: { name: string; sku: string }
-  quantity: number
-  unitPrice: number
+  product: { 
+    name: string; 
+    sku: string;
+    hasSerialNumbers?: boolean;
+  }
+  qty: number // Backend uses qty
+  unitCost: number // Backend uses unitCost
   totalPrice: number
 }
 
@@ -50,8 +53,8 @@ export const purchaseService = {
     return response.data
   },
 
-  async receive(id: string, warehouseId: string = 'default-warehouse') {
-    const response = await api.put<PurchaseOrder>(`/purchase-orders/${id}/receive`, { warehouseId })
+  async receive(id: string, warehouseId: string = 'default-warehouse', serialNumbers?: { productId: string; serialNumbers: string[] }[]) {
+    const response = await api.put<PurchaseOrder>(`/purchase-orders/${id}/receive`, { warehouseId, serialNumbers })
     return response.data
   }
 }

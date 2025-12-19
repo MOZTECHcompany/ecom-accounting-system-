@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
+import { ReceivePurchaseOrderDto } from './dto/receive-purchase-order.dto';
 import { InventoryService } from '../inventory/inventory.service';
 import { CostService } from '../cost/cost.service';
 
@@ -86,7 +87,8 @@ export class PurchaseService {
    * Receive Purchase Order (Inbound)
    * Triggers inventory update and cost recording
    */
-  async receiveOrder(entityId: string, id: string, warehouseId: string) {
+  async receiveOrder(entityId: string, id: string, dto: ReceivePurchaseOrderDto) {
+    const { warehouseId, serialNumbers } = dto;
     const po = await this.findOne(entityId, id);
 
     if (po.status !== 'pending') {
@@ -105,6 +107,26 @@ export class PurchaseService {
         referenceType: 'PURCHASE_ORDER',
         referenceId: po.id,
       });
+
+      // Handle Serial Numbers
+      if (item.product.hasSerialNumbers) {
+        const entry = serialNumbers?.find(e => e.productId === item.productId);
+        const snList = entry?.serialNumbers || [];
+        
+        // Validate count
+        if (snList.length !== Number(item.qty)) {
+           throw new BadRequestException(`Product ${item.product.sku} requires ${item.qty} serial numbers, but got ${snList.length}`);
+        }
+
+        await this.inventoryService.addSerialNumbers(
+          entityId,
+          warehouseId,
+          item.productId,
+          snList,
+          'PURCHASE_ORDER',
+          po.id
+        );
+      }
     }
 
     // 2. Record Cost (Optional hook to CostService)

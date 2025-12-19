@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Param, Put, UseGuards, Request } from '@nestjs/common';
 import { PurchaseService } from './purchase.service';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
+import { ReceivePurchaseOrderDto } from './dto/receive-purchase-order.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -33,7 +34,7 @@ export class PurchaseController {
 
   @Put(':id/receive')
   @Roles('ADMIN', 'OPERATOR')
-  receive(@Request() req, @Param('id') id: string, @Body('warehouseId') warehouseId: string) {
-    return this.purchaseService.receiveOrder(req.user.entityId, id, warehouseId);
+  receive(@Request() req, @Param('id') id: string, @Body() dto: ReceivePurchaseOrderDto) {
+    return this.purchaseService.receiveOrder(req.user.entityId, id, dto);
   }
 }

@@ -255,4 +255,33 @@ export class InventoryService {
       return { movement, snapshot: updatedSnapshot };
     });
   }
+
+  /**
+   * 批次新增庫存序號 (進貨時)
+   */
+  async addSerialNumbers(
+    entityId: string,
+    warehouseId: string,
+    productId: string,
+    serialNumbers: string[],
+    inboundRefType: string,
+    inboundRefId: string,
+  ) {
+    if (!serialNumbers || serialNumbers.length === 0) return;
+
+    const data = serialNumbers.map((sn) => ({
+      entityId,
+      productId,
+      warehouseId,
+      serialNumber: sn,
+      status: 'AVAILABLE',
+      inboundRefType,
+      inboundRefId,
+    }));
+
+    await this.prisma.inventorySerialNumber.createMany({
+      data,
+      skipDuplicates: true, 
+    });
+  }
 }
