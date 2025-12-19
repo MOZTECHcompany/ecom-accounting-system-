@@ -689,6 +689,12 @@ npm run test:e2e
 
 ## 🚢 部署到 Render
 
+## 🔁 Render → Google Cloud SQL（停機遷移）
+
+若你想把 Render PostgreSQL 搬到 Google Cloud SQL（開發中允許停機的情境），請直接照這份一鍵腳本與指南：
+
+- [backend/scripts/DB_MIGRATION_RENDER_TO_CLOUDSQL.md](backend/scripts/DB_MIGRATION_RENDER_TO_CLOUDSQL.md)
+
 ### ⚠️ 重要：Monorepo 結構說明
 
 此專案為 **monorepo** 結構：

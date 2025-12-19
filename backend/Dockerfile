@@ -47,5 +47,5 @@ COPY --from=builder /app/dist ./dist
 # Expose port
 EXPOSE 3000
 
-# Start in production mode with migration
-CMD ["sh", "-c", "npx prisma migrate deploy && npm run start:prod"]
+# Start in production mode
+CMD ["sh", "-c", "npm run start:prod"]
