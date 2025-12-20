@@ -4,6 +4,10 @@ FROM node:20-alpine AS builder
 # Install dependencies for Prisma
 RUN apk add --no-cache openssl
 
+# Prisma `generate` requires DATABASE_URL to be present at build time.
+# This is a non-secret placeholder and will be overridden by Cloud Run env vars at runtime.
+ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres?schema=public"
+
 # Set working directory
 WORKDIR /app
 
@@ -28,6 +32,9 @@ FROM node:20-alpine
 
 # Install dependencies for Prisma
 RUN apk add --no-cache openssl
+
+# Same placeholder for the production stage (overridden at runtime).
+ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres?schema=public"
 
 WORKDIR /app
 
