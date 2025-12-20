@@ -55,4 +55,6 @@ COPY --from=builder /app/dist ./dist
 EXPOSE 3000
 
 # Start in production mode
-CMD ["sh", "-c", "npm run start:prod"]
+# We construct the DATABASE_URL at runtime using the DB_PASSWORD env var (injected from Secret Manager)
+# This avoids the issue where Cloud Run UI doesn't support variable substitution like ${DB_PASSWORD}
+CMD ["sh", "-c", "export DATABASE_URL=postgresql://erp_user:${DB_PASSWORD}@localhost/erp_db?host=/cloudsql/moztech-main-db:asia-east1:moztech-main-db && npm run start:prod"]
