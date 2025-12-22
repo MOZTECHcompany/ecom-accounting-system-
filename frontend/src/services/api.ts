@@ -11,7 +11,8 @@ const getBaseURL = () => {
   if (import.meta.env.DEV) {
     return '/api/v1'
   }
-  return 'https://ecom-accounting-backend.onrender.com/api/v1'
+  // Fallback to new Cloud Run backend
+  return 'https://ecom-accounting-backend-249593319772.asia-east1.run.app/api/v1'
 }
 
 export const API_URL = getBaseURL()
