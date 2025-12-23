@@ -60,6 +60,7 @@ EXPOSE 3000
 # Start in production mode
 # We construct the DATABASE_URL at runtime using the DB_PASSWORD env var (injected from Secret Manager)
 # This avoids the issue where Cloud Run UI doesn't support variable substitution like ${DB_PASSWORD}
-# Added 'node dist/prisma/seed.js' to ensure default data (accounts, roles, etc.) is populated on startup
-# We use the compiled JS seed file because ts-node is not available in production dependencies
-CMD ["sh", "-c", "export DATABASE_URL=postgresql://erp_user:${DB_PASSWORD}@localhost/erp_db?host=/cloudsql/moztech-main-db:asia-east1:moztech-main-db && npm run prisma:deploy && node dist/prisma/seed.js && node dist/src/main.js"]
+# Seeding can take time (or fail) and block the container from listening on $PORT.
+# Gate it behind an env flag so deployments can reliably start.
+# - Set SEED_ON_STARTUP=true (or 1) for a one-off revision to populate baseline data.
+CMD ["sh", "-c", "set -e; export DATABASE_URL=postgresql://erp_user:${DB_PASSWORD}@localhost/erp_db?host=/cloudsql/moztech-main-db:asia-east1:moztech-main-db; npm run prisma:deploy; case \"${SEED_ON_STARTUP:-}\" in true|TRUE|1) node dist/prisma/seed.js ;; esac; node dist/src/main.js"]
