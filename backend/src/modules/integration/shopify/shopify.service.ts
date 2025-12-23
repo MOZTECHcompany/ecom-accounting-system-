@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -31,6 +31,7 @@ export class ShopifyService {
   }
 
   async syncOrders(params: { entityId: string; since?: Date; until?: Date }) {
+    await this.assertEntityExists(params.entityId);
     const orders = await this.adapter.fetchOrders({
       since: params.since,
       until: params.until,
@@ -55,6 +56,7 @@ export class ShopifyService {
   }
 
   async syncTransactions(params: { entityId: string; since?: Date; until?: Date }) {
+    await this.assertEntityExists(params.entityId);
     const transactions = await this.adapter.fetchTransactions({
       since: params.since,
       until: params.until,
@@ -160,6 +162,7 @@ export class ShopifyService {
     if (triggerEvents.includes(event)) {
       // 不帶日期，拉最新一批（adapter 預設 50 筆），確保不漏單
       try {
+        await this.assertEntityExists(this.defaultEntityId);
         await this.syncOrders({ entityId: this.defaultEntityId });
         await this.syncTransactions({ entityId: this.defaultEntityId });
       } catch (error) {
@@ -367,5 +370,22 @@ export class ShopifyService {
 
   private dec(value: number | string | Decimal) {
     return new Decimal(value || 0);
+  }
+
+  private async assertEntityExists(entityId: string) {
+    if (!entityId?.trim()) {
+      throw new BadRequestException('entityId is required');
+    }
+
+    const entity = await this.prisma.entity.findUnique({
+      where: { id: entityId },
+      select: { id: true },
+    });
+
+    if (!entity) {
+      throw new BadRequestException(
+        `Entity not found: ${entityId}. Please set VITE_DEFAULT_ENTITY_ID (frontend) or pass a valid entityId.`,
+      );
+    }
   }
 }
