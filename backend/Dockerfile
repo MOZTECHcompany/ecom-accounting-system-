@@ -24,11 +24,11 @@ COPY . .
 # Generate Prisma Client
 RUN npx prisma generate
 
-# Compile seed script to JS
-RUN npx tsc prisma/seed.ts --outDir dist/prisma --skipLibCheck --module commonjs --target es2019 --esModuleInterop
-
 # Build the application
 RUN npm run build
+
+# Compile seed script to JS (after build, because nest build may clean dist/)
+RUN npx tsc prisma/seed.ts --outDir dist/prisma --skipLibCheck --module commonjs --target es2019 --esModuleInterop
 
 # Production stage
 FROM node:20-alpine
