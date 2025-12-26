@@ -16,7 +16,7 @@ COPY package*.json ./
 COPY prisma ./prisma/
 
 # Install all dependencies (including devDependencies for build)
-RUN npm ci
+RUN npm install --no-audit --no-fund
 
 # Copy source code
 COPY . .
@@ -46,7 +46,7 @@ COPY package*.json ./
 COPY prisma ./prisma/
 
 # Install only production dependencies
-RUN npm ci --only=production
+RUN npm install --omit=dev --no-audit --no-fund
 
 # Generate Prisma Client
 RUN npx prisma generate

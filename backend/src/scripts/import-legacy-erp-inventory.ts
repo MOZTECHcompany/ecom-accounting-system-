@@ -65,7 +65,7 @@ function parseRowsFromWorkbook(
   }
 
   const sheet = workbook.Sheets[chosenSheetName];
-  const raw = XLSX.utils.sheet_to_json<RowRecord>(sheet, {
+  const raw = XLSX.utils.sheet_to_json(sheet, {
     defval: '',
     raw: false,
   });
