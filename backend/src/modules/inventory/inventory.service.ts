@@ -46,6 +46,19 @@ type ImportProductCache = {
   hasSerialNumbers: boolean;
 };
 
+type ParsedImportMeta = {
+  format: 'csv' | 'excel';
+  headers: string[];
+  sheet?: string;
+  availableSheets?: string[];
+};
+
+type ParsedImport = {
+  rows: ImportRow[];
+  rawRows: number;
+  meta: ParsedImportMeta;
+};
+
 @Injectable()
 export class InventoryService {
   constructor(private readonly prisma: PrismaService) {}
@@ -80,18 +93,67 @@ export class InventoryService {
         }
 
         const barcode = String(
-          this.pick(row, ['品項編碼', '國際條碼', 'Barcode', 'barcode', 'EAN', 'UPC']) ?? '',
+          this.pick(row, [
+            '品項編碼',
+            '品項代碼',
+            '商品編碼',
+            '商品代碼',
+            '料號',
+            'SKU',
+            'sku',
+            '國際條碼',
+            '國際碼',
+            '條碼',
+            '商品條碼',
+            '品項條碼',
+            'Barcode',
+            'barcode',
+            'EAN',
+            'EAN13',
+            'UPC',
+          ]) ?? '',
         ).trim();
         const name = String(this.pick(row, ['品項名稱', '品名', '商品名稱', '名稱', 'name']) ?? '').trim();
 
         const warehouseLocation = String(
-          this.pick(row, ['工業店', '倉庫位置', '倉庫位置名稱', '倉庫', 'warehouse', 'location']) ?? '',
+          this.pick(row, [
+            '工業店',
+            '店別',
+            '店別名稱',
+            '倉庫位置',
+            '倉庫位置名稱',
+            '庫位',
+            '倉庫',
+            '倉別',
+            '庫別',
+            'warehouse',
+            'location',
+          ]) ?? '',
         ).trim();
         const rawWarehouseCode = String(
-          this.pick(row, ['倉庫工廠編碼', '倉庫編碼', '倉庫代碼', 'warehouseCode', 'warehouse_code']) ?? '',
+          this.pick(row, [
+            '倉庫工廠編碼',
+            '工廠編碼',
+            '倉庫編碼',
+            '倉庫代碼',
+            '倉別代碼',
+            '庫別代碼',
+            '店別代碼',
+            'warehouseCode',
+            'warehouse_code',
+          ]) ?? '',
         ).trim();
         const rawWarehouseName = String(
-          this.pick(row, ['倉庫工廠名稱', '倉庫名稱', 'warehouseName', 'warehouse_name']) ?? '',
+          this.pick(row, [
+            '倉庫工廠名稱',
+            '工廠名稱',
+            '倉庫名稱',
+            '倉別名稱',
+            '庫別名稱',
+            '店別名稱',
+            'warehouseName',
+            'warehouse_name',
+          ]) ?? '',
         ).trim();
 
         const warehouseName = (rawWarehouseName || warehouseLocation || rawWarehouseCode || '').trim();
@@ -102,13 +164,27 @@ export class InventoryService {
         const serialNumberRaw = this.pick(row, [
           '序號/批號',
           '序號',
+          '批號',
           'SN',
           'sn',
           'serialNumber',
           'serial_number',
         ]);
         const serialNumber = serialNumberRaw ? String(serialNumberRaw).trim() : undefined;
-        let quantity = this.toNumber(this.pick(row, ['庫存數量', '數量', 'qty', 'quantity']) ?? 0, 0);
+        let quantity = this.toNumber(
+          this.pick(row, [
+            '庫存數量',
+            '庫存',
+            '現有量',
+            '結存量',
+            '期末量',
+            '可用量',
+            '數量',
+            'qty',
+            'quantity',
+          ]) ?? 0,
+          0,
+        );
         if ((!quantity || quantity <= 0) && serialNumber) quantity = 1;
 
         if (!barcode) return null;
@@ -160,14 +236,20 @@ export class InventoryService {
     return out.map((v) => v.trim());
   }
 
-  private parseRowsFromCsvBuffer(buffer: Buffer): { rows: ImportRow[]; rawRows: number } {
+  private parseRowsFromCsvBuffer(buffer: Buffer): ParsedImport {
     const content = buffer.toString('utf8').replace(/^\uFEFF/, '');
     const lines = content
       .split(/\r?\n/)
       .map((l) => l.trimEnd())
       .filter((l) => l.length > 0);
 
-    if (lines.length === 0) return { rows: [], rawRows: 0 };
+    if (lines.length === 0) {
+      return {
+        rows: [],
+        rawRows: 0,
+        meta: { format: 'csv', headers: [] },
+      };
+    }
 
     const headers = this.parseCsvLine(lines[0]).map((h) => this.normalizeHeaderKey(h));
     const raw: Array<Record<string, any>> = [];
@@ -183,15 +265,17 @@ export class InventoryService {
       raw.push(row);
     }
 
-    return this.parseRowsFromRecords(raw);
+    const parsed = this.parseRowsFromRecords(raw);
+    return {
+      ...parsed,
+      meta: { format: 'csv', headers },
+    };
   }
 
-  private parseRowsFromExcelBuffer(
-    buffer: Buffer,
-    sheetName?: string,
-  ): { rows: ImportRow[]; rawRows: number } {
+  private parseRowsFromExcelBuffer(buffer: Buffer, sheetName?: string): ParsedImport {
     const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
-    const chosenSheetName = sheetName || workbook.SheetNames[0];
+    const availableSheets = workbook.SheetNames || [];
+    const chosenSheetName = sheetName || availableSheets[0];
     if (!chosenSheetName || !workbook.Sheets[chosenSheetName]) {
       throw new Error(`Sheet not found: ${chosenSheetName}`);
     }
@@ -199,7 +283,19 @@ export class InventoryService {
     const sheet = workbook.Sheets[chosenSheetName];
     const raw = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
 
-    return this.parseRowsFromRecords(raw as Array<Record<string, any>>);
+    const headers = Object.keys((raw as Array<Record<string, any>>)[0] || {}).map((h) =>
+      this.normalizeHeaderKey(h),
+    );
+    const parsed = this.parseRowsFromRecords(raw as Array<Record<string, any>>);
+    return {
+      ...parsed,
+      meta: {
+        format: 'excel',
+        headers,
+        sheet: chosenSheetName,
+        availableSheets,
+      },
+    };
   }
 
   async importLegacyErpInventory(input: {
@@ -237,15 +333,23 @@ export class InventoryService {
     const mime = String(input.file.mimetype || '').toLowerCase();
     const isCsv = originalName.endsWith('.csv') || mime.includes('text/csv') || mime.includes('application/csv');
 
-    const { rows, rawRows } = isCsv
+    const parsed: ParsedImport = isCsv
       ? this.parseRowsFromCsvBuffer(input.file.buffer)
       : this.parseRowsFromExcelBuffer(input.file.buffer, sheet);
+
+    const { rows, rawRows, meta } = parsed;
     if (rows.length === 0) {
       return {
         rawRows,
         rows: 0,
         skippedRows: rawRows,
         message: 'No rows found (check headers / sheet).',
+        debug: {
+          format: meta.format,
+          sheet: meta.sheet,
+          availableSheets: meta.availableSheets,
+          headers: meta.headers,
+        },
       };
     }
 
