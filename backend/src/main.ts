@@ -43,6 +43,18 @@ async function bootstrap() {
     origin: '*',
   });
 
+  // Some hosting/CDN setups may send Reporting API (Report-To / NEL) beacons to
+  // endpoints like `/report/*` or other custom paths. These are not part of our
+  // public API (which is under `/api/v1/*`), but missing handlers can cause noisy
+  // 404s in the browser console.
+  // Swallow them with 204 to keep UX clean.
+  app.use('/report', (req, res) => {
+    res.status(204).end();
+  });
+  app.use('/import/erp', (req, res) => {
+    res.status(204).end();
+  });
+
   // Force restart trigger
   console.log('Server restarting...');
 
