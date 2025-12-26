@@ -1,6 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { Prisma } from '@prisma/client';
+
+interface CreateWarehouseInput {
+  entityId: string;
+  code: string;
+  name: string;
+  type?: string;
+}
 
 interface AdjustStockInput {
   entityId: string;
@@ -34,6 +41,43 @@ export class InventoryService {
     return this.prisma.warehouse.findMany({
       where: { entityId, isActive: true },
       orderBy: { code: 'asc' },
+    });
+  }
+
+  /**
+   * 建立倉庫（若 code 已存在則直接回傳既有倉庫）
+   */
+  async createWarehouse(input: CreateWarehouseInput) {
+    const entityId = input.entityId?.trim();
+    const code = input.code?.trim();
+    const name = input.name?.trim();
+    const type = input.type?.trim() || 'INTERNAL';
+
+    if (!entityId || !code || !name) {
+      throw new BadRequestException('Missing required fields: entityId, code, name');
+    }
+
+    const existing = await this.prisma.warehouse.findUnique({
+      where: {
+        entityId_code: {
+          entityId,
+          code,
+        },
+      },
+    });
+
+    if (existing) {
+      return existing;
+    }
+
+    return this.prisma.warehouse.create({
+      data: {
+        entityId,
+        code,
+        name,
+        type,
+        isActive: true,
+      },
     });
   }
 

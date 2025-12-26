@@ -28,6 +28,37 @@ npm run start:dev        # 啟動 API，預設 http://localhost:3000/api/v1
 - `npm run seed:ai-items`：使用 Gemini 生成 30~50 個標準 `ReimbursementItem`（預設 `tw-entity-001`）。
 - `npm run test` / `npm run test:e2e`：單元與 E2E 測試。
 
+## ERP 庫存匯入（Excel）
+系統提供一次性匯入腳本，把舊 ERP 的「商品 + 倉庫 + 庫存數量 +（可選）序號/SN」灌進本系統的 `Product`/`Warehouse`/`InventorySnapshot`/`InventoryTransaction`/`InventorySerialNumber`。
+
+指令：
+```bash
+# Dry-run（只印 summary、不寫入 DB）
+npm run import:erp-inventory -- --file <你的檔案.xlsx> --entityId tw-entity-001 --dry-run
+
+# 實際寫入
+npm run import:erp-inventory -- --file <你的檔案.xlsx> --entityId tw-entity-001
+
+# 若同檔名已匯入過（防止重複灌數），可加 --force 強制重跑
+npm run import:erp-inventory -- --file <你的檔案.xlsx> --entityId tw-entity-001 --force
+
+# 指定工作表
+npm run import:erp-inventory -- --file <你的檔案.xlsx> --sheet <SheetName> --entityId tw-entity-001
+```
+
+欄位支援（擇一即可）：
+- 條碼：`品項編碼` / `國際條碼` / `Barcode`
+- 名稱：`品項名稱` / `品名` / `商品名稱`
+- 倉庫：優先吃 `倉庫工廠編碼` + `倉庫工廠名稱`；若只有 `工業店`（或 `倉庫位置`）也可（會同時當作 code+name）
+- 數量：`庫存數量` / `數量`（若有 SN 但數量空白，會自動視為 1）
+- SN：`序號/批號` / `SN`
+
+如果你目前的 VS Code dev container 沒有 Node.js，可用根目錄的 `docker-compose.yml` 先把 backend/postgres 跑起來，再在 backend 容器內執行：
+```bash
+docker compose up -d postgres backend
+docker compose exec backend npm run import:erp-inventory -- --file /app/<你的檔案.xlsx> --entityId tw-entity-001 --dry-run
+```
+
 ## 必填環境變數
 | 變數 | 說明 |
 | --- | --- |

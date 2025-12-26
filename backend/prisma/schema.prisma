@@ -427,6 +427,7 @@ model Product {
   packageLength      Decimal?               @map("package_length") @db.Decimal(10, 2) // cm
   packageWidth       Decimal?               @map("package_width") @db.Decimal(10, 2) // cm
   packageHeight      Decimal?               @map("package_height") @db.Decimal(10, 2) // cm
+  weight             Decimal?               @map("weight") @db.Decimal(10, 3) // kg
   grossWeight        Decimal?               @map("gross_weight") @db.Decimal(10, 3) // kg
   netWeight          Decimal?               @map("net_weight") @db.Decimal(10, 3) // kg
 

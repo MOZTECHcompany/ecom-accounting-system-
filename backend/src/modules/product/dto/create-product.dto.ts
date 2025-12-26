@@ -81,6 +81,11 @@ export class CreateProductDto {
   @IsNumber()
   @Min(0)
   @IsOptional()
+  weight?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
   grossWeight?: number;
 
   @IsNumber()
@@ -149,6 +154,11 @@ export class UpdateProductDto {
   @Min(0)
   @IsOptional()
   packageHeight?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  weight?: number;
 
   @IsNumber()
   @Min(0)

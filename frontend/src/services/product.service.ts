@@ -23,6 +23,7 @@ export interface Product {
   packageLength?: number
   packageWidth?: number
   packageHeight?: number
+  weight?: number
   grossWeight?: number
   netWeight?: number
 }
@@ -45,6 +46,7 @@ export interface CreateProductDto {
   packageLength?: number
   packageWidth?: number
   packageHeight?: number
+  weight?: number
   grossWeight?: number
   netWeight?: number
 }

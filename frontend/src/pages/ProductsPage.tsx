@@ -164,10 +164,17 @@ const ProductsPage: React.FC = () => {
           </Row>
           <Row gutter={16}>
             <Col span={12}>
+              <Form.Item name="weight" label="重量 (KG)">
+                <InputNumber className="w-full" min={0} step={0.001} placeholder="產品重量（可與淨重不同）" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
               <Form.Item name="grossWeight" label="毛重 (KG)">
                 <InputNumber className="w-full" min={0} step={0.001} placeholder="含包裝重量" />
               </Form.Item>
             </Col>
+          </Row>
+          <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="netWeight" label="淨重 (KG)">
                 <InputNumber className="w-full" min={0} step={0.001} placeholder="產品本體重量" />

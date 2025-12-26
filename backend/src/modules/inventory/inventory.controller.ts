@@ -16,6 +16,12 @@ export class InventoryController {
     return this.inventoryService.getWarehouses(entityId);
   }
 
+  @Post('warehouses')
+  @ApiOperation({ summary: '建立倉庫（多倉）' })
+  createWarehouse(@Body() body: any) {
+    return this.inventoryService.createWarehouse(body);
+  }
+
   @Get('snapshots')
   @ApiOperation({ summary: '取得指定商品在各倉庫的庫存快照' })
   getSnapshots(
