@@ -13,6 +13,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { InventoryService } from './inventory.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
+import multer from 'multer';
 
 @ApiTags('inventory')
 @ApiBearerAuth()
@@ -61,7 +62,11 @@ export class InventoryController {
   }
 
   @Post('import/erp')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: multer.memoryStorage(),
+    }),
+  )
   @ApiOperation({ summary: '批次匯入舊 ERP 庫存（Excel/CSV）' })
   importErpInventory(
     @Request() req,
