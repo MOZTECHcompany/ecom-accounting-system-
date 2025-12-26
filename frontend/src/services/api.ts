@@ -4,9 +4,33 @@ import axios from 'axios'
 // 本地開發：使用 proxy (/api/v1)
 // 正式環境：使用環境變數 (VITE_API_URL)
 const getBaseURL = () => {
-  const envUrl = import.meta.env.VITE_API_URL?.trim()
-  if (envUrl) {
-    return envUrl
+  const envUrlRaw = import.meta.env.VITE_API_URL?.trim()
+  if (envUrlRaw) {
+    const envUrl = envUrlRaw.replace(/\/+$/, '')
+    // If a full API prefix is not provided, default to backend global prefix `/api/v1`.
+    // This prevents 404s in production when VITE_API_URL is set to a bare host.
+    if (envUrl.startsWith('/')) {
+      return envUrl
+    }
+
+    try {
+      const url = new URL(envUrl)
+      const pathname = (url.pathname || '/').replace(/\/+$/, '')
+
+      if (pathname === '' || pathname === '/' || pathname === '/api') {
+        url.pathname = '/api/v1'
+        return url.toString().replace(/\/+$/, '')
+      }
+
+      if (pathname.startsWith('/api/')) {
+        return envUrl
+      }
+
+      url.pathname = `${pathname}/api/v1`
+      return url.toString().replace(/\/+$/, '')
+    } catch {
+      return envUrl
+    }
   }
   if (import.meta.env.DEV) {
     return '/api/v1'
