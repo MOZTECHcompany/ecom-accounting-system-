@@ -16,6 +16,13 @@ export class AppController {
       status: 'ok',
       timestamp: new Date().toISOString(),
       env: process.env.NODE_ENV,
+      cloudRun: {
+        service: process.env.K_SERVICE,
+        revision: process.env.K_REVISION,
+        configuration: process.env.K_CONFIGURATION,
+        project: process.env.GOOGLE_CLOUD_PROJECT,
+        region: process.env.CLOUD_RUN_REGION,
+      },
     };
   }
 }

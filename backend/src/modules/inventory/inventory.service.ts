@@ -53,10 +53,26 @@ type ParsedImportMeta = {
   availableSheets?: string[];
 };
 
+type ParsedImportDebug = {
+  accepted: number;
+  rejected: number;
+  reasons: {
+    missingBarcode: number;
+    missingWarehouse: number;
+  };
+  sampleRejected?: {
+    keys: string[];
+    barcodeCandidate?: string;
+    warehouseCodeCandidate?: string;
+    warehouseNameCandidate?: string;
+  };
+};
+
 type ParsedImport = {
   rows: ImportRow[];
   rawRows: number;
   meta: ParsedImportMeta;
+  debug: ParsedImportDebug;
 };
 
 @Injectable()
@@ -85,7 +101,13 @@ export class InventoryService {
     return String(value || '').trim();
   }
 
-  private parseRowsFromRecords(raw: Array<Record<string, any>>): { rows: ImportRow[]; rawRows: number } {
+  private parseRowsFromRecords(
+    raw: Array<Record<string, any>>,
+  ): { rows: ImportRow[]; rawRows: number; debug: ParsedImportDebug } {
+    let missingBarcode = 0;
+    let missingWarehouse = 0;
+    let sampleRejected: ParsedImportDebug['sampleRejected'] | undefined;
+
     const mapped: Array<ImportRow | null> = raw.map((r) => {
         const row: Record<string, any> = {};
         for (const [k, v] of Object.entries(r)) {
@@ -187,8 +209,32 @@ export class InventoryService {
         );
         if ((!quantity || quantity <= 0) && serialNumber) quantity = 1;
 
-        if (!barcode) return null;
-        if (!warehouseCode || !warehouseName) return null;
+        if (!barcode) {
+          missingBarcode++;
+          if (!sampleRejected) {
+            sampleRejected = {
+              keys: Object.keys(row),
+              barcodeCandidate: String(
+                this.pick(row, ['品項編碼', '品項代碼', '商品編碼', '商品代碼', '料號', 'SKU', 'sku', '條碼']) ?? '',
+              ).trim(),
+              warehouseCodeCandidate: rawWarehouseCode,
+              warehouseNameCandidate: rawWarehouseName || warehouseLocation,
+            };
+          }
+          return null;
+        }
+        if (!warehouseCode || !warehouseName) {
+          missingWarehouse++;
+          if (!sampleRejected) {
+            sampleRejected = {
+              keys: Object.keys(row),
+              barcodeCandidate: barcode,
+              warehouseCodeCandidate: rawWarehouseCode,
+              warehouseNameCandidate: rawWarehouseName || warehouseLocation,
+            };
+          }
+          return null;
+        }
 
         const finalName = name || barcode;
 
@@ -206,7 +252,19 @@ export class InventoryService {
 
     const rows: ImportRow[] = mapped.filter((r): r is ImportRow => r !== null);
 
-    return { rows, rawRows: raw.length };
+    return {
+      rows,
+      rawRows: raw.length,
+      debug: {
+        accepted: rows.length,
+        rejected: Math.max(0, raw.length - rows.length),
+        reasons: {
+          missingBarcode,
+          missingWarehouse,
+        },
+        sampleRejected,
+      },
+    };
   }
 
   private parseCsvLine(line: string): string[] {
@@ -248,6 +306,11 @@ export class InventoryService {
         rows: [],
         rawRows: 0,
         meta: { format: 'csv', headers: [] },
+        debug: {
+          accepted: 0,
+          rejected: 0,
+          reasons: { missingBarcode: 0, missingWarehouse: 0 },
+        },
       };
     }
 
@@ -305,6 +368,12 @@ export class InventoryService {
     dryRun?: boolean;
     force?: boolean;
   }) {
+    const server = {
+      service: process.env.K_SERVICE,
+      revision: process.env.K_REVISION,
+      configuration: process.env.K_CONFIGURATION,
+    };
+
     const entityId = input.entityId?.trim();
     if (!entityId) throw new BadRequestException('Missing entityId');
     if (!input.file?.buffer) throw new BadRequestException('Missing file');
@@ -337,9 +406,10 @@ export class InventoryService {
       ? this.parseRowsFromCsvBuffer(input.file.buffer)
       : this.parseRowsFromExcelBuffer(input.file.buffer, sheet);
 
-    const { rows, rawRows, meta } = parsed;
+    const { rows, rawRows, meta, debug } = parsed;
     if (rows.length === 0) {
       return {
+        server,
         rawRows,
         rows: 0,
         skippedRows: rawRows,
@@ -349,6 +419,7 @@ export class InventoryService {
           sheet: meta.sheet,
           availableSheets: meta.availableSheets,
           headers: meta.headers,
+          parser: debug,
         },
       };
     }
@@ -483,6 +554,7 @@ export class InventoryService {
 
     if (dryRun) {
       return {
+        server,
         dryRun: true,
         entityId,
         file: importRef,
@@ -566,6 +638,7 @@ export class InventoryService {
     }
 
     return {
+      server,
       success: true,
       entityId,
       file: importRef,
