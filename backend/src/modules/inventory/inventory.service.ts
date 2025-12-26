@@ -72,20 +72,8 @@ export class InventoryService {
     return String(value || '').trim();
   }
 
-  private parseRowsFromExcelBuffer(
-    buffer: Buffer,
-    sheetName?: string,
-  ): { rows: ImportRow[]; rawRows: number } {
-    const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
-    const chosenSheetName = sheetName || workbook.SheetNames[0];
-    if (!chosenSheetName || !workbook.Sheets[chosenSheetName]) {
-      throw new Error(`Sheet not found: ${chosenSheetName}`);
-    }
-
-    const sheet = workbook.Sheets[chosenSheetName];
-    const raw = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
-
-    const rows = (raw as Array<Record<string, any>>)
+  private parseRowsFromRecords(raw: Array<Record<string, any>>): { rows: ImportRow[]; rawRows: number } {
+    const rows = raw
       .map((r) => {
         const row: Record<string, any> = {};
         for (const [k, v] of Object.entries(r)) {
@@ -140,7 +128,76 @@ export class InventoryService {
       })
       .filter((r): r is ImportRow => Boolean(r));
 
-    return { rows, rawRows: (raw as any[]).length };
+    return { rows, rawRows: raw.length };
+  }
+
+  private parseCsvLine(line: string): string[] {
+    const out: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+          continue;
+        }
+        inQuotes = !inQuotes;
+        continue;
+      }
+      if (ch === ',' && !inQuotes) {
+        out.push(current);
+        current = '';
+        continue;
+      }
+      current += ch;
+    }
+    out.push(current);
+    return out.map((v) => v.trim());
+  }
+
+  private parseRowsFromCsvBuffer(buffer: Buffer): { rows: ImportRow[]; rawRows: number } {
+    const content = buffer.toString('utf8').replace(/^\uFEFF/, '');
+    const lines = content
+      .split(/\r?\n/)
+      .map((l) => l.trimEnd())
+      .filter((l) => l.length > 0);
+
+    if (lines.length === 0) return { rows: [], rawRows: 0 };
+
+    const headers = this.parseCsvLine(lines[0]).map((h) => this.normalizeHeaderKey(h));
+    const raw: Array<Record<string, any>> = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = this.parseCsvLine(lines[i]);
+      const row: Record<string, any> = {};
+      for (let c = 0; c < headers.length; c++) {
+        const key = headers[c];
+        if (!key) continue;
+        row[key] = cols[c] ?? '';
+      }
+      raw.push(row);
+    }
+
+    return this.parseRowsFromRecords(raw);
+  }
+
+  private parseRowsFromExcelBuffer(
+    buffer: Buffer,
+    sheetName?: string,
+  ): { rows: ImportRow[]; rawRows: number } {
+    const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+    const chosenSheetName = sheetName || workbook.SheetNames[0];
+    if (!chosenSheetName || !workbook.Sheets[chosenSheetName]) {
+      throw new Error(`Sheet not found: ${chosenSheetName}`);
+    }
+
+    const sheet = workbook.Sheets[chosenSheetName];
+    const raw = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+
+    return this.parseRowsFromRecords(raw as Array<Record<string, any>>);
   }
 
   async importLegacyErpInventory(input: {
@@ -174,7 +231,13 @@ export class InventoryService {
       }
     }
 
-    const { rows, rawRows } = this.parseRowsFromExcelBuffer(input.file.buffer, sheet);
+    const originalName = (input.file.originalname || '').toLowerCase();
+    const mime = String(input.file.mimetype || '').toLowerCase();
+    const isCsv = originalName.endsWith('.csv') || mime.includes('text/csv') || mime.includes('application/csv');
+
+    const { rows, rawRows } = isCsv
+      ? this.parseRowsFromCsvBuffer(input.file.buffer)
+      : this.parseRowsFromExcelBuffer(input.file.buffer, sheet);
     if (rows.length === 0) {
       return {
         rawRows,

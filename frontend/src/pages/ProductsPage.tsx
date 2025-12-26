@@ -111,11 +111,12 @@ const ProductsPage: React.FC = () => {
         <Space>
           <Button icon={<ReloadOutlined />} onClick={fetchProducts}>重新整理</Button>
           <Upload
-            accept=".xlsx,.xls"
+            accept=".xlsx,.xls,.csv"
             showUploadList={false}
             beforeUpload={(file) => {
-              const ok = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')
-              if (!ok) message.error('請上傳 .xlsx 或 .xls 檔案')
+              const lower = file.name.toLowerCase()
+              const ok = lower.endsWith('.xlsx') || lower.endsWith('.xls') || lower.endsWith('.csv')
+              if (!ok) message.error('請上傳 .xlsx / .xls / .csv 檔案')
               return ok || Upload.LIST_IGNORE
             }}
             customRequest={async (options) => {
@@ -128,7 +129,7 @@ const ProductsPage: React.FC = () => {
             }}
           >
             <Button icon={<UploadOutlined />} loading={importing} disabled={importing}>
-              批次匯入 Excel
+              批次匯入 Excel/CSV
             </Button>
           </Upload>
           <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => setIsModalVisible(true)}>

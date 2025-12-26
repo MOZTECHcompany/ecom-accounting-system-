@@ -62,7 +62,7 @@ export class InventoryController {
 
   @Post('import/erp')
   @UseInterceptors(FileInterceptor('file'))
-  @ApiOperation({ summary: '批次匯入舊 ERP 庫存（Excel）' })
+  @ApiOperation({ summary: '批次匯入舊 ERP 庫存（Excel/CSV）' })
   importErpInventory(
     @Request() req,
     @UploadedFile() file: Express.Multer.File,
