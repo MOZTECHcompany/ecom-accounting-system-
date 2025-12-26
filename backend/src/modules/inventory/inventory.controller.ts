@@ -13,7 +13,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { InventoryService } from './inventory.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
-import multer from 'multer';
+import * as multer from 'multer';
 
 @ApiTags('inventory')
 @ApiBearerAuth()

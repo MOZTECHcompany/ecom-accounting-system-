@@ -73,8 +73,7 @@ export class InventoryService {
   }
 
   private parseRowsFromRecords(raw: Array<Record<string, any>>): { rows: ImportRow[]; rawRows: number } {
-    const rows = raw
-      .map((r) => {
+    const mapped: Array<ImportRow | null> = raw.map((r) => {
         const row: Record<string, any> = {};
         for (const [k, v] of Object.entries(r)) {
           row[this.normalizeHeaderKey(k)] = v;
@@ -117,16 +116,19 @@ export class InventoryService {
 
         const finalName = name || barcode;
 
-        return {
+        const out: ImportRow = {
           barcode,
           name: finalName,
           warehouseCode,
           warehouseName,
-          serialNumber: serialNumber || undefined,
           quantity: quantity > 0 ? quantity : 0,
-        } satisfies ImportRow;
-      })
-      .filter((r): r is ImportRow => Boolean(r));
+        };
+
+        if (serialNumber) out.serialNumber = serialNumber;
+        return out;
+      });
+
+    const rows: ImportRow[] = mapped.filter((r): r is ImportRow => r !== null);
 
     return { rows, rawRows: raw.length };
   }
