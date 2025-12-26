@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Typography, Table, Button, Tag, Space, Modal, Form, Input, Select, InputNumber, message, Checkbox, Divider, Row, Col } from 'antd'
-import { PlusOutlined, BarcodeOutlined, ReloadOutlined, MinusCircleOutlined } from '@ant-design/icons'
+import { Card, Typography, Table, Button, Tag, Space, Modal, Form, Input, Select, InputNumber, message, Checkbox, Divider, Row, Col, Upload } from 'antd'
+import { PlusOutlined, BarcodeOutlined, ReloadOutlined, MinusCircleOutlined, UploadOutlined } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import { productService, Product } from '../services/product.service'
+import { inventoryService } from '../services/inventory.service'
 
 const { Title } = Typography
 const { Option } = Select
@@ -11,6 +12,7 @@ const ProductsPage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(false)
   const [isModalVisible, setIsModalVisible] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [form] = Form.useForm()
 
   const fetchProducts = async () => {
@@ -44,6 +46,22 @@ const ProductsPage: React.FC = () => {
       fetchProducts()
     } catch (error) {
       message.error('建立失敗')
+    }
+  }
+
+  const handleImportExcel = async (file: File) => {
+    setImporting(true)
+    try {
+      const result = await inventoryService.importErpInventory(file)
+      message.success('批次匯入完成')
+      // eslint-disable-next-line no-console
+      console.log('ERP import result:', result)
+      fetchProducts()
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || '批次匯入失敗'
+      message.error(Array.isArray(msg) ? msg.join(', ') : msg)
+    } finally {
+      setImporting(false)
     }
   }
 
@@ -92,6 +110,27 @@ const ProductsPage: React.FC = () => {
         </div>
         <Space>
           <Button icon={<ReloadOutlined />} onClick={fetchProducts}>重新整理</Button>
+          <Upload
+            accept=".xlsx,.xls"
+            showUploadList={false}
+            beforeUpload={(file) => {
+              const ok = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')
+              if (!ok) message.error('請上傳 .xlsx 或 .xls 檔案')
+              return ok || Upload.LIST_IGNORE
+            }}
+            customRequest={async (options) => {
+              try {
+                await handleImportExcel(options.file as File)
+                options.onSuccess?.({}, new XMLHttpRequest())
+              } catch (e) {
+                options.onError?.(e as any)
+              }
+            }}
+          >
+            <Button icon={<UploadOutlined />} loading={importing} disabled={importing}>
+              批次匯入 Excel
+            </Button>
+          </Upload>
           <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => setIsModalVisible(true)}>
             新增產品
           </Button>

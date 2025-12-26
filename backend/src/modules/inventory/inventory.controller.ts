@@ -1,7 +1,18 @@
-import { Controller, Get, Query, Post, Body, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Query,
+  Post,
+  Body,
+  UseGuards,
+  Request,
+  UseInterceptors,
+  UploadedFile,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { InventoryService } from './inventory.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('inventory')
 @ApiBearerAuth()
@@ -47,5 +58,28 @@ export class InventoryController {
   @ApiOperation({ summary: '釋放預留庫存（訂單取消或調整）' })
   releaseReserved(@Body() body: any) {
     return this.inventoryService.releaseReservedStock(body);
+  }
+
+  @Post('import/erp')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: '批次匯入舊 ERP 庫存（Excel）' })
+  importErpInventory(
+    @Request() req,
+    @UploadedFile() file: Express.Multer.File,
+    @Query('entityId') entityId?: string,
+    @Query('sheet') sheet?: string,
+    @Query('dryRun') dryRun?: string,
+    @Query('force') force?: string,
+  ) {
+    const resolvedEntityId =
+      (entityId || '').trim() || req.user?.entityId || 'default-entity-id';
+
+    return this.inventoryService.importLegacyErpInventory({
+      entityId: resolvedEntityId,
+      file,
+      sheet,
+      dryRun: String(dryRun || '').toLowerCase() === 'true',
+      force: String(force || '').toLowerCase() === 'true',
+    });
   }
 }

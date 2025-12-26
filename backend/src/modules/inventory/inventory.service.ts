@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { Prisma } from '@prisma/client';
+import { Prisma, ProductType } from '@prisma/client';
+import * as XLSX from 'xlsx';
 
 interface CreateWarehouseInput {
   entityId: string;
@@ -30,9 +31,389 @@ interface ReserveStockInput {
   referenceId: string;
 }
 
+type ImportRow = {
+  barcode: string;
+  name: string;
+  warehouseCode: string;
+  warehouseName: string;
+  serialNumber?: string;
+  quantity: number;
+};
+
+type ImportProductCache = {
+  id: string;
+  name: string;
+  hasSerialNumbers: boolean;
+};
+
 @Injectable()
 export class InventoryService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private pick(row: Record<string, any>, keys: string[]): any {
+    for (const k of keys) {
+      const v = row[k];
+      if (v !== undefined && v !== null && String(v).trim() !== '') return v;
+    }
+    return undefined;
+  }
+
+  private toNumber(value: any, defaultValue = 0): number {
+    if (value === undefined || value === null || value === '') return defaultValue;
+    const n = Number(String(value).replace(/,/g, '').trim());
+    return Number.isFinite(n) ? n : defaultValue;
+  }
+
+  private normalizeHeaderKey(key: string): string {
+    return String(key || '').trim();
+  }
+
+  private normalizeWarehouseCode(value: string): string {
+    return String(value || '').trim();
+  }
+
+  private parseRowsFromExcelBuffer(
+    buffer: Buffer,
+    sheetName?: string,
+  ): { rows: ImportRow[]; rawRows: number } {
+    const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+    const chosenSheetName = sheetName || workbook.SheetNames[0];
+    if (!chosenSheetName || !workbook.Sheets[chosenSheetName]) {
+      throw new Error(`Sheet not found: ${chosenSheetName}`);
+    }
+
+    const sheet = workbook.Sheets[chosenSheetName];
+    const raw = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+
+    const rows = (raw as Array<Record<string, any>>)
+      .map((r) => {
+        const row: Record<string, any> = {};
+        for (const [k, v] of Object.entries(r)) {
+          row[this.normalizeHeaderKey(k)] = v;
+        }
+
+        const barcode = String(
+          this.pick(row, ['品項編碼', '國際條碼', 'Barcode', 'barcode', 'EAN', 'UPC']) ?? '',
+        ).trim();
+        const name = String(this.pick(row, ['品項名稱', '品名', '商品名稱', '名稱', 'name']) ?? '').trim();
+
+        const warehouseLocation = String(
+          this.pick(row, ['工業店', '倉庫位置', '倉庫位置名稱', '倉庫', 'warehouse', 'location']) ?? '',
+        ).trim();
+        const rawWarehouseCode = String(
+          this.pick(row, ['倉庫工廠編碼', '倉庫編碼', '倉庫代碼', 'warehouseCode', 'warehouse_code']) ?? '',
+        ).trim();
+        const rawWarehouseName = String(
+          this.pick(row, ['倉庫工廠名稱', '倉庫名稱', 'warehouseName', 'warehouse_name']) ?? '',
+        ).trim();
+
+        const warehouseName = (rawWarehouseName || warehouseLocation || rawWarehouseCode || '').trim();
+        const warehouseCode = this.normalizeWarehouseCode(
+          (rawWarehouseCode || warehouseLocation || rawWarehouseName || '').trim(),
+        );
+
+        const serialNumberRaw = this.pick(row, [
+          '序號/批號',
+          '序號',
+          'SN',
+          'sn',
+          'serialNumber',
+          'serial_number',
+        ]);
+        const serialNumber = serialNumberRaw ? String(serialNumberRaw).trim() : undefined;
+        let quantity = this.toNumber(this.pick(row, ['庫存數量', '數量', 'qty', 'quantity']) ?? 0, 0);
+        if ((!quantity || quantity <= 0) && serialNumber) quantity = 1;
+
+        if (!barcode) return null;
+        if (!warehouseCode || !warehouseName) return null;
+
+        const finalName = name || barcode;
+
+        return {
+          barcode,
+          name: finalName,
+          warehouseCode,
+          warehouseName,
+          serialNumber: serialNumber || undefined,
+          quantity: quantity > 0 ? quantity : 0,
+        } satisfies ImportRow;
+      })
+      .filter((r): r is ImportRow => Boolean(r));
+
+    return { rows, rawRows: (raw as any[]).length };
+  }
+
+  async importLegacyErpInventory(input: {
+    entityId: string;
+    file?: Express.Multer.File;
+    sheet?: string;
+    dryRun?: boolean;
+    force?: boolean;
+  }) {
+    const entityId = input.entityId?.trim();
+    if (!entityId) throw new BadRequestException('Missing entityId');
+    if (!input.file?.buffer) throw new BadRequestException('Missing file');
+
+    const dryRun = Boolean(input.dryRun);
+    const force = Boolean(input.force);
+    const sheet = input.sheet?.trim();
+    const importRef = (input.file.originalname || 'upload.xlsx').trim();
+
+    if (!dryRun && !force) {
+      const prior = await this.prisma.inventoryTransaction.count({
+        where: {
+          entityId,
+          referenceType: 'MIGRATION',
+          referenceId: importRef,
+        },
+      });
+      if (prior > 0) {
+        throw new BadRequestException(
+          `This file looks already imported (referenceId=${importRef}). Use force=true to run again.`,
+        );
+      }
+    }
+
+    const { rows, rawRows } = this.parseRowsFromExcelBuffer(input.file.buffer, sheet);
+    if (rows.length === 0) {
+      return {
+        rawRows,
+        rows: 0,
+        skippedRows: rawRows,
+        message: 'No rows found (check headers / sheet).',
+      };
+    }
+
+    const warehouseKeyToId = new Map<string, string>();
+    const productKeyToCache = new Map<string, ImportProductCache>();
+    let createdWarehouses = 0;
+    let createdProducts = 0;
+    let updatedProducts = 0;
+
+    const qtyAgg = new Map<string, Prisma.Decimal>();
+    const serialRows: Array<{
+      entityId: string;
+      productId: string;
+      warehouseId: string;
+      serialNumber: string;
+    }> = [];
+
+    const [existingWarehouses, existingProducts] = await Promise.all([
+      this.prisma.warehouse.findMany({ where: { entityId } }),
+      this.prisma.product.findMany({ where: { entityId } }),
+    ]);
+
+    for (const w of existingWarehouses) warehouseKeyToId.set(w.code, w.id);
+    for (const p of existingProducts) {
+      productKeyToCache.set(p.sku, {
+        id: p.id,
+        name: p.name,
+        hasSerialNumbers: p.hasSerialNumbers,
+      });
+    }
+
+    for (const r of rows) {
+      // Warehouse
+      let warehouseId = warehouseKeyToId.get(r.warehouseCode);
+      if (!warehouseId) {
+        if (!dryRun) {
+          const created = await this.prisma.warehouse.create({
+            data: {
+              entityId,
+              code: r.warehouseCode,
+              name: r.warehouseName,
+              type: 'INTERNAL',
+              isActive: true,
+            },
+          });
+          warehouseId = created.id;
+        } else {
+          warehouseId = `DRYRUN-WH-${r.warehouseCode}`;
+        }
+
+        warehouseKeyToId.set(r.warehouseCode, warehouseId);
+        createdWarehouses++;
+      }
+
+      // Product (sku = barcode)
+      const sku = r.barcode;
+      const cached = productKeyToCache.get(sku);
+      let productId = cached?.id;
+
+      if (!productId) {
+        if (!dryRun) {
+          const created = await this.prisma.product.create({
+            data: {
+              entityId,
+              sku,
+              name: r.name,
+              type: ProductType.SIMPLE,
+              barcode: r.barcode,
+              hasSerialNumbers: Boolean(r.serialNumber),
+              isActive: true,
+            },
+          });
+          productId = created.id;
+          productKeyToCache.set(sku, {
+            id: created.id,
+            name: created.name,
+            hasSerialNumbers: created.hasSerialNumbers,
+          });
+        } else {
+          productId = `DRYRUN-PROD-${sku}`;
+          productKeyToCache.set(sku, {
+            id: productId,
+            name: r.name,
+            hasSerialNumbers: Boolean(r.serialNumber),
+          });
+        }
+
+        createdProducts++;
+      } else {
+        const needsSn = Boolean(r.serialNumber);
+        const current = productKeyToCache.get(sku);
+        const shouldUpdateName = Boolean(current && (!current.name || current.name.trim() === '') && r.name);
+        const shouldEnableSn = Boolean(current && !current.hasSerialNumbers && needsSn);
+
+        if (shouldUpdateName || shouldEnableSn) {
+          productKeyToCache.set(sku, {
+            id: productId,
+            name: shouldUpdateName ? r.name : (current?.name || r.name),
+            hasSerialNumbers: shouldEnableSn ? true : Boolean(current?.hasSerialNumbers),
+          });
+
+          if (!dryRun) {
+            await this.prisma.product.update({
+              where: { id: productId },
+              data: {
+                ...(shouldUpdateName ? { name: r.name } : {}),
+                ...(shouldEnableSn ? { hasSerialNumbers: true } : {}),
+              },
+            });
+          }
+
+          updatedProducts++;
+        }
+      }
+
+      if (r.quantity > 0) {
+        const key = `${warehouseId}::${productId}`;
+        const prev = qtyAgg.get(key) || new Prisma.Decimal(0);
+        qtyAgg.set(key, prev.add(new Prisma.Decimal(r.quantity)));
+      }
+
+      if (r.serialNumber && r.serialNumber.trim()) {
+        serialRows.push({
+          entityId,
+          productId,
+          warehouseId,
+          serialNumber: r.serialNumber.trim(),
+        });
+      }
+    }
+
+    if (dryRun) {
+      return {
+        dryRun: true,
+        entityId,
+        file: importRef,
+        sheet: sheet || '(first sheet)',
+        rawRows,
+        rows: rows.length,
+        skippedRows: Math.max(0, rawRows - rows.length),
+        createdWarehouses,
+        createdProducts,
+        updatedProducts,
+        inventoryLines: qtyAgg.size,
+        serialNumbers: serialRows.length,
+      };
+    }
+
+    let createdMovements = 0;
+    let upsertedSnapshots = 0;
+
+    for (const [key, qty] of qtyAgg.entries()) {
+      const [warehouseId, productId] = key.split('::');
+
+      await this.prisma.$transaction(async (tx) => {
+        await tx.inventoryTransaction.create({
+          data: {
+            entityId,
+            warehouseId,
+            productId,
+            direction: 'IN',
+            quantity: qty,
+            referenceType: 'MIGRATION',
+            referenceId: importRef,
+            reason: 'ERP_IMPORT',
+            occurredAt: new Date(),
+          },
+        });
+
+        await tx.inventorySnapshot.upsert({
+          where: {
+            entityId_warehouseId_productId: {
+              entityId,
+              warehouseId,
+              productId,
+            },
+          },
+          create: {
+            entityId,
+            warehouseId,
+            productId,
+            qtyOnHand: qty,
+            qtyAllocated: new Prisma.Decimal(0),
+            qtyAvailable: qty,
+          },
+          update: {
+            qtyOnHand: { increment: qty },
+            qtyAvailable: { increment: qty },
+          },
+        });
+      });
+
+      createdMovements++;
+      upsertedSnapshots++;
+    }
+
+    let createdSerials = 0;
+    const chunkSize = 1000;
+    for (let i = 0; i < serialRows.length; i += chunkSize) {
+      const chunk = serialRows.slice(i, i + chunkSize);
+      const result = await this.prisma.inventorySerialNumber.createMany({
+        data: chunk.map((s) => ({
+          entityId: s.entityId,
+          productId: s.productId,
+          warehouseId: s.warehouseId,
+          serialNumber: s.serialNumber,
+          status: 'AVAILABLE',
+          inboundRefType: 'MIGRATION',
+          inboundRefId: importRef,
+        })),
+        skipDuplicates: true,
+      });
+      createdSerials += result.count;
+    }
+
+    return {
+      success: true,
+      entityId,
+      file: importRef,
+      sheet: sheet || '(first sheet)',
+      rawRows,
+      rows: rows.length,
+      skippedRows: Math.max(0, rawRows - rows.length),
+      createdWarehouses,
+      createdProducts,
+      updatedProducts,
+      inventoryLines: qtyAgg.size,
+      createdMovements,
+      upsertedSnapshots,
+      serialRows: serialRows.length,
+      createdSerials,
+    };
+  }
 
   /**
    * 查詢倉庫列表
