@@ -3,7 +3,36 @@ import { AppService } from './app.service';
 
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
+  constructor(private readonly appService: AppService) { }
+
+  @Get('debug')
+  async debug() {
+    try {
+      // Test DB Connection
+      await this.prisma.$queryRaw`SELECT 1`;
+      return {
+        status: 'ok',
+        db: 'connected',
+        env: {
+          NODE_ENV: process.env.NODE_ENV,
+          HAS_DB_URL: !!process.env.DATABASE_URL,
+          // Mask password
+          DB_URL_MASKED: process.env.DATABASE_URL?.replace(/:([^:@]+)@/, ':***@'),
+        }
+      };
+    } catch (e) {
+      return {
+        status: 'error',
+        db: 'disconnected',
+        error: e.message,
+        stack: e.stack,
+        env: {
+          HAS_DB_URL: !!process.env.DATABASE_URL,
+          DB_URL_MASKED: process.env.DATABASE_URL?.replace(/:([^:@]+)@/, ':***@'),
+        }
+      };
+    }
+  }
 
   @Get()
   getHello(): string {
