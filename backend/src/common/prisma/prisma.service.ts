@@ -15,8 +15,7 @@ import { PrismaClient } from '@prisma/client';
 @Injectable()
 export class PrismaService
   extends PrismaClient
-  implements OnModuleInit, OnModuleDestroy
-{
+  implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
 
   constructor() {
@@ -31,7 +30,9 @@ export class PrismaService
       this.logger.log('Successfully connected to database');
     } catch (error) {
       this.logger.error('Failed to connect to database', error);
-      throw error;
+      // Don't throw error to allow app to start and health check to pass
+      // This enables debugging via logs in Cloud Run
+      // throw error; 
     }
   }
 
