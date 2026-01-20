@@ -40,7 +40,14 @@ async function bootstrap() {
 
   // CORS 設定
   app.enableCors({
-    origin: '*',
+    origin: [
+      'https://ecom-accounting-frontend.onrender.com',
+      'http://localhost:5173',
+      'http://localhost:3000',
+    ],
+    credentials: true,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: 'Content-Type, Accept, Authorization',
   });
 
   // Some hosting/CDN setups may send Reporting API (Report-To / NEL) beacons to

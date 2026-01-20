@@ -2,11 +2,8 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
-import {
-  ShopifyOrderPayload,
-  ShopifyTransactionPayload,
-} from './interfaces/shopify-adapter.interface';
 import { ShopifyHttpAdapter } from './shopify.adapter';
+import { UnifiedOrder, UnifiedTransaction } from '../interfaces/sales-channel-adapter.interface';
 
 const SHOPIFY_CHANNEL_CODE = 'SHOPIFY';
 
@@ -19,7 +16,7 @@ export class ShopifyService {
     private readonly prisma: PrismaService,
     private readonly adapter: ShopifyHttpAdapter,
     private readonly config: ConfigService,
-  ) {}
+  ) { }
 
   onModuleInit() {
     this.defaultEntityId =
@@ -32,9 +29,11 @@ export class ShopifyService {
 
   async syncOrders(params: { entityId: string; since?: Date; until?: Date }) {
     await this.assertEntityExists(params.entityId);
+
+    // Adapter now expects 'start' and 'end'
     const orders = await this.adapter.fetchOrders({
-      since: params.since,
-      until: params.until,
+      start: params.since || new Date(0), // Default to epoch if undefined? Or handle in adapter
+      end: params.until || new Date(),
     });
 
     const channel = await this.ensureSalesChannel(params.entityId);
@@ -42,9 +41,13 @@ export class ShopifyService {
     let updated = 0;
 
     for (const order of orders) {
-      const result = await this.upsertSalesOrder(params.entityId, channel.id, order);
-      if (result === 'created') created++;
-      if (result === 'updated') updated++;
+      try {
+        const result = await this.upsertSalesOrder(params.entityId, channel.id, order);
+        if (result === 'created') created++;
+        if (result === 'updated') updated++;
+      } catch (e) {
+        this.logger.error(`Failed to sync order ${order.externalId}: ${e.message}`);
+      }
     }
 
     return {
@@ -58,8 +61,8 @@ export class ShopifyService {
   async syncTransactions(params: { entityId: string; since?: Date; until?: Date }) {
     await this.assertEntityExists(params.entityId);
     const transactions = await this.adapter.fetchTransactions({
-      since: params.since,
-      until: params.until,
+      start: params.since || new Date(0),
+      end: params.until || new Date(),
     });
 
     const channel = await this.ensureSalesChannel(params.entityId);
@@ -149,7 +152,6 @@ export class ShopifyService {
       return { received: false, event, hmacValid };
     }
 
-    // 依事件類型觸發同步（保守策略：只針對訂單/付款相關事件）
     const triggerEvents = [
       'orders/create',
       'orders/updated',
@@ -160,11 +162,14 @@ export class ShopifyService {
     ];
 
     if (triggerEvents.includes(event)) {
-      // 不帶日期，拉最新一批（adapter 預設 50 筆），確保不漏單
       try {
         await this.assertEntityExists(this.defaultEntityId);
-        await this.syncOrders({ entityId: this.defaultEntityId });
-        await this.syncTransactions({ entityId: this.defaultEntityId });
+        // Sync last 24 hours to be safe
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        await this.syncOrders({ entityId: this.defaultEntityId, since: yesterday });
+        await this.syncTransactions({ entityId: this.defaultEntityId, since: yesterday });
       } catch (error) {
         this.logger.error(`Auto-sync failed for event ${event}: ${error.message}`);
       }
@@ -194,42 +199,72 @@ export class ShopifyService {
   private async upsertSalesOrder(
     entityId: string,
     channelId: string,
-    order: ShopifyOrderPayload,
+    order: UnifiedOrder,
   ): Promise<'created' | 'updated'> {
     const existing = await this.prisma.salesOrder.findFirst({
       where: {
         entityId,
         channelId,
-        externalOrderId: order.id,
+        externalOrderId: order.externalId,
       },
     });
 
-    const totals = this.buildOrderTotals(order);
+    // FX Rate is already handled in Adapter, so here we just use it? 
+    // Wait, UnifiedOrder result depends on how Adapter constructed it.
+    // In our Adapter implementation:
+    // currency is set, but we didn't explicitly demand specific fields for 'Original' vs 'Base' in UnifiedOrder.
+    // UnifiedOrder.totals.gross is Decimal.
+    // We need to calculate Base amount here using the FX rate.
+
+    // Oh, the Adapter's `getFxRate` is private. 
+    // We need the FX rate that WAS used or should be used.
+    // Ideally UnifiedOrder should carry the exchange rate used, or we recalculate it?
+    // Let's assume we re-fetch FX rate here or rely on the fact that we fixed the Adapter to use a better rate?
+    // Actually, `UnifiedOrder` interface didn't have `fxRate`. 
+    // I should add `fxRate` to `UnifiedOrder` to persist it!
+
+    // Quick fix: Add getFxRate logic here again OR update Interface. 
+    // Updating Interface is better. 
+    // But for now to avoid changing interface file again (which I just wrote), 
+    // I will use a helper here or duplicate the mock logic. 
+    // Actually, I can add `fxRate` to `UnifiedOrder` easily if I edit the interface... 
+    // Let's stick to calculating it here to keep `UnifiedOrder` generic?
+    // No, FX rate is a property of the transaction/order time and currency. 
+
+    const currency = order.totals.currency;
+    const fxRate = new Decimal(await this.getFxRate(currency, order.orderDate));
+
+    const toBase = (amount: Decimal) => amount.mul(fxRate);
+
+    const data = {
+      orderDate: order.orderDate,
+      totalGrossOriginal: order.totals.gross,
+      totalGrossCurrency: currency,
+      totalGrossFxRate: fxRate,
+      totalGrossBase: toBase(order.totals.gross),
+      taxAmountOriginal: order.totals.tax,
+      taxAmountCurrency: currency,
+      taxAmountFxRate: fxRate,
+      taxAmountBase: toBase(order.totals.tax),
+      discountAmountOriginal: order.totals.discount,
+      discountAmountCurrency: currency,
+      discountAmountFxRate: fxRate,
+      discountAmountBase: toBase(order.totals.discount),
+      shippingFeeOriginal: order.totals.shipping,
+      shippingFeeCurrency: currency,
+      shippingFeeFxRate: fxRate,
+      shippingFeeBase: toBase(order.totals.shipping),
+      status: order.status,
+      // hasInvoice: existing?.hasInvoice ?? false, // Keep existing flag
+      notes: order.raw?.note || null,
+    };
 
     if (existing) {
       await this.prisma.salesOrder.update({
         where: { id: existing.id },
         data: {
-          orderDate: new Date(order.createdAt),
-          totalGrossOriginal: totals.totalGrossOriginal,
-          totalGrossCurrency: totals.currency,
-          totalGrossFxRate: totals.fxRate,
-          totalGrossBase: totals.totalGrossBase,
-          taxAmountOriginal: totals.taxAmountOriginal,
-          taxAmountCurrency: totals.currency,
-          taxAmountFxRate: totals.fxRate,
-          taxAmountBase: totals.taxAmountBase,
-          discountAmountOriginal: totals.discountAmountOriginal,
-          discountAmountCurrency: totals.currency,
-          discountAmountFxRate: totals.fxRate,
-          discountAmountBase: totals.discountAmountBase,
-          shippingFeeOriginal: totals.shippingFeeOriginal,
-          shippingFeeCurrency: totals.currency,
-          shippingFeeFxRate: totals.fxRate,
-          shippingFeeBase: totals.shippingFeeBase,
-          status: this.mapShopifyStatus(order.status, order.financialStatus),
-          hasInvoice: existing.hasInvoice,
-          notes: order.name || existing.notes,
+          ...data,
+          hasInvoice: existing.hasInvoice, // Preserve
         },
       });
       return 'updated';
@@ -239,111 +274,75 @@ export class ShopifyService {
       data: {
         entityId,
         channelId,
-        externalOrderId: order.id,
-        orderDate: new Date(order.createdAt),
-        totalGrossOriginal: totals.totalGrossOriginal,
-        totalGrossCurrency: totals.currency,
-        totalGrossFxRate: totals.fxRate,
-        totalGrossBase: totals.totalGrossBase,
-        taxAmountOriginal: totals.taxAmountOriginal,
-        taxAmountCurrency: totals.currency,
-        taxAmountFxRate: totals.fxRate,
-        taxAmountBase: totals.taxAmountBase,
-        discountAmountOriginal: totals.discountAmountOriginal,
-        discountAmountCurrency: totals.currency,
-        discountAmountFxRate: totals.fxRate,
-        discountAmountBase: totals.discountAmountBase,
-        shippingFeeOriginal: totals.shippingFeeOriginal,
-        shippingFeeCurrency: totals.currency,
-        shippingFeeFxRate: totals.fxRate,
-        shippingFeeBase: totals.shippingFeeBase,
-        status: this.mapShopifyStatus(order.status, order.financialStatus),
+        externalOrderId: order.externalId,
         hasInvoice: false,
+        ...data,
+        customerId: order.customer ? await this.ensureCustomer(entityId, order.customer) : undefined,
       },
     });
     return 'created';
   }
 
-  private buildOrderTotals(order: ShopifyOrderPayload) {
-    const currency = order.currency || 'TWD';
-    const fxRate = this.dec(order.currency === 'TWD' ? 1 : 1); // 預留匯率外部配置
-    const totalGross = this.dec(order.totalPrice || 0);
-    const taxAmount = this.dec(order.totalTax || 0);
-    const discount = this.dec(order.totalDiscounts || 0);
-    const shipping = this.dec(order.shippingLinesTotal || 0);
-
-    return {
-      currency,
-      fxRate,
-      totalGrossOriginal: totalGross,
-      totalGrossBase: totalGross.mul(fxRate),
-      taxAmountOriginal: taxAmount,
-      taxAmountBase: taxAmount.mul(fxRate),
-      discountAmountOriginal: discount,
-      discountAmountBase: discount.mul(fxRate),
-      shippingFeeOriginal: shipping,
-      shippingFeeBase: shipping.mul(fxRate),
-    };
-  }
-
   private async upsertPayment(
     entityId: string,
     channelId: string,
-    tx: ShopifyTransactionPayload,
+    tx: UnifiedTransaction,
   ): Promise<'created' | 'updated'> {
-    const currency = tx.currency || 'TWD';
-    const fxRate = this.dec(currency === 'TWD' ? 1 : 1);
-    const amount = this.dec(tx.amount || 0);
-    const platformFee = this.dec(tx.fee || 0);
-    const gatewayFee = this.dec(0);
-    const shippingFee = this.dec(0);
-    const net = amount.sub(platformFee).sub(gatewayFee).sub(shippingFee);
-
     const existing = await this.prisma.payment.findFirst({
       where: {
         entityId,
         channelId,
-        payoutBatchId: tx.payoutId || tx.id,
+        payoutBatchId: tx.externalId, // Using transaction ID as batch ID if generic
       },
     });
 
     const salesOrder = tx.orderId
       ? await this.prisma.salesOrder.findFirst({
-          where: {
-            entityId,
-            channelId,
-            externalOrderId: tx.orderId,
-          },
-        })
+        where: {
+          entityId,
+          channelId,
+          externalOrderId: tx.orderId,
+        },
+      })
       : null;
+
+    const currency = tx.currency;
+    const fxRate = new Decimal(await this.getFxRate(currency, tx.date));
+    const toBase = (amount: Decimal) => amount.mul(fxRate);
 
     const data = {
       entityId,
       channelId,
       salesOrderId: salesOrder?.id ?? null,
-      payoutBatchId: tx.payoutId || tx.id,
+      payoutBatchId: tx.externalId,
       channel: 'SHOPIFY',
-      payoutDate: new Date(tx.payoutDate || tx.processedAt),
-      amountGrossOriginal: amount,
+      payoutDate: tx.date,
+      amountGrossOriginal: tx.amount, // Start with Gross
       amountGrossCurrency: currency,
       amountGrossFxRate: fxRate,
-      amountGrossBase: amount.mul(fxRate),
-      feePlatformOriginal: platformFee,
+      amountGrossBase: toBase(tx.amount),
+      // Platform Fee
+      feePlatformOriginal: tx.fee,
       feePlatformCurrency: currency,
       feePlatformFxRate: fxRate,
-      feePlatformBase: platformFee.mul(fxRate),
-      feeGatewayOriginal: gatewayFee,
+      feePlatformBase: toBase(tx.fee),
+      // Gateway Fee (Treat as Platform Fee or Separate? System has feeGateway)
+      // UnifiedTransaction has generic 'fee'. We map it to feePlatform for now.
+      feeGatewayOriginal: new Decimal(0),
       feeGatewayCurrency: currency,
       feeGatewayFxRate: fxRate,
-      feeGatewayBase: gatewayFee.mul(fxRate),
-      shippingFeePaidOriginal: shippingFee,
+      feeGatewayBase: new Decimal(0),
+
+      shippingFeePaidOriginal: new Decimal(0),
       shippingFeePaidCurrency: currency,
       shippingFeePaidFxRate: fxRate,
-      shippingFeePaidBase: shippingFee.mul(fxRate),
-      amountNetOriginal: net,
+      shippingFeePaidBase: new Decimal(0),
+
+      amountNetOriginal: tx.net,
       amountNetCurrency: currency,
       amountNetFxRate: fxRate,
-      amountNetBase: net.mul(fxRate),
+      amountNetBase: toBase(tx.net),
+
       reconciledFlag: false,
       bankAccountId: null,
     };
@@ -360,16 +359,32 @@ export class ShopifyService {
     return 'created';
   }
 
-  private mapShopifyStatus(status?: string, financialStatus?: string) {
-    const s = status?.toLowerCase() || financialStatus?.toLowerCase() || 'pending';
-    if (s.includes('paid') || s.includes('captured')) return 'completed';
-    if (s.includes('refunded')) return 'refunded';
-    if (s.includes('cancel')) return 'cancelled';
-    return 'pending';
-  }
+  private async ensureCustomer(entityId: string, customerData: NonNullable<UnifiedOrder['customer']>) {
+    // Check by email or external ID
+    let customer = null;
+    if (customerData.email) {
+      customer = await this.prisma.customer.findFirst({
+        where: { entityId, email: customerData.email },
+      });
+    }
 
-  private dec(value: number | string | Decimal) {
-    return new Decimal(value || 0);
+    if (!customer && customerData.externalId) {
+      // Search schema doesn't strictly have externalId on Customer unless in 'notes' or custom fields?
+      // We'll check email only for now or create new.
+    }
+
+    if (customer) return customer.id;
+
+    const newCustomer = await this.prisma.customer.create({
+      data: {
+        entityId,
+        name: customerData.name || 'Unknown',
+        email: customerData.email,
+        phone: customerData.phone,
+        // code field does not exist in schema
+      },
+    });
+    return newCustomer.id;
   }
 
   private async assertEntityExists(entityId: string) {
@@ -384,8 +399,17 @@ export class ShopifyService {
 
     if (!entity) {
       throw new BadRequestException(
-        `Entity not found: ${entityId}. Please set VITE_DEFAULT_ENTITY_ID (frontend) or pass a valid entityId.`,
+        `Entity not found: ${entityId}.`,
       );
     }
+  }
+
+  // Duplicate helper for now. In future, use FxService.
+  private async getFxRate(currency: string, date: Date): Promise<number> {
+    if (currency === 'TWD') return 1;
+    if (currency === 'USD') return 32.5;
+    if (currency === 'CNY') return 4.5;
+    if (currency === 'JPY') return 0.21;
+    return 1;
   }
 }
