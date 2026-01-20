@@ -81,9 +81,10 @@ async function bootstrap() {
   // 啟動服務
   const port = configService.get('PORT') || 3000;
 
-  await app.listen(port, () => {
+  await app.listen(port, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${port}`);
     console.log(`📘 Swagger available at /api-docs`);
+    console.log(`🌍 Listening on 0.0.0.0:${port}`);
   });
 }
 
