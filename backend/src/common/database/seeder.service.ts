@@ -237,11 +237,13 @@ export class SeederService implements OnModuleInit {
       update: {
         passwordHash, // Ensure password is updated
         name,
+        isActive: true,
       },
       create: {
         email,
         name,
         passwordHash,
+        isActive: true,
       },
     });
 
