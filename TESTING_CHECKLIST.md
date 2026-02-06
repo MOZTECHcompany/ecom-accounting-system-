@@ -820,3 +820,23 @@ npx prisma migrate deploy
 ---
 
 **✨ 祝測試順利！**
+
+### 5️⃣ Phase 3: AI & Security 驗證
+
+**目標**: 確認 AI 分析與 2FA 功能正常
+
+**測試 AI 分析**:
+```bash
+# 取得 AI 分析報告 (需設定 GEMINI_API_KEY 環境變數)
+curl -X POST http://localhost:3000/reports/analyze \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <YOUR_TOKEN>" \
+  -d '{"entityId": "1", "startDate": "2025-01-01", "endDate": "2025-01-31", "context": "Monthly Review"}'
+```
+
+**測試 2FA Setup**:
+```bash
+# 取得 2FA Secret 與 OTP URL
+curl -X GET http://localhost:3000/auth/2fa/setup \
+  -H "Authorization: Bearer <YOUR_TOKEN>"
+```
