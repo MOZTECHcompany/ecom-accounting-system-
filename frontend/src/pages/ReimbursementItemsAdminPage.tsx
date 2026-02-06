@@ -27,10 +27,12 @@ import {
   ReloadOutlined,
   StopOutlined,
   SearchOutlined,
+  RobotOutlined,
 } from '@ant-design/icons'
 import { GlassDrawer, GlassDrawerSection } from '../components/ui/GlassDrawer'
 import { motion } from 'framer-motion'
 import { expenseService } from '../services/expense.service'
+import { api } from '../services/api'
 import type {
   ApprovalPolicySummary,
   ReimbursementItem,
@@ -67,6 +69,7 @@ const ReimbursementItemsAdminPage: React.FC = () => {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [editingItem, setEditingItem] = useState<ReimbursementItem | null>(null)
+  const [seeding, setSeeding] = useState(false)
 
   const fetchItems = useCallback(async () => {
     if (!entityId) return
@@ -219,7 +222,20 @@ const ReimbursementItemsAdminPage: React.FC = () => {
     },
     [fetchItems],
   )
-
+  const handleSeedAiItems = async () => {
+    setSeeding(true)
+    try {
+      // Direct API call or add to service
+      await expenseService.seedAiItems(entityId)
+      message.success('已成功生成 AI 預設報銷項目')
+      await fetchItems()
+    } catch (error) {
+      console.error(error)
+      message.error('生成失敗')
+    } finally {
+      setSeeding(false)
+    }
+  }
   const columns: ColumnsType<ReimbursementItem> = useMemo(
     () => [
       {
@@ -346,6 +362,9 @@ const ReimbursementItemsAdminPage: React.FC = () => {
           <Text className="text-gray-500">設定費用報銷項目、審核政策與會計科目對應</Text>
         </div>
         <Space>
+          <Button icon={<RobotOutlined />} onClick={handleSeedAiItems} loading={seeding}>
+            AI 生成預設庫
+          </Button>
           <Button icon={<ReloadOutlined />} onClick={fetchItems}>
             重新整理
           </Button>

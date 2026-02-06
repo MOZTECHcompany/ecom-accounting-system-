@@ -617,7 +617,7 @@ const ExpenseRequestsPage: React.FC = () => {
           }
         }
       } else {
-        message.info('AI 無法判斷合適的報銷項目，請手動選擇')
+        message.info('AI 無法判斷合適的報銷項目，可能尚未設定報銷項目庫，請聯繫管理員')
       }
     } catch (error) {
       console.error(error)
@@ -891,7 +891,7 @@ const ExpenseRequestsPage: React.FC = () => {
           <GlassDrawerSection>
             <Form.Item label="AI 智慧報銷說明" style={{ marginBottom: 0 }} required>
               <div className="mb-2 text-slate-500 text-xs">
-                請輸入費用內容（如：文具、計程車費 560），AI 將自動建議報銷項目並填入金額。
+                請輸入費用內容（如：文具、計程車費 560），並點擊下方按鈕，AI 將自動建議報銷項目並填入金額。
               </div>
               <Form.Item name="description" noStyle rules={[{ required: true, message: '請輸入備註說明' }]}>
                 <Input.TextArea

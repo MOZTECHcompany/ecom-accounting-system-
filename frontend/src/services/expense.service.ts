@@ -304,6 +304,11 @@ export const expenseService = {
     return response.data
   },
 
+  async seedAiItems(entityId: string) {
+    const response = await api.post(`/expense/seed-ai-items`, { entityId })
+    return response.data
+  },
+
   async rejectExpenseRequest(
     requestId: string,
     payload: RejectExpenseRequestPayload,
