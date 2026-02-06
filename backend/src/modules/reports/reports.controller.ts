@@ -49,7 +49,7 @@ export class ReportsController {
     // Fetch underlying financial data (e.g., Income Statement)
     // Note: This relies on reportsService.getIncomeStatement returning raw data object, not a StreamableFile.
     // We assume it returns an object based on standard NestJS patterns unless it's designed for PDF export.
-    const financialData = await this.reportsService.getIncomeStatement(entityId, startDate, endDate);
+    const financialData = await this.reportsService.getIncomeStatement(entityId, new Date(startDate), new Date(endDate));
 
     return this.expenseIntelligenceService.analyzeFinancialReport(
       context || 'General Financial Health Check',

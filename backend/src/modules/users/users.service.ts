@@ -315,8 +315,8 @@ export class UsersService {
       return await this.prisma.user.update({
         where: { id: userId },
         data: {
-          two_factor_secret: secret,
-          is_two_factor_enabled: enabled,
+          twoFactorSecret: secret,
+          isTwoFactorEnabled: enabled,
         },
       });
     } catch (error) {
