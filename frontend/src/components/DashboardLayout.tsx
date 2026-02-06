@@ -188,6 +188,7 @@ const DashboardLayout: React.FC = () => {
       key: 'profile',
       icon: <UserOutlined />,
       label: '個人資料',
+      onClick: () => navigate('/profile'),
     },
     {
       key: 'settings',

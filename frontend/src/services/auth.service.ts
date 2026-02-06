@@ -49,6 +49,17 @@ export const authService = {
     return mapManagedUserToUser(response.data)
   },
 
+  async get2FASetup() {
+    const response = await api.get<{ secret: string; otpauthUrl: string }>('/auth/2fa/setup')
+    return response.data
+  },
+
+  async enable2FA(token: string, secret: string) {
+    const response = await api.post('/auth/2fa/enable', { token, secret })
+    return response.data
+  },
+
+
   logout() {
     localStorage.removeItem('access_token')
   },

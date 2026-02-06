@@ -32,6 +32,12 @@ export const accountingService = {
     })
     return response.data
   },
+
+  async analyzeReport(data: { entityId: string; startDate: string; endDate: string; context?: string }): Promise<any> {
+    const response = await api.post('/reports/analyze', data)
+    return response.data
+  },
+
 }
 
 export interface ReportItem {

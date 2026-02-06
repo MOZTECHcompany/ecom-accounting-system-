@@ -840,3 +840,22 @@ curl -X POST http://localhost:3000/reports/analyze \
 curl -X GET http://localhost:3000/auth/2fa/setup \
   -H "Authorization: Bearer <YOUR_TOKEN>"
 ```
+
+### 6️⃣ Frontend Integration 驗證
+
+**目標**: 確認前端介面能正確呼叫後端 AI 與 2FA
+
+**驗證 2FA 流程**:
+1. 登入系統
+2. 點擊右上角頭像 -> 個人資料 (Profile)
+3. 點擊 "Setup 2FA"
+4. 使用 Google Authenticator 掃描 QRCode
+5. 輸入 6 位數驗證碼並啟用
+6. 確認介面顯示 "2FA is Active"
+
+**驗證 AI 分析**:
+1. 進入 "報表中心" (Reports)
+2. 點擊頂部工具列的 "AI 財務分析" 按鈕
+3. 觀察 Loading 狀態
+4. 確認彈出視窗顯示 "關鍵洞察"、"異常偵測" 等區塊
+   *(若未設定 API Key，將顯示 "AI service not configured" 提示)*

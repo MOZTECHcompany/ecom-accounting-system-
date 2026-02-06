@@ -30,6 +30,7 @@ import ProductsPage from './pages/ProductsPage'
 import PurchaseOrdersPage from './pages/PurchaseOrdersPage'
 import AssemblyPage from './pages/AssemblyPage'
 import CustomersPage from './pages/CustomersPage'
+import ProfilePage from './pages/ProfilePage'
 
 const App: React.FC = () => {
   return (
@@ -72,6 +73,9 @@ const App: React.FC = () => {
                 <Route path="purchasing/orders" element={<PurchaseOrdersPage />} />
                 <Route path="manufacturing/assembly" element={<AssemblyPage />} />
                 <Route path="sales/customers" element={<CustomersPage />} />
+
+                {/* User Routes */}
+                <Route path="profile" element={<ProfilePage />} />
 
                 {/* Placeholder Routes */}
                 <Route path="import" element={<ImportPage />} />

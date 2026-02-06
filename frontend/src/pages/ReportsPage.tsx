@@ -14,7 +14,9 @@ import {
   Select,
   message,
   Empty,
-  Spin
+  Spin,
+  Modal,
+  Descriptions,
 } from 'antd'
 import { 
   DownloadOutlined, 
@@ -24,7 +26,8 @@ import {
   PieChartOutlined,
   BarChartOutlined,
   FileTextOutlined,
-  ReloadOutlined
+  ReloadOutlined,
+  RobotOutlined
 } from '@ant-design/icons'
 import { 
   BarChart, 
@@ -68,6 +71,11 @@ const ReportsPage: React.FC = () => {
   const [incomeStatement, setIncomeStatement] = useState<IncomeStatement | null>(null)
   const [balanceSheet, setBalanceSheet] = useState<BalanceSheet | null>(null)
 
+  // AI State
+  const [aiModalVisible, setAiModalVisible] = useState(false)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiResult, setAiResult] = useState<any>(null)
+
   const fetchData = async () => {
     if (!dateRange || !dateRange[0] || !dateRange[1]) return
     setLoading(true)
@@ -93,6 +101,25 @@ const ReportsPage: React.FC = () => {
 
   const handleExport = () => {
     message.info('匯出功能開發中')
+  }
+
+  const handleAIAnalysis = async () => {
+    if (!incomeStatement) return
+    setAiModalVisible(true)
+    setAiLoading(true)
+    try {
+      const result = await accountingService.analyzeReport({
+        entityId: 'tw-entity-001', // Should come from a selector in real app
+        startDate: dateRange[0].format('YYYY-MM-DD'),
+        endDate: dateRange[1].format('YYYY-MM-DD'),
+        context: 'Income Statement Review'
+      })
+      setAiResult(result)
+    } catch (error) {
+      message.error('AI Analysis failed')
+    } finally {
+      setAiLoading(false)
+    }
   }
 
   // Transform Income Statement Data
@@ -222,6 +249,14 @@ const ReportsPage: React.FC = () => {
             onChange={(dates) => setDateRange(dates as [dayjs.Dayjs, dayjs.Dayjs])}
           />
           <Button icon={<ReloadOutlined />} onClick={fetchData} loading={loading}>重新整理</Button>
+          <Button 
+            icon={<RobotOutlined />} 
+            onClick={handleAIAnalysis} 
+            loading={aiLoading}
+            className="border-purple-500 text-purple-600 hover:text-purple-700 hover:border-purple-600"
+          >
+            AI 財務分析
+          </Button>
           <Button 
             type="primary" 
             icon={<DownloadOutlined />} 
@@ -360,6 +395,56 @@ const ReportsPage: React.FC = () => {
           </Tabs>
         </Spin>
       </div>
+
+      <Modal
+        title={<span><RobotOutlined className="text-purple-600 mr-2" /> AI 財務分析報告 (Expense Intelligence)</span>}
+        open={aiModalVisible}
+        onCancel={() => setAiModalVisible(false)}
+        footer={null}
+        width={800}
+      >
+        {aiLoading ? (
+           <div className="flex flex-col items-center justify-center py-12">
+             <Spin size="large" />
+             <Text className="mt-4 text-gray-500">正在分析財務數據...</Text>
+           </div>
+        ) : aiResult ? (
+          <div className="space-y-6">
+             {aiResult.analysis === 'AI service not configured.' && (
+               <div className="bg-orange-50 p-4 rounded text-orange-700">
+                 請聯繫管理員配置 GEMINI_API_KEY 以啟用 AI 功能。
+               </div>
+             )}
+             
+             {aiResult.insights && (
+               <Card size="small" title="📊 關鍵洞察 (Insights)" className="border-purple-100">
+                  <Text>{aiResult.insights}</Text>
+               </Card>
+             )}
+
+             {aiResult.anomalies && (
+               <Card size="small" title="⚠️ 異常偵測 (Anomalies)" className="border-red-100">
+                  <Text>{aiResult.anomalies}</Text>
+               </Card>
+             )}
+
+             {aiResult.suggestions && (
+               <Card size="small" title="💡 優化建議 (Suggestions)" className="border-green-100">
+                  <Text>{aiResult.suggestions}</Text>
+               </Card>
+             )}
+
+             {/* Fallback for raw text response */}
+             {!aiResult.insights && !aiResult.analysis && (
+               <pre className="whitespace-pre-wrap bg-gray-50 p-4 rounded text-sm">
+                 {JSON.stringify(aiResult, null, 2)}
+               </pre>
+             )}
+          </div>
+        ) : (
+          <Empty description="點擊分析按鈕以生成報告" />
+        )}
+      </Modal>
     </div>
   )
 }
