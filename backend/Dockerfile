@@ -65,4 +65,4 @@ EXPOSE 3000
 # Gate heavyweight operations behind env flags so deployments can reliably start.
 # - Set MIGRATE_ON_STARTUP=true (or 1) to apply Prisma migrations on startup (recommended at least once after deploy).
 # - Set SEED_ON_STARTUP=true (or 1) for a one-off revision to populate baseline data.
-CMD ["sh", "-c", "set -e; export DATABASE_URL=postgresql://erp_user:${DB_PASSWORD}@localhost/erp_db?host=/cloudsql/moztech-main-db:asia-east1:moztech-main-db; case \"${MIGRATE_ON_STARTUP:-}\" in true|TRUE|1) npx prisma migrate deploy ;; esac; case \"${SEED_ON_STARTUP:-}\" in true|TRUE|1) node dist/prisma/seed.js ;; esac; node dist/src/main.js"]
+CMD ["sh", "-c", "set -e; : \"${DB_USER:=erp_user}\"; : \"${DB_NAME:=erp_db}\"; : \"${CLOUDSQL_INSTANCE:=moztech-main-db:asia-east1:moztech-main-db}\"; if [ -z \"${DATABASE_URL:-}\" ]; then export DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@localhost/${DB_NAME}?host=/cloudsql/${CLOUDSQL_INSTANCE}; fi; case \"${MIGRATE_ON_STARTUP:-}\" in true|TRUE|1) npx prisma migrate deploy ;; esac; case \"${SEED_ON_STARTUP:-}\" in true|TRUE|1) node dist/prisma/seed.js ;; esac; node dist/src/main.js"]
