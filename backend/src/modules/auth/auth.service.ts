@@ -4,9 +4,11 @@ import {
   ConflictException,
   Logger,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import * as OTPAuth from 'otpauth';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -161,4 +163,53 @@ export class AuthService {
     const payload = { sub: userId, email };
     return this.jwtService.signAsync(payload);
   }
+
+  /**
+   * 產生 2FA Secret
+   */
+  async generateTwoFactorSecret(userEmail: string) {
+    const secret = new OTPAuth.Secret({ size: 20 });
+    const totp = new OTPAuth.TOTP({
+      issuer: 'EcomAccounting',
+      label: userEmail,
+      algorithm: 'SHA1',
+      digits: 6,
+      period: 30,
+      secret: secret,
+    });
+
+    return {
+      secret: secret.base32,
+      otpauthUrl: totp.toString(),
+    };
+  }
+
+  /**
+   * 驗證 2FA Token
+   */
+  verifyTwoFactorToken(token: string, secret: string): boolean {
+    const totp = new OTPAuth.TOTP({
+      issuer: 'EcomAccounting',
+      algorithm: 'SHA1',
+      digits: 6,
+      period: 30,
+      secret: OTPAuth.Secret.fromBase32(secret),
+    });
+
+    const delta = totp.validate({ token, window: 1 });
+    return delta !== null;
+  }
+
+  /**
+   * 啟用 2FA (需先驗證 Token)
+   */
+  async enableTwoFactor(userId: string, token: string, secret: string) {
+    const isValid = this.verifyTwoFactorToken(token, secret);
+    if (!isValid) {
+      throw new BadRequestException('Invalid authentication code');
+    }
+    await this.usersService.updateTwoFactorConfig(userId, secret, true);
+    return true;
+  }
 }
+

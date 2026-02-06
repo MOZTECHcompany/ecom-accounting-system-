@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards, Param, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UseGuards, Param, UseInterceptors } from '@nestjs/common';
 import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import {
   ApiTags,
@@ -6,9 +6,11 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiQuery,
+  ApiBody,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ReportsService } from './reports.service';
+import { ExpenseIntelligenceService } from './expense-intelligence.service';
 
 /**
  * 報表控制器
@@ -20,7 +22,40 @@ import { ReportsService } from './reports.service';
 @UseInterceptors(CacheInterceptor) // Enable Caching for all reports
 @Controller('reports')
 export class ReportsController {
-  constructor(private readonly reportsService: ReportsService) {}
+  constructor(
+    private readonly reportsService: ReportsService,
+    private readonly expenseIntelligenceService: ExpenseIntelligenceService,
+  ) {}
+
+  @Post('analyze')
+  @ApiOperation({ summary: 'AI 財務分析 (Expense Intelligence)' })
+  @ApiResponse({ status: 200, description: '成功產生分析報告' })
+  @ApiBody({ 
+    schema: {
+      type: 'object',
+      properties: {
+        entityId: { type: 'string' },
+        startDate: { type: 'string' },
+        endDate: { type: 'string' },
+        context: { type: 'string', description: 'Context for analysis (e.g. "Monthly Review")' }
+      }
+    }
+  })
+  async getAIAnalysis(
+    @Body() body: { entityId: string; startDate: string; endDate: string; context?: string },
+  ) {
+    const { entityId, startDate, endDate, context } = body;
+    
+    // Fetch underlying financial data (e.g., Income Statement)
+    // Note: This relies on reportsService.getIncomeStatement returning raw data object, not a StreamableFile.
+    // We assume it returns an object based on standard NestJS patterns unless it's designed for PDF export.
+    const financialData = await this.reportsService.getIncomeStatement(entityId, startDate, endDate);
+
+    return this.expenseIntelligenceService.analyzeFinancialReport(
+      context || 'General Financial Health Check',
+      financialData,
+    );
+  }
 
   @Get('income-statement')
   @CacheTTL(300000) // Cache for 5 minutes (in ms for v5, or seconds for v4/v6? Nest Cache v5 uses ms usually)

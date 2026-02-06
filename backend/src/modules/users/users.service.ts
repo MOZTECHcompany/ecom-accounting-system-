@@ -308,6 +308,23 @@ export class UsersService {
   }
 
   /**
+   * 更新 2FA 設定
+   */
+  async updateTwoFactorConfig(userId: string, secret: string, enabled: boolean) {
+    try {
+      return await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          two_factor_secret: secret,
+          is_two_factor_enabled: enabled,
+        },
+      });
+    } catch (error) {
+      this.handlePrismaError(error, `update 2fa for user ${userId}`);
+    }
+  }
+
+  /**
    * 取得使用者的所有權限
    */
   async getUserPermissions(userId: string) {

@@ -1,9 +1,10 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Controller, Post, Body, HttpCode, HttpStatus, Get, UseGuards, Request } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { Public } from '../../common/decorators/public.decorator';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 /**
  * AuthController
@@ -37,5 +38,23 @@ export class AuthController {
   @ApiResponse({ status: 401, description: '登入失敗' })
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Get('2fa/setup')
+  @ApiOperation({ summary: '取得 2FA 設定資料 (QR Code URL)' })
+  async setupTwoFactor(@Request() req) {
+    // req.user is populated by JwtStrategy
+    const email = req.user.email;
+    return this.authService.generateTwoFactorSecret(email);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/enable')
+  @ApiOperation({ summary: '啟用 2FA' })
+  async enableTwoFactor(@Request() req, @Body() body: { token: string; secret: string }) {
+    return this.authService.enableTwoFactor(req.user.userId, body.token, body.secret);
   }
 }
