@@ -9,6 +9,7 @@ import { ConfigModule } from './common/config/config.module';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { DatabaseModule } from './common/database/database.module';
 import { RedisModule } from './common/redis/redis.module'; // Added RedisModule
+import { GlobalQueueModule } from './common/queue/queue.module'; // Added QueueModule
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
 // Feature modules - 按照指定的 12 個模組順序
@@ -69,6 +70,7 @@ import { AssemblyModule } from './modules/assembly/assembly.module';
     PrismaModule,
     DatabaseModule,
     RedisModule, // Added logic
+    GlobalQueueModule, // Global Queue
     ScheduleModule.forRoot(),
 
     // Features

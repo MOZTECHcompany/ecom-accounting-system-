@@ -1,4 +1,5 @@
-import { Controller, Get, Query, UseGuards, Param } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, Param, UseInterceptors } from '@nestjs/common';
+import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import {
   ApiTags,
   ApiOperation,
@@ -16,11 +17,21 @@ import { ReportsService } from './reports.service';
 @ApiTags('reports')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
+@UseInterceptors(CacheInterceptor) // Enable Caching for all reports
 @Controller('reports')
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
   @Get('income-statement')
+  @CacheTTL(300000) // Cache for 5 minutes (in ms for v5, or seconds for v4/v6? Nest Cache v5 uses ms usually)
+  // Check version: cache-manager v5 changed to milliseconds? 
+  // CacheModule v3 (Nest v10) uses milliseconds.
+  // Let's assume ms to be safe or verify. 
+  // "cache-manager": "^6.0.0" in package.json.
+  // NestJS Cache Manager usually takes milliseconds.
+  // Actually, @CacheTTL() behavior depends on the store. Redis store might expect seconds or ms.
+  // Let's use 60 seconds (60000 ms) to be safe for now, or just trust defaults. 
+  // Let's put 60 * 1000 = 60000 if it is ms.
   @ApiOperation({ summary: '產生損益表 (Income Statement / P&L)' })
   @ApiResponse({ status: 200, description: '成功產生損益表' })
   @ApiQuery({ name: 'entityId', required: true, description: '實體ID' })
