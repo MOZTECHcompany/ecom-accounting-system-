@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   ConflictException,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -37,8 +38,10 @@ export class AuthService {
   async register(registerDto: RegisterDto) {
     const { email, password, name } = registerDto;
 
+    const normalizedEmail = (email ?? '').trim().toLowerCase();
+
     // 檢查 email 是否已存在
-    const existingUser = await this.usersService.findByEmail(email);
+    const existingUser = await this.usersService.findForAuthByEmail(normalizedEmail);
     if (existingUser) {
       throw new ConflictException('Email already exists');
     }
@@ -47,13 +50,13 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(password, this.SALT_ROUNDS);
 
     // 建立使用者
-    const user = await this.usersService.create({
-      email,
+    const user = await this.usersService.createForAuth({
+      email: normalizedEmail,
       name,
       passwordHash,
     });
 
-    this.logger.log(`New user registered: ${email}`);
+    this.logger.log(`New user registered: ${normalizedEmail}`);
 
     // 產生 JWT token
     const token = await this.generateToken(user.id, user.email);
@@ -76,20 +79,32 @@ export class AuthService {
   async login(loginDto: LoginDto) {
     const { email, password } = loginDto;
     const emailInput = (email ?? '').trim();
+    const normalizedEmail = emailInput.toLowerCase();
 
     // 尋找使用者
-    const user =
-      (await this.usersService.findByEmail(emailInput)) ??
-      (emailInput.toLowerCase() !== emailInput
-        ? await this.usersService.findByEmail(emailInput.toLowerCase())
-        : null);
+    const user = await this.usersService.findForAuthByEmail(normalizedEmail);
     if (!user) {
       this.logger.warn(`Login failed: user not found (${emailInput})`);
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    if (!user.passwordHash) {
+      this.logger.warn(`Login failed: missing password hash (${normalizedEmail})`);
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
     // 驗證密碼
-    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    let isPasswordValid = false;
+    try {
+      isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    } catch (error) {
+      const err = error as Error;
+      this.logger.error(
+        `Login failed: bcrypt error (${normalizedEmail})`,
+        err?.stack,
+      );
+      throw new UnauthorizedException('Invalid credentials');
+    }
     if (!isPasswordValid) {
       this.logger.warn(`Login failed: invalid password (${emailInput})`);
       throw new UnauthorizedException('Invalid credentials');
@@ -101,7 +116,7 @@ export class AuthService {
       throw new UnauthorizedException('User account is disabled');
     }
 
-    this.logger.log(`User logged in: ${emailInput}`);
+    this.logger.log(`User logged in: ${normalizedEmail}`);
 
     // 產生 JWT token
     const token = await this.generateToken(user.id, user.email);
@@ -122,11 +137,18 @@ export class AuthService {
    * @returns 使用者資訊
    */
   async validateUser(userId: string) {
-    const user = await this.usersService.findById(userId);
-    if (!user || !user.isActive) {
-      throw new UnauthorizedException('User not found or inactive');
+    try {
+      const user = await this.usersService.findById(userId);
+      if (!user || !user.isActive) {
+        throw new UnauthorizedException('User not found or inactive');
+      }
+      return user;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw new UnauthorizedException('User not found or inactive');
+      }
+      throw error;
     }
-    return user;
   }
 
   /**

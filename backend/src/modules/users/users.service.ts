@@ -69,6 +69,31 @@ export class UsersService {
   }
 
   /**
+   * Auth 專用：根據 Email 查詢使用者（不載入 roles/permissions）
+   *
+   * 用途：登入/註冊只需要最小欄位（包含 passwordHash），避免因為
+   * 角色/權限相關資料表尚未部署或不同步導致的 500。
+   */
+  async findForAuthByEmail(email: string) {
+    return this.prisma.user.findUnique({
+      where: { email },
+    });
+  }
+
+  /**
+   * Auth 專用：建立使用者（不載入 roles/permissions）
+   */
+  async createForAuth(data: { email: string; name: string; passwordHash: string }) {
+    try {
+      return await this.prisma.user.create({
+        data,
+      });
+    } catch (error) {
+      this.handlePrismaError(error, `create user with email ${data.email}`);
+    }
+  }
+
+  /**
    * 根據 ID 查詢使用者
    */
   async findById(id: string) {
