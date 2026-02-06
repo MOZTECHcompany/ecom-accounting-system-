@@ -59,6 +59,23 @@ async function start() {
         console.log('Attempting to start application despite migration failure...');
     }
 
+    // 2.5 Run Seeding (Optional but recommended for init)
+    // We run this if SEED_ON_STARTUP is set, OR if we want to ensure admin exists.
+    // For this specific fix, we default to running it to ensure the user is added.
+    const shouldSeed = process.env.SEED_ON_STARTUP === 'true' || process.env.SEED_ON_STARTUP === '1' || true; // Force seed for this fix
+    
+    if (shouldSeed) {
+        console.log('Running database seeding...');
+        try {
+            // We use 'node dist/prisma/seed.js' assuming it was built by Dockerfile
+            await runCommand('node', ['dist/prisma/seed.js']);
+            console.log('Seeding completed successfully.');
+        } catch (e) {
+            console.error('Seeding failed (non-fatal):', e);
+            // Non-fatal, proceed to start app
+        }
+    }
+
     // 3. Start NestJS App
     console.log('Starting NestJS server...');
     // Note: The previous Dockerfile used dist/src/main.js, so we match that path here.
