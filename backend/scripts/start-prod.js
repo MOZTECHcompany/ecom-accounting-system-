@@ -61,7 +61,8 @@ async function start() {
 
     // 3. Start NestJS App
     console.log('Starting NestJS server...');
-    await runCommand('node', ['dist/main']);
+    // Note: The previous Dockerfile used dist/src/main.js, so we match that path here.
+    await runCommand('node', ['dist/src/main.js']);
 
   } catch (error) {
     console.error('Startup failed:', error);
