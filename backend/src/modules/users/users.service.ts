@@ -75,9 +75,18 @@ export class UsersService {
    * 角色/權限相關資料表尚未部署或不同步導致的 500。
    */
   async findForAuthByEmail(email: string) {
-    return this.prisma.user.findUnique({
-      where: { email },
-    });
+    try {
+      return await this.prisma.user.findUnique({
+        where: { email },
+      });
+    } catch (error) {
+      const err = error as Error;
+      this.logger.error(
+        `Auth user lookup failed for email ${email}: ${err?.message ?? String(error)}`,
+        err?.stack,
+      );
+      throw error;
+    }
   }
 
   /**

@@ -29,7 +29,11 @@ export class PrismaService
       await this.$connect();
       this.logger.log('Successfully connected to database');
     } catch (error) {
-      this.logger.error('Failed to connect to database', error);
+      const err = error as Error;
+      this.logger.error(
+        `Failed to connect to database: ${err?.message ?? String(error)}`,
+        err?.stack,
+      );
       // Don't throw error to allow app to start and health check to pass
       // This enables debugging via logs in Cloud Run
       // throw error; 

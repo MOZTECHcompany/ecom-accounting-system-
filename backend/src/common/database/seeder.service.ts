@@ -30,7 +30,11 @@ export class SeederService implements OnModuleInit {
 
       this.logger.log('✅ Database seeding completed successfully.');
     } catch (error) {
-      this.logger.error('❌ Database seeding failed:', error);
+      const err = error as Error;
+      this.logger.error(
+        `❌ Database seeding failed: ${err?.message ?? String(error)}`,
+        err?.stack,
+      );
     }
   }
 
