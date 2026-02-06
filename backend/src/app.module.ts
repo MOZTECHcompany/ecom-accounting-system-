@@ -8,6 +8,7 @@ import { AppService } from './app.service';
 import { ConfigModule } from './common/config/config.module';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { DatabaseModule } from './common/database/database.module';
+import { RedisModule } from './common/redis/redis.module'; // Added RedisModule
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
 // Feature modules - 按照指定的 12 個模組順序
@@ -67,6 +68,7 @@ import { AssemblyModule } from './modules/assembly/assembly.module';
     ConfigModule,
     PrismaModule,
     DatabaseModule,
+    RedisModule, // Added logic
     ScheduleModule.forRoot(),
 
     // Features
