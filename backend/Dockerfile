@@ -36,9 +36,6 @@ FROM node:20-alpine
 # Install dependencies for Prisma
 RUN apk add --no-cache openssl
 
-# Same placeholder for the production stage (overridden at runtime).
-ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres?schema=public"
-
 WORKDIR /app
 
 # Copy package files
