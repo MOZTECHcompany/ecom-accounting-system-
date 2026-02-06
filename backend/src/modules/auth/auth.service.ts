@@ -75,25 +75,33 @@ export class AuthService {
    */
   async login(loginDto: LoginDto) {
     const { email, password } = loginDto;
+    const emailInput = (email ?? '').trim();
 
     // 尋找使用者
-    const user = await this.usersService.findByEmail(email);
+    const user =
+      (await this.usersService.findByEmail(emailInput)) ??
+      (emailInput.toLowerCase() !== emailInput
+        ? await this.usersService.findByEmail(emailInput.toLowerCase())
+        : null);
     if (!user) {
+      this.logger.warn(`Login failed: user not found (${emailInput})`);
       throw new UnauthorizedException('Invalid credentials');
     }
 
     // 驗證密碼
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     if (!isPasswordValid) {
+      this.logger.warn(`Login failed: invalid password (${emailInput})`);
       throw new UnauthorizedException('Invalid credentials');
     }
 
     // 檢查使用者是否啟用
     if (!user.isActive) {
+      this.logger.warn(`Login failed: user disabled (${emailInput})`);
       throw new UnauthorizedException('User account is disabled');
     }
 
-    this.logger.log(`User logged in: ${email}`);
+    this.logger.log(`User logged in: ${emailInput}`);
 
     // 產生 JWT token
     const token = await this.generateToken(user.id, user.email);
