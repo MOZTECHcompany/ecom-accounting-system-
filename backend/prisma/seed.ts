@@ -331,10 +331,6 @@ async function main() {
           roleId: superAdminRole.id,
         },
       },
-          userId: adminUser.id,
-          roleId: superAdminRole.id,
-        },
-      },
       update: {},
       create: {
         userId: adminUser.id,
