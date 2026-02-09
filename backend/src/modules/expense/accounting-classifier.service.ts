@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AiService } from '../ai/ai.service';
@@ -206,7 +206,7 @@ export class AccountingClassifierService {
   async suggestReimbursementItem(
     entityId: string,
     description: string,
-    model: string = 'gemini-2.0-flash',
+    model: string = 'gemini-1.5-flash',
   ): Promise<{ itemId: string; confidence: number; amount?: number } | null> {
     // 1. Fetch active reimbursement items
     const items = await this.prisma.reimbursementItem.findMany({
@@ -261,8 +261,9 @@ Instructions:
       }
       return null;
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       this.logger.error('Error calling Gemini API for item suggestion', error);
-      return null;
+      throw new BadRequestException(`AI 分析失敗：${message}`);
     }
   }
 

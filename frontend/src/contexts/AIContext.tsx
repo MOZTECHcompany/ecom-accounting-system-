@@ -14,7 +14,8 @@ const AIContext = createContext<AIContextType | undefined>(undefined)
 export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth()
   const [selectedModelId, setSelectedModelId] = useState<string>(() => {
-    return localStorage.getItem('ai_selected_model') || 'gemini-3.0-pro-exp'
+    // Prefer stable default model; preview models may not be enabled for a given API key.
+    return localStorage.getItem('ai_selected_model') || 'gemini-1.5-flash'
   })
   const [availableModels, setAvailableModels] = useState<AiModel[]>([])
   const [loading, setLoading] = useState(true)
@@ -31,8 +32,7 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         setAvailableModels(models)
         // If currently selected model is not in the list (and list is not empty), default to first
         if (models.length > 0 && !models.find(m => m.id === selectedModelId)) {
-           // Prefer 3.0 pro if available, else 2.0 flash
-           const defaultModel = models.find(m => m.id === 'gemini-3.0-pro-exp') || models.find(m => m.id === 'gemini-2.0-flash') || models[0]
+          const defaultModel = models.find(m => m.id === 'gemini-1.5-flash') || models.find(m => m.id === 'gemini-1.5-pro') || models[0]
            setSelectedModelId(defaultModel.id)
         }
       } catch (error: any) {

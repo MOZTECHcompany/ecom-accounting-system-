@@ -15,10 +15,9 @@ export class AiService {
   
   // Default supported models - this can be moved to DB later for full dynamic control
   private readonly supportedModels: AiModel[] = [
-    { id: 'gemini-3.0-pro-exp', name: 'Gemini 3.0 Pro (Preview)', description: 'Latest & Most Capable', isExperimental: true },
-    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Fastest, multimodal', isExperimental: true },
-    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', description: 'Best for complex reasoning' },
+    // Prefer stable, widely-available models by default.
     { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', description: 'Fast and cost-effective' },
+    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', description: 'Best for complex reasoning' },
   ];
 
   constructor(private configService: ConfigService) {
@@ -32,7 +31,7 @@ export class AiService {
     return this.supportedModels;
   }
 
-  async generateContent(prompt: string, modelId: string = 'gemini-3.0-pro-exp'): Promise<string | null> {
+  async generateContent(prompt: string, modelId: string = 'gemini-1.5-flash'): Promise<string | null> {
     if (!this.apiKey) {
       this.logger.warn('Attempted to use AI without API Key');
       return null;
@@ -50,7 +49,10 @@ export class AiService {
       });
 
       if (!response.ok) {
-        throw new Error(`AI API Error: ${response.status} ${response.statusText}`);
+        const raw = await response.text().catch(() => '');
+        throw new Error(
+          `AI API Error: ${response.status} ${response.statusText}${raw ? ` - ${raw}` : ''}`,
+        );
       }
 
       const data = await response.json();

@@ -621,7 +621,8 @@ const ExpenseRequestsPage: React.FC = () => {
       }
     } catch (error) {
       console.error(error)
-      message.error('AI 分析失敗，請稍後再試')
+      const apiMessage = extractApiMessage(error)
+      message.error(apiMessage || 'AI 分析失敗，請稍後再試')
     } finally {
       setPredicting(false)
     }

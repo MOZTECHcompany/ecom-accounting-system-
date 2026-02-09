@@ -58,6 +58,11 @@ export class ExpenseService {
   }
 
   async predictReimbursementItem(entityId: string, description: string, model?: string) {
+    const geminiApiKey = this.configService.get<string>('GEMINI_API_KEY');
+    if (!geminiApiKey) {
+      throw new BadRequestException('GEMINI_API_KEY is not configured');
+    }
+
     // 1. Use AI to suggest a Reimbursement Item directly
     const suggestion = await this.classifierService.suggestReimbursementItem(
       entityId,
