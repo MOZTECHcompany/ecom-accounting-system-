@@ -40,9 +40,6 @@ interface UserContext {
 @Injectable()
 export class ExpenseService {
   private readonly logger = new Logger(ExpenseService.name);
-  constructor(
-    private readonly expenseRepository: ExpenseRepository,
-    private readonly classifierService: AccountingClassifierService,
     private readonly notificationService: NotificationService,
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
@@ -81,8 +78,8 @@ export class ExpenseService {
     });
 
     return {
-      suggestedItem: item,
-      confidence: suggestion.confidence,
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
       amount: suggestion.amount,
       reason: 'ai_gemini',
     };
@@ -170,7 +167,7 @@ Do not include any markdown formatting (like \`\`\`json), just the raw JSON stri
 
     try {
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
+        `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -242,7 +239,7 @@ Do not include any markdown formatting (like \`\`\`json), just the raw JSON stri
 
     try {
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
+        `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

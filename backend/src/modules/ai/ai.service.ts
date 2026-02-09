@@ -38,7 +38,8 @@ export class AiService {
     }
 
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${this.apiKey}`;
+      // Use v1 API; some models return 404 on v1beta for generateContent.
+      const url = `https://generativelanguage.googleapis.com/v1/models/${modelId}:generateContent?key=${this.apiKey}`;
       
       const response = await fetch(url, {
         method: 'POST',
