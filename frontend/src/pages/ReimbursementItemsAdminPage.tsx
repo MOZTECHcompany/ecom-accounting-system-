@@ -32,7 +32,6 @@ import {
 import { GlassDrawer, GlassDrawerSection } from '../components/ui/GlassDrawer'
 import { motion } from 'framer-motion'
 import { expenseService } from '../services/expense.service'
-import { api } from '../services/api'
 import type {
   ApprovalPolicySummary,
   ReimbursementItem,
