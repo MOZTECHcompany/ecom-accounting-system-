@@ -40,10 +40,15 @@ interface UserContext {
 @Injectable()
 export class ExpenseService {
   private readonly logger = new Logger(ExpenseService.name);
+
+  constructor(
+    private readonly expenseRepository: ExpenseRepository,
+    private readonly classifierService: AccountingClassifierService,
     private readonly notificationService: NotificationService,
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
   ) {}
+
   /**
    * 建立費用申請單
    */
@@ -78,8 +83,8 @@ export class ExpenseService {
     });
 
     return {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
+      suggestedItem: item,
+      confidence: suggestion.confidence,
       amount: suggestion.amount,
       reason: 'ai_gemini',
     };
