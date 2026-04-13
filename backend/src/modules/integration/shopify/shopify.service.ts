@@ -164,7 +164,34 @@ export class ShopifyService {
     if (triggerEvents.includes(event)) {
       try {
         await this.assertEntityExists(this.defaultEntityId);
-        // Sync last 24 hours to be safe
+        const channel = await this.ensureSalesChannel(this.defaultEntityId);
+        const externalOrderId = this.extractExternalOrderId(event, payload);
+
+        if (externalOrderId) {
+          const orderSync = await this.syncSingleOrder(
+            this.defaultEntityId,
+            channel.id,
+            externalOrderId,
+          );
+          const transactionSync = await this.syncSingleOrderTransactions(
+            this.defaultEntityId,
+            channel.id,
+            externalOrderId,
+          );
+
+          return {
+            received: true,
+            event,
+            hmacValid,
+            externalOrderId,
+            synced: {
+              order: orderSync,
+              transactions: transactionSync,
+            },
+          };
+        }
+
+        // Fallback for payloads that do not carry a direct order ID.
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
 
@@ -194,6 +221,54 @@ export class ShopifyService {
         defaultCurrency: this.config.get<string>('DEFAULT_CURRENCY', 'TWD'),
       },
     });
+  }
+
+  private extractExternalOrderId(event: string, payload: any) {
+    if (event.startsWith('orders/') && payload?.id) {
+      return String(payload.id);
+    }
+
+    if (payload?.order_id) {
+      return String(payload.order_id);
+    }
+
+    return null;
+  }
+
+  private async syncSingleOrder(
+    entityId: string,
+    channelId: string,
+    externalOrderId: string,
+  ) {
+    const order = await this.adapter.fetchOrderById(externalOrderId);
+    if (!order) {
+      return { fetched: false, action: 'skipped' as const };
+    }
+
+    const result = await this.upsertSalesOrder(entityId, channelId, order);
+    return { fetched: true, action: result };
+  }
+
+  private async syncSingleOrderTransactions(
+    entityId: string,
+    channelId: string,
+    externalOrderId: string,
+  ) {
+    const transactions = await this.adapter.fetchTransactionsForOrder(externalOrderId);
+    let created = 0;
+    let updated = 0;
+
+    for (const tx of transactions) {
+      const result = await this.upsertPayment(entityId, channelId, tx);
+      if (result === 'created') created++;
+      if (result === 'updated') updated++;
+    }
+
+    return {
+      fetched: transactions.length,
+      created,
+      updated,
+    };
   }
 
   private async upsertSalesOrder(

@@ -41,7 +41,9 @@ export class ShopifyHttpAdapter implements ISalesChannelAdapter {
   }
 
   private get baseUrl() {
-    const domain = this.shopDomain.replace(/^https?:\/\//, '').replace(/.myshopify.com$/, '');
+    const domain = this.shopDomain
+      .replace(/^https?:\/\//, '')
+      .replace(/\.myshopify\.com$/, '');
     return `https://${domain}.myshopify.com/admin/api/${this.apiVersion}`;
   }
 
@@ -94,8 +96,7 @@ export class ShopifyHttpAdapter implements ISalesChannelAdapter {
           if (nextLink) {
             const match = nextLink.match(/<([^>]+)>/);
             if (match) {
-              const url = new URL(match[1]);
-              path = `${url.pathname}${url.search}`; // Extract path and query
+              path = match[1];
             } else {
               hasNext = false;
             }
@@ -113,6 +114,41 @@ export class ShopifyHttpAdapter implements ISalesChannelAdapter {
     }
   }
 
+  async fetchOrderById(orderId: string): Promise<UnifiedOrder | null> {
+    this.assertConfig();
+
+    try {
+      const { body } = await this.request('GET', `/orders/${orderId}.json`);
+      if (!body.order) {
+        return null;
+      }
+      return this.mapToUnifiedOrder(body.order);
+    } catch (error: any) {
+      if (String(error.message).includes('Shopify API Error 404')) {
+        this.logger.warn(`Shopify order ${orderId} not found`);
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  async fetchTransactionsForOrder(
+    orderId: string,
+    order?: UnifiedOrder,
+  ): Promise<UnifiedTransaction[]> {
+    this.assertConfig();
+
+    const resolvedOrder = order ?? (await this.fetchOrderById(orderId));
+    if (!resolvedOrder) {
+      return [];
+    }
+
+    const { body } = await this.request('GET', `/orders/${orderId}/transactions.json`);
+    return Promise.all(
+      (body.transactions || []).map((tx: any) => this.mapToUnifiedTransaction(tx, resolvedOrder)),
+    );
+  }
+
   async fetchTransactions(params: { start: Date; end: Date }): Promise<UnifiedTransaction[]> {
     this.assertConfig();
     const orders = await this.fetchOrders(params);
@@ -120,11 +156,7 @@ export class ShopifyHttpAdapter implements ISalesChannelAdapter {
 
     for (const order of orders) {
       try {
-        const { body } = await this.request('GET', `/orders/${order.externalId}/transactions.json`);
-        // Parallel map is fine here if no async calls inside mapToUnifiedTransaction, but there might be later.
-        const txs = await Promise.all(
-          (body.transactions || []).map((tx: any) => this.mapToUnifiedTransaction(tx, order))
-        );
+        const txs = await this.fetchTransactionsForOrder(order.externalId, order);
         transactions.push(...txs);
       } catch (error: any) {
         this.logger.error(`Failed to fetch txs for order ${order.externalId}: ${error.message}`);

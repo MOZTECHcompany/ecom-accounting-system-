@@ -1,5 +1,7 @@
 import api from './api'
 
+const DEFAULT_ENTITY_ID = import.meta.env.VITE_DEFAULT_ENTITY_ID?.trim() || 'tw-entity-001'
+
 export interface SalesOrder {
   id: string
   orderNumber: string
@@ -14,8 +16,17 @@ export interface SalesOrder {
 }
 
 export const salesService = {
-  async findAll(params?: { status?: string; channelId?: string }) {
-    const response = await api.get<SalesOrder[]>('/sales/orders', { params })
+  async findAll(params?: { status?: string; channelId?: string; entityId?: string }) {
+    const entityId =
+      params?.entityId?.trim() || localStorage.getItem('entityId')?.trim() || DEFAULT_ENTITY_ID
+
+    const response = await api.get<SalesOrder[]>('/sales/orders', {
+      params: {
+        entityId,
+        status: params?.status,
+        channelId: params?.channelId,
+      },
+    })
     return response.data
   },
 

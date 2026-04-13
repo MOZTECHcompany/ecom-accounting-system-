@@ -1,8 +1,8 @@
-import { Body, Controller, Get, Headers, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Post, Query, RawBody } from '@nestjs/common';
 import { IsDateString, IsOptional, IsString } from 'class-validator';
+import { createHmac, timingSafeEqual } from 'crypto';
+import { Public } from '../../../common/decorators/public.decorator';
 import { ShopifyService } from './shopify.service';
-import { createHmac } from 'crypto';
-import type { Request } from 'express';
 
 class SyncRequestDto {
   @IsString()
@@ -66,16 +66,16 @@ export class ShopifyController {
     });
   }
 
+  @Public()
   @Post('webhook')
   async webhook(
     @Headers('x-shopify-topic') topic: string,
     @Headers('x-shopify-hmac-sha256') hmac: string,
-    @Req() req: Request,
+    @RawBody() rawBody: Buffer | undefined,
     @Body() payload: any,
   ) {
-    const rawBody = (req as any)?.rawBody ? (req as any).rawBody : JSON.stringify(payload);
-    const computedHmac = this.computeHmac(rawBody);
-    const hmacValid = hmac === computedHmac;
+    const rawPayload = rawBody?.toString('utf8') || JSON.stringify(payload);
+    const hmacValid = this.isValidHmac(rawPayload, hmac);
     return this.shopifyService.handleWebhook(topic, payload, hmacValid);
   }
 
@@ -83,5 +83,21 @@ export class ShopifyController {
     const secret = process.env.SHOPIFY_WEBHOOK_SECRET || '';
     if (!secret) return '';
     return createHmac('sha256', secret).update(rawBody, 'utf8').digest('base64');
+  }
+
+  private isValidHmac(rawBody: string, providedHmac?: string) {
+    const computedHmac = this.computeHmac(rawBody);
+    if (!providedHmac || !computedHmac) {
+      return false;
+    }
+
+    const expected = Buffer.from(computedHmac, 'utf8');
+    const received = Buffer.from(providedHmac, 'utf8');
+
+    if (expected.length !== received.length) {
+      return false;
+    }
+
+    return timingSafeEqual(expected, received);
   }
 }

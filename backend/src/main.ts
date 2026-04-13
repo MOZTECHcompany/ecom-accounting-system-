@@ -1,30 +1,24 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     cors: true,
+    bodyParser: false,
+    rawBody: true,
   });
 
   const configService = app.get(ConfigService);
   const prefix = configService.get('API_PREFIX') || '/api/v1';
 
-  // Increase body limit for large file uploads and capture raw body for Shopify webhook HMAC
-  app.use(
-    json({
-      limit: '50mb',
-      verify: (req: any, res, buf) => {
-        if (req.originalUrl?.startsWith(`${prefix}/integrations/shopify/webhook`)) {
-          req.rawBody = buf.toString('utf8');
-        }
-      },
-    }),
-  );
-  app.use(urlencoded({ extended: true, limit: '50mb' }));
+  // Register parsers once with Nest's rawBody support so webhook HMAC validation
+  // uses the original Shopify payload instead of a re-serialized JSON string.
+  app.useBodyParser('json', { limit: '50mb' });
+  app.useBodyParser('urlencoded', { extended: true, limit: '50mb' });
 
   // 全域驗證管道
   app.useGlobalPipes(

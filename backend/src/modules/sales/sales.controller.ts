@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -39,8 +40,8 @@ export class SalesController {
   @Get('channels')
   @ApiOperation({ summary: '查詢銷售渠道' })
   @ApiQuery({ name: 'entityId', required: true })
-  async getSalesChannels(@Query('entityId', ParseUUIDPipe) entityId: string) {
-    return this.salesService.getSalesChannels(entityId);
+  async getSalesChannels(@Query('entityId') entityId: string) {
+    return this.salesService.getSalesChannels(this.requireEntityId(entityId));
   }
 
   /**
@@ -52,11 +53,11 @@ export class SalesController {
   @ApiQuery({ name: 'channelId', required: false })
   @ApiQuery({ name: 'status', required: false })
   async getSalesOrders(
-    @Query('entityId', ParseUUIDPipe) entityId: string,
+    @Query('entityId') entityId: string,
     @Query('channelId') channelId?: string,
     @Query('status') status?: string,
   ) {
-    return this.salesOrderService.getSalesOrders(entityId, {
+    return this.salesOrderService.getSalesOrders(this.requireEntityId(entityId), {
       channelId,
       status,
     });
@@ -82,11 +83,11 @@ export class SalesController {
   @ApiQuery({ name: 'entityId', required: true })
   async fulfillSalesOrder(
     @Param('id', ParseUUIDPipe) orderId: string,
-    @Query('entityId', ParseUUIDPipe) entityId: string,
+    @Query('entityId') entityId: string,
     @Body() dto: FulfillSalesOrderDto,
   ) {
     return this.salesService.fulfillSalesOrder({
-      entityId,
+      entityId: this.requireEntityId(entityId),
       warehouseId: dto.warehouseId,
       salesOrderId: orderId,
       itemSerialNumbers: dto.itemSerialNumbers,
@@ -112,9 +113,17 @@ export class SalesController {
   @ApiOperation({ summary: '建立模擬訂單用於測試系統流程' })
   @ApiQuery({ name: 'entityId', required: true, description: '公司實體ID' })
   async createMockOrder(
-    @Query('entityId', ParseUUIDPipe) entityId: string,
+    @Query('entityId') entityId: string,
     @CurrentUser('id') userId: string,
   ) {
-    return this.salesOrderService.createMockOrder(entityId, userId);
+    return this.salesOrderService.createMockOrder(this.requireEntityId(entityId), userId);
+  }
+
+  private requireEntityId(entityId?: string) {
+    const trimmed = entityId?.trim();
+    if (!trimmed) {
+      throw new BadRequestException('entityId is required');
+    }
+    return trimmed;
   }
 }
