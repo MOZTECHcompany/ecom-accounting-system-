@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Headers, Post, Query, RawBody } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { IsDateString, IsOptional, IsString } from 'class-validator';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { Public } from '../../../common/decorators/public.decorator';
@@ -32,7 +33,10 @@ class SummaryQueryDto {
 
 @Controller('integrations/shopify')
 export class ShopifyController {
-  constructor(private readonly shopifyService: ShopifyService) {}
+  constructor(
+    private readonly shopifyService: ShopifyService,
+    private readonly configService: ConfigService,
+  ) {}
 
   @Get('health')
   async health() {
@@ -80,7 +84,10 @@ export class ShopifyController {
   }
 
   private computeHmac(rawBody: string) {
-    const secret = process.env.SHOPIFY_WEBHOOK_SECRET || '';
+    const secret =
+      this.configService.get<string>('SHOPIFY_WEBHOOK_SECRET') ||
+      this.configService.get<string>('SHOPIFY_CLIENT_SECRET') ||
+      '';
     if (!secret) return '';
     return createHmac('sha256', secret).update(rawBody, 'utf8').digest('base64');
   }

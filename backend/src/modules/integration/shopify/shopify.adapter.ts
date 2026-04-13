@@ -32,11 +32,17 @@ export class ShopifyHttpAdapter implements ISalesChannelAdapter {
   private readonly logger = new Logger(ShopifyHttpAdapter.name);
   private readonly shopDomain: string;
   private readonly token: string;
+  private readonly clientId: string;
+  private readonly clientSecret: string;
   private readonly apiVersion: string;
+  private accessTokenCache: { token: string; expiresAt: number } | null = null;
+  private accessTokenPromise: Promise<string> | null = null;
 
   constructor(private readonly configService: ConfigService) {
     this.shopDomain = this.configService.get<string>('SHOPIFY_SHOP', '') || '';
     this.token = this.configService.get<string>('SHOPIFY_TOKEN', '') || '';
+    this.clientId = this.configService.get<string>('SHOPIFY_CLIENT_ID', '') || '';
+    this.clientSecret = this.configService.get<string>('SHOPIFY_CLIENT_SECRET', '') || '';
     this.apiVersion = this.configService.get<string>('SHOPIFY_API_VERSION', '2024-10');
   }
 
@@ -47,16 +53,13 @@ export class ShopifyHttpAdapter implements ISalesChannelAdapter {
     return `https://${domain}.myshopify.com/admin/api/${this.apiVersion}`;
   }
 
-  private get headers() {
-    return {
-      'X-Shopify-Access-Token': this.token,
-      'Content-Type': 'application/json',
-    };
-  }
-
   async testConnection(): Promise<{ success: boolean; message?: string }> {
-    if (!this.shopDomain || !this.token) {
-      return { success: false, message: 'SHOPIFY_SHOP or SHOPIFY_TOKEN not configured' };
+    if (!this.shopDomain || (!this.token && !(this.clientId && this.clientSecret))) {
+      return {
+        success: false,
+        message:
+          'SHOPIFY_SHOP and either SHOPIFY_TOKEN or SHOPIFY_CLIENT_ID/SHOPIFY_CLIENT_SECRET are required',
+      };
     }
     try {
       await this.request('GET', '/shop.json');
@@ -253,9 +256,13 @@ export class ShopifyHttpAdapter implements ISalesChannelAdapter {
 
   private async request(method: string, path: string, body?: any): Promise<{ body: any; headers: Headers }> {
     const url = path.startsWith('https://') ? path : `${this.baseUrl}${path}`;
+    const accessToken = await this.getAccessToken();
     const options: RequestInit = {
       method,
-      headers: this.headers,
+      headers: {
+        'X-Shopify-Access-Token': accessToken,
+        'Content-Type': 'application/json',
+      },
       body: body ? JSON.stringify(body) : undefined,
     };
 
@@ -269,8 +276,73 @@ export class ShopifyHttpAdapter implements ISalesChannelAdapter {
   }
 
   private assertConfig() {
-    if (!this.shopDomain || !this.token) {
-      throw new Error('Shopify configuration missing');
+    if (!this.shopDomain) {
+      throw new Error('Shopify configuration missing: SHOPIFY_SHOP');
     }
+
+    if (!this.token && !(this.clientId && this.clientSecret)) {
+      throw new Error(
+        'Shopify configuration missing: provide SHOPIFY_TOKEN or SHOPIFY_CLIENT_ID + SHOPIFY_CLIENT_SECRET'
+      );
+    }
+  }
+
+  private async getAccessToken(): Promise<string> {
+    this.assertConfig();
+
+    if (this.token) {
+      return this.token;
+    }
+
+    const now = Date.now();
+    if (this.accessTokenCache && this.accessTokenCache.expiresAt - 60_000 > now) {
+      return this.accessTokenCache.token;
+    }
+
+    if (!this.accessTokenPromise) {
+      this.accessTokenPromise = this.fetchAccessTokenWithClientCredentials().finally(() => {
+        this.accessTokenPromise = null;
+      });
+    }
+
+    return this.accessTokenPromise;
+  }
+
+  private async fetchAccessTokenWithClientCredentials(): Promise<string> {
+    const domain = this.shopDomain
+      .replace(/^https?:\/\//, '')
+      .replace(/\.myshopify\.com$/, '');
+
+    const response = await fetch(`https://${domain}.myshopify.com/admin/oauth/access_token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: this.clientId,
+        client_secret: this.clientSecret,
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Shopify token request failed ${response.status}: ${text}`);
+    }
+
+    const data = await response.json();
+    const expiresIn = Number(data.expires_in || 0);
+    const accessToken = data.access_token;
+
+    if (!accessToken) {
+      throw new Error('Shopify token request succeeded but no access_token was returned');
+    }
+
+    this.accessTokenCache = {
+      token: accessToken,
+      expiresAt: Date.now() + Math.max(expiresIn, 300) * 1000,
+    };
+
+    return accessToken;
   }
 }
