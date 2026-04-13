@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AiService } from './ai.service';
+import {
+  AI_AGENT_CORE_PRINCIPLES,
+  AI_AGENT_RESPONSE_STYLE,
+} from './ai-principles';
 import dayjs from 'dayjs';
 
 @Injectable()
@@ -20,7 +24,11 @@ export class AiCopilotService {
   ): Promise<{ reply: string; data?: any }> {
     // 1. Intent Classification & Parameter Extraction
     const prompt = `
+${AI_AGENT_CORE_PRINCIPLES}
+
+Role:
 You are a Financial Copilot for an E-commerce Accounting System.
+
 User Query: "${message}"
 Current Date: ${dayjs().format('YYYY-MM-DD')}
 
@@ -32,16 +40,19 @@ Available Tools:
 5. get_payroll_summary(month?: string) - Get total payroll cost for a specific month (YYYY-MM).
 6. general_chat() - For greetings or questions not related to data.
 
-Instructions:
-1. Determine the user's intent.
-2. If they ask for data (sales, expenses, "last month", "yesterday"), map to a tool.
-3. If they ask about product cost, price, or stock (e.g., "How much is the power bank cost?", "Stock of iPhone cable"), map to 'get_product_cost'.
-4. If they ask about bank balance, cash, or money in bank, map to 'get_bank_balances'.
-5. If they ask about payroll, salaries, or employee costs, map to 'get_payroll_summary'.
-6. Calculate start/end dates based on natural language (e.g., "last month" -> 2025-11-01 to 2025-11-30).
-7. If no date is specified, default to the current month (start of month to today).
-8. If the user asks for "pending" or "waiting" expenses, set status to 'pending'.
-9. Return JSON ONLY: { "tool": "TOOL_NAME", "params": { ... }, "reply": "Optional conversational filler" }
+Decision Rules:
+- First understand the user's real goal.
+- If system data is required, choose the single best tool for the job.
+- If the user asks about product cost, price, or stock, use 'get_product_cost'.
+- If the user asks about bank balance, cash, or money in bank, use 'get_bank_balances'.
+- If the user asks about payroll, salaries, or employee costs, use 'get_payroll_summary'.
+- Convert natural language dates into exact YYYY-MM-DD ranges.
+- If no date is specified for sales or expenses, default to the current month through today.
+- If the user asks for "pending" or "waiting" expenses, set status to 'pending'.
+- If the request is greeting, chit-chat, or cannot be answered with current tools, use 'general_chat'.
+
+Return JSON ONLY:
+{ "tool": "TOOL_NAME", "params": { ... }, "reply": "Optional short conversational filler" }
 `;
 
     const aiResponse = await this.aiService.generateContent(prompt, modelId);
@@ -60,24 +71,41 @@ Instructions:
     let toolData = null;
 
     // Check permissions for sensitive tools
-    if (['get_product_cost', 'get_bank_balances', 'get_payroll_summary'].includes(intent.tool)) {
+    if (
+      ['get_product_cost', 'get_bank_balances', 'get_payroll_summary'].includes(
+        intent.tool,
+      )
+    ) {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
         include: { roles: { include: { role: true } } },
       });
-      
-      const isSuperAdmin = user?.roles.some(r => r.role.code === 'SUPER_ADMIN');
-      
+
+      const isSuperAdmin = user?.roles.some(
+        (r) => r.role.code === 'SUPER_ADMIN',
+      );
+
       if (!isSuperAdmin) {
-        return { reply: `抱歉，您沒有權限查詢此敏感資訊 (${intent.tool})。此功能僅限超級管理員 (SUPER_ADMIN) 使用。` };
+        return {
+          reply: `抱歉，您沒有權限查詢此敏感資訊 (${intent.tool})。此功能僅限超級管理員 (SUPER_ADMIN) 使用。`,
+        };
       }
     }
 
     if (intent.tool === 'get_sales_stats') {
-      toolData = await this.getSalesStats(entityId, intent.params.startDate, intent.params.endDate);
+      toolData = await this.getSalesStats(
+        entityId,
+        intent.params.startDate,
+        intent.params.endDate,
+      );
       toolResult = `Sales: TWD ${toolData.total} (${toolData.count} orders)`;
     } else if (intent.tool === 'get_expense_stats') {
-      toolData = await this.getExpenseStats(entityId, intent.params.startDate, intent.params.endDate, intent.params.status);
+      toolData = await this.getExpenseStats(
+        entityId,
+        intent.params.startDate,
+        intent.params.endDate,
+        intent.params.status,
+      );
       toolResult = `Expenses: TWD ${toolData.total} (${toolData.count} requests)`;
     } else if (intent.tool === 'get_product_cost') {
       toolData = await this.getProductCost(entityId, intent.params.productName);
@@ -88,7 +116,7 @@ Instructions:
       }
     } else if (intent.tool === 'get_bank_balances') {
       toolData = await this.getBankBalances(entityId);
-      toolResult = `Bank Balances:\n${toolData.map(b => `- ${b.name}: ${b.currency} ${b.balance}`).join('\n')}`;
+      toolResult = `Bank Balances:\n${toolData.map((b) => `- ${b.name}: ${b.currency} ${b.balance}`).join('\n')}`;
     } else if (intent.tool === 'get_payroll_summary') {
       toolData = await this.getPayrollSummary(entityId, intent.params.month);
       toolResult = `Payroll Summary for ${toolData.month}:\nTotal Cost: TWD ${toolData.totalCost}\nHeadcount: ${toolData.headcount}`;
@@ -99,13 +127,21 @@ Instructions:
 
     // 3. Generate Final Natural Language Response
     const finalPrompt = `
+${AI_AGENT_CORE_PRINCIPLES}
+${AI_AGENT_RESPONSE_STYLE}
+
 User Query: "${message}"
 Tool Result: "${toolResult}"
 
-Task: Answer the user's question in Traditional Chinese based on the tool result.
-Keep it professional and concise.
+Task:
+Answer the user's question directly based on the tool result.
+Be concise, natural, and useful.
+If the tool result is limited, say so honestly and give the simplest next step.
 `;
-    const finalReply = await this.aiService.generateContent(finalPrompt, modelId);
+    const finalReply = await this.aiService.generateContent(
+      finalPrompt,
+      modelId,
+    );
 
     return {
       reply: finalReply || '數據查詢成功，但無法生成回應。',
@@ -113,7 +149,11 @@ Keep it professional and concise.
     };
   }
 
-  private async getSalesStats(entityId: string, startDate: string, endDate: string) {
+  private async getSalesStats(
+    entityId: string,
+    startDate: string,
+    endDate: string,
+  ) {
     const data = await this.prisma.salesOrder.aggregate({
       where: {
         entityId,
@@ -131,7 +171,12 @@ Keep it professional and concise.
     };
   }
 
-  private async getExpenseStats(entityId: string, startDate: string, endDate: string, status?: string) {
+  private async getExpenseStats(
+    entityId: string,
+    startDate: string,
+    endDate: string,
+    status?: string,
+  ) {
     const where: any = {
       entityId,
       createdAt: {
@@ -172,7 +217,10 @@ Keep it professional and concise.
 
     if (!product) return null;
 
-    const totalStock = product.inventorySnapshots.reduce((sum, snap) => sum + Number(snap.qtyOnHand), 0);
+    const totalStock = product.inventorySnapshots.reduce(
+      (sum, snap) => sum + Number(snap.qtyOnHand),
+      0,
+    );
 
     return {
       name: product.name,
@@ -197,11 +245,11 @@ Keep it professional and concise.
       },
     });
 
-    return accounts.map(account => {
+    return accounts.map((account) => {
       const balance = account.journalLines.reduce((sum, line) => {
         return sum + Number(line.debit) - Number(line.credit);
       }, 0);
-      
+
       return {
         name: account.name,
         currency: 'TWD', // Simplified, should come from account or lines
@@ -234,16 +282,20 @@ Keep it professional and concise.
       // We exclude employee deductions (INS_EMP_*) as they are part of Gross Pay (Earnings)
       // We exclude TAX_WITHHOLD for the same reason
       const runCost = run.items.reduce((sum, item) => {
-        if (['INS_EMP_LABOR', 'INS_EMP_HEALTH', 'TAX_WITHHOLD'].includes(item.type)) {
+        if (
+          ['INS_EMP_LABOR', 'INS_EMP_HEALTH', 'TAX_WITHHOLD'].includes(
+            item.type,
+          )
+        ) {
           return sum;
         }
         return sum + Number(item.amountBase);
       }, 0);
 
       totalCost += runCost;
-      
+
       // Count unique employees in this run
-      const uniqueEmployees = new Set(run.items.map(i => i.employeeId));
+      const uniqueEmployees = new Set(run.items.map((i) => i.employeeId));
       headcount += uniqueEmployees.size;
     }
 

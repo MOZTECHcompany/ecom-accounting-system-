@@ -193,6 +193,7 @@
 - **2025-11-23 — AccountsPage 中文化與標籤優化**：`Chart of Accounts` 改名為「會計科目表」，並新增 `typeLabelMap` 讓科目類別標籤顯示「資產／負債／權益／收入／費用」等繁體中文名稱，以提升可讀性。
 
 ### 商業面亮點
+
 - ✅ **多公司實體管理**：支援跨國營運，每個實體獨立會計帳。
 - ✅ **多幣別支援**：全系統採用 4 欄位金額標準（原幣、幣別、匯率、本位幣）。
 - ✅ **多電商平台整合規劃**：對應 Shopify、momo、PChome、Shopee、Amazon 等 9 個平台的銷售渠道模型。
@@ -202,6 +203,7 @@
 - ✅ **銀行對帳**：支援銀行交易匯入與會計紀錄對應，預留自動匹配規則。
 
 ### 技術架構
+
 - **Backend**：NestJS 11.x + TypeScript + Prisma ORM
 - **Database**：PostgreSQL 16
 - **Frontend**：React 18 + Vite + Ant Design + TypeScript
@@ -227,6 +229,13 @@
   - Shimmering Border：外框有微光流動效果，暗示「正在思考 / 分析」。
   - Typewriter Effect：文字逐字打出，讓 AI 洞見感覺像現場生成而非死板數據。
 
+### AI Agent 設計原則
+
+- 核心原則：`少即是多，大道至簡`
+- 我們希望 Agent 像能被馴化的人類夥伴，而不是只能照規則填空的機器人。
+- 開發重點是把資料來源、工具與答案邊界整理乾淨，而不是堆疊越來越長的 prompt 規則。
+- 詳細說明請見 [backend/docs/ai-agent-principles.md](/Users/moztecheason/ecom-accounting-system-/backend/docs/ai-agent-principles.md)
+
 ### 動態體驗與互動
 
 - **`DashboardLayout`**：
@@ -240,22 +249,26 @@
 ## 🤖 AI 智能建議與反饋迴路
 
 ### 功能總覽
+
 - **多信號推論**：`AccountingClassifierService` 先以 Gemini 2.0 Flash 生成建議，再搭配關鍵字規則與白名單策略，輸出最終 `suggestedItemId`、`suggestedAccountId` 與 `suggestionConfidence`。
 - **建議存證**：所有決策寫入 `expense_requests`，供審核人員檢視「AI 推薦 vs. 實際決策」。
 - **回饋閉環**：審核者或申請者可呼叫 `/expense/requests/:id/feedback`，系統會在 `accounting_classifier_feedbacks` 中記錄 `suggested_item_id`、`chosen_item_id`、`label` 與 `features`，下一次推論會將歷史修正納入 Few-shot 參考。
 
 ### 資料流程
+
 1. **輸入**：員工於 `ExpenseRequestsPage` 輸入用途、金額與憑證。
 2. **推論**：後端呼叫 `predictReimbursementItem`，Gemini + 規則雙層推論，並同步查出可用的 `ReimbursementItem`。
 3. **呈現**：前端顯示建議名稱、所屬科目與信心值，低信心（<0.4）會加註提醒。
 4. **回饋**：審核者改選其他項目或填寫錯誤原因時，透過 Feedback API 寫入 `AccountingClassifierFeedback`，與 `ReimbursementItem` 之間透過 `FeedbackSuggestedItem` / `FeedbackChosenItem` 名稱化關聯。
 
 ### 關鍵資料表
+
 - `expense_requests`：新增 `suggested_item_id`, `suggested_account_id`, `suggestion_confidence` 欄位與 `ExpenseRequestSuggestedItem` 關聯，完整紀錄每次 AI 推薦。
 - `reimbursement_items`：保留使用者可選清單，並新增 `suggestedFeedbacks` / `chosenFeedbacks` 反向關聯，方便統計建議命中率。
 - `accounting_classifier_feedbacks`：擴充 `entity_id`, `description`, `suggested_item_id`, `chosen_item_id` 欄位，讓每筆反饋都能回溯到實體、敘述與最終選擇。
 
 ### 設定與檢查
+
 ```bash
 # 1. 更新資料庫 Schema
 cd backend
@@ -277,6 +290,7 @@ curl -X POST http://localhost:3000/api/v1/expense/predict-category -d '{"entityI
 ```
 
 ### 前端整合
+
 - `ExpenseRequestsPage` 在送出需求前即會呼叫 `/expense/predict-category`，同時將 `suggestionConfidence` 視覺化，並允許「採用建議 / 改選其他項目 / 提交回饋」。
 - `AICopilotWidget`（`components/AICopilotWidget.tsx`）會顯示最新建議、觸發率與錯誤回饋摘要；`AIInsightsWidget` 則針對財務異常額外提供語意化建議。
 - 所有回饋結果會透過 `expense.service.ts` 的 `submitFeedback` 儲存到資料庫，可在 `ReimbursementItemsAdminPage` 看到命中率與常見誤判描述。
@@ -295,6 +309,7 @@ curl -X POST http://localhost:3000/api/v1/expense/predict-category -d '{"entityI
    - 自動執行 `npm install` 和 `prisma generate`
 
 3. **執行 Migration 和 Seed**
+
    ```bash
    cd backend
    npm run prisma:migrate
@@ -302,11 +317,12 @@ curl -X POST http://localhost:3000/api/v1/expense/predict-category -d '{"entityI
    ```
 
 4. **啟動服務**
+
    ```bash
    # Backend (Terminal 1)
    cd backend
    npm run start:dev
-   
+
    # Frontend (Terminal 2)
    cd frontend
    npm run dev
@@ -322,6 +338,7 @@ curl -X POST http://localhost:3000/api/v1/expense/predict-category -d '{"entityI
 ### 方式二：本機開發
 
 #### 前置需求
+
 - Node.js 20+
 - PostgreSQL 16
 - Docker Desktop（可選）
@@ -329,11 +346,13 @@ curl -X POST http://localhost:3000/api/v1/expense/predict-category -d '{"entityI
 #### 1. 啟動資料庫
 
 **選項 A：使用 Docker**
+
 ```bash
 docker-compose up postgres -d
 ```
 
 **選項 B：本機 PostgreSQL**
+
 ```bash
 # 建立資料庫
 createdb ecommerce_accounting
@@ -379,6 +398,7 @@ npm run dev
 ```
 
 #### 4. 訪問系統
+
 - Frontend: http://localhost:5173
 - Backend: http://localhost:3000/api/v1
 - Swagger: http://localhost:3000/api-docs
@@ -399,6 +419,7 @@ docker-compose down
 ```
 
 訪問：
+
 - Frontend: http://localhost:3001
 - Backend: http://localhost:3000/api/v1
 - Swagger: http://localhost:3000/api-docs
@@ -418,14 +439,17 @@ SUPER_ADMIN_NAME="系統管理員"
 ```
 
 > ⚠️ **重要**：密碼只應透過環境變數提供，請勿將真實帳密寫入程式碼或版本控制。
+
 ---
 
 ## 📚 API 文件
 
 ### Swagger UI
+
 啟動 Backend 後訪問：`http://localhost:3000/api-docs`
 
 **所有 API 已使用 Swagger 註解完整標註：**
+
 - ✅ 所有 Controllers 都有 `@ApiTags` 分類
 - ✅ 所有端點都有 `@ApiOperation` 說明
 - ✅ 查詢參數使用 `@ApiQuery` 標註
@@ -435,6 +459,7 @@ SUPER_ADMIN_NAME="系統管理員"
 ### 範例 API 測試
 
 #### 1. 登入取得 Token
+
 ```bash
 curl -X POST http://localhost:3000/api/v1/auth/login \
   -H "Content-Type: application/json" \
@@ -447,6 +472,7 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
 > 在終端機中預先設定 `SUPER_ADMIN_EMAIL` 與 `SUPER_ADMIN_PASSWORD`，或在指令中以實際帳密取代佔位符號。
 
 回應：
+
 ```json
 {
   "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
@@ -459,18 +485,21 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
 ```
 
 #### 2. 查詢會計科目
+
 ```bash
 curl -X GET "http://localhost:3000/api/v1/accounting/accounts?entityId=tw-entity-001" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 #### 3. 建立模擬訂單（測試用）
+
 ```bash
 curl -X POST "http://localhost:3000/api/v1/sales/orders/mock?entityId=tw-entity-001" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 #### 4. 取得損益表
+
 ```bash
 curl -X GET "http://localhost:3000/api/v1/reports/income-statement?entityId=tw-entity-001&startDate=2025-01-01&endDate=2025-12-31" \
   -H "Authorization: Bearer YOUR_TOKEN"
@@ -530,6 +559,7 @@ ecom-accounting-system/
 ### 核心資料表（> 36 個，包含電商與庫存）
 
 #### 系統核心
+
 - `users` - 使用者
 - `roles` - 角色（ADMIN、ACCOUNTANT、OPERATOR）
 - `permissions` - 權限
@@ -538,6 +568,7 @@ ecom-accounting-system/
 - `audit_logs` - 審計軌跡
 
 #### 會計核心
+
 - `entities` - 公司實體
 - `accounts` - 會計科目表（採用台灣商業會計法 112 年度後「商業會計項目表」為主，並加上系統用輔助欄位）
 - `periods` - 會計期間
@@ -545,6 +576,7 @@ ecom-accounting-system/
 - `journal_lines` - 會計分錄明細
 
 #### 銷售模組
+
 - `sales_channels` - 銷售渠道（9個平台）
 - `customers` - 客戶
 - `vendors` - 供應商
@@ -555,15 +587,18 @@ ecom-accounting-system/
 - `payments` - 付款記錄
 
 #### 庫存模組（Inventory）
+
 - `warehouses` - 倉庫（公司倉、3PL、平台倉等）
 - `inventory_snapshots` - 庫存快照（每實體 × 倉庫 × 商品一筆，紀錄 OnHand / Allocated / Available）
 - `inventory_transactions` - 庫存異動流水（入庫 / 出庫 / 預留 / 釋放 / 調整）
 
 #### AR/AP
+
 - `ar_invoices` - 應收發票
 - `ap_invoices` - 應付發票
 
 #### 費用與審批
+
 - `expense_requests` - 費用申請
 - `expenses` - 費用記錄
 - `expense_items` - 費用明細
@@ -572,17 +607,20 @@ ecom-accounting-system/
 - `approval_requests` - 審批請求
 
 #### 成本管理
+
 - `purchase_orders` - 採購訂單
 - `purchase_order_items` - 採購明細
 - `product_batches` - 產品批次（成本追蹤）
 - `dev_costs` - 研發成本
 
 #### 銀行模組
+
 - `bank_accounts` - 銀行帳戶
 - `virtual_accounts` - 虛擬帳號
 - `bank_transactions` - 銀行交易
 
 #### 薪資模組
+
 - `departments` - 部門
 - `employees` - 員工
 - `payroll_runs` - 薪資批次
@@ -591,6 +629,7 @@ ecom-accounting-system/
 ### 金額欄位標準
 
 **所有金額欄位都採用 4 欄位標準：**
+
 ```typescript
 amountOriginal  Decimal  // 原幣金額
 currency        String   // 幣別 (TWD, USD, CNY...)
@@ -604,16 +643,17 @@ amountBase      Decimal  // 本位幣金額
 
 ### 角色定義
 
-| 角色 | 代碼 | 權限範圍 |
-|------|------|----------|
-| 最高管理員 | `SUPER_ADMIN` | 全系統權限與設定管理 |
-| 系統管理員 | `ADMIN` | 使用者管理、系統設定、多數模組操作 |
-| 會計人員 | `ACCOUNTANT` | 查看、建立、審核會計相關資料 |
-| 操作員 | `OPERATOR` | 查看、建立訂單等基本操作 |
+| 角色       | 代碼          | 權限範圍                           |
+| ---------- | ------------- | ---------------------------------- |
+| 最高管理員 | `SUPER_ADMIN` | 全系統權限與設定管理               |
+| 系統管理員 | `ADMIN`       | 使用者管理、系統設定、多數模組操作 |
+| 會計人員   | `ACCOUNTANT`  | 查看、建立、審核會計相關資料       |
+| 操作員     | `OPERATOR`    | 查看、建立訂單等基本操作           |
 
 ### 使用方式
 
 在 Controller 中使用 `@Roles()` decorator：
+
 ```typescript
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('ADMIN', 'ACCOUNTANT')
@@ -652,6 +692,7 @@ async getSensitiveData() {
 - ✅ **24個會計期間**：2025年度 12個月 × 2個實體
 
 ### AI 報銷題庫（選用，但建議啟用）
+
 - 設定 `GEMINI_API_KEY` 後，於 `backend/` 執行 `npm run seed:ai-items`。
 - 腳本會使用 Gemini 依據會計科目自動生成 30~50 個 `ReimbursementItem`，預設實體為 `tw-entity-001`；若需切換實體可調整 `src/scripts/seed-ai-reimbursement-items.ts` 中的常數。
 - 自動帶入的 `keywords`、`defaultReceiptType` 與 `allowedReceiptTypes` 會作為 AI 推論與表單搜尋的資料來源。
@@ -661,6 +702,7 @@ async getSensitiveData() {
 ## 🧪 測試
 
 ### Backend 測試
+
 ```bash
 cd backend
 
@@ -675,6 +717,7 @@ npm run test:cov
 ```
 
 ### Frontend 測試
+
 ```bash
 cd frontend
 
@@ -698,22 +741,26 @@ npm run test:e2e
 ### ⚠️ 重要：Monorepo 結構說明
 
 此專案為 **monorepo** 結構：
+
 - `backend/` - NestJS 後端應用程式
 - `frontend/` - React 前端應用程式
 
 部署時必須正確設定 **Root Directory**，否則會找不到 `package.json`。
 
 ### 正式環境 URL
+
 - **前端**: https://ecom-accounting-frontend.onrender.com
 - **後端**: https://ecom-accounting-backend.onrender.com
 - **API Base URL**: https://ecom-accounting-backend.onrender.com/api/v1
 - **Swagger 文件**: https://ecom-accounting-backend.onrender.com/api-docs
 
 ### 1. 準備工作
+
 - 註冊 [Render](https://render.com) 帳號
 - Fork 此專案到您的 GitHub
 
 ### 2. 建立 PostgreSQL 資料庫
+
 1. 在 Render Dashboard 點擊 "New" → "PostgreSQL"
 2. 填寫資料庫名稱：`ecommerce-accounting-db`
 3. 選擇免費方案
@@ -737,13 +784,15 @@ npm run test:e2e
 **方案 B：在命令中切換目錄**
 
 如果 Root Directory 留空，則必須在命令中加入 `cd backend`：
-   - **Root Directory**: （留空）
-   - **Build Command**: `cd backend && npm install && npx prisma generate && npm run build`
-   - **Start Command**: `cd backend && npx prisma migrate deploy && npm run start:prod`
+
+- **Root Directory**: （留空）
+- **Build Command**: `cd backend && npm install && npx prisma generate && npm run build`
+- **Start Command**: `cd backend && npx prisma migrate deploy && npm run start:prod`
 
 #### 環境變數設定
 
 4. 環境變數：
+
    ```bash
    DATABASE_URL=<您的 Internal Database URL>
    JWT_SECRET=<隨機產生的安全字串，至少32字元>
@@ -759,14 +808,13 @@ npm run test:e2e
 
 - ❌ **錯誤**：`Cannot find module '@nestjs/cli'` 或 `nest: not found`
   - ✅ **解決**：確認 `backend/package.json` 的 build script 使用 `node_modules/.bin/nest build`
-  
 - ❌ **錯誤**：`Error: Cannot find module './dist/main'`
   - ✅ **解決**：確認 Root Directory 設定為 `backend`，或在命令前加 `cd backend`
-  
 - ❌ **錯誤**：`sh: 1: nest: not found`
   - ✅ **解決**：`@nestjs/cli` 必須在 `devDependencies` 中，且 build script 使用完整路徑
 
 ### 4. 建立 Frontend Web Service
+
 1. 點擊 "New" → "Static Site"
 2. 連接相同的儲存庫
 3. 設定：
@@ -783,7 +831,9 @@ npm run test:e2e
 5. 點擊 "Create Static Site"
 
 ### 5. 初始化資料
+
 Backend 部署完成後，執行種子資料：
+
 ```bash
 # 在 Render Shell 中執行
 npm run prisma:seed
@@ -792,18 +842,22 @@ npm run prisma:seed
 ### 6. 驗證部署
 
 #### 檢查 Backend Health
+
 ```bash
 curl https://ecom-accounting-backend.onrender.com/health
 # 預期回應：{"status":"ok","timestamp":"...","env":"production"}
 ```
 
 #### 檢查 Swagger 文件
+
 開啟瀏覽器訪問：
+
 ```
 https://ecom-accounting-backend.onrender.com/api-docs
 ```
 
 #### 測試登入 API
+
 ```bash
 curl -X POST https://ecom-accounting-backend.onrender.com/api/v1/auth/login \
   -H "Content-Type: application/json" \
@@ -816,7 +870,9 @@ curl -X POST https://ecom-accounting-backend.onrender.com/api/v1/auth/login \
 > 建議於 Render 控制台設定對應的環境變數，再使用上述指令測試登入。
 
 #### 測試前端訪問
+
 開啟瀏覽器：
+
 ```
 https://ecom-accounting-frontend.onrender.com
 ```
@@ -828,6 +884,7 @@ https://ecom-accounting-frontend.onrender.com
 ### 新增模組
 
 1. **建立模組檔案**
+
    ```bash
    cd backend/src/modules
    mkdir my-module
@@ -837,6 +894,7 @@ https://ecom-accounting-frontend.onrender.com
    ```
 
 2. **檔案結構**
+
    ```
    my-module/
    ├── my-module.controller.ts    # API 端點
@@ -848,10 +906,11 @@ https://ecom-accounting-frontend.onrender.com
    ```
 
 3. **註冊到 AppModule**
+
    ```typescript
    // app.module.ts
    import { MyModule } from './modules/my-module/my-module.module';
-   
+
    @Module({
      imports: [
        // ...其他模組
@@ -904,6 +963,7 @@ npm run format
 完整的電子發票開立流程：
 
 #### 1. 建立銷售訂單
+
 ```bash
 curl -X POST http://localhost:3000/sales/orders \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
@@ -927,12 +987,14 @@ curl -X POST http://localhost:3000/sales/orders \
 ```
 
 #### 2. 預覽發票內容
+
 ```bash
 curl -X GET http://localhost:3000/invoicing/preview/ORDER_ID \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
 **預期回應**：
+
 ```json
 {
   "orderId": "order-uuid",
@@ -947,6 +1009,7 @@ curl -X GET http://localhost:3000/invoicing/preview/ORDER_ID \
 ```
 
 #### 3. 開立正式發票
+
 ```bash
 curl -X POST http://localhost:3000/invoicing/issue/ORDER_ID \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
@@ -959,6 +1022,7 @@ curl -X POST http://localhost:3000/invoicing/issue/ORDER_ID \
 ```
 
 **預期回應**：
+
 ```json
 {
   "success": true,
@@ -969,12 +1033,14 @@ curl -X POST http://localhost:3000/invoicing/issue/ORDER_ID \
 ```
 
 #### 4. 查詢發票狀態
+
 ```bash
 curl -X GET http://localhost:3000/invoicing/by-order/ORDER_ID \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
 #### 5. 作廢發票（如需要）
+
 ```bash
 curl -X POST http://localhost:3000/invoicing/INVOICE_ID/void \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
@@ -991,6 +1057,7 @@ curl -X POST http://localhost:3000/invoicing/INVOICE_ID/void \
 完整的銀行對帳流程：
 
 #### 1. 匯入銀行交易明細
+
 ```bash
 curl -X POST http://localhost:3000/reconciliation/bank/import \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
@@ -1021,6 +1088,7 @@ curl -X POST http://localhost:3000/reconciliation/bank/import \
 ```
 
 **預期回應**：
+
 ```json
 {
   "success": true,
@@ -1030,6 +1098,7 @@ curl -X POST http://localhost:3000/reconciliation/bank/import \
 ```
 
 #### 2. 自動對帳
+
 ```bash
 curl -X POST http://localhost:3000/reconciliation/bank/auto-match/BATCH_ID \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
@@ -1042,6 +1111,7 @@ curl -X POST http://localhost:3000/reconciliation/bank/auto-match/BATCH_ID \
 ```
 
 **預期回應**：
+
 ```json
 {
   "success": true,
@@ -1053,12 +1123,14 @@ curl -X POST http://localhost:3000/reconciliation/bank/auto-match/BATCH_ID \
 ```
 
 #### 3. 查詢待對帳項目
+
 ```bash
 curl -X GET "http://localhost:3000/reconciliation/pending?entityId=ENTITY_ID" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
 **預期回應**：
+
 ```json
 [
   {
@@ -1072,6 +1144,7 @@ curl -X GET "http://localhost:3000/reconciliation/pending?entityId=ENTITY_ID" \
 ```
 
 #### 4. 手動對帳（針對無法自動匹配的項目）
+
 ```bash
 curl -X POST http://localhost:3000/reconciliation/bank/manual-match \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
@@ -1084,6 +1157,7 @@ curl -X POST http://localhost:3000/reconciliation/bank/manual-match \
 ```
 
 #### 5. 取消對帳（如有誤）
+
 ```bash
 curl -X POST http://localhost:3000/reconciliation/bank/unmatch \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
@@ -1110,6 +1184,7 @@ curl -X POST http://localhost:3000/reconciliation/bank/unmatch \
 我們將前端從傳統的後台管理介面，升級為現代化、高互動性的 SaaS 產品體驗。
 
 #### 🎨 視覺與設計語言 (Visual & Design Language)
+
 - **Deep Glass UI (深層玻璃擬態)**：
   - 捨棄平面的白色背景，改用 **Mesh Gradient (網格漸層)** 作為全域背景，營造空間深度。
   - 實作 **Apple-style Glassmorphism**：
@@ -1122,6 +1197,7 @@ curl -X POST http://localhost:3000/reconciliation/bank/unmatch \
   - 針對深色模式優化了玻璃材質的透明度與光澤感。
 
 #### 🎬 動態設計 (Motion Design)
+
 - **Staggered Entry (交錯進場)**：
   - 頁面載入時，卡片與元件採用 `stagger` 策略依序滑入，消除資訊轟炸的壓迫感。
 - **Ambient Background (環境氛圍)**：
@@ -1131,6 +1207,7 @@ curl -X POST http://localhost:3000/reconciliation/bank/unmatch \
   - 點擊回饋與轉場動畫。
 
 #### ⚡️ 生產力與互動 (Productivity & Interaction)
+
 - **Living Data (即時數據模擬)**：
   - 儀表板不再是靜態圖片。數字會模擬即時跳動，並在變動時觸發 **Flash Text** 視覺脈衝。
   - 新增 "Live Updates" 呼吸燈指示器，強化系統運作中的感知。
@@ -1143,6 +1220,7 @@ curl -X POST http://localhost:3000/reconciliation/bank/unmatch \
   - 支援批次刪除、匯出、審核等動作。
 
 #### 🤖 AI 整合 (AI Integration)
+
 - **AI Insights Widget (智慧洞察元件)**：
   - 儀表板頂部的主動式 AI 分析區塊。
   - **Shimmering Border (流光邊框)**：使用流動的極光邊框暗示 AI 運算能量。
@@ -1152,6 +1230,7 @@ curl -X POST http://localhost:3000/reconciliation/bank/unmatch \
   - 提供快捷指令 (Suggested Prompts) 引導使用者探索數據。
 
 #### 📊 數據視覺化 (Data Visualization)
+
 - **Sales Analytics (銷售分析)**：
   - 整合 `recharts` 繪製高質感圖表。
   - 支援 Area Chart (趨勢)、Bar Chart (比較)、Composed Chart (複合分析)。
@@ -1160,6 +1239,7 @@ curl -X POST http://localhost:3000/reconciliation/bank/unmatch \
   - 前端直接生成 Excel 檔案，支援自定義欄位與格式。
 
 #### 🛠️ 系統功能 (System Features)
+
 - **Order Details Drawer (訂單詳情側邊欄)**：
   - 點擊列表不跳頁，直接滑出詳情側邊欄，保持工作流暢。
   - 包含訂單時間軸 (Timeline) 與商品明細。
@@ -1167,4 +1247,3 @@ curl -X POST http://localhost:3000/reconciliation/bank/unmatch \
   - 動態背景光暈。
   - 密碼強度即時檢測。
   - 社交登入 UI 整合。
-

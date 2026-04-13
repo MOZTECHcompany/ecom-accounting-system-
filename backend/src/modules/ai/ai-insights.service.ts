@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AiService } from './ai.service';
+import {
+  AI_AGENT_CORE_PRINCIPLES,
+  AI_AGENT_RESPONSE_STYLE,
+} from './ai-principles';
 import dayjs from 'dayjs';
 
 @Injectable()
@@ -43,7 +47,12 @@ export class AiInsightsService {
 
     // 2. Generate Prompt
     const prompt = `
-You are a CFO assistant. Analyze yesterday's financial data for the dashboard.
+${AI_AGENT_CORE_PRINCIPLES}
+${AI_AGENT_RESPONSE_STYLE}
+
+Role:
+You are a CFO assistant analyzing yesterday's financial data for the dashboard.
+
 Data:
 - Date: ${dayjs(yesterday).format('YYYY-MM-DD')}
 - Total Sales: TWD ${salesTotal} (${salesCount} orders)
@@ -52,6 +61,7 @@ Data:
 Task:
 Write a concise, one-sentence "Daily Financial Insight" in Traditional Chinese (Taiwan).
 Highlight the net flow (Sales - Expenses) and mention if it was a busy day or quiet day.
+Less is more: focus on the single most important signal.
 Tone: Professional, encouraging, and insightful.
 Max length: 50 words.
 `;
