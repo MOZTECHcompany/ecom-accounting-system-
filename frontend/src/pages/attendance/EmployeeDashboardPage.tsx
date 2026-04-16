@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { message } from 'antd';
+import { Alert, message } from 'antd';
 import { 
   EnvironmentOutlined, 
   CheckCircleOutlined, 
@@ -22,6 +22,7 @@ const EmployeeDashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [employeeLinkMissing, setEmployeeLinkMissing] = useState(false);
   const [lastAction, setLastAction] = useState<{ type: string; time: string } | null>(null);
   const [todayRecords, setTodayRecords] = useState<any[]>([]);
 
@@ -65,12 +66,26 @@ const EmployeeDashboardPage: React.FC = () => {
         longitude: location.lng,
       });
       message.success('上班打卡成功');
+      setEmployeeLinkMissing(false);
       const timeStr = dayjs().format('HH:mm:ss');
       setLastAction({ type: '上班', time: timeStr });
       setTodayRecords(prev => [...prev, { type: 'clock_in', time: timeStr }]);
     } catch (error) {
       console.error(error);
-      message.error('打卡失敗');
+      const backendMessage =
+        typeof error === 'object' &&
+        error !== null &&
+        'response' in error &&
+        typeof (error as any).response?.data?.message === 'string'
+          ? (error as any).response.data.message
+          : '';
+
+      if (backendMessage.includes('Employee record not found')) {
+        setEmployeeLinkMissing(true);
+        message.error('目前登入帳號尚未綁定員工資料');
+      } else {
+        message.error('打卡失敗');
+      }
     } finally {
       setLoading(false);
     }
@@ -89,12 +104,26 @@ const EmployeeDashboardPage: React.FC = () => {
         longitude: location.lng,
       });
       message.success('下班打卡成功');
+      setEmployeeLinkMissing(false);
       const timeStr = dayjs().format('HH:mm:ss');
       setLastAction({ type: '下班', time: timeStr });
       setTodayRecords(prev => [...prev, { type: 'clock_out', time: timeStr }]);
     } catch (error) {
       console.error(error);
-      message.error('打卡失敗');
+      const backendMessage =
+        typeof error === 'object' &&
+        error !== null &&
+        'response' in error &&
+        typeof (error as any).response?.data?.message === 'string'
+          ? (error as any).response.data.message
+          : '';
+
+      if (backendMessage.includes('Employee record not found')) {
+        setEmployeeLinkMissing(true);
+        message.error('目前登入帳號尚未綁定員工資料');
+      } else {
+        message.error('打卡失敗');
+      }
     } finally {
       setLoading(false);
     }
@@ -113,6 +142,15 @@ const EmployeeDashboardPage: React.FC = () => {
           <span>{currentTime.format('YYYY年MM月DD日 dddd')}</span>
         </div>
       </div>
+
+      {employeeLinkMissing ? (
+        <Alert
+          type="warning"
+          showIcon
+          message="目前登入帳號尚未綁定員工資料"
+          description="請到「薪資管理 > 員工與部門」將這個登入帳號綁定到對應員工後，再進行打卡與請假。"
+        />
+      ) : null}
       
       {/* Stats Grid - Moved to top like AP page */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 w-full">

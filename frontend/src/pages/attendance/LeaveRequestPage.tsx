@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { message } from 'antd';
+import { Alert, message } from 'antd';
 import { motion } from 'framer-motion';
 import { PlusOutlined, CalendarOutlined, ClockCircleOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { attendanceService } from '../../services/attendance.service';
@@ -18,6 +18,7 @@ const LeaveRequestPage: React.FC = () => {
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
   const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [employeeLinkMissing, setEmployeeLinkMissing] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -45,8 +46,25 @@ const LeaveRequestPage: React.FC = () => {
       setRequests(requestsData);
       setLeaveTypes(typesData);
       setLeaveBalances(balancesData);
+      setEmployeeLinkMissing(false);
     } catch (error) {
       console.error(error);
+      const backendMessage =
+        typeof error === 'object' &&
+        error !== null &&
+        'response' in error &&
+        typeof (error as any).response?.data?.message === 'string'
+          ? (error as any).response.data.message
+          : '';
+
+      if (backendMessage.includes('Employee record not found')) {
+        setEmployeeLinkMissing(true);
+        setRequests([]);
+        setLeaveTypes([]);
+        setLeaveBalances([]);
+        return;
+      }
+
       message.error('無法載入資料');
     }
   };
@@ -152,6 +170,15 @@ const LeaveRequestPage: React.FC = () => {
           <span>新增請假申請</span>
         </GlassButton>
       </div>
+
+      {employeeLinkMissing ? (
+        <Alert
+          type="warning"
+          showIcon
+          message="目前登入帳號尚未綁定員工資料"
+          description="請到「薪資管理 > 員工與部門」將這個登入帳號綁定到對應員工後，才能使用請假額度與請假申請功能。"
+        />
+      ) : null}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

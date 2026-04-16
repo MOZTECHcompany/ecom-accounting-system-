@@ -208,6 +208,7 @@ export interface Department {
 
 export interface Employee {
   id: string;
+  userId?: string | null;
   employeeNo: string;
   name: string;
   departmentId?: string;
@@ -215,6 +216,11 @@ export interface Employee {
   salaryBaseOriginal: number;
   isActive: boolean;
   hireDate: string;
+  user?: {
+    id: string;
+    name: string;
+    email?: string;
+  } | null;
 }
 
 export interface PayrollRun {

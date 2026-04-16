@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
+  Alert,
   Button,
   Card,
   Form,
@@ -27,7 +28,9 @@ import {
 import { motion } from "framer-motion";
 import dayjs from "dayjs";
 import { payrollService } from "../services/payroll.service";
-import { Employee, Department, PaginatedResult } from "../types";
+import { usersService } from "../services/users.service";
+import { useAuth } from "../contexts/AuthContext";
+import { Employee, Department, ManagedUser, PaginatedResult } from "../types";
 
 const { Title, Text } = Typography;
 
@@ -49,8 +52,11 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 };
 
 const EmployeesTab = ({ departments }: { departments: Department[] }) => {
+  const { user } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [users, setUsers] = useState<ManagedUser[]>([]);
   const [loading, setLoading] = useState(false);
+  const [usersLoading, setUsersLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(
@@ -70,8 +76,22 @@ const EmployeesTab = ({ departments }: { departments: Department[] }) => {
     }
   };
 
+  const fetchUsers = async () => {
+    setUsersLoading(true);
+    try {
+      const result = await usersService.list(1, 100);
+      setUsers(result.items.filter((item) => item.isActive));
+    } catch (error) {
+      setUsers([]);
+      message.error(getErrorMessage(error, "載入使用者失敗"));
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchEmployees();
+    fetchUsers();
   }, []);
 
   const handleCreate = async () => {
@@ -119,6 +139,20 @@ const EmployeesTab = ({ departments }: { departments: Department[] }) => {
     { title: "員工編號", dataIndex: "employeeNo", key: "employeeNo" },
     { title: "姓名", dataIndex: "name", key: "name" },
     {
+      title: "登入帳號",
+      dataIndex: "user",
+      key: "user",
+      render: (linkedUser: Employee["user"]) =>
+        linkedUser ? (
+          <div className="flex flex-col">
+            <span>{linkedUser.name}</span>
+            <span className="text-xs text-gray-400">{linkedUser.email || "-"}</span>
+          </div>
+        ) : (
+          <Tag color="default">未綁定</Tag>
+        ),
+    },
+    {
       title: "部門",
       dataIndex: "departmentId",
       key: "department",
@@ -165,8 +199,27 @@ const EmployeesTab = ({ departments }: { departments: Department[] }) => {
     },
   ];
 
+  const currentUserEmployee = user
+    ? employees.find((employee) => employee.userId === user.id)
+    : null;
+
+  const availableUserOptions = users.map((item) => ({
+    label: `${item.name} (${item.email})`,
+    value: item.id,
+  }));
+
   return (
     <div className="glass-card p-6">
+      {!currentUserEmployee && user ? (
+        <Alert
+          type="warning"
+          showIcon
+          className="mb-6"
+          message="目前登入帳號尚未綁定員工資料"
+          description="這會讓「我的請假」、「我的薪資單」、「打卡儀表板」等員工頁面看起來像沒功能。請在員工資料中把對應使用者綁上去。"
+        />
+      ) : null}
+
       <div className="flex justify-between items-center mb-6">
         <Title level={4} className="!mb-0 !font-light">
           員工名單
@@ -207,6 +260,16 @@ const EmployeesTab = ({ departments }: { departments: Department[] }) => {
           <Form.Item name="name" label="姓名" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
+          <Form.Item name="userId" label="綁定登入帳號">
+            <Select
+              allowClear
+              loading={usersLoading}
+              showSearch
+              optionFilterProp="label"
+              options={availableUserOptions}
+              placeholder="選擇要綁定的使用者"
+            />
+          </Form.Item>
           <Form.Item name="departmentId" label="部門">
             <Select
               options={departments.map((d) => ({ label: d.name, value: d.id }))}
@@ -238,6 +301,16 @@ const EmployeesTab = ({ departments }: { departments: Department[] }) => {
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="姓名" rules={[{ required: true }]}>
             <Input />
+          </Form.Item>
+          <Form.Item name="userId" label="綁定登入帳號">
+            <Select
+              allowClear
+              loading={usersLoading}
+              showSearch
+              optionFilterProp="label"
+              options={availableUserOptions}
+              placeholder="選擇要綁定的使用者"
+            />
           </Form.Item>
           <Form.Item name="departmentId" label="部門">
             <Select

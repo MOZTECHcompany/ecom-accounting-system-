@@ -428,6 +428,13 @@ export class PayrollService {
       where: { id },
       include: {
         department: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
       },
     });
 
@@ -447,6 +454,13 @@ export class PayrollService {
       where: resolvedEntityId ? { entityId: resolvedEntityId } : undefined,
       include: {
         department: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
       },
     });
   }
@@ -514,6 +528,7 @@ export class PayrollService {
     userId: string,
     data: {
       entityId?: string;
+      userId?: string | null;
       employeeNo: string;
       name: string;
       departmentId?: string;
@@ -562,6 +577,7 @@ export class PayrollService {
     }
 
     await this.ensureDepartmentInEntity(data.departmentId, entityId);
+    await this.ensureUserAssignable(data.userId);
 
     const salaryBaseOriginal = Number(data.salaryBaseOriginal);
     if (!Number.isFinite(salaryBaseOriginal) || salaryBaseOriginal < 0) {
@@ -573,6 +589,7 @@ export class PayrollService {
     const employee = await this.prisma.employee.create({
       data: {
         entityId,
+        userId: data.userId || null,
         employeeNo,
         name,
         country: entity.country,
@@ -587,6 +604,13 @@ export class PayrollService {
       },
       include: {
         department: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
       },
     });
 
@@ -605,6 +629,7 @@ export class PayrollService {
     id: string,
     userId: string,
     data: {
+      userId?: string | null;
       name?: string;
       departmentId?: string | null;
       hireDate?: string | Date;
@@ -636,6 +661,9 @@ export class PayrollService {
     if (data.departmentId !== undefined && data.departmentId !== null) {
       await this.ensureDepartmentInEntity(data.departmentId, employee.entityId);
     }
+    if (data.userId !== undefined) {
+      await this.ensureUserAssignable(data.userId, employee.id);
+    }
 
     const updateData: Record<string, any> = {};
 
@@ -649,6 +677,10 @@ export class PayrollService {
 
     if (data.departmentId !== undefined) {
       updateData.departmentId = data.departmentId || null;
+    }
+
+    if (data.userId !== undefined) {
+      updateData.userId = data.userId || null;
     }
 
     if (data.hireDate !== undefined) {
@@ -685,6 +717,13 @@ export class PayrollService {
       data: updateData,
       include: {
         department: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
       },
     });
 
@@ -710,6 +749,54 @@ export class PayrollService {
       },
       orderBy: [{ bankName: 'asc' }, { accountNo: 'asc' }],
     });
+  }
+
+  private async ensureUserAssignable(
+    employeeUserId?: string | null,
+    excludeEmployeeId?: string,
+  ) {
+    if (employeeUserId === undefined) {
+      return;
+    }
+
+    if (employeeUserId === null || employeeUserId === '') {
+      return;
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: employeeUserId },
+      select: { id: true, isActive: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Assigned user not found');
+    }
+
+    if (!user.isActive) {
+      throw new BadRequestException('Assigned user is inactive');
+    }
+
+    const linkedEmployee = await this.prisma.employee.findFirst({
+      where: {
+        userId: employeeUserId,
+        ...(excludeEmployeeId
+          ? {
+              id: { not: excludeEmployeeId },
+            }
+          : {}),
+      },
+      select: {
+        id: true,
+        employeeNo: true,
+        name: true,
+      },
+    });
+
+    if (linkedEmployee) {
+      throw new ConflictException(
+        `User is already linked to employee ${linkedEmployee.employeeNo} ${linkedEmployee.name}`,
+      );
+    }
   }
 
   async getPayrollRuns(userId: string, entityId?: string) {
