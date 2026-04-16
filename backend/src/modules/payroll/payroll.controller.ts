@@ -20,6 +20,7 @@ import { PayrollService } from './payroll.service';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { PayPayrollRunDto } from './dto/pay-payroll-run.dto';
+import { UpsertPayrollPolicyDto } from './dto/upsert-payroll-policy.dto';
 
 /**
  * 薪資控制器
@@ -63,6 +64,30 @@ export class PayrollController {
     @Query('entityId') entityId?: string,
   ) {
     return this.payrollService.getBankAccounts(req.user.id, entityId);
+  }
+
+  @Get('settings')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT')
+  @UseGuards(RolesGuard)
+  @ApiOperation({ summary: '查詢薪資規則設定' })
+  @ApiResponse({ status: 200, description: '成功取得薪資規則設定' })
+  async getPayrollSettings(
+    @Request() req: any,
+    @Query('entityId') entityId?: string,
+  ) {
+    return this.payrollService.getPayrollSettings(req.user.id, entityId);
+  }
+
+  @Patch('settings')
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @UseGuards(RolesGuard)
+  @ApiOperation({ summary: '更新薪資規則設定' })
+  @ApiResponse({ status: 200, description: '成功更新薪資規則設定' })
+  async upsertPayrollSettings(
+    @Request() req: any,
+    @Body() dto: UpsertPayrollPolicyDto,
+  ) {
+    return this.payrollService.upsertPayrollSettings(req.user.id, dto);
   }
 
   @Get('employees')

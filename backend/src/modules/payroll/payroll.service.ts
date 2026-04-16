@@ -9,6 +9,14 @@ import { AttendanceIntegrationService } from '../attendance/services/integration
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { JournalService } from '../accounting/services/journal.service';
 
+const DEFAULT_PAYROLL_POLICY = {
+  standardMonthlyHours: 240,
+  overtimeMultiplier: 1.33,
+  twLaborInsuranceRate: 0.022,
+  twHealthInsuranceRate: 0.015,
+  cnSocialInsuranceRate: 0.105,
+} as const;
+
 /**
  * 薪資管理服務
  *
@@ -60,6 +68,17 @@ export class PayrollService {
       totalAmount,
       employeeCount:
         employeeCount > 0 ? employeeCount : (run._count?.items ?? undefined),
+    };
+  }
+
+  private serializePayrollPolicy<T extends Record<string, any>>(policy: T) {
+    return {
+      ...policy,
+      standardMonthlyHours: this.toNumber(policy.standardMonthlyHours),
+      overtimeMultiplier: this.toNumber(policy.overtimeMultiplier),
+      twLaborInsuranceRate: this.toNumber(policy.twLaborInsuranceRate),
+      twHealthInsuranceRate: this.toNumber(policy.twHealthInsuranceRate),
+      cnSocialInsuranceRate: this.toNumber(policy.cnSocialInsuranceRate),
     };
   }
 
@@ -146,6 +165,71 @@ export class PayrollService {
     }
 
     return department;
+  }
+
+  private async getOrCreatePayrollPolicy(entityId: string) {
+    return this.prisma.payrollPolicy.upsert({
+      where: { entityId },
+      update: {},
+      create: {
+        entityId,
+        ...DEFAULT_PAYROLL_POLICY,
+      },
+    });
+  }
+
+  async getPayrollSettings(userId: string, entityId?: string) {
+    const resolvedEntityId = await this.resolveEntityId(userId, entityId);
+    const policy = await this.getOrCreatePayrollPolicy(resolvedEntityId);
+    return this.serializePayrollPolicy(policy);
+  }
+
+  async upsertPayrollSettings(
+    userId: string,
+    data: {
+      entityId?: string;
+      standardMonthlyHours?: number;
+      overtimeMultiplier?: number;
+      twLaborInsuranceRate?: number;
+      twHealthInsuranceRate?: number;
+      cnSocialInsuranceRate?: number;
+    },
+  ) {
+    const resolvedEntityId = await this.resolveEntityId(userId, data.entityId);
+
+    const updateData: Record<string, number> = {};
+
+    if (data.standardMonthlyHours !== undefined) {
+      updateData.standardMonthlyHours = Number(data.standardMonthlyHours);
+    }
+
+    if (data.overtimeMultiplier !== undefined) {
+      updateData.overtimeMultiplier = Number(data.overtimeMultiplier);
+    }
+
+    if (data.twLaborInsuranceRate !== undefined) {
+      updateData.twLaborInsuranceRate = Number(data.twLaborInsuranceRate);
+    }
+
+    if (data.twHealthInsuranceRate !== undefined) {
+      updateData.twHealthInsuranceRate = Number(data.twHealthInsuranceRate);
+    }
+
+    if (data.cnSocialInsuranceRate !== undefined) {
+      updateData.cnSocialInsuranceRate = Number(data.cnSocialInsuranceRate);
+    }
+
+    const policy = await this.prisma.payrollPolicy.upsert({
+      where: { entityId: resolvedEntityId },
+      update: updateData,
+      create: {
+        entityId: resolvedEntityId,
+        ...DEFAULT_PAYROLL_POLICY,
+        ...updateData,
+      },
+    });
+
+    return this.serializePayrollPolicy(policy);
   }
 
   async getEmployeeById(id: string) {
@@ -1070,6 +1154,9 @@ export class PayrollService {
       where: { id: employeeId },
     });
     if (!employee) throw new Error('Employee not found');
+    const payrollPolicy = await this.getOrCreatePayrollPolicy(
+      employee.entityId,
+    );
 
     // 1. Get Attendance Data
     const attendanceData = await this.attendanceIntegration.getPayrollData(
@@ -1082,10 +1169,20 @@ export class PayrollService {
 
     const items: { type: string; amount: number; remark?: string }[] = [];
     const baseSalary = Number(employee.salaryBaseOriginal);
-
-    // Standard working hours per month (30 days * 8 hours)
-    const STANDARD_MONTHLY_HOURS = 240;
-    const hourlyRate = baseSalary / STANDARD_MONTHLY_HOURS;
+    const standardMonthlyHours = this.toNumber(
+      payrollPolicy.standardMonthlyHours,
+    );
+    const overtimeMultiplier = this.toNumber(payrollPolicy.overtimeMultiplier);
+    const twLaborInsuranceRate = this.toNumber(
+      payrollPolicy.twLaborInsuranceRate,
+    );
+    const twHealthInsuranceRate = this.toNumber(
+      payrollPolicy.twHealthInsuranceRate,
+    );
+    const cnSocialInsuranceRate = this.toNumber(
+      payrollPolicy.cnSocialInsuranceRate,
+    );
+    const hourlyRate = baseSalary / standardMonthlyHours;
 
     // 2. Base Salary (Full month for now, TODO: pro-rate for new hires/terminations)
     items.push({
@@ -1095,8 +1192,8 @@ export class PayrollService {
 
     // 3. Overtime Pay
     if (attendanceData.overtimeHours > 0) {
-      // Simplified: 1.33x for all overtime
-      const overtimePay = attendanceData.overtimeHours * hourlyRate * 1.33;
+      const overtimePay =
+        attendanceData.overtimeHours * hourlyRate * overtimeMultiplier;
       items.push({
         type: 'OVERTIME',
         amount: Math.round(overtimePay),
@@ -1143,18 +1240,14 @@ export class PayrollService {
     }
 
     // 4. Deductions (Insurance & Tax)
-    // Simplified logic based on country
     if (employee.country === 'TW') {
-      // Labor Insurance (Employee Share) - Approx 2.2%
-      const laborIns = Math.round(baseSalary * 0.022);
+      const laborIns = Math.round(baseSalary * twLaborInsuranceRate);
       items.push({ type: 'INS_EMP_LABOR', amount: -laborIns });
 
-      // Health Insurance (Employee Share) - Approx 1.5%
-      const healthIns = Math.round(baseSalary * 0.015);
+      const healthIns = Math.round(baseSalary * twHealthInsuranceRate);
       items.push({ type: 'INS_EMP_HEALTH', amount: -healthIns });
     } else if (employee.country === 'CN') {
-      // Social Insurance (Employee Share) - Approx 10.5% total
-      const socialIns = Math.round(baseSalary * 0.105);
+      const socialIns = Math.round(baseSalary * cnSocialInsuranceRate);
       items.push({ type: 'INS_EMP_SOCIAL', amount: -socialIns });
     }
 

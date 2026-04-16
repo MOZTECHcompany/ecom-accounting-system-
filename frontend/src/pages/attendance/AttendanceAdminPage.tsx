@@ -253,7 +253,10 @@ const AttendanceAdminPage: React.FC = () => {
       const payload = {
         code: typeForm.code,
         name: typeForm.name,
-        balanceResetPolicy: typeForm.balanceResetPolicy,
+        balanceResetPolicy: typeForm.balanceResetPolicy as
+          | "CALENDAR_YEAR"
+          | "HIRE_ANNIVERSARY"
+          | "NONE",
         maxDaysPerYear:
           typeForm.maxDaysPerYear !== ""
             ? Number(typeForm.maxDaysPerYear)

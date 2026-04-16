@@ -107,7 +107,7 @@ export const shopifyService = {
       `/integrations/shopify/summary?${query.toString()}`,
     );
     const summary = response.data as Partial<ShopifySummary>;
-    const payouts = summary.payouts || {};
+    const payouts: Partial<ShopifySummary["payouts"]> = summary.payouts || {};
 
     return {
       entityId: summary.entityId || entityId,
