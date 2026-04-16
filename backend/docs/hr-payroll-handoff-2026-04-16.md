@@ -53,6 +53,11 @@
   - 將已核准請假轉為 `LEAVE_DEDUCTION`
   - 新增薪資批次明細查詢
   - 新增薪資批次 audit log 查詢
+  - 舊版 payroll 相容端點不再是 placeholder：
+    - `GET /payroll/payrolls`
+    - `GET /payroll/payrolls/:id`
+    - `POST /payroll/payrolls/:id/process`
+  - 補上薪資彙總報表與年度薪資摘要的 service 入口
   - 新增草稿 -> 待批准 -> 已批准狀態流
   - 建立批次時改用真實 `createdBy`
   - 送審/批准時同步 `ApprovalRequest`

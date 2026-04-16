@@ -269,22 +269,31 @@ export class PayrollController {
   }
 
   @Get('payrolls')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT')
+  @UseGuards(RolesGuard)
   @ApiOperation({ summary: '查詢薪資記錄列表' })
   @ApiResponse({ status: 200, description: '成功取得薪資記錄' })
   async getPayrolls(
+    @Request() req: any,
     @Query('entityId') entityId?: string,
     @Query('year') year?: number,
     @Query('month') month?: number,
   ) {
-    // This might be for individual payslips, keeping it for now but implementing basic return
-    return [];
+    return this.payrollService.getLegacyPayrolls(
+      req.user.id,
+      entityId,
+      year,
+      month,
+    );
   }
 
   @Get('payrolls/:id')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT')
+  @UseGuards(RolesGuard)
   @ApiOperation({ summary: '查詢單一薪資記錄' })
   @ApiResponse({ status: 200, description: '成功取得薪資記錄詳情' })
   async getPayroll(@Param('id') id: string) {
-    throw new Error('Not implemented');
+    return this.payrollService.getPayrollRunById(id);
   }
 
   @Post('payrolls')
@@ -297,9 +306,15 @@ export class PayrollController {
   }
 
   @Post('payrolls/:id/process')
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @UseGuards(RolesGuard)
   @ApiOperation({ summary: '處理薪資發放' })
   @ApiResponse({ status: 200, description: '成功處理薪資發放' })
-  async processPayroll(@Param('id') id: string) {
-    throw new Error('Not implemented');
+  async processPayroll(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() data?: Partial<PayPayrollRunDto>,
+  ) {
+    return this.payrollService.processLegacyPayroll(id, req.user.id, data);
   }
 }

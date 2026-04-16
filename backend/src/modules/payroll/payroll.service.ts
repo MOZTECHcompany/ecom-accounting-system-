@@ -745,6 +745,28 @@ export class PayrollService {
     return runs.map((run) => this.serializePayrollRun(run));
   }
 
+  async getLegacyPayrolls(
+    userId: string,
+    entityId?: string,
+    year?: number,
+    month?: number,
+  ) {
+    const runs = await this.getPayrollRuns(userId, entityId);
+
+    return runs.filter((run) => {
+      const payDate = new Date(run.payDate);
+      if (year !== undefined && payDate.getFullYear() !== Number(year)) {
+        return false;
+      }
+
+      if (month !== undefined && payDate.getMonth() + 1 !== Number(month)) {
+        return false;
+      }
+
+      return true;
+    });
+  }
+
   async getPayrollRunById(id: string) {
     const run = await this.prisma.payrollRun.findUnique({
       where: { id },
@@ -1590,6 +1612,68 @@ export class PayrollService {
     return this.getPayrollRunById(id);
   }
 
+  async processLegacyPayroll(
+    id: string,
+    userId: string,
+    data?: { bankAccountId?: string; paidAt?: string },
+  ) {
+    const run = await this.prisma.payrollRun.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        entityId: true,
+        status: true,
+        approvedBy: true,
+        createdBy: true,
+      },
+    });
+
+    if (!run) {
+      throw new NotFoundException('Payroll run not found');
+    }
+
+    if (run.status === 'draft') {
+      return this.submitPayrollRun(id, userId);
+    }
+
+    if (run.status === 'pending_approval') {
+      return this.approvePayrollRun(id, userId);
+    }
+
+    if (run.status === 'approved') {
+      return this.postPayrollRun(id, userId);
+    }
+
+    if (run.status === 'posted') {
+      let bankAccountId = data?.bankAccountId;
+      if (!bankAccountId) {
+        const fallbackBankAccount = await this.prisma.bankAccount.findFirst({
+          where: {
+            entityId: run.entityId,
+            isActive: true,
+          },
+          orderBy: [{ bankName: 'asc' }, { accountNo: 'asc' }],
+          select: { id: true },
+        });
+
+        if (!fallbackBankAccount) {
+          throw new BadRequestException(
+            '尚未設定可用銀行帳戶，請先建立銀行帳戶後再處理發薪。',
+          );
+        }
+
+        bankAccountId = fallbackBankAccount.id;
+      }
+
+      return this.payPayrollRun(id, userId, {
+        bankAccountId,
+        paidAt: data?.paidAt,
+      });
+    }
+
+    return this.getPayrollRunById(id);
+  }
+
   /**
    * 計算員工薪資
    */
@@ -1755,14 +1839,110 @@ export class PayrollService {
    * 薪資報表
    */
   async getPayrollReport(entityId: string, periodStart: Date, periodEnd: Date) {
-    // TODO: 產生薪資彙總表
+    const runs = await this.prisma.payrollRun.findMany({
+      where: {
+        entityId,
+        periodStart: { gte: periodStart },
+        periodEnd: { lte: periodEnd },
+      },
+      include: {
+        items: {
+          include: {
+            employee: {
+              select: {
+                id: true,
+                employeeNo: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { payDate: 'asc' },
+    });
+
+    const totalsByType = new Map<string, number>();
+    const totalsByEmployee = new Map<
+      string,
+      { employeeId: string; employeeNo: string; name: string; total: number }
+    >();
+
+    for (const run of runs) {
+      for (const item of run.items) {
+        totalsByType.set(
+          item.type,
+          (totalsByType.get(item.type) || 0) + this.toNumber(item.amountBase),
+        );
+
+        const existingEmployeeTotal = totalsByEmployee.get(item.employeeId) || {
+          employeeId: item.employeeId,
+          employeeNo: item.employee.employeeNo,
+          name: item.employee.name,
+          total: 0,
+        };
+        existingEmployeeTotal.total += this.toNumber(item.amountBase);
+        totalsByEmployee.set(item.employeeId, existingEmployeeTotal);
+      }
+    }
+
+    return {
+      periodStart,
+      periodEnd,
+      runCount: runs.length,
+      totalsByType: Array.from(totalsByType.entries()).map(([type, amount]) => ({
+        type,
+        amount,
+      })),
+      totalsByEmployee: Array.from(totalsByEmployee.values()).sort(
+        (a, b) => b.total - a.total,
+      ),
+      totalAmount: Array.from(totalsByType.values()).reduce(
+        (sum, amount) => sum + amount,
+        0,
+      ),
+    };
   }
 
   /**
    * 年度薪資總表（用於報稅）
    */
   async getAnnualPayrollSummary(entityId: string, year: number) {
-    // TODO: 產生年度薪資總表
+    const annualStart = new Date(year, 0, 1);
+    const annualEnd = new Date(year, 11, 31, 23, 59, 59, 999);
+    const report = await this.getPayrollReport(entityId, annualStart, annualEnd);
+
+    const monthlyRuns = await this.prisma.payrollRun.findMany({
+      where: {
+        entityId,
+        payDate: {
+          gte: annualStart,
+          lte: annualEnd,
+        },
+      },
+      include: {
+        items: true,
+      },
+      orderBy: { payDate: 'asc' },
+    });
+
+    const monthlyTotals = Array.from({ length: 12 }, (_, index) => ({
+      month: index + 1,
+      total: 0,
+    }));
+
+    for (const run of monthlyRuns) {
+      const monthIndex = run.payDate.getMonth();
+      monthlyTotals[monthIndex].total += run.items.reduce(
+        (sum, item) => sum + this.toNumber(item.amountBase),
+        0,
+      );
+    }
+
+    return {
+      year,
+      ...report,
+      monthlyTotals,
+    };
   }
 
   /**
@@ -1776,7 +1956,34 @@ export class PayrollService {
     this.logger.log(
       `Calculating payroll for entity ${entityId}, period: ${year}/${month}`,
     );
-    throw new Error('Not implemented: calculatePayroll');
+    const periodStart = new Date(year, month - 1, 1);
+    const periodEnd = new Date(year, month, 0, 23, 59, 59, 999);
+    const employees = await this.prisma.employee.findMany({
+      where: {
+        entityId,
+        isActive: true,
+        hireDate: { lte: periodEnd },
+        OR: [{ terminateDate: null }, { terminateDate: { gte: periodStart } }],
+      },
+      orderBy: { employeeNo: 'asc' },
+    });
+
+    const results = [];
+    for (const employee of employees) {
+      results.push(
+        await this.calculateEmployeePayroll(employee.id, periodStart, periodEnd),
+      );
+    }
+
+    return {
+      entityId,
+      year,
+      month,
+      periodStart,
+      periodEnd,
+      employeeCount: results.length,
+      results,
+    };
   }
 
   /**
@@ -1786,7 +1993,23 @@ export class PayrollService {
    */
   async postPayrollToAccounting(payrollRunId: string) {
     this.logger.log(`Posting payroll ${payrollRunId} to accounting`);
-    throw new Error('Not implemented: postPayrollToAccounting');
+    const run = await this.prisma.payrollRun.findUnique({
+      where: { id: payrollRunId },
+      select: {
+        id: true,
+        approvedBy: true,
+        createdBy: true,
+      },
+    });
+
+    if (!run) {
+      throw new NotFoundException('Payroll run not found');
+    }
+
+    return this.postPayrollRun(
+      payrollRunId,
+      run.approvedBy || run.createdBy,
+    );
   }
 
   /**
@@ -1807,7 +2030,7 @@ export class PayrollService {
    */
   async calculateLaborInsurance(salary: number) {
     this.logger.log(`Calculating labor insurance for salary: ${salary}`);
-    throw new Error('Not implemented: calculateLaborInsurance');
+    return Math.round(salary * DEFAULT_PAYROLL_POLICY.twLaborInsuranceRate);
   }
 
   /**
@@ -1817,6 +2040,6 @@ export class PayrollService {
    */
   async calculateHealthInsurance(salary: number) {
     this.logger.log(`Calculating health insurance for salary: ${salary}`);
-    throw new Error('Not implemented: calculateHealthInsurance');
+    return Math.round(salary * DEFAULT_PAYROLL_POLICY.twHealthInsuranceRate);
   }
 }
