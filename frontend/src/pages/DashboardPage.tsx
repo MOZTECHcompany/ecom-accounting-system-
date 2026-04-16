@@ -381,7 +381,7 @@ const DashboardPage: React.FC = () => {
               </Tag>
             </div>
             <Statistic
-              title={<span className="label-text font-medium">平台費用</span>}
+              title={<span className="label-text font-medium">支付手續費</span>}
               value={platformFeeDisplay}
               precision={typeof expenses === "number" ? 2 : undefined}
               prefix="$"
@@ -413,7 +413,7 @@ const DashboardPage: React.FC = () => {
             ) : null}
             {platformFeeStatus === "not_applicable" ? (
               <div className="mt-2 text-xs leading-5 text-gray-500">
-                目前期間內的付款方式沒有平台手續費。
+                目前期間內的付款方式沒有支付手續費。
               </div>
             ) : null}
             {platformFeeStatus === "empty" ? (

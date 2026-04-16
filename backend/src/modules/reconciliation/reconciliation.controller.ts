@@ -16,16 +16,21 @@ import {
 import { ReconciliationService } from './reconciliation.service';
 import { ImportBankTransactionsDto } from './dto/import-bank-transactions.dto';
 import { AutoMatchDto } from './dto/auto-match.dto';
+import { ImportProviderPayoutsDto } from './dto/import-provider-payouts.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { ProviderPayoutReconciliationService } from './provider-payout-reconciliation.service';
 
 @ApiTags('Reconciliation')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('reconciliation')
 export class ReconciliationController {
-  constructor(private readonly reconciliationService: ReconciliationService) {}
+  constructor(
+    private readonly reconciliationService: ReconciliationService,
+    private readonly providerPayoutService: ProviderPayoutReconciliationService,
+  ) {}
 
   @Post('bank/import')
   @Roles('ADMIN')
@@ -98,5 +103,48 @@ export class ReconciliationController {
       body.bankTransactionId,
       user.userId,
     );
+  }
+
+  @Post('payouts/import')
+  @Roles('ADMIN')
+  @ApiOperation({
+    summary: '匯入金流撥款/對帳報表',
+    description:
+      '支援綠界與 HiTRUST 的原始報表列資料，會回填每筆 Shopify 收款的實際金流手續費與淨額。',
+  })
+  @ApiResponse({ status: 201, description: '匯入成功' })
+  async importProviderPayouts(
+    @Body() dto: ImportProviderPayoutsDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.providerPayoutService.importProviderPayouts(dto, user.userId);
+  }
+
+  @Get('payouts/batches')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  @ApiOperation({
+    summary: '查詢金流對帳匯入批次',
+    description: '列出綠界 / HiTRUST 實際撥款匯入記錄',
+  })
+  @ApiResponse({ status: 200, description: '查詢成功' })
+  async getPayoutImportBatches(
+    @Query('entityId') entityId: string,
+    @Query('provider') provider?: string,
+  ) {
+    return this.providerPayoutService.getPayoutImportBatches(
+      entityId,
+      provider,
+    );
+  }
+
+  @Get('payouts/batches/:batchId')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  @ApiOperation({
+    summary: '查詢單一金流對帳匯入批次',
+    description: '查看批次內每一列實際撥款資料與匹配結果',
+  })
+  @ApiResponse({ status: 200, description: '查詢成功' })
+  async getPayoutImportBatchDetail(@Param('batchId') batchId: string) {
+    return this.providerPayoutService.getPayoutImportBatchDetail(batchId);
   }
 }

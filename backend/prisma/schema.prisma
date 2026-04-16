@@ -12,10 +12,10 @@ datasource db {
 }
 
 enum TaxType {
-  TAXABLE_5_PERCENT        // V5: 應稅 5% (可扣抵)
+  TAXABLE_5_PERCENT // V5: 應稅 5% (可扣抵)
   NON_DEDUCTIBLE_5_PERCENT // VND: 應稅 5% (不可扣抵 - 交際費、職工福利等)
-  ZERO_RATED               // Z0: 零稅率
-  TAX_FREE                 // F0: 免稅/無稅
+  ZERO_RATED // Z0: 零稅率
+  TAX_FREE // F0: 免稅/無稅
 }
 
 // ============================================
@@ -23,18 +23,18 @@ enum TaxType {
 // ============================================
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String   @map("password_hash")
+  id           String  @id @default(uuid())
+  email        String  @unique
+  passwordHash String  @map("password_hash")
   name         String
-  isActive     Boolean  @default(true) @map("is_active")
-  
+  isActive     Boolean @default(true) @map("is_active")
+
   // 2FA Fields
-  twoFactorSecret String? @map("two_factor_secret")
+  twoFactorSecret    String? @map("two_factor_secret")
   isTwoFactorEnabled Boolean @default(false) @map("is_two_factor_enabled")
-  
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
   roles                         UserRole[]
@@ -49,6 +49,7 @@ model User {
   payrollRunsApproved           PayrollRun[]                   @relation("ApprovedBy")
   invoiceLogs                   InvoiceLog[]
   bankImportBatches             BankImportBatch[]
+  payoutImportBatches           PayoutImportBatch[]
   reconciliationResults         ReconciliationResult[]
   approvalPolicySteps           ApprovalPolicyStep[]
   approvalSteps                 ApprovalStep[]
@@ -57,12 +58,12 @@ model User {
   notifications                 Notification[]
 
   // Attendance Relations
-  employee              Employee?
-  reviewedLeaveRequests LeaveRequest[] @relation("LeaveReviewer")
-  uploadedLeaveDocuments LeaveDocument[] @relation("LeaveDocumentUploader")
-  leaveRequestHistories LeaveRequestHistory[] @relation("LeaveHistoryActor")
-  resolvedAnomalies     AttendanceAnomaly[] @relation("AnomalyResolver")
-  createdAssemblyOrders AssemblyOrder[]
+  employee               Employee?
+  reviewedLeaveRequests  LeaveRequest[]        @relation("LeaveReviewer")
+  uploadedLeaveDocuments LeaveDocument[]       @relation("LeaveDocumentUploader")
+  leaveRequestHistories  LeaveRequestHistory[] @relation("LeaveHistoryActor")
+  resolvedAnomalies      AttendanceAnomaly[]   @relation("AnomalyResolver")
+  createdAssemblyOrders  AssemblyOrder[]
 
   @@map("users")
 }
@@ -180,6 +181,7 @@ model Entity {
   approvalRequests      ApprovalRequest[]
   invoices              Invoice[]
   bankImportBatches     BankImportBatch[]
+  payoutImportBatches   PayoutImportBatch[]
   warehouses            Warehouse[]
   inventorySnapshots    InventorySnapshot[]
   inventoryTransactions InventoryTransaction[]
@@ -189,16 +191,16 @@ model Entity {
   classifierFeedbacks   AccountingClassifierFeedback[] @relation("EntityClassifierFeedback")
 
   // Attendance Relations
-  attendancePolicies    AttendancePolicy[]
-  attendanceRecords     AttendanceRecord[]
-  attendanceSummaries   AttendanceDailySummary[]
-  leaveTypes            LeaveType[]
-  leaveBalances         LeaveBalance[]
-  leaveRequests         LeaveRequest[]
-  attendanceAnomalies   AttendanceAnomaly[]
+  attendancePolicies     AttendancePolicy[]
+  attendanceRecords      AttendanceRecord[]
+  attendanceSummaries    AttendanceDailySummary[]
+  leaveTypes             LeaveType[]
+  leaveBalances          LeaveBalance[]
+  leaveRequests          LeaveRequest[]
+  attendanceAnomalies    AttendanceAnomaly[]
   inventorySerialNumbers InventorySerialNumber[]
-  billOfMaterials       BillOfMaterial[]
-  assemblyOrders        AssemblyOrder[]
+  billOfMaterials        BillOfMaterial[]
+  assemblyOrders         AssemblyOrder[]
 
   @@map("entities")
 }
@@ -373,10 +375,10 @@ model Vendor {
 
 // 商品類型
 enum ProductType {
-  SIMPLE        // 一般商品
-  BUNDLE        // 組合商品 (虛擬，扣子件庫存)
-  MANUFACTURED  // 製成品 (需組裝，有 BOM)
-  SERVICE       // 服務 (無庫存)
+  SIMPLE // 一般商品
+  BUNDLE // 組合商品 (虛擬，扣子件庫存)
+  MANUFACTURED // 製成品 (需組裝，有 BOM)
+  SERVICE // 服務 (無庫存)
 }
 
 // 商品
@@ -388,14 +390,14 @@ model Product {
   type        ProductType @default(SIMPLE)
   category    String?
   description String?
-  
-  // 價格與成本
-  salesPrice  Decimal     @default(0) @map("sales_price") @db.Decimal(18, 2)
-  purchaseCost Decimal    @default(0) @map("purchase_cost") @db.Decimal(18, 2)
 
-  isActive    Boolean     @default(true) @map("is_active")
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
+  // 價格與成本
+  salesPrice   Decimal @default(0) @map("sales_price") @db.Decimal(18, 2)
+  purchaseCost Decimal @default(0) @map("purchase_cost") @db.Decimal(18, 2)
+
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   entity             Entity                 @relation(fields: [entityId], references: [id], onDelete: Cascade)
   salesOrderItems    SalesOrderItem[]
@@ -405,41 +407,41 @@ model Product {
   invoiceLines       InvoiceLine[]
   inventorySnapshots InventorySnapshot[]
   inventoryMovements InventoryTransaction[]
-  
+
   // BOM Relations
-  bomParent          BillOfMaterial[]       @relation("BomParent")
-  bomChildren        BillOfMaterial[]       @relation("BomChild")
-  
+  bomParent   BillOfMaterial[] @relation("BomParent")
+  bomChildren BillOfMaterial[] @relation("BomChild")
+
   // Assembly Relations
-  assemblyOrders     AssemblyOrder[]        @relation("AssemblyProduct")
+  assemblyOrders AssemblyOrder[] @relation("AssemblyProduct")
 
   // Costing & Tracking
-  hasSerialNumbers   Boolean                @default(false) @map("has_serial_numbers")
-  movingAverageCost  Decimal                @default(0) @map("moving_average_cost") @db.Decimal(18, 4)
-  latestPurchasePrice Decimal               @default(0) @map("latest_purchase_price") @db.Decimal(18, 4)
+  hasSerialNumbers    Boolean @default(false) @map("has_serial_numbers")
+  movingAverageCost   Decimal @default(0) @map("moving_average_cost") @db.Decimal(18, 4)
+  latestPurchasePrice Decimal @default(0) @map("latest_purchase_price") @db.Decimal(18, 4)
 
   // Variant Support
-  parentId           String?                @map("parent_id")
-  attributes         Json?                  @map("attributes") // e.g. { "Color": "Red", "Size": "L" }
-  
+  parentId   String? @map("parent_id")
+  attributes Json?   @map("attributes") // e.g. { "Color": "Red", "Size": "L" }
+
   // Barcode & Identification
-  barcode            String?                @map("barcode") // International Barcode (EAN/UPC)
-  modelNumber        String?                @map("model_number") // Manufacturer Part Number (MPN) / Model No.
-  hsCode             String?                @map("hs_code") // Harmonized System Code
-  countryOfOrigin    String?                @map("country_of_origin") // ISO 3166-1 alpha-2 code
+  barcode         String? @map("barcode") // International Barcode (EAN/UPC)
+  modelNumber     String? @map("model_number") // Manufacturer Part Number (MPN) / Model No.
+  hsCode          String? @map("hs_code") // Harmonized System Code
+  countryOfOrigin String? @map("country_of_origin") // ISO 3166-1 alpha-2 code
 
   // Physical Dimensions & Weight
-  packageLength      Decimal?               @map("package_length") @db.Decimal(10, 2) // cm
-  packageWidth       Decimal?               @map("package_width") @db.Decimal(10, 2) // cm
-  packageHeight      Decimal?               @map("package_height") @db.Decimal(10, 2) // cm
-  weight             Decimal?               @map("weight") @db.Decimal(10, 3) // kg
-  grossWeight        Decimal?               @map("gross_weight") @db.Decimal(10, 3) // kg
-  netWeight          Decimal?               @map("net_weight") @db.Decimal(10, 3) // kg
+  packageLength Decimal? @map("package_length") @db.Decimal(10, 2) // cm
+  packageWidth  Decimal? @map("package_width") @db.Decimal(10, 2) // cm
+  packageHeight Decimal? @map("package_height") @db.Decimal(10, 2) // cm
+  weight        Decimal? @map("weight") @db.Decimal(10, 3) // kg
+  grossWeight   Decimal? @map("gross_weight") @db.Decimal(10, 3) // kg
+  netWeight     Decimal? @map("net_weight") @db.Decimal(10, 3) // kg
 
-  parent             Product?               @relation("ProductVariants", fields: [parentId], references: [id])
-  variants           Product[]              @relation("ProductVariants")
+  parent   Product?  @relation("ProductVariants", fields: [parentId], references: [id])
+  variants Product[] @relation("ProductVariants")
 
-  serialNumbers      InventorySerialNumber[]
+  serialNumbers InventorySerialNumber[]
 
   @@unique([entityId, sku])
   @@index([entityId])
@@ -449,21 +451,21 @@ model Product {
 
 // 庫存序號追蹤 (SN)
 model InventorySerialNumber {
-  id          String   @id @default(uuid())
-  entityId    String   @map("entity_id")
-  productId   String   @map("product_id")
-  warehouseId String?  @map("warehouse_id") // 如果已出貨，可能為 null 或特定「已出貨」倉
+  id           String  @id @default(uuid())
+  entityId     String  @map("entity_id")
+  productId    String  @map("product_id")
+  warehouseId  String? @map("warehouse_id") // 如果已出貨，可能為 null 或特定「已出貨」倉
   serialNumber String  @map("serial_number")
-  status      String   @default("AVAILABLE") // AVAILABLE, RESERVED, SOLD, DEFECTIVE, RETURNED
-  
+  status       String  @default("AVAILABLE") // AVAILABLE, RESERVED, SOLD, DEFECTIVE, RETURNED
+
   // 追蹤資訊
   inboundRefType  String? @map("inbound_ref_type") // PURCHASE_ORDER, ASSEMBLY
   inboundRefId    String? @map("inbound_ref_id")
   outboundRefType String? @map("outbound_ref_type") // SALES_ORDER, ASSEMBLY
   outboundRefId   String? @map("outbound_ref_id")
-  
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   entity    Entity     @relation(fields: [entityId], references: [id], onDelete: Cascade)
   product   Product    @relation(fields: [productId], references: [id])
@@ -477,18 +479,18 @@ model InventorySerialNumber {
 
 // 物料清單 (BOM)
 model BillOfMaterial {
-  id          String   @id @default(uuid())
-  entityId    String   @map("entity_id")
-  parentId    String   @map("parent_id") // 父商品 (Bundle or Manufactured)
-  childId     String   @map("child_id")  // 子商品 (Component)
-  quantity    Decimal  @db.Decimal(18, 4) // 每個父商品需要多少子商品
-  notes       String?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id        String   @id @default(uuid())
+  entityId  String   @map("entity_id")
+  parentId  String   @map("parent_id") // 父商品 (Bundle or Manufactured)
+  childId   String   @map("child_id") // 子商品 (Component)
+  quantity  Decimal  @db.Decimal(18, 4) // 每個父商品需要多少子商品
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  entity      Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  parent      Product  @relation("BomParent", fields: [parentId], references: [id], onDelete: Cascade)
-  child       Product  @relation("BomChild", fields: [childId], references: [id])
+  entity Entity  @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  parent Product @relation("BomParent", fields: [parentId], references: [id], onDelete: Cascade)
+  child  Product @relation("BomChild", fields: [childId], references: [id])
 
   @@unique([parentId, childId])
   @@index([parentId])
@@ -497,28 +499,28 @@ model BillOfMaterial {
 
 // 組裝/拆解單
 model AssemblyOrder {
-  id          String   @id @default(uuid())
-  entityId    String   @map("entity_id")
-  orderNo     String   @unique @map("order_no")
-  productId   String   @map("product_id") // 要生產/拆解的商品
-  warehouseId String   @map("warehouse_id")
-  quantity    Decimal  @db.Decimal(18, 2)
-  type        String   @default("ASSEMBLE") // ASSEMBLE (組裝), DISASSEMBLE (拆解)
-  status      String   @default("DRAFT")    // DRAFT, CONFIRMED, COMPLETED, CANCELLED
-  
+  id          String  @id @default(uuid())
+  entityId    String  @map("entity_id")
+  orderNo     String  @unique @map("order_no")
+  productId   String  @map("product_id") // 要生產/拆解的商品
+  warehouseId String  @map("warehouse_id")
+  quantity    Decimal @db.Decimal(18, 2)
+  type        String  @default("ASSEMBLE") // ASSEMBLE (組裝), DISASSEMBLE (拆解)
+  status      String  @default("DRAFT") // DRAFT, CONFIRMED, COMPLETED, CANCELLED
+
   // 成本相關
   totalCostBase Decimal @default(0) @map("total_cost_base") @db.Decimal(18, 2)
-  
-  notes       String?
-  occurredAt  DateTime @default(now()) @map("occurred_at")
-  createdBy   String   @map("created_by")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  entity      Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  product     Product  @relation("AssemblyProduct", fields: [productId], references: [id])
-  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
-  creator     User     @relation(fields: [createdBy], references: [id])
+  notes      String?
+  occurredAt DateTime @default(now()) @map("occurred_at")
+  createdBy  String   @map("created_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  entity    Entity    @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  product   Product   @relation("AssemblyProduct", fields: [productId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  creator   User      @relation(fields: [createdBy], references: [id])
 
   @@index([entityId, status])
   @@map("assembly_orders")
@@ -535,11 +537,11 @@ model Warehouse {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  entity    Entity                 @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  snapshots InventorySnapshot[]
-  movements InventoryTransaction[]
+  entity                 Entity                  @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  snapshots              InventorySnapshot[]
+  movements              InventoryTransaction[]
   inventorySerialNumbers InventorySerialNumber[]
-  assemblyOrders AssemblyOrder[]
+  assemblyOrders         AssemblyOrder[]
 
   @@unique([entityId, code])
   @@index([entityId])
@@ -804,30 +806,30 @@ model ApInvoice {
   amountFxRate   Decimal @default(1) @map("amount_fx_rate") @db.Decimal(18, 6)
   amountBase     Decimal @map("amount_base") @db.Decimal(18, 2)
 
-  invoiceDate DateTime @map("invoice_date")
-  dueDate     DateTime @map("due_date")
+  invoiceDate DateTime  @map("invoice_date")
+  dueDate     DateTime  @map("due_date")
   nextDueDate DateTime? @map("next_due_date")
 
   // 已付金額（符合四欄位標準）
-  paidAmountOriginal Decimal  @default(0) @map("paid_amount_original") @db.Decimal(18, 2)
-  paidAmountCurrency String   @default("TWD") @map("paid_amount_currency")
-  paidAmountFxRate   Decimal  @default(1) @map("paid_amount_fx_rate") @db.Decimal(18, 6)
-  paidAmountBase     Decimal  @default(0) @map("paid_amount_base") @db.Decimal(18, 2)
-  
-  taxType            TaxType  @default(TAXABLE_5_PERCENT) @map("tax_type")
-  taxAmount          Decimal? @map("tax_amount") @db.Decimal(18, 2)
+  paidAmountOriginal Decimal @default(0) @map("paid_amount_original") @db.Decimal(18, 2)
+  paidAmountCurrency String  @default("TWD") @map("paid_amount_currency")
+  paidAmountFxRate   Decimal @default(1) @map("paid_amount_fx_rate") @db.Decimal(18, 6)
+  paidAmountBase     Decimal @default(0) @map("paid_amount_base") @db.Decimal(18, 2)
 
-  status             String   @default("pending") // pending, partial, paid, overdue
-  priority           String   @default("normal") // normal, urgent
-  paymentFrequency   String   @default("one_time") @map("payment_frequency") // one_time, monthly
-  isRecurringMonthly Boolean  @default(false) @map("is_recurring_monthly")
-  recurringDayOfMonth Int?    @map("recurring_day_of_month")
-  sourceModule       String?  @map("source_module")
-  sourceId           String?  @map("source_id")
-  approvalStatus     String   @default("pending") @map("approval_status") // pending, approved, rejected
-  notes              String?
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  taxType   TaxType  @default(TAXABLE_5_PERCENT) @map("tax_type")
+  taxAmount Decimal? @map("tax_amount") @db.Decimal(18, 2)
+
+  status              String   @default("pending") // pending, partial, paid, overdue
+  priority            String   @default("normal") // normal, urgent
+  paymentFrequency    String   @default("one_time") @map("payment_frequency") // one_time, monthly
+  isRecurringMonthly  Boolean  @default(false) @map("is_recurring_monthly")
+  recurringDayOfMonth Int?     @map("recurring_day_of_month")
+  sourceModule        String?  @map("source_module")
+  sourceId            String?  @map("source_id")
+  approvalStatus      String   @default("pending") @map("approval_status") // pending, approved, rejected
+  notes               String?
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
 
   entity Entity  @relation(fields: [entityId], references: [id], onDelete: Cascade)
   vendor Vendor? @relation(fields: [vendorId], references: [id])
@@ -857,34 +859,34 @@ model ExpenseRequest {
   amountFxRate   Decimal @default(1) @map("amount_fx_rate") @db.Decimal(18, 6)
   amountBase     Decimal @map("amount_base") @db.Decimal(18, 2)
 
-  taxType        TaxType  @default(TAXABLE_5_PERCENT) @map("tax_type")
-  taxAmount      Decimal? @map("tax_amount") @db.Decimal(18, 2)
+  taxType   TaxType  @default(TAXABLE_5_PERCENT) @map("tax_type")
+  taxAmount Decimal? @map("tax_amount") @db.Decimal(18, 2)
 
-  dueDate              DateTime? @map("due_date")
-  description          String
-  remarks              String?   @map("remarks")
-  priority             String    @default("normal") // normal, urgent
-  attachmentUrl        String?   @map("attachment_url")
-  evidenceFiles        Json?     @map("evidence_files")
-  departmentId         String?   @map("department_id")
-  receiptType          String?   @map("receipt_type")
-  createdBy            String    @map("created_by")
-  status               String    @default("pending") // draft, pending, approved, rejected, paid
-  approvalUserId       String?   @map("approval_user_id")
-  approvedAt           DateTime? @map("approved_at")
+  dueDate        DateTime? @map("due_date")
+  description    String
+  remarks        String?   @map("remarks")
+  priority       String    @default("normal") // normal, urgent
+  attachmentUrl  String?   @map("attachment_url")
+  evidenceFiles  Json?     @map("evidence_files")
+  departmentId   String?   @map("department_id")
+  receiptType    String?   @map("receipt_type")
+  createdBy      String    @map("created_by")
+  status         String    @default("pending") // draft, pending, approved, rejected, paid
+  approvalUserId String?   @map("approval_user_id")
+  approvedAt     DateTime? @map("approved_at")
 
   // 付款資訊
-  paymentMethod        String?   @map("payment_method") // cash, bank_transfer, check, other
-  paymentStatus        String    @default("pending") @map("payment_status") // pending, processing, paid
-  paymentBankName      String?   @map("payment_bank_name") // 實際付款銀行名稱
-  paymentAccountLast5  String?   @map("payment_account_last_5") // 實際付款帳號末五碼
+  paymentMethod       String? @map("payment_method") // cash, bank_transfer, check, other
+  paymentStatus       String  @default("pending") @map("payment_status") // pending, processing, paid
+  paymentBankName     String? @map("payment_bank_name") // 實際付款銀行名稱
+  paymentAccountLast5 String? @map("payment_account_last_5") // 實際付款帳號末五碼
 
-  suggestedAccountId   String?   @map("suggested_account_id")
-  finalAccountId       String?   @map("final_account_id")
-  suggestionConfidence Decimal   @default(0) @map("suggestion_confidence") @db.Decimal(5, 2)
-  metadata             Json?     @map("metadata")
-  createdAt            DateTime  @default(now()) @map("created_at")
-  updatedAt            DateTime  @updatedAt @map("updated_at")
+  suggestedAccountId   String?  @map("suggested_account_id")
+  finalAccountId       String?  @map("final_account_id")
+  suggestionConfidence Decimal  @default(0) @map("suggestion_confidence") @db.Decimal(5, 2)
+  metadata             Json?    @map("metadata")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
 
   entity              Entity                         @relation(fields: [entityId], references: [id], onDelete: Cascade)
   creator             User                           @relation("RequestedBy", fields: [createdBy], references: [id])
@@ -974,14 +976,14 @@ model ReimbursementItem {
   createdAt              DateTime @default(now()) @map("created_at")
   updatedAt              DateTime @updatedAt @map("updated_at")
 
-  entity                     Entity           @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  account                    Account          @relation(fields: [accountId], references: [id])
-  approvalPolicy             ApprovalPolicy?  @relation(fields: [approvalPolicyId], references: [id], onDelete: SetNull)
-  defaultTaxType             TaxType          @default(TAXABLE_5_PERCENT) @map("default_tax_type")
-  expenseRequests            ExpenseRequest[] @relation("ExpenseRequestFinalItem")
-  suggestedExpenseRequests   ExpenseRequest[] @relation("ExpenseRequestSuggestedItem")
-  suggestedFeedbacks AccountingClassifierFeedback[] @relation("FeedbackSuggestedItem")
-  chosenFeedbacks    AccountingClassifierFeedback[] @relation("FeedbackChosenItem")
+  entity                   Entity                         @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  account                  Account                        @relation(fields: [accountId], references: [id])
+  approvalPolicy           ApprovalPolicy?                @relation(fields: [approvalPolicyId], references: [id], onDelete: SetNull)
+  defaultTaxType           TaxType                        @default(TAXABLE_5_PERCENT) @map("default_tax_type")
+  expenseRequests          ExpenseRequest[]               @relation("ExpenseRequestFinalItem")
+  suggestedExpenseRequests ExpenseRequest[]               @relation("ExpenseRequestSuggestedItem")
+  suggestedFeedbacks       AccountingClassifierFeedback[] @relation("FeedbackSuggestedItem")
+  chosenFeedbacks          AccountingClassifierFeedback[] @relation("FeedbackChosenItem")
 
   @@unique([entityId, name])
   @@index([entityId, isActive])
@@ -1001,9 +1003,9 @@ model ApprovalPolicy {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  entity Entity               @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  steps  ApprovalPolicyStep[]
-  items  ReimbursementItem[]
+  entity     Entity               @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  steps      ApprovalPolicyStep[]
+  items      ReimbursementItem[]
   leaveTypes LeaveType[]
 
   @@index([entityId, isActive])
@@ -1127,12 +1129,12 @@ model AccountingClassifierFeedback {
   createdAt          DateTime @default(now()) @map("created_at")
 
   entity           Entity             @relation("EntityClassifierFeedback", fields: [entityId], references: [id], onDelete: Cascade)
-  expenseRequest  ExpenseRequest?     @relation(fields: [expenseRequestId], references: [id], onDelete: SetNull)
-  createdByUser   User?               @relation(fields: [createdBy], references: [id])
+  expenseRequest   ExpenseRequest?    @relation(fields: [expenseRequestId], references: [id], onDelete: SetNull)
+  createdByUser    User?              @relation(fields: [createdBy], references: [id])
   suggestedAccount Account?           @relation("ClassifierSuggestedAccount", fields: [suggestedAccountId], references: [id])
-  chosenAccount     Account?          @relation("ClassifierChosenAccount", fields: [chosenAccountId], references: [id])
-  suggestedItem     ReimbursementItem? @relation("FeedbackSuggestedItem", fields: [suggestedItemId], references: [id])
-  chosenItem        ReimbursementItem? @relation("FeedbackChosenItem", fields: [chosenItemId], references: [id])
+  chosenAccount    Account?           @relation("ClassifierChosenAccount", fields: [chosenAccountId], references: [id])
+  suggestedItem    ReimbursementItem? @relation("FeedbackSuggestedItem", fields: [suggestedItemId], references: [id])
+  chosenItem       ReimbursementItem? @relation("FeedbackChosenItem", fields: [chosenItemId], references: [id])
 
   @@index([entityId])
   @@index([expenseRequestId])
@@ -1356,9 +1358,9 @@ model Department {
   expenseRequests ExpenseRequest[]
   approvalSteps   ApprovalStep[]
 
-  @@map("departments")
-
   attendanceSchedules AttendanceSchedule[]
+
+  @@map("departments")
 }
 
 // 員工
@@ -1591,6 +1593,62 @@ model BankImportBatch {
   @@map("bank_import_batches")
 }
 
+model PayoutImportBatch {
+  id             String   @id @default(cuid())
+  entityId       String   @map("entity_id")
+  provider       String
+  sourceType     String   @default("statement") @map("source_type")
+  importedBy     String   @map("imported_by")
+  importedAt     DateTime @default(now()) @map("imported_at")
+  fileName       String?  @map("file_name")
+  recordCount    Int      @default(0) @map("record_count")
+  matchedCount   Int      @default(0) @map("matched_count")
+  unmatchedCount Int      @default(0) @map("unmatched_count")
+  invalidCount   Int      @default(0) @map("invalid_count")
+  notes          String?
+
+  entity   Entity             @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  importer User               @relation(fields: [importedBy], references: [id])
+  lines    PayoutImportLine[]
+
+  @@index([entityId, provider, importedAt])
+  @@map("payout_import_batches")
+}
+
+model PayoutImportLine {
+  id                String    @id @default(cuid())
+  batchId           String    @map("batch_id")
+  provider          String
+  rowIndex          Int       @map("row_index")
+  payoutDate        DateTime? @map("payout_date")
+  statementDate     DateTime? @map("statement_date")
+  currency          String    @default("TWD")
+  gateway           String?
+  externalOrderId   String?   @map("external_order_id")
+  providerPaymentId String?   @map("provider_payment_id")
+  providerTradeNo   String?   @map("provider_trade_no")
+  authorizationCode String?   @map("authorization_code")
+
+  grossAmountOriginal Decimal? @map("gross_amount_original") @db.Decimal(18, 2)
+  feeAmountOriginal   Decimal? @map("fee_amount_original") @db.Decimal(18, 2)
+  netAmountOriginal   Decimal? @map("net_amount_original") @db.Decimal(18, 2)
+
+  matchedPaymentId    String?  @map("matched_payment_id")
+  matchedSalesOrderId String?  @map("matched_sales_order_id")
+  status              String   @default("pending")
+  confidence          Int      @default(0)
+  message             String?
+  rawData             Json?    @map("raw_data")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  batch PayoutImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId, status])
+  @@index([provider, payoutDate])
+  @@index([matchedPaymentId])
+  @@map("payout_import_lines")
+}
+
 // 對帳結果表
 model ReconciliationResult {
   id                String   @id @default(cuid())
@@ -1617,17 +1675,17 @@ model Notification {
   userId    String   @map("user_id")
   title     String
   message   String
-  type      String   // e.g., 'info', 'success', 'warning', 'error'
-  category  String   // e.g., 'expense', 'system', 'approval'
+  type      String // e.g., 'info', 'success', 'warning', 'error'
+  category  String // e.g., 'expense', 'system', 'approval'
   read      Boolean  @default(false)
-  data      Json?    // Store related entity ID, link, etc.
+  data      Json? // Store related entity ID, link, etc.
   createdAt DateTime @default(now()) @map("created_at")
 
-  user      User     @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
-  @@map("notifications")
   @@index([userId])
   @@index([read])
+  @@map("notifications")
 }
 
 // ============================================
@@ -1657,17 +1715,17 @@ enum LeaveStatus {
 }
 
 model AttendancePolicy {
-  id             String   @id @default(uuid())
-  entityId       String   @map("entity_id")
-  name           String
-  type           String   @default("office") // office, remote, hybrid
-  ipAllowList    Json?    @map("ip_allow_list") // CIDR blocks
-  geofence       Json?    // polygons or circle definitions
-  requiresPhoto  Boolean  @default(false) @map("requires_photo")
-  maxEarlyClock  Int      @default(15) @map("max_early_clock") // minutes before shift
-  maxLateClock   Int      @default(5)  @map("max_late_clock")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id            String   @id @default(uuid())
+  entityId      String   @map("entity_id")
+  name          String
+  type          String   @default("office") // office, remote, hybrid
+  ipAllowList   Json?    @map("ip_allow_list") // CIDR blocks
+  geofence      Json? // polygons or circle definitions
+  requiresPhoto Boolean  @default(false) @map("requires_photo")
+  maxEarlyClock Int      @default(15) @map("max_early_clock") // minutes before shift
+  maxLateClock  Int      @default(5) @map("max_late_clock")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   entity    Entity               @relation(fields: [entityId], references: [id], onDelete: Cascade)
   schedules AttendanceSchedule[]
@@ -1676,20 +1734,20 @@ model AttendancePolicy {
 }
 
 model AttendanceSchedule {
-  id             String   @id @default(uuid())
-  policyId       String   @map("policy_id")
-  departmentId   String?  @map("department_id")
-  employeeId     String?  @map("employee_id")
-  weekday        Int      // 0=Sun ... 6=Sat
-  shiftStart     String   @map("shift_start") // HH:mm, store as text for TZ simplicity
-  shiftEnd       String   @map("shift_end")
-  breakMinutes   Int      @default(60) @map("break_minutes")
-  allowRemote    Boolean  @default(false) @map("allow_remote")
-  createdAt      DateTime @default(now()) @map("created_at")
+  id           String   @id @default(uuid())
+  policyId     String   @map("policy_id")
+  departmentId String?  @map("department_id")
+  employeeId   String?  @map("employee_id")
+  weekday      Int // 0=Sun ... 6=Sat
+  shiftStart   String   @map("shift_start") // HH:mm, store as text for TZ simplicity
+  shiftEnd     String   @map("shift_end")
+  breakMinutes Int      @default(60) @map("break_minutes")
+  allowRemote  Boolean  @default(false) @map("allow_remote")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   policy     AttendancePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
-  department Department?       @relation(fields: [departmentId], references: [id])
-  employee   Employee?         @relation(fields: [employeeId], references: [id])
+  department Department?      @relation(fields: [departmentId], references: [id])
+  employee   Employee?        @relation(fields: [employeeId], references: [id])
 
   attendanceRecords AttendanceRecord[]
 
@@ -1706,20 +1764,20 @@ model AttendanceRecord {
   eventType       AttendanceEventType @map("event_type")
   method          AttendanceMethod
   timestamp       DateTime
-  latitude        Decimal? @db.Decimal(10, 6)
-  longitude       Decimal? @db.Decimal(10, 6)
-  ipAddress       String?  @map("ip_address")
-  deviceInfo      Json?     @map("device_info")
-  photoUrl        String?   @map("photo_url")
-  isWithinFence   Boolean   @default(true) @map("is_within_fence")
-  isWithinIpRange Boolean   @default(true) @map("is_within_ip_range")
-  anomalyFlag     Boolean   @default(false) @map("anomaly_flag")
+  latitude        Decimal?            @db.Decimal(10, 6)
+  longitude       Decimal?            @db.Decimal(10, 6)
+  ipAddress       String?             @map("ip_address")
+  deviceInfo      Json?               @map("device_info")
+  photoUrl        String?             @map("photo_url")
+  isWithinFence   Boolean             @default(true) @map("is_within_fence")
+  isWithinIpRange Boolean             @default(true) @map("is_within_ip_range")
+  anomalyFlag     Boolean             @default(false) @map("anomaly_flag")
   notes           String?
-  createdAt       DateTime  @default(now()) @map("created_at")
+  createdAt       DateTime            @default(now()) @map("created_at")
 
-  entity   Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  employee Employee      @relation(fields: [employeeId], references: [id])
-  schedule AttendanceSchedule? @relation(fields: [scheduleId], references: [id])
+  entity    Entity              @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  employee  Employee            @relation(fields: [employeeId], references: [id])
+  schedule  AttendanceSchedule? @relation(fields: [scheduleId], references: [id])
   anomalies AttendanceAnomaly[]
 
   @@index([entityId, employeeId, timestamp])
@@ -1728,22 +1786,22 @@ model AttendanceRecord {
 }
 
 model AttendanceDailySummary {
-  id             String   @id @default(uuid())
-  entityId       String   @map("entity_id")
-  employeeId     String   @map("employee_id")
-  workDate       DateTime @map("work_date")
-  clockInTime    DateTime? @map("clock_in_time")
-  clockOutTime   DateTime? @map("clock_out_time")
-  breakMinutes   Int       @default(0) @map("break_minutes")
-  workedMinutes  Int       @default(0) @map("worked_minutes")
-  overtimeMinutes Int      @default(0) @map("overtime_minutes")
-  status         String    @default("pending") // pending, completed, missing_clock
-  anomalyReason  String?   @map("anomaly_reason")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  id              String    @id @default(uuid())
+  entityId        String    @map("entity_id")
+  employeeId      String    @map("employee_id")
+  workDate        DateTime  @map("work_date")
+  clockInTime     DateTime? @map("clock_in_time")
+  clockOutTime    DateTime? @map("clock_out_time")
+  breakMinutes    Int       @default(0) @map("break_minutes")
+  workedMinutes   Int       @default(0) @map("worked_minutes")
+  overtimeMinutes Int       @default(0) @map("overtime_minutes")
+  status          String    @default("pending") // pending, completed, missing_clock
+  anomalyReason   String?   @map("anomaly_reason")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  entity   Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  employee Employee @relation(fields: [employeeId], references: [id])
+  entity    Entity              @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  employee  Employee            @relation(fields: [employeeId], references: [id])
   anomalies AttendanceAnomaly[]
 
   @@unique([entityId, employeeId, workDate])
@@ -1751,24 +1809,24 @@ model AttendanceDailySummary {
 }
 
 model LeaveType {
-  id                 String   @id @default(uuid())
-  entityId           String   @map("entity_id")
-  code               String   // SICK, PERSONAL, ANNUAL, MENSTRUAL, MARRIAGE, FUNERAL, MATERNITY, PATERNITY, COMP_TIME, CUSTOM
-  name               String
-  requiresDocument   Boolean  @default(false) @map("requires_document")
-  documentExamples   String?  @map("document_examples")
-  maxDaysPerYear     Decimal? @map("max_days_per_year") @db.Decimal(5, 2)
-  minNoticeHours     Int?     @map("min_notice_hours")
-  paidPercentage     Decimal? @map("paid_percentage") @db.Decimal(5, 2)
-  autoApprovalHours  Int?     @map("auto_approval_hours")
-  approvalPolicyId   String?  @map("approval_policy_id")
-  requiresChildData  Boolean  @default(false) @map("requires_child_data") // for maternity/paternity
-  metadata           Json?
-  isActive           Boolean  @default(true) @map("is_active")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  id                String   @id @default(uuid())
+  entityId          String   @map("entity_id")
+  code              String // SICK, PERSONAL, ANNUAL, MENSTRUAL, MARRIAGE, FUNERAL, MATERNITY, PATERNITY, COMP_TIME, CUSTOM
+  name              String
+  requiresDocument  Boolean  @default(false) @map("requires_document")
+  documentExamples  String?  @map("document_examples")
+  maxDaysPerYear    Decimal? @map("max_days_per_year") @db.Decimal(5, 2)
+  minNoticeHours    Int?     @map("min_notice_hours")
+  paidPercentage    Decimal? @map("paid_percentage") @db.Decimal(5, 2)
+  autoApprovalHours Int?     @map("auto_approval_hours")
+  approvalPolicyId  String?  @map("approval_policy_id")
+  requiresChildData Boolean  @default(false) @map("requires_child_data") // for maternity/paternity
+  metadata          Json?
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
-  entity        Entity         @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  entity         Entity          @relation(fields: [entityId], references: [id], onDelete: Cascade)
   approvalPolicy ApprovalPolicy? @relation(fields: [approvalPolicyId], references: [id], onDelete: SetNull)
   leaveRequests  LeaveRequest[]
   leaveBalances  LeaveBalance[]
@@ -1783,43 +1841,43 @@ model LeaveBalance {
   employeeId     String   @map("employee_id")
   leaveTypeId    String   @map("leave_type_id")
   year           Int
-  accruedHours   Decimal @default(0) @map("accrued_hours") @db.Decimal(6, 2)
-  usedHours      Decimal @default(0) @map("used_hours") @db.Decimal(6, 2)
-  carryOverHours Decimal @default(0) @map("carry_over_hours") @db.Decimal(6, 2)
-  pendingHours   Decimal @default(0) @map("pending_hours") @db.Decimal(6, 2)
+  accruedHours   Decimal  @default(0) @map("accrued_hours") @db.Decimal(6, 2)
+  usedHours      Decimal  @default(0) @map("used_hours") @db.Decimal(6, 2)
+  carryOverHours Decimal  @default(0) @map("carry_over_hours") @db.Decimal(6, 2)
+  pendingHours   Decimal  @default(0) @map("pending_hours") @db.Decimal(6, 2)
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  entity     Entity     @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  employee   Employee   @relation(fields: [employeeId], references: [id])
-  leaveType  LeaveType  @relation(fields: [leaveTypeId], references: [id])
+  entity    Entity    @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  employee  Employee  @relation(fields: [employeeId], references: [id])
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
 
   @@unique([entityId, employeeId, leaveTypeId, year])
   @@map("leave_balances")
 }
 
 model LeaveRequest {
-  id               String     @id @default(uuid())
-  entityId         String     @map("entity_id")
-  employeeId       String     @map("employee_id")
-  leaveTypeId      String     @map("leave_type_id")
-  startAt          DateTime   @map("start_at")
-  endAt            DateTime   @map("end_at")
-  hours            Decimal    @db.Decimal(5, 2)
-  status           LeaveStatus @default(DRAFT)
-  reviewerId       String?    @map("reviewer_id")
-  reason           String?
-  location         String?    // domestic, overseas, remote city
-  requiredDocsMet  Boolean    @default(false) @map("required_docs_met")
-  metadata         Json?
-  createdAt        DateTime   @default(now()) @map("created_at")
-  updatedAt        DateTime   @updatedAt @map("updated_at")
+  id              String      @id @default(uuid())
+  entityId        String      @map("entity_id")
+  employeeId      String      @map("employee_id")
+  leaveTypeId     String      @map("leave_type_id")
+  startAt         DateTime    @map("start_at")
+  endAt           DateTime    @map("end_at")
+  hours           Decimal     @db.Decimal(5, 2)
+  status          LeaveStatus @default(DRAFT)
+  reviewerId      String?     @map("reviewer_id")
+  reason          String?
+  location        String? // domestic, overseas, remote city
+  requiredDocsMet Boolean     @default(false) @map("required_docs_met")
+  metadata        Json?
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
 
-  entity     Entity     @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  employee   Employee   @relation(fields: [employeeId], references: [id])
-  leaveType  LeaveType  @relation(fields: [leaveTypeId], references: [id])
-  reviewer   User?      @relation("LeaveReviewer", fields: [reviewerId], references: [id])
-  documents  LeaveDocument[]
-  histories  LeaveRequestHistory[]
+  entity    Entity                @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  employee  Employee              @relation(fields: [employeeId], references: [id])
+  leaveType LeaveType             @relation(fields: [leaveTypeId], references: [id])
+  reviewer  User?                 @relation("LeaveReviewer", fields: [reviewerId], references: [id])
+  documents LeaveDocument[]
+  histories LeaveRequestHistory[]
 
   @@index([entityId, status])
   @@index([employeeId])
@@ -1827,15 +1885,15 @@ model LeaveRequest {
 }
 
 model LeaveDocument {
-  id            String   @id @default(uuid())
-  leaveRequestId String  @map("leave_request_id")
-  fileName      String   @map("file_name")
-  fileUrl       String   @map("file_url")
-  mimeType      String   @map("mime_type")
-  checksum      String?
-  docType       String?  // medical_note, travel_itinerary, certificate
-  uploadedBy    String   @map("uploaded_by")
-  uploadedAt    DateTime @default(now()) @map("uploaded_at")
+  id             String   @id @default(uuid())
+  leaveRequestId String   @map("leave_request_id")
+  fileName       String   @map("file_name")
+  fileUrl        String   @map("file_url")
+  mimeType       String   @map("mime_type")
+  checksum       String?
+  docType        String? // medical_note, travel_itinerary, certificate
+  uploadedBy     String   @map("uploaded_by")
+  uploadedAt     DateTime @default(now()) @map("uploaded_at")
 
   leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
   uploader     User         @relation("LeaveDocumentUploader", fields: [uploadedBy], references: [id])
@@ -1844,15 +1902,15 @@ model LeaveDocument {
 }
 
 model LeaveRequestHistory {
-  id             String   @id @default(uuid())
-  leaveRequestId String   @map("leave_request_id")
+  id             String       @id @default(uuid())
+  leaveRequestId String       @map("leave_request_id")
   action         String
   fromStatus     LeaveStatus? @map("from_status")
   toStatus       LeaveStatus? @map("to_status")
-  actorId        String?  @map("actor_id")
+  actorId        String?      @map("actor_id")
   note           String?
   metadata       Json?
-  createdAt      DateTime @default(now()) @map("created_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
 
   leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
   actor        User?        @relation("LeaveHistoryActor", fields: [actorId], references: [id])
@@ -1866,15 +1924,15 @@ model AttendanceAnomaly {
   employeeId     String   @map("employee_id")
   summaryId      String?  @map("summary_id")
   recordId       String?  @map("record_id")
-  type           String   // missing_clock, gps_mismatch, duplicate_ip, overtime_without_request
+  type           String // missing_clock, gps_mismatch, duplicate_ip, overtime_without_request
   severity       String   @default("medium")
   detectedAt     DateTime @default(now()) @map("detected_at")
   resolvedStatus String   @default("open") @map("resolved_status")
   resolverId     String?  @map("resolver_id")
   resolutionNote String?  @map("resolution_note")
 
-  entity   Entity                 @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  employee Employee               @relation(fields: [employeeId], references: [id])
+  entity   Entity                  @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  employee Employee                @relation(fields: [employeeId], references: [id])
   summary  AttendanceDailySummary? @relation(fields: [summaryId], references: [id])
   record   AttendanceRecord?       @relation(fields: [recordId], references: [id])
   resolver User?                   @relation("AnomalyResolver", fields: [resolverId], references: [id])

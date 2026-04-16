@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ReconciliationController } from './reconciliation.controller';
 import { ReconciliationService } from './reconciliation.service';
+import { ProviderPayoutReconciliationService } from './provider-payout-reconciliation.service';
 import { PrismaModule } from '../../common/prisma/prisma.module';
 
 /**
@@ -25,7 +26,7 @@ import { PrismaModule } from '../../common/prisma/prisma.module';
 @Module({
   imports: [PrismaModule],
   controllers: [ReconciliationController],
-  providers: [ReconciliationService],
-  exports: [ReconciliationService],
+  providers: [ReconciliationService, ProviderPayoutReconciliationService],
+  exports: [ReconciliationService, ProviderPayoutReconciliationService],
 })
 export class ReconciliationModule {}

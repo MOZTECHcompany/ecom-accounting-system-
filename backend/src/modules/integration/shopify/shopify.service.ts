@@ -111,72 +111,67 @@ export class ShopifyService {
       ...dateFilter('payoutDate'),
     };
 
-    const [
-      ordersAgg,
-      paymentsAgg,
-      ordersCount,
-      paymentsCount,
-      actualFeeCount,
-      estimatedFeeCount,
-      unavailableFeeCount,
-      notApplicableFeeCount,
-    ] = await Promise.all([
-      this.prisma.salesOrder.aggregate({
-        where: {
-          entityId,
-          ...dateFilter('orderDate'),
-        },
-        _sum: {
-          totalGrossOriginal: true,
-          taxAmountOriginal: true,
-          discountAmountOriginal: true,
-          shippingFeeOriginal: true,
-        },
-      }),
-      this.prisma.payment.aggregate({
-        where: paymentWhere,
-        _sum: {
-          amountGrossOriginal: true,
-          amountNetOriginal: true,
-          feePlatformOriginal: true,
-        },
-      }),
-      this.prisma.salesOrder.count({
-        where: {
-          entityId,
-          ...dateFilter('orderDate'),
-        },
-      }),
-      this.prisma.payment.count({
-        where: paymentWhere,
-      }),
-      this.prisma.payment.count({
-        where: {
-          ...paymentWhere,
-          notes: { contains: 'feeStatus=actual' },
-        },
-      }),
-      this.prisma.payment.count({
-        where: {
-          ...paymentWhere,
-          notes: { contains: 'feeStatus=estimated' },
-        },
-      }),
-      this.prisma.payment.count({
-        where: {
-          ...paymentWhere,
-          notes: { contains: 'feeStatus=unavailable' },
-        },
-      }),
-      this.prisma.payment.count({
-        where: {
-          ...paymentWhere,
-          notes: { contains: 'feeStatus=not_applicable' },
-        },
-      }),
-    ]);
+    const [ordersAgg, paymentsAgg, ordersCount, paymentFlags] =
+      await Promise.all([
+        this.prisma.salesOrder.aggregate({
+          where: {
+            entityId,
+            ...dateFilter('orderDate'),
+          },
+          _sum: {
+            totalGrossOriginal: true,
+            taxAmountOriginal: true,
+            discountAmountOriginal: true,
+            shippingFeeOriginal: true,
+          },
+        }),
+        this.prisma.payment.aggregate({
+          where: paymentWhere,
+          _sum: {
+            amountGrossOriginal: true,
+            amountNetOriginal: true,
+            feePlatformOriginal: true,
+            feeGatewayOriginal: true,
+          },
+        }),
+        this.prisma.salesOrder.count({
+          where: {
+            entityId,
+            ...dateFilter('orderDate'),
+          },
+        }),
+        this.prisma.payment.findMany({
+          where: paymentWhere,
+          select: {
+            id: true,
+            notes: true,
+          },
+        }),
+      ]);
 
     const num = (value: any) => (value ? Number(value) : 0);
+    const paymentsCount = paymentFlags.length;
+    const effectiveFeeMeta = paymentFlags.map((payment) =>
+      this.resolveEffectiveFeeMeta(payment.notes),
+    );
+    const actualFeeCount = effectiveFeeMeta.filter(
+      (meta) => meta.status === 'actual',
+    ).length;
+    const estimatedFeeCount = effectiveFeeMeta.filter(
+      (meta) => meta.status === 'estimated',
+    ).length;
+    const unavailableFeeCount = effectiveFeeMeta.filter(
+      (meta) => meta.status === 'unavailable',
+    ).length;
+    const notApplicableFeeCount = effectiveFeeMeta.filter(
+      (meta) => meta.status === 'not_applicable',
+    ).length;
+    const shopifyActualFeeCount = effectiveFeeMeta.filter(
+      (meta) => meta.source === 'shopify.transaction.fee',
+    ).length;
+    const providerActualFeeCount = effectiveFeeMeta.filter((meta) =>
+      meta.source.startsWith('provider-payout:'),
+    ).length;
     const hasActualFee = actualFeeCount > 0;
     const hasEstimatedFee = estimatedFeeCount > 0;
     const hasUnavailableFee = unavailableFeeCount > 0;
@@ -193,43 +188,49 @@ export class ShopifyService {
       | 'unavailable'
       | 'not_applicable'
       | 'empty' = 'empty';
-    let platformFeeValue: number | null = num(
-      paymentsAgg._sum.feePlatformOriginal,
-    );
-    let platformFeeSource = 'Shopify transactions.fee';
+    let platformFeeValue: number | null =
+      num(paymentsAgg._sum.feePlatformOriginal) +
+      num(paymentsAgg._sum.feeGatewayOriginal);
+    let platformFeeSource = 'Payments fee total';
     let platformFeeMessage: string | null = null;
 
     if (!paymentsCount) {
       platformFeeStatus = 'empty';
       platformFeeSource = '尚未同步交易資料';
-      platformFeeMessage = '請先執行交易同步，平台費用才會開始計算。';
+      platformFeeMessage = '請先執行交易同步，支付手續費才會開始計算。';
     } else if (hasActualFee && !hasEstimatedFee && !hasUnavailableFee) {
       platformFeeStatus = 'actual';
-      platformFeeSource = 'Shopify transaction fee';
+      platformFeeSource =
+        providerActualFeeCount > 0
+          ? '已匯入金流實際撥款對帳'
+          : 'Shopify 實際交易費';
       platformFeeMessage =
-        '這個期間內的手續費來自 Shopify 回傳的實際交易資料。';
+        providerActualFeeCount > 0
+          ? '這個期間內的手續費來自綠界 / HiTRUST 的實際撥款報表。'
+          : '這個期間內的手續費來自 Shopify 回傳的實際交易資料。';
     } else if (hasEstimatedFee && !hasActualFee && !hasUnavailableFee) {
       platformFeeStatus = 'estimated';
       platformFeeSource = '已設定的金流費率規則';
-      platformFeeMessage = '這個期間內的手續費是依金流費率規則估算。';
+      platformFeeMessage = '這個期間內的支付手續費是依金流費率規則估算。';
     } else if (hasActualFee || hasEstimatedFee) {
       platformFeeStatus = 'mixed';
-      platformFeeSource = hasActualFee
-        ? '實際交易費 + 金流費率規則'
-        : '部分金流費率規則';
+      platformFeeSource =
+        providerActualFeeCount > 0 || shopifyActualFeeCount > 0
+          ? '實際對帳 + 金流費率規則'
+          : '部分金流費率規則';
       platformFeeMessage =
-        '這個期間內有部分交易能計算手續費，但仍有部分外部金流沒有費率來源。';
+        '這個期間內有部分交易已核實手續費，但仍有部分外部金流沒有實際報表或費率來源。';
     } else if (allPaymentsAreNoFee) {
       platformFeeStatus = 'not_applicable';
-      platformFeeSource = '無平台費付款方式';
+      platformFeeSource = '無支付手續費付款方式';
       platformFeeMessage =
-        '這個期間內的交易都屬於貨到付款或其他無平台費付款方式。';
+        '這個期間內的交易都屬於貨到付款或其他無支付手續費付款方式。';
     } else {
       platformFeeStatus = 'unavailable';
       platformFeeSource = '外部金流未提供手續費';
       platformFeeValue = null;
       platformFeeMessage =
-        '目前 Shopify 對綠界、LINE Pay 這類外部金流不會回傳實際手續費；請串接金流 API 或設定費率規則。';
+        '目前 Shopify 對綠界、LINE Pay 這類外部金流不會回傳實際手續費；請匯入金流撥款報表或設定費率規則。';
     }
 
     return {
@@ -508,6 +509,9 @@ export class ShopifyService {
     const currency = tx.currency;
     const fxRate = new Decimal(await this.getFxRate(currency, tx.date));
     const toBase = (amount: Decimal) => amount.mul(fxRate);
+    const hasLockedProviderPayout = this.hasLockedProviderPayout(
+      existing?.notes,
+    );
 
     const paymentNotes = this.buildPaymentNotes(existing?.notes, tx);
     const data = {
@@ -522,28 +526,41 @@ export class ShopifyService {
       amountGrossFxRate: fxRate,
       amountGrossBase: toBase(tx.amount),
       // Platform Fee
-      feePlatformOriginal: tx.fee,
+      feePlatformOriginal: hasLockedProviderPayout
+        ? existing?.feePlatformOriginal || new Decimal(0)
+        : tx.fee,
       feePlatformCurrency: currency,
       feePlatformFxRate: fxRate,
-      feePlatformBase: toBase(tx.fee),
+      feePlatformBase: hasLockedProviderPayout
+        ? existing?.feePlatformBase || new Decimal(0)
+        : toBase(tx.fee),
       // Gateway Fee (Treat as Platform Fee or Separate? System has feeGateway)
-      // UnifiedTransaction has generic 'fee'. We map it to feePlatform for now.
-      feeGatewayOriginal: new Decimal(0),
+      feeGatewayOriginal: hasLockedProviderPayout
+        ? existing?.feeGatewayOriginal || new Decimal(0)
+        : new Decimal(0),
       feeGatewayCurrency: currency,
       feeGatewayFxRate: fxRate,
-      feeGatewayBase: new Decimal(0),
+      feeGatewayBase: hasLockedProviderPayout
+        ? existing?.feeGatewayBase || new Decimal(0)
+        : new Decimal(0),
 
       shippingFeePaidOriginal: new Decimal(0),
       shippingFeePaidCurrency: currency,
       shippingFeePaidFxRate: fxRate,
       shippingFeePaidBase: new Decimal(0),
 
-      amountNetOriginal: tx.net,
+      amountNetOriginal: hasLockedProviderPayout
+        ? existing?.amountNetOriginal || tx.net
+        : tx.net,
       amountNetCurrency: currency,
       amountNetFxRate: fxRate,
-      amountNetBase: toBase(tx.net),
+      amountNetBase: hasLockedProviderPayout
+        ? existing?.amountNetBase || toBase(tx.net)
+        : toBase(tx.net),
 
-      reconciledFlag: false,
+      reconciledFlag: hasLockedProviderPayout
+        ? existing?.reconciledFlag || false
+        : false,
       bankAccountId: null,
       notes: paymentNotes,
     };
@@ -623,9 +640,24 @@ export class ShopifyService {
     const feeStatus = tx.feeStatus || 'unavailable';
     const feeSource = tx.feeSource || 'unknown';
     const parts = [`feeStatus=${feeStatus}`, `feeSource=${feeSource}`];
+    const providerMetadata = this.extractProviderMetadata(tx);
 
     if (gateway) {
       parts.push(`gateway=${gateway}`);
+    }
+
+    parts.push(`shopifyTxnId=${tx.externalId}`);
+    if (tx.orderId) {
+      parts.push(`shopifyOrderId=${tx.orderId}`);
+    }
+    if (providerMetadata.providerPaymentId) {
+      parts.push(`providerPaymentId=${providerMetadata.providerPaymentId}`);
+    }
+    if (providerMetadata.providerTradeNo) {
+      parts.push(`providerTradeNo=${providerMetadata.providerTradeNo}`);
+    }
+    if (providerMetadata.authorization) {
+      parts.push(`authorization=${providerMetadata.authorization}`);
     }
 
     const syncNote = `[shopify-sync] ${parts.join('; ')}`;
@@ -636,5 +668,90 @@ export class ShopifyService {
       .trim();
 
     return preservedNotes ? `${preservedNotes}\n${syncNote}` : syncNote;
+  }
+
+  private hasLockedProviderPayout(notes: string | null | undefined) {
+    const text = notes || '';
+    return (
+      text.includes('[provider-payout]') && text.includes('feeStatus=actual')
+    );
+  }
+
+  private resolveEffectiveFeeMeta(notes: string | null | undefined) {
+    const parsedLines = (notes || '')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const separator = line.indexOf('] ');
+        if (separator < 0) {
+          return null;
+        }
+
+        const scope = line.slice(1, separator);
+        const meta: Record<string, string> = {};
+        for (const pair of line.slice(separator + 2).split(';')) {
+          const [key, ...rest] = pair.split('=');
+          if (!key || !rest.length) {
+            continue;
+          }
+          meta[key.trim()] = rest.join('=').trim();
+        }
+
+        return { scope, meta };
+      })
+      .filter(
+        (
+          value,
+        ): value is {
+          scope: string;
+          meta: Record<string, string>;
+        } => Boolean(value),
+      );
+
+    const providerLine = parsedLines.find(
+      (line) => line.scope === 'provider-payout',
+    );
+    if (providerLine?.meta.feeStatus && providerLine.meta.feeSource) {
+      return {
+        status: providerLine.meta.feeStatus,
+        source: providerLine.meta.feeSource,
+      };
+    }
+
+    const shopifyLine = parsedLines.find(
+      (line) => line.scope === 'shopify-sync',
+    );
+    return {
+      status: shopifyLine?.meta.feeStatus || 'unavailable',
+      source: shopifyLine?.meta.feeSource || 'unknown',
+    };
+  }
+
+  private extractProviderMetadata(tx: UnifiedTransaction) {
+    const raw = tx.raw || {};
+    const receipt = raw.receipt || {};
+    const pick = (...values: Array<unknown>) =>
+      values
+        .map((value) =>
+          value === null || value === undefined ? '' : String(value).trim(),
+        )
+        .find((value) => value);
+
+    return {
+      providerPaymentId: pick(
+        receipt.payment_id,
+        receipt.PaymentID,
+        raw.payment_id,
+      ),
+      providerTradeNo: pick(
+        receipt.trade_no,
+        receipt.TradeNo,
+        receipt.merchant_trade_no,
+        receipt.MerchantTradeNo,
+        raw.trade_no,
+      ),
+      authorization: pick(receipt.authorization, raw.authorization),
+    };
   }
 }
