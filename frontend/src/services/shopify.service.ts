@@ -36,6 +36,30 @@ export type ShopifySummary = {
   };
 };
 
+const PLATFORM_FEE_STATUSES = new Set([
+  "actual",
+  "estimated",
+  "mixed",
+  "unavailable",
+  "not_applicable",
+  "empty",
+] as const);
+
+function normalizePlatformFeeStatus(
+  value: unknown,
+): ShopifySummary["payouts"]["platformFeeStatus"] {
+  if (
+    typeof value === "string" &&
+    PLATFORM_FEE_STATUSES.has(
+      value as ShopifySummary["payouts"]["platformFeeStatus"],
+    )
+  ) {
+    return value as ShopifySummary["payouts"]["platformFeeStatus"];
+  }
+
+  return "empty";
+}
+
 export const shopifyService = {
   async health(): Promise<{ ok: boolean; message?: string }> {
     const response = await api.get("/integrations/shopify/health");
@@ -82,6 +106,33 @@ export const shopifyService = {
     const response = await api.get(
       `/integrations/shopify/summary?${query.toString()}`,
     );
-    return response.data;
+    const summary = response.data as Partial<ShopifySummary>;
+    const payouts = summary.payouts || {};
+
+    return {
+      entityId: summary.entityId || entityId,
+      range: {
+        since: summary.range?.since || null,
+        until: summary.range?.until || null,
+      },
+      orders: {
+        count: summary.orders?.count || 0,
+        gross: summary.orders?.gross || 0,
+        tax: summary.orders?.tax || 0,
+        discount: summary.orders?.discount || 0,
+        shipping: summary.orders?.shipping || 0,
+      },
+      payouts: {
+        gross: payouts.gross || 0,
+        net: payouts.net || 0,
+        platformFee:
+          typeof payouts.platformFee === "number" ? payouts.platformFee : null,
+        platformFeeStatus: normalizePlatformFeeStatus(
+          payouts.platformFeeStatus,
+        ),
+        platformFeeSource: payouts.platformFeeSource || "尚未同步交易資料",
+        platformFeeMessage: payouts.platformFeeMessage || null,
+      },
+    };
   },
 };

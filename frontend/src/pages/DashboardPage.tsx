@@ -200,6 +200,8 @@ const DashboardPage: React.FC = () => {
   };
 
   const platformFeeDisplay = expenses ?? "—";
+  const platformFeeTag =
+    platformFeeTagMap[platformFeeStatus] || platformFeeTagMap.empty;
 
   return (
     <div className="space-y-8">
@@ -374,10 +376,10 @@ const DashboardPage: React.FC = () => {
                 <ShoppingOutlined className="text-purple-500 text-xl" />
               </div>
               <Tag
-                color={platformFeeTagMap[platformFeeStatus].color}
+                color={platformFeeTag.color}
                 className="m-0 rounded-full px-3 py-1"
               >
-                {platformFeeTagMap[platformFeeStatus].label}
+                {platformFeeTag.label}
               </Tag>
             </div>
             <Statistic
