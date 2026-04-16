@@ -1,27 +1,29 @@
 export const AttendanceMethod = {
-  MOBILE: 'MOBILE',
-  WEB: 'WEB',
-  KIOSK: 'KIOSK',
+  MOBILE: "MOBILE",
+  WEB: "WEB",
+  KIOSK: "KIOSK",
 } as const;
-export type AttendanceMethod = typeof AttendanceMethod[keyof typeof AttendanceMethod];
+export type AttendanceMethod =
+  (typeof AttendanceMethod)[keyof typeof AttendanceMethod];
 
 export const AttendanceEventType = {
-  CLOCK_IN: 'CLOCK_IN',
-  CLOCK_OUT: 'CLOCK_OUT',
-  BREAK_START: 'BREAK_START',
-  BREAK_END: 'BREAK_END',
+  CLOCK_IN: "CLOCK_IN",
+  CLOCK_OUT: "CLOCK_OUT",
+  BREAK_START: "BREAK_START",
+  BREAK_END: "BREAK_END",
 } as const;
-export type AttendanceEventType = typeof AttendanceEventType[keyof typeof AttendanceEventType];
+export type AttendanceEventType =
+  (typeof AttendanceEventType)[keyof typeof AttendanceEventType];
 
 export const LeaveStatus = {
-  DRAFT: 'DRAFT',
-  SUBMITTED: 'SUBMITTED',
-  UNDER_REVIEW: 'UNDER_REVIEW',
-  APPROVED: 'APPROVED',
-  REJECTED: 'REJECTED',
-  CANCELLED: 'CANCELLED',
+  DRAFT: "DRAFT",
+  SUBMITTED: "SUBMITTED",
+  UNDER_REVIEW: "UNDER_REVIEW",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+  CANCELLED: "CANCELLED",
 } as const;
-export type LeaveStatus = typeof LeaveStatus[keyof typeof LeaveStatus];
+export type LeaveStatus = (typeof LeaveStatus)[keyof typeof LeaveStatus];
 
 export interface ClockInDto {
   method: AttendanceMethod;
@@ -57,7 +59,7 @@ export interface LeaveType {
   id: string;
   code: string;
   name: string;
-  balanceResetPolicy?: 'CALENDAR_YEAR' | 'HIRE_ANNIVERSARY' | 'NONE';
+  balanceResetPolicy?: "CALENDAR_YEAR" | "HIRE_ANNIVERSARY" | "NONE";
   requiresDocument: boolean;
   maxDaysPerYear?: number;
   paidPercentage?: number;
@@ -90,6 +92,34 @@ export interface LeaveRequest {
   status: LeaveStatus;
   reason?: string;
   createdAt: string;
+}
+
+export interface AdminLeaveRequest extends LeaveRequest {
+  employee: {
+    id: string;
+    name: string;
+    employeeNo?: string;
+    department?: {
+      id: string;
+      name: string;
+    };
+  };
+  reviewer?: {
+    id: string;
+    name: string;
+  };
+}
+
+export interface AdminLeaveBalance extends LeaveBalance {
+  employee: {
+    id: string;
+    name: string;
+    employeeNo?: string;
+    department?: {
+      id: string;
+      name: string;
+    };
+  };
 }
 
 export interface AttendanceRecord {

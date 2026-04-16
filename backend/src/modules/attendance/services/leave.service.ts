@@ -2,8 +2,10 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { NotificationService } from '../../notification/notification.service';
 import { CreateLeaveRequestDto } from '../dto/create-leave-request.dto';
-import { LeaveStatus } from '@prisma/client';
+import { LeaveStatus, Prisma } from '@prisma/client';
 import { BalanceService } from './balance.service';
+import { UpsertLeaveTypeDto } from '../dto/upsert-leave-type.dto';
+import { AdjustLeaveBalanceDto } from '../dto/adjust-leave-balance.dto';
 
 @Injectable()
 export class LeaveService {
@@ -77,7 +79,11 @@ export class LeaveService {
     return leaveRequest;
   }
 
-  async updateLeaveStatus(requestId: string, status: LeaveStatus, reviewerId: string) {
+  async updateLeaveStatus(
+    requestId: string,
+    status: LeaveStatus,
+    reviewerId: string,
+  ) {
     const existingRequest = await this.prisma.leaveRequest.findUnique({
       where: { id: requestId },
       include: {
@@ -147,5 +153,231 @@ export class LeaveService {
       include: { leaveType: true },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async getAdminLeaveRequests(
+    userId: string,
+    filters: {
+      status?: string;
+      employeeId?: string;
+      leaveTypeId?: string;
+      year?: number;
+      entityId?: string;
+    },
+  ) {
+    const entityId = await this.resolveEntityId(userId, filters.entityId);
+    const periodFilter =
+      filters.year !== undefined
+        ? {
+            gte: new Date(filters.year, 0, 1),
+            lte: new Date(filters.year, 11, 31, 23, 59, 59, 999),
+          }
+        : undefined;
+
+    return this.prisma.leaveRequest.findMany({
+      where: {
+        ...(entityId ? { entityId } : {}),
+        ...(filters.status ? { status: filters.status as LeaveStatus } : {}),
+        ...(filters.employeeId ? { employeeId: filters.employeeId } : {}),
+        ...(filters.leaveTypeId ? { leaveTypeId: filters.leaveTypeId } : {}),
+        ...(periodFilter ? { startAt: periodFilter } : {}),
+      },
+      include: {
+        employee: {
+          include: {
+            department: true,
+          },
+        },
+        leaveType: true,
+        reviewer: true,
+      },
+      orderBy: [{ createdAt: 'desc' }],
+    });
+  }
+
+  async getAdminLeaveTypes(userId: string, entityId?: string) {
+    const resolvedEntityId = await this.resolveEntityId(userId, entityId);
+
+    return this.prisma.leaveType.findMany({
+      where: resolvedEntityId ? { entityId: resolvedEntityId } : undefined,
+      orderBy: [{ code: 'asc' }],
+    });
+  }
+
+  async createLeaveType(userId: string, dto: UpsertLeaveTypeDto) {
+    const entityId = await this.resolveEntityId(userId, dto.entityId);
+
+    return this.prisma.leaveType.create({
+      data: {
+        entityId,
+        code: dto.code.trim().toUpperCase(),
+        name: dto.name.trim(),
+        balanceResetPolicy: dto.balanceResetPolicy || 'CALENDAR_YEAR',
+        requiresDocument: dto.requiresDocument ?? false,
+        maxDaysPerYear:
+          dto.maxDaysPerYear !== undefined
+            ? new Prisma.Decimal(dto.maxDaysPerYear)
+            : undefined,
+        paidPercentage:
+          dto.paidPercentage !== undefined
+            ? new Prisma.Decimal(dto.paidPercentage)
+            : undefined,
+        minNoticeHours: dto.minNoticeHours,
+        allowCarryOver: dto.allowCarryOver ?? false,
+        carryOverLimitHours: new Prisma.Decimal(dto.carryOverLimitHours || 0),
+      },
+    });
+  }
+
+  async updateLeaveType(userId: string, id: string, dto: UpsertLeaveTypeDto) {
+    const existing = await this.prisma.leaveType.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new BadRequestException('Leave type not found');
+    }
+
+    const entityId = await this.resolveEntityId(userId, existing.entityId);
+    if (entityId && existing.entityId !== entityId) {
+      throw new BadRequestException('Leave type not found in current entity');
+    }
+
+    return this.prisma.leaveType.update({
+      where: { id },
+      data: {
+        code: dto.code ? dto.code.trim().toUpperCase() : existing.code,
+        name: dto.name ? dto.name.trim() : existing.name,
+        balanceResetPolicy:
+          dto.balanceResetPolicy || existing.balanceResetPolicy,
+        requiresDocument: dto.requiresDocument ?? existing.requiresDocument,
+        maxDaysPerYear:
+          dto.maxDaysPerYear !== undefined
+            ? new Prisma.Decimal(dto.maxDaysPerYear)
+            : existing.maxDaysPerYear,
+        paidPercentage:
+          dto.paidPercentage !== undefined
+            ? new Prisma.Decimal(dto.paidPercentage)
+            : existing.paidPercentage,
+        minNoticeHours:
+          dto.minNoticeHours !== undefined
+            ? dto.minNoticeHours
+            : existing.minNoticeHours,
+        allowCarryOver: dto.allowCarryOver ?? existing.allowCarryOver,
+        carryOverLimitHours:
+          dto.carryOverLimitHours !== undefined
+            ? new Prisma.Decimal(dto.carryOverLimitHours)
+            : existing.carryOverLimitHours,
+      },
+    });
+  }
+
+  async getAdminLeaveBalances(
+    userId: string,
+    filters: {
+      year?: number;
+      employeeId?: string;
+      leaveTypeId?: string;
+      entityId?: string;
+    },
+  ) {
+    const entityId = await this.resolveEntityId(userId, filters.entityId);
+    const balances = await this.prisma.leaveBalance.findMany({
+      where: {
+        ...(entityId ? { entityId } : {}),
+        ...(filters.year !== undefined ? { year: filters.year } : {}),
+        ...(filters.employeeId ? { employeeId: filters.employeeId } : {}),
+        ...(filters.leaveTypeId ? { leaveTypeId: filters.leaveTypeId } : {}),
+      },
+      include: {
+        leaveType: true,
+        employee: {
+          include: {
+            department: true,
+          },
+        },
+      },
+      orderBy: [{ periodStart: 'desc' }, { employeeId: 'asc' }],
+    });
+
+    return balances.map((balance) => ({
+      ...balance,
+      remainingHours:
+        Number(balance.accruedHours) +
+        Number(balance.carryOverHours) +
+        Number(balance.manualAdjustmentHours) -
+        Number(balance.usedHours) -
+        Number(balance.pendingHours),
+      accruedHours: Number(balance.accruedHours),
+      usedHours: Number(balance.usedHours),
+      carryOverHours: Number(balance.carryOverHours),
+      pendingHours: Number(balance.pendingHours),
+      manualAdjustmentHours: Number(balance.manualAdjustmentHours),
+    }));
+  }
+
+  async adjustLeaveBalance(
+    userId: string,
+    id: string,
+    dto: AdjustLeaveBalanceDto,
+  ) {
+    const existing = await this.prisma.leaveBalance.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new BadRequestException('Leave balance not found');
+    }
+
+    const entityId = await this.resolveEntityId(userId, existing.entityId);
+    if (entityId && existing.entityId !== entityId) {
+      throw new BadRequestException(
+        'Leave balance not found in current entity',
+      );
+    }
+
+    return this.prisma.leaveBalance.update({
+      where: { id },
+      data: {
+        accruedHours:
+          dto.accruedHours !== undefined
+            ? new Prisma.Decimal(dto.accruedHours)
+            : existing.accruedHours,
+        carryOverHours:
+          dto.carryOverHours !== undefined
+            ? new Prisma.Decimal(dto.carryOverHours)
+            : existing.carryOverHours,
+        manualAdjustmentHours:
+          dto.manualAdjustmentHours !== undefined
+            ? new Prisma.Decimal(dto.manualAdjustmentHours)
+            : existing.manualAdjustmentHours,
+      },
+    });
+  }
+
+  private async resolveEntityId(userId: string, requestedEntityId?: string) {
+    if (requestedEntityId) {
+      return requestedEntityId;
+    }
+
+    const employee = await this.prisma.employee.findUnique({
+      where: { userId },
+      select: { entityId: true },
+    });
+
+    if (employee?.entityId) {
+      return employee.entityId;
+    }
+
+    const firstEntity = await this.prisma.entity.findFirst({
+      orderBy: { id: 'asc' },
+      select: { id: true },
+    });
+
+    if (!firstEntity) {
+      throw new BadRequestException('Entity not found');
+    }
+
+    return firstEntity.id;
   }
 }
