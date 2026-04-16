@@ -67,8 +67,16 @@ Max length: 50 words.
 `;
 
     // 3. Call AI
-    const insight = await this.aiService.generateContent(prompt, modelId);
-    return insight?.trim() || '昨日財務數據處理中，請稍後再試。';
+    try {
+      const insight = await this.aiService.generateContent(prompt, modelId);
+      return insight?.trim() || '昨日財務數據處理中，請稍後再試。';
+    } catch (error) {
+      this.logger.error(
+        `Failed to generate daily briefing for entity ${entityId}`,
+        error,
+      );
+      return '暫時無法整理昨日重點，請稍後再試。';
+    }
   }
 
   async checkExpenseAnomaly(

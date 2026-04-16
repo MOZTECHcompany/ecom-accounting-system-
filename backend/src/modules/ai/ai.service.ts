@@ -8,6 +8,15 @@ export interface AiModel {
   isExperimental?: boolean;
 }
 
+const DEFAULT_STANDARD_MODEL = 'gemini-2.5-flash';
+const DEFAULT_DEEP_MODEL = 'gemini-2.5-pro';
+
+const LEGACY_MODEL_ALIASES: Record<string, string> = {
+  'gemini-1.5-flash': DEFAULT_STANDARD_MODEL,
+  'gemini-1.5-pro': DEFAULT_DEEP_MODEL,
+  'gemini-2.0-flash': DEFAULT_STANDARD_MODEL,
+};
+
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
@@ -16,12 +25,12 @@ export class AiService {
   // Default supported models - this can be moved to DB later for full dynamic control
   private readonly supportedModels: AiModel[] = [
     {
-      id: 'gemini-1.5-flash',
+      id: DEFAULT_STANDARD_MODEL,
       name: '標準模式',
       description: '速度較快，適合日常問答與建議',
     },
     {
-      id: 'gemini-1.5-pro',
+      id: DEFAULT_DEEP_MODEL,
       name: '深度模式',
       description: '思考較深，適合分析與判斷',
     },
@@ -40,22 +49,52 @@ export class AiService {
     return this.supportedModels;
   }
 
+  resolveModelId(modelId?: string): string {
+    if (!modelId) {
+      return DEFAULT_STANDARD_MODEL;
+    }
+
+    const normalizedModelId = LEGACY_MODEL_ALIASES[modelId] || modelId;
+    const isSupportedModel = this.supportedModels.some(
+      (model) => model.id === normalizedModelId,
+    );
+
+    if (!isSupportedModel) {
+      this.logger.warn(
+        `Unsupported Gemini model "${modelId}" requested. Falling back to ${DEFAULT_STANDARD_MODEL}.`,
+      );
+      return DEFAULT_STANDARD_MODEL;
+    }
+
+    if (normalizedModelId !== modelId) {
+      this.logger.log(
+        `Mapped legacy Gemini model "${modelId}" to "${normalizedModelId}".`,
+      );
+    }
+
+    return normalizedModelId;
+  }
+
   async generateContent(
     prompt: string,
-    modelId: string = 'gemini-1.5-flash',
+    modelId?: string,
   ): Promise<string | null> {
     if (!this.apiKey) {
       this.logger.warn('Attempted to use AI without API Key');
       return null;
     }
 
+    const resolvedModelId = this.resolveModelId(modelId);
+
     try {
-      // Use v1 API; some models return 404 on v1beta for generateContent.
-      const url = `https://generativelanguage.googleapis.com/v1/models/${modelId}:generateContent?key=${this.apiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${resolvedModelId}:generateContent`;
 
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': this.apiKey,
+        },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
         }),
@@ -73,7 +112,10 @@ export class AiService {
 
       return text || null;
     } catch (error) {
-      this.logger.error(`AI Generation failed for model ${modelId}`, error);
+      this.logger.error(
+        `AI Generation failed for model ${resolvedModelId}`,
+        error,
+      );
       throw error;
     }
   }

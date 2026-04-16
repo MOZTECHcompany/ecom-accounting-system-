@@ -212,7 +212,7 @@ export class AccountingClassifierService {
   async suggestReimbursementItem(
     entityId: string,
     description: string,
-    model: string = 'gemini-1.5-flash',
+    model: string = 'gemini-2.5-flash',
   ): Promise<{ itemId: string; confidence: number; amount?: number } | null> {
     // 1. Fetch active reimbursement items
     const items = await this.prisma.reimbursementItem.findMany({
@@ -289,7 +289,7 @@ Return raw JSON only:
   private async classifyWithGemini(
     entityId: string,
     description: string,
-    model: string = 'gemini-2.0-flash',
+    model: string = 'gemini-2.5-flash',
   ): Promise<{ accountId: string; confidence: number } | null> {
     // 1. Fetch active expense accounts
     const accounts = await this.prisma.account.findMany({
