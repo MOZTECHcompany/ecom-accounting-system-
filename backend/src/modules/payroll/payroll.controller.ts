@@ -22,6 +22,7 @@ import { PayrollService } from './payroll.service';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { PayPayrollRunDto } from './dto/pay-payroll-run.dto';
+import { UpdateDepartmentDto } from './dto/update-department.dto';
 import { UpsertPayrollPolicyDto } from './dto/upsert-payroll-policy.dto';
 import type { Response } from 'express';
 
@@ -55,6 +56,19 @@ export class PayrollController {
   @ApiResponse({ status: 201, description: '成功建立部門' })
   async createDepartment(@Request() req: any, @Body() data: any) {
     return this.payrollService.createDepartment(req.user.id, data);
+  }
+
+  @Patch('departments/:id')
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @UseGuards(RolesGuard)
+  @ApiOperation({ summary: '更新部門' })
+  @ApiResponse({ status: 200, description: '成功更新部門' })
+  async updateDepartment(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() dto: UpdateDepartmentDto,
+  ) {
+    return this.payrollService.updateDepartment(id, req.user.id, dto);
   }
 
   @Get('bank-accounts')
