@@ -3,13 +3,17 @@ import {
   Injectable,
   Logger,
   OnModuleInit,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
 import { OneShopHttpAdapter } from './one-shop.adapter';
-import { UnifiedOrder } from '../interfaces/sales-channel-adapter.interface';
+import {
+  UnifiedOrder,
+  UnifiedTransaction,
+} from '../interfaces/sales-channel-adapter.interface';
 
 const ONESHOP_CHANNEL_CODE = '1SHOP';
 
@@ -31,6 +35,23 @@ export class OneShopService implements OnModuleInit {
 
   async testConnection() {
     return this.adapter.testConnection();
+  }
+
+  assertSchedulerToken(providedToken?: string | null) {
+    const expected =
+      this.config.get<string>('ONESHOP_SYNC_JOB_TOKEN', '') ||
+      this.config.get<string>('SHOPIFY_SYNC_JOB_TOKEN', '') ||
+      '';
+
+    if (!expected) {
+      throw new UnauthorizedException(
+        'ONESHOP_SYNC_JOB_TOKEN is not configured',
+      );
+    }
+
+    if (!providedToken || providedToken !== expected) {
+      throw new UnauthorizedException('Invalid scheduler token');
+    }
   }
 
   getConnectionInfo() {
@@ -88,6 +109,82 @@ export class OneShopService implements OnModuleInit {
     };
   }
 
+  async syncTransactions(params: {
+    entityId: string;
+    since?: Date;
+    until?: Date;
+  }) {
+    await this.assertEntityExists(params.entityId);
+
+    const transactions = await this.adapter.fetchTransactions({
+      start: params.since || new Date(0),
+      end: params.until || new Date(),
+    });
+
+    const channel = await this.ensureSalesChannel(params.entityId);
+    let created = 0;
+    let updated = 0;
+
+    for (const tx of transactions) {
+      try {
+        const result = await this.upsertPayment(params.entityId, channel.id, tx);
+        if (result === 'created') created++;
+        if (result === 'updated') updated++;
+      } catch (error: any) {
+        this.logger.error(
+          `Failed to sync 1Shop payment ${tx.externalId}: ${error.message}`,
+        );
+      }
+    }
+
+    return {
+      success: true,
+      fetched: transactions.length,
+      created,
+      updated,
+    };
+  }
+
+  async autoSync(options?: {
+    entityId?: string;
+    since?: Date;
+    until?: Date;
+  }) {
+    const enabled =
+      this.config.get<string>('ONESHOP_SYNC_ENABLED', 'false') === 'true';
+
+    if (!enabled) {
+      return {
+        success: false,
+        skipped: true,
+        message: 'ONESHOP_SYNC_ENABLED is false',
+      };
+    }
+
+    const entityId = options?.entityId || this.defaultEntityId;
+    const lookbackDays = Number(
+      this.config.get<string>('ONESHOP_SYNC_LOOKBACK_DAYS', '3'),
+    );
+    const until = options?.until || new Date();
+    const since =
+      options?.since ||
+      new Date(until.getTime() - lookbackDays * 24 * 60 * 60 * 1000);
+
+    const [orders, transactions] = await Promise.all([
+      this.syncOrders({ entityId, since, until }),
+      this.syncTransactions({ entityId, since, until }),
+    ]);
+
+    return {
+      success: true,
+      entityId,
+      since: since.toISOString(),
+      until: until.toISOString(),
+      orders,
+      transactions,
+    };
+  }
+
   async getSummary(params: { entityId: string; since?: Date; until?: Date }) {
     const { entityId, since, until } = params;
     const channel = await this.ensureSalesChannel(entityId);
@@ -104,8 +201,14 @@ export class OneShopService implements OnModuleInit {
       channelId: channel.id,
       ...dateFilter('orderDate'),
     };
+    const paymentsWhere = {
+      entityId,
+      channelId: channel.id,
+      ...dateFilter('payoutDate'),
+    };
 
-    const [ordersAgg, ordersCount] = await Promise.all([
+    const [ordersAgg, ordersCount, paymentsAgg, reconciledCount, paymentCount] =
+      await Promise.all([
       this.prisma.salesOrder.aggregate({
         where: ordersWhere,
         _sum: {
@@ -117,6 +220,24 @@ export class OneShopService implements OnModuleInit {
       }),
       this.prisma.salesOrder.count({
         where: ordersWhere,
+      }),
+      this.prisma.payment.aggregate({
+        where: paymentsWhere,
+        _sum: {
+          amountGrossOriginal: true,
+          amountNetOriginal: true,
+          feePlatformOriginal: true,
+          feeGatewayOriginal: true,
+        },
+      }),
+      this.prisma.payment.count({
+        where: {
+          ...paymentsWhere,
+          reconciledFlag: true,
+        },
+      }),
+      this.prisma.payment.count({
+        where: paymentsWhere,
       }),
     ]);
 
@@ -138,13 +259,26 @@ export class OneShopService implements OnModuleInit {
         shipping: num(ordersAgg._sum.shippingFeeOriginal),
       },
       payouts: {
-        gross: 0,
-        net: 0,
-        platformFee: null,
-        platformFeeStatus: 'unavailable',
-        platformFeeSource: '1Shop API v1 尚未提供撥款/手續費資料',
+        gross: num(paymentsAgg._sum.amountGrossOriginal),
+        net: num(paymentsAgg._sum.amountNetOriginal),
+        platformFee:
+          num(paymentsAgg._sum.feePlatformOriginal) +
+          num(paymentsAgg._sum.feeGatewayOriginal),
+        platformFeeStatus: paymentCount
+          ? reconciledCount > 0
+            ? 'mixed'
+            : 'unavailable'
+          : 'empty',
+        platformFeeSource:
+          reconciledCount > 0
+            ? '1Shop 訂單 + 綠界/對帳資料'
+            : '1Shop 訂單明細 / 待撥款對帳',
         platformFeeMessage:
-          '目前 1Shop API v1 以訂單匯出為主，若之後拿到撥款或業績明細 API，再補平台費與淨額回填。',
+          reconciledCount > 0
+            ? `已有 ${reconciledCount} 筆收款完成對帳，其餘仍待撥款或待匯入對帳單。`
+            : '目前已建立待對帳收款紀錄，待綠界撥款或匯入對帳單後可回填實際手續費與淨額。',
+        paymentCount,
+        reconciledCount,
       },
     };
   }
@@ -168,14 +302,14 @@ export class OneShopService implements OnModuleInit {
     since.setDate(since.getDate() - lookbackDays);
 
     try {
-      const result = await this.syncOrders({
+      const result = await this.autoSync({
         entityId: this.defaultEntityId,
         since,
         until: new Date(),
       });
 
       this.logger.log(
-        `Scheduled 1Shop sync finished: fetched=${result.fetched}, created=${result.created}, updated=${result.updated}`,
+        `Scheduled 1Shop sync finished: orders=${result.orders.fetched}, transactions=${result.transactions.fetched}`,
       );
     } catch (error: any) {
       this.logger.error(`Scheduled 1Shop sync failed: ${error.message}`);
@@ -279,6 +413,84 @@ export class OneShopService implements OnModuleInit {
     return 'created';
   }
 
+  private async upsertPayment(
+    entityId: string,
+    channelId: string,
+    tx: UnifiedTransaction,
+  ): Promise<'created' | 'updated'> {
+    const salesOrder = tx.orderId
+      ? await this.prisma.salesOrder.findFirst({
+          where: {
+            entityId,
+            channelId,
+            externalOrderId: tx.orderId,
+          },
+        })
+      : null;
+
+    const existing = await this.prisma.payment.findFirst({
+      where: {
+        entityId,
+        channelId,
+        payoutBatchId: tx.externalId,
+      },
+    });
+
+    const currency = tx.currency || 'TWD';
+    const fxRate = new Decimal(await this.getFxRate(currency));
+    const zero = new Decimal(0);
+    const hasLockedProviderPayout = this.hasLockedProviderPayout(existing?.notes);
+    const paymentNotes = this.buildPaymentNotes(existing?.notes, tx);
+
+    const data = {
+      entityId,
+      channelId,
+      salesOrderId: salesOrder?.id ?? null,
+      payoutBatchId: tx.externalId,
+      channel: ONESHOP_CHANNEL_CODE,
+      payoutDate: tx.date,
+      amountGrossOriginal: tx.amount,
+      amountGrossCurrency: currency,
+      amountGrossFxRate: fxRate,
+      amountGrossBase: tx.amount.mul(fxRate),
+      feePlatformOriginal: hasLockedProviderPayout ? existing?.feePlatformOriginal || zero : tx.fee,
+      feePlatformCurrency: currency,
+      feePlatformFxRate: fxRate,
+      feePlatformBase: hasLockedProviderPayout
+        ? existing?.feePlatformBase || zero
+        : tx.fee.mul(fxRate),
+      feeGatewayOriginal: hasLockedProviderPayout ? existing?.feeGatewayOriginal || zero : zero,
+      feeGatewayCurrency: currency,
+      feeGatewayFxRate: fxRate,
+      feeGatewayBase: hasLockedProviderPayout ? existing?.feeGatewayBase || zero : zero,
+      shippingFeePaidOriginal: zero,
+      shippingFeePaidCurrency: currency,
+      shippingFeePaidFxRate: fxRate,
+      shippingFeePaidBase: zero,
+      amountNetOriginal: hasLockedProviderPayout ? existing?.amountNetOriginal || tx.net : tx.net,
+      amountNetCurrency: currency,
+      amountNetFxRate: fxRate,
+      amountNetBase: hasLockedProviderPayout
+        ? existing?.amountNetBase || tx.net.mul(fxRate)
+        : tx.net.mul(fxRate),
+      reconciledFlag: hasLockedProviderPayout ? existing?.reconciledFlag || false : false,
+      bankAccountId: null,
+      status: tx.status === 'success' ? 'completed' : tx.status,
+      notes: paymentNotes,
+    };
+
+    if (existing) {
+      await this.prisma.payment.update({
+        where: { id: existing.id },
+        data,
+      });
+      return 'updated';
+    }
+
+    await this.prisma.payment.create({ data });
+    return 'created';
+  }
+
   private buildOrderNotes(order: UnifiedOrder) {
     const notes = [
       '[1shop-sync]',
@@ -324,6 +536,60 @@ export class OneShopService implements OnModuleInit {
     }
 
     return notes.join('; ');
+  }
+
+  private buildPaymentNotes(
+    existingNotes: string | null | undefined,
+    tx: UnifiedTransaction,
+  ) {
+    const raw = tx.raw || {};
+    const parts = [
+      `feeStatus=${tx.feeStatus || 'unavailable'}`,
+      `feeSource=${tx.feeSource || 'unknown'}`,
+      `gateway=${tx.gateway || raw.payment || ''}`,
+      `storeAccount=${raw.sourceStoreAccount || ''}`,
+      `storeName=${raw.sourceStoreName || ''}`,
+      `originalOrderNumber=${raw.originalOrderNumber || ''}`,
+      `paymentStatus=${raw.payment_status || ''}`,
+      `logisticStatus=${raw.logistic_status || ''}`,
+    ].filter((part) => !part.endsWith('='));
+
+    if (tx.orderId) {
+      parts.push(`oneShopOrderId=${tx.orderId}`);
+    }
+
+    const providerPaymentId = this.pickMetadata(
+      raw.payment_third_party_no,
+      raw.logistics_third_party_no,
+    );
+    const providerTradeNo = this.pickMetadata(
+      raw.receipt?.[0]?.invoice_number,
+      raw.payment_third_party_no,
+    );
+
+    if (providerPaymentId) {
+      parts.push(`providerPaymentId=${providerPaymentId}`);
+    }
+
+    if (providerTradeNo) {
+      parts.push(`providerTradeNo=${providerTradeNo}`);
+    }
+
+    const syncNote = `[1shop-sync] ${parts.join('; ')}`;
+    const preservedNotes = (existingNotes || '')
+      .split('\n')
+      .filter((line) => !line.startsWith('[1shop-sync]'))
+      .join('\n')
+      .trim();
+
+    return preservedNotes ? `${preservedNotes}\n${syncNote}` : syncNote;
+  }
+
+  private hasLockedProviderPayout(notes: string | null | undefined) {
+    const text = notes || '';
+    return (
+      text.includes('[provider-payout]') && text.includes('feeStatus=actual')
+    );
   }
 
   private async ensureCustomer(
@@ -381,5 +647,13 @@ export class OneShopService implements OnModuleInit {
     if (currency === 'CNY') return 4.5;
     if (currency === 'JPY') return 0.21;
     return 1;
+  }
+
+  private pickMetadata(...values: Array<unknown>) {
+    return values
+      .map((value) =>
+        value === undefined || value === null ? '' : String(value).trim(),
+      )
+      .find((value) => value);
   }
 }

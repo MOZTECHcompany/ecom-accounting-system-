@@ -2,23 +2,21 @@ import React, { useState, useEffect } from "react";
 import {
   Row,
   Col,
-  Statistic,
-  Typography,
-  Tag,
   Button,
   Timeline,
   Card,
-  Avatar,
   message,
   Radio,
   DatePicker,
+  Statistic,
+  Tag,
+  Typography,
 } from "antd";
 import {
-  DollarOutlined,
-  ShoppingOutlined,
   BankOutlined,
+  DollarOutlined,
   FileTextOutlined,
-  UserOutlined,
+  ShoppingOutlined,
   SyncOutlined,
 } from "@ant-design/icons";
 import { motion } from "framer-motion";
@@ -26,6 +24,12 @@ import FinancialHealthWidget from "../components/FinancialHealthWidget";
 import PageSkeleton from "../components/PageSkeleton";
 import AIInsightsWidget from "../components/AIInsightsWidget";
 import { shopifyService } from "../services/shopify.service";
+import { oneShopService } from "../services/oneshop.service";
+import {
+  dashboardService,
+  DashboardPerformanceBucket,
+  DashboardSalesOverview,
+} from "../services/dashboard.service";
 import dayjs, { Dayjs } from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
@@ -42,14 +46,6 @@ dayjs.tz.setDefault(DASHBOARD_TZ);
 type RangeMode = "all" | "today" | "yesterday" | "last7d" | "custom";
 type CustomRange = [Dayjs, Dayjs] | null;
 type RangeValue = [Dayjs | null, Dayjs | null] | null;
-
-type PlatformFeeStatus =
-  | "actual"
-  | "estimated"
-  | "mixed"
-  | "unavailable"
-  | "not_applicable"
-  | "empty";
 
 function resolveRange(
   mode: RangeMode,
@@ -83,26 +79,56 @@ function resolveRange(
   return { since: undefined, until: undefined };
 }
 
+function getBucketAccent(index: number) {
+  const accents = [
+    "from-sky-500/15 to-sky-100/10 text-sky-600",
+    "from-emerald-500/15 to-emerald-100/10 text-emerald-600",
+    "from-amber-500/15 to-amber-100/10 text-amber-600",
+    "from-fuchsia-500/15 to-fuchsia-100/10 text-fuchsia-600",
+    "from-slate-700/15 to-slate-100/10 text-slate-700",
+  ];
+  return accents[index % accents.length];
+}
+
+function getBucketStatus(bucket: DashboardPerformanceBucket) {
+  if (!bucket.paymentCount) {
+    return {
+      color: "default" as const,
+      label: "待同步金流",
+      helper: "目前只有訂單，尚未建立收款或撥款資料",
+    };
+  }
+
+  if (bucket.pendingPayoutCount === 0) {
+    return {
+      color: "green" as const,
+      label: "已完成對帳",
+      helper: "這個區塊的收款都已完成對帳回填",
+    };
+  }
+
+  if (bucket.reconciledCount > 0) {
+    return {
+      color: "gold" as const,
+      label: "部分待撥款",
+      helper: "已有部分收款完成對帳，仍有款項待撥或待核對",
+    };
+  }
+
+  return {
+    color: "blue" as const,
+    label: "待撥款 / 待對帳",
+    helper: "訂單已進系統，但金流與撥款明細尚未全部完成回填",
+  };
+}
+
 const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [rangeMode, setRangeMode] = useState<RangeMode>("today");
   const [customRange, setCustomRange] = useState<CustomRange>(null);
   const [refreshToken, setRefreshToken] = useState(0);
   const [syncing, setSyncing] = useState(false);
-
-  // Live Data State (from API)
-  const [revenue, setRevenue] = useState(0);
-  const [receivables, setReceivables] = useState(0);
-  const [expenses, setExpenses] = useState<number | null>(null);
-  const [pendingDocs, setPendingDocs] = useState(0);
-  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
-  const [platformFeeStatus, setPlatformFeeStatus] =
-    useState<PlatformFeeStatus>("empty");
-  const [platformFeeSource, setPlatformFeeSource] =
-    useState("尚未同步交易資料");
-  const [platformFeeMessage, setPlatformFeeMessage] = useState<string | null>(
-    null,
-  );
+  const [overview, setOverview] = useState<DashboardSalesOverview | null>(null);
 
   useEffect(() => {
     if (rangeMode === "custom" && (!customRange?.[0] || !customRange?.[1])) {
@@ -118,23 +144,15 @@ const DashboardPage: React.FC = () => {
     const fetchSummary = async () => {
       setLoading(true);
       try {
-        const summary = await shopifyService.summary({
+        const summary = await dashboardService.getSalesOverview({
           entityId: storedEntityId,
-          since,
-          until,
+          startDate: since,
+          endDate: until,
         });
 
         if (ignore) return;
 
-        // Map backend summary to dashboard KPIs
-        setRevenue(summary.orders.gross);
-        setReceivables(summary.payouts.gross);
-        setExpenses(summary.payouts.platformFee);
-        setPlatformFeeStatus(summary.payouts.platformFeeStatus);
-        setPlatformFeeSource(summary.payouts.platformFeeSource);
-        setPlatformFeeMessage(summary.payouts.platformFeeMessage);
-        setPendingDocs(summary.orders.count);
-        setLastUpdated("revenue");
+        setOverview(summary);
       } catch (error: any) {
         if (!ignore) {
           message.error(error?.response?.data?.message || "讀取儀表板資料失敗");
@@ -163,16 +181,38 @@ const DashboardPage: React.FC = () => {
 
   const handleManualSync = async () => {
     const storedEntityId = localStorage.getItem("entityId")?.trim();
+    const { since, until } = resolveRange(rangeMode, DASHBOARD_TZ, customRange);
     setSyncing(true);
     try {
-      const [ordersResult, transactionsResult] = await Promise.all([
-        shopifyService.syncOrders({ entityId: storedEntityId }),
-        shopifyService.syncTransactions({ entityId: storedEntityId }),
+      const [
+        shopifyOrdersResult,
+        shopifyTransactionsResult,
+        oneShopOrdersResult,
+        oneShopTransactionsResult,
+      ] = await Promise.all([
+        shopifyService.syncOrders({ entityId: storedEntityId, since, until }),
+        shopifyService.syncTransactions({
+          entityId: storedEntityId,
+          since,
+          until,
+        }),
+        oneShopService.syncOrders({ entityId: storedEntityId, since, until }),
+        oneShopService.syncTransactions({
+          entityId: storedEntityId,
+          since,
+          until,
+        }),
       ]);
 
       message.success(
-        `同步完成：訂單 ${ordersResult.created + ordersResult.updated} 筆，撥款 ${
-          transactionsResult.created + transactionsResult.updated
+        `同步完成：Shopify 訂單 ${
+          shopifyOrdersResult.created + shopifyOrdersResult.updated
+        } 筆、1Shop 訂單 ${
+          oneShopOrdersResult.created + oneShopOrdersResult.updated
+        } 筆、Shopify 金流 ${
+          shopifyTransactionsResult.created + shopifyTransactionsResult.updated
+        } 筆、1Shop 金流 ${
+          oneShopTransactionsResult.created + oneShopTransactionsResult.updated
         } 筆`,
       );
       setRefreshToken((prev) => prev + 1);
@@ -186,22 +226,10 @@ const DashboardPage: React.FC = () => {
   if (loading) {
     return <PageSkeleton />;
   }
-
-  const platformFeeTagMap: Record<
-    PlatformFeeStatus,
-    { color: string; label: string }
-  > = {
-    actual: { color: "green", label: "實際" },
-    estimated: { color: "gold", label: "估算" },
-    mixed: { color: "orange", label: "部分估算" },
-    unavailable: { color: "default", label: "未串接" },
-    not_applicable: { color: "blue", label: "不適用" },
-    empty: { color: "default", label: "尚未同步" },
-  };
-
-  const platformFeeDisplay = expenses ?? "—";
-  const platformFeeTag =
-    platformFeeTagMap[platformFeeStatus] || platformFeeTagMap.empty;
+  const performanceBuckets = overview
+    ? [...overview.buckets, overview.total]
+    : [];
+  const total = overview?.total;
 
   return (
     <div className="space-y-8">
@@ -286,179 +314,187 @@ const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Key Metrics Cards */}
-      <Row
-        gutter={[
-          { xs: 16, sm: 24 },
-          { xs: 16, sm: 24 },
-        ]}
-      >
-        <Col xs={24} sm={12} lg={6}>
-          <motion.div
-            whileHover={{ y: -5 }}
-            className="glass-card p-6 transition-all duration-300 animate-slide-up"
-            style={{ animationDelay: "0ms" }}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center backdrop-blur-sm">
-                <DollarOutlined className="text-blue-500 text-xl" />
-              </div>
-              <Tag
-                color="green"
-                className="m-0 rounded-full border-none bg-green-500/10 text-green-600 px-3 py-1"
-              >
-                +12.5%
-              </Tag>
-            </div>
-            <Statistic
-              title={<span className="label-text font-medium">今日銷售額</span>}
-              value={revenue}
-              precision={2}
-              prefix="$"
-              className={`kpi-number transition-colors duration-300 ${lastUpdated === "revenue" ? "animate-flash-text" : ""}`}
-              valueStyle={{
-                color: "var(--text-primary)",
-                fontWeight: 700,
-                fontSize: "28px",
-              }}
-            />
-            <div className="mt-2 text-sm text-gray-400">
-              來源：Shopify orders.gross
-            </div>
-          </motion.div>
-        </Col>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.9fr)]">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+          {performanceBuckets.map((bucket, index) => {
+            const status = getBucketStatus(bucket);
+            const accent = getBucketAccent(index);
 
-        <Col xs={24} sm={12} lg={6}>
-          <motion.div
-            whileHover={{ y: -5 }}
-            className="glass-card p-6 transition-all duration-300 animate-slide-up"
-            style={{ animationDelay: "100ms" }}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 rounded-full bg-orange-500/10 flex items-center justify-center backdrop-blur-sm">
-                <BankOutlined className="text-orange-500 text-xl" />
-              </div>
-              <Tag
-                color="red"
-                className="m-0 rounded-full border-none bg-red-500/10 text-red-600 px-3 py-1"
+            return (
+              <motion.div
+                key={bucket.key}
+                whileHover={{ y: -4 }}
+                className="glass-card relative overflow-hidden p-6 transition-all duration-300"
               >
-                12 筆逾期
-              </Tag>
-            </div>
-            <Statistic
-              title={
-                <span className="label-text font-medium">平台撥款總額</span>
-              }
-              value={receivables}
-              precision={2}
-              prefix="$"
-              className={`kpi-number transition-colors duration-300 ${lastUpdated === "receivables" ? "animate-flash-text" : ""}`}
-              valueStyle={{
-                color: "var(--text-primary)",
-                fontWeight: 700,
-                fontSize: "28px",
-              }}
-            />
-            <div className="mt-2 text-sm text-gray-400">
-              來源：Shopify payouts.gross
-            </div>
-          </motion.div>
-        </Col>
+                <div
+                  className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${accent.split(" ")[0]} ${accent.split(" ")[1]}`}
+                />
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium text-slate-500">
+                      {bucket.label}
+                    </div>
+                    {"account" in bucket && bucket.account ? (
+                      <div className="mt-1 text-xs text-slate-400">
+                        帳號：{bucket.account}
+                      </div>
+                    ) : null}
+                  </div>
+                  <Tag color={status.color} className="rounded-full px-3 py-1">
+                    {status.label}
+                  </Tag>
+                </div>
 
-        <Col xs={24} sm={12} lg={6}>
-          <motion.div
-            whileHover={{ y: -5 }}
-            className="glass-card p-6 transition-all duration-300 animate-slide-up"
-            style={{ animationDelay: "200ms" }}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 rounded-full bg-purple-500/10 flex items-center justify-center backdrop-blur-sm">
-                <ShoppingOutlined className="text-purple-500 text-xl" />
-              </div>
-              <Tag
-                color={platformFeeTag.color}
-                className="m-0 rounded-full px-3 py-1"
-              >
-                {platformFeeTag.label}
-              </Tag>
-            </div>
-            <Statistic
-              title={<span className="label-text font-medium">支付手續費</span>}
-              value={platformFeeDisplay}
-              precision={typeof expenses === "number" ? 2 : undefined}
-              prefix="$"
-              className={`kpi-number transition-colors duration-300 ${lastUpdated === "expenses" ? "animate-flash-text" : ""}`}
-              valueStyle={{
-                color: "var(--text-primary)",
-                fontWeight: 700,
-                fontSize: "28px",
-              }}
-            />
-            <div className="mt-2 text-sm text-gray-400">
-              來源：{platformFeeSource}
-            </div>
-            {platformFeeMessage && (
-              <div className="mt-2 text-xs leading-5 text-gray-500">
-                {platformFeeMessage}
-              </div>
-            )}
-            {platformFeeStatus === "estimated" ||
-            platformFeeStatus === "mixed" ? (
-              <div className="mt-2 text-xs leading-5 text-amber-600">
-                目前是依你設定的金流費率規則估算，不是金流實際對帳單。
-              </div>
-            ) : null}
-            {platformFeeStatus === "unavailable" ? (
-              <div className="mt-2 text-xs leading-5 text-gray-500">
-                這家店目前使用外部金流，Shopify 不會直接回傳手續費。
-              </div>
-            ) : null}
-            {platformFeeStatus === "not_applicable" ? (
-              <div className="mt-2 text-xs leading-5 text-gray-500">
-                目前期間內的付款方式沒有支付手續費。
-              </div>
-            ) : null}
-            {platformFeeStatus === "empty" ? (
-              <div className="mt-2 text-xs leading-5 text-gray-500">
-                先按一次「即時同步」把交易資料拉進來。
-              </div>
-            ) : null}
-          </motion.div>
-        </Col>
+                <Statistic
+                  title={<span className="label-text font-medium">業績總額</span>}
+                  value={bucket.gross}
+                  precision={2}
+                  prefix="$"
+                  valueStyle={{
+                    color: "var(--text-primary)",
+                    fontWeight: 700,
+                    fontSize: "28px",
+                  }}
+                />
 
-        <Col xs={24} sm={12} lg={6}>
-          <motion.div
-            whileHover={{ y: -5 }}
-            className="glass-card p-6 transition-all duration-300 animate-slide-up"
-            style={{ animationDelay: "300ms" }}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 rounded-full bg-teal-500/10 flex items-center justify-center backdrop-blur-sm">
-                <FileTextOutlined className="text-teal-500 text-xl" />
+                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-2xl bg-white/40 px-4 py-3">
+                    <div className="text-xs text-slate-400">訂單數</div>
+                    <div className="mt-1 font-semibold text-slate-800">
+                      {bucket.orderCount}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl bg-white/40 px-4 py-3">
+                    <div className="text-xs text-slate-400">已入帳 / 收款</div>
+                    <div className="mt-1 font-semibold text-slate-800">
+                      {bucket.payoutNet.toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl bg-white/40 px-4 py-3">
+                    <div className="text-xs text-slate-400">手續費</div>
+                    <div className="mt-1 font-semibold text-slate-800">
+                      {bucket.feeTotal.toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl bg-white/40 px-4 py-3">
+                    <div className="text-xs text-slate-400">待撥 / 待對帳</div>
+                    <div className="mt-1 font-semibold text-slate-800">
+                      {bucket.pendingPayoutCount}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 text-xs leading-5 text-slate-500">
+                  {status.helper}
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass-card overflow-hidden p-0"
+        >
+          <div className="border-b border-white/30 bg-[linear-gradient(135deg,rgba(15,23,42,0.9),rgba(30,41,59,0.75))] px-6 py-5 text-white">
+            <div className="text-xs font-semibold uppercase tracking-[0.28em] text-white/60">
+              Reconciliation Pulse
+            </div>
+            <div className="mt-2 text-2xl font-semibold">金流與入帳狀態</div>
+            <div className="mt-2 text-sm leading-6 text-white/75">
+              這裡會把訂單、收款、手續費、待撥款與已對帳的狀態壓成一個管理視圖，方便每天追追帳。
+            </div>
+          </div>
+
+          <div className="space-y-4 p-6">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-3xl bg-slate-900/5 px-5 py-4">
+                <div className="text-xs text-slate-400">總訂單數</div>
+                <div className="mt-2 text-2xl font-semibold text-slate-900">
+                  {total?.orderCount || 0}
+                </div>
               </div>
-              <Tag
-                color="blue"
-                className="m-0 rounded-full border-none bg-blue-500/10 text-blue-600 px-3 py-1"
-              >
-                3 筆待簽
-              </Tag>
+              <div className="rounded-3xl bg-slate-900/5 px-5 py-4">
+                <div className="text-xs text-slate-400">已建立收款</div>
+                <div className="mt-2 text-2xl font-semibold text-slate-900">
+                  {total?.paymentCount || 0}
+                </div>
+              </div>
+              <div className="rounded-3xl bg-slate-900/5 px-5 py-4">
+                <div className="text-xs text-slate-400">已完成對帳</div>
+                <div className="mt-2 text-2xl font-semibold text-emerald-600">
+                  {total?.reconciledCount || 0}
+                </div>
+              </div>
+              <div className="rounded-3xl bg-slate-900/5 px-5 py-4">
+                <div className="text-xs text-slate-400">待撥款 / 待對帳</div>
+                <div className="mt-2 text-2xl font-semibold text-amber-600">
+                  {total?.pendingPayoutCount || 0}
+                </div>
+              </div>
             </div>
-            <Statistic
-              title={<span className="label-text font-medium">訂單數</span>}
-              value={pendingDocs}
-              className={`kpi-number transition-colors duration-300 ${lastUpdated === "pendingDocs" ? "animate-flash-text" : ""}`}
-              valueStyle={{
-                color: "var(--text-primary)",
-                fontWeight: 700,
-                fontSize: "28px",
-              }}
-            />
-            <div className="mt-2 text-sm text-gray-400">
-              來源：Shopify orders.count
+
+            <div className="rounded-3xl border border-white/30 bg-white/45 px-5 py-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">
+                    總業績 vs 已入帳
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    用來看業績已經進來多少、實際撥款與淨額又落到多少。
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-xs text-slate-400">總業績</div>
+                  <div className="text-xl font-semibold text-slate-900">
+                    ${total?.gross.toFixed(2) || "0.00"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                <div>
+                  <div className="mb-1 flex items-center justify-between text-xs text-slate-500">
+                    <span>已入帳淨額</span>
+                    <span>${total?.payoutNet.toFixed(2) || "0.00"}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-slate-200/70">
+                    <div
+                      className="h-2 rounded-full bg-emerald-500 transition-all"
+                      style={{
+                        width: `${
+                          total?.gross
+                            ? Math.min((total.payoutNet / total.gross) * 100, 100)
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-1 flex items-center justify-between text-xs text-slate-500">
+                    <span>手續費</span>
+                    <span>${total?.feeTotal.toFixed(2) || "0.00"}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-slate-200/70">
+                    <div
+                      className="h-2 rounded-full bg-fuchsia-500 transition-all"
+                      style={{
+                        width: `${
+                          total?.gross
+                            ? Math.min((total.feeTotal / total.gross) * 100, 100)
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
-          </motion.div>
-        </Col>
-      </Row>
+          </div>
+        </motion.div>
+      </div>
 
       {/* Financial Health Widget */}
       <div className="animate-slide-up" style={{ animationDelay: "400ms" }}>
@@ -571,7 +607,8 @@ const DashboardPage: React.FC = () => {
                     className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
                   >
                     <div className="flex items-center gap-3">
-                      <Avatar
+                      <div
+                        className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white"
                         style={{
                           backgroundColor:
                             idx === 0
@@ -580,8 +617,9 @@ const DashboardPage: React.FC = () => {
                                 ? "#7265e6"
                                 : "#ffbf00",
                         }}
-                        icon={<UserOutlined />}
-                      />
+                      >
+                        {task.user.slice(0, 1)}
+                      </div>
                       <div>
                         <div className="font-medium text-gray-800">
                           {task.title}

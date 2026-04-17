@@ -402,7 +402,9 @@ export class ProviderPayoutReconciliationService {
     return tx.payment.findMany({
       where: {
         entityId,
-        channel: 'SHOPIFY',
+        channel: {
+          in: ['SHOPIFY', '1SHOP'],
+        },
         payoutDate:
           minDate && maxDate
             ? {
@@ -443,7 +445,7 @@ export class ProviderPayoutReconciliationService {
       return {
         candidate: null,
         confidence: 0,
-        message: '找不到可對應的 Shopify 收款紀錄。',
+        message: '找不到可對應的收款紀錄。',
       };
     }
 
@@ -510,7 +512,7 @@ export class ProviderPayoutReconciliationService {
       this.sameText(candidate.salesOrder?.externalOrderId, line.externalOrderId)
     ) {
       confidence += 95;
-      reasons.push('Shopify 訂單編號一致');
+      reasons.push('訂單編號一致');
     }
 
     if (line.gateway && this.sameText(metadata.gateway, line.gateway)) {

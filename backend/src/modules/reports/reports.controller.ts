@@ -186,6 +186,24 @@ export class ReportsController {
     };
   }
 
+  @Get('dashboard-sales-overview')
+  @ApiOperation({ summary: '儀錶板通路業績與對帳概況' })
+  @ApiResponse({ status: 200, description: '成功取得儀錶板業績概況' })
+  @ApiQuery({ name: 'entityId', required: true })
+  @ApiQuery({ name: 'startDate', required: false })
+  @ApiQuery({ name: 'endDate', required: false })
+  async getDashboardSalesOverview(
+    @Query('entityId') entityId: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.reportsService.getDashboardSalesOverview(
+      entityId,
+      startDate ? new Date(startDate) : undefined,
+      endDate ? new Date(endDate) : undefined,
+    );
+  }
+
   @Get(':id/export')
   @ApiOperation({ summary: '匯出報表 (Excel/PDF)' })
   @ApiResponse({ status: 200, description: '成功匯出報表' })

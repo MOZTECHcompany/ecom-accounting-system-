@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
 /**
@@ -12,7 +13,177 @@ import { PrismaService } from '../../common/prisma/prisma.service';
  */
 @Injectable()
 export class ReportsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  async getDashboardSalesOverview(
+    entityId: string,
+    startDate?: Date,
+    endDate?: Date,
+  ) {
+    const stores = this.getOneShopStores();
+    const buckets = [
+      {
+        key: 'shopify',
+        label: 'Shopify 官網業績',
+      },
+      ...stores.slice(0, 2).map((store, index) => ({
+        key: `oneshop:${store.account}`,
+        label: `1shop 第${index + 1}個帳號業績`,
+        account: store.account,
+        storeName: store.storeName || null,
+      })),
+      {
+        key: 'other',
+        label: '其他業績',
+      },
+    ];
+
+    const bucketMap = new Map(
+      buckets.map((bucket) => [
+        bucket.key,
+        {
+          ...bucket,
+          gross: 0,
+          orderCount: 0,
+          payoutGross: 0,
+          payoutNet: 0,
+          feeTotal: 0,
+          paymentCount: 0,
+          reconciledCount: 0,
+          pendingPayoutCount: 0,
+        },
+      ]),
+    );
+
+    const orderDateFilter = this.buildDateFilter(startDate, endDate);
+    const paymentDateFilter = this.buildDateFilter(startDate, endDate);
+
+    const [orders, payments] = await Promise.all([
+      this.prisma.salesOrder.findMany({
+        where: {
+          entityId,
+          ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
+        },
+        select: {
+          id: true,
+          notes: true,
+          totalGrossOriginal: true,
+          channel: {
+            select: {
+              code: true,
+              name: true,
+            },
+          },
+        },
+      }),
+      this.prisma.payment.findMany({
+        where: {
+          entityId,
+          ...(paymentDateFilter ? { payoutDate: paymentDateFilter } : {}),
+        },
+        select: {
+          id: true,
+          channel: true,
+          notes: true,
+          amountGrossOriginal: true,
+          amountNetOriginal: true,
+          feePlatformOriginal: true,
+          feeGatewayOriginal: true,
+          reconciledFlag: true,
+          salesOrder: {
+            select: {
+              notes: true,
+              channel: {
+                select: {
+                  code: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    for (const order of orders) {
+      const bucketKey = this.resolvePerformanceBucket({
+        channelCode: order.channel?.code,
+        notes: order.notes,
+        stores,
+      });
+      const bucket = bucketMap.get(bucketKey) || bucketMap.get('other');
+      if (!bucket) {
+        continue;
+      }
+      bucket.gross += Number(order.totalGrossOriginal || 0);
+      bucket.orderCount += 1;
+    }
+
+    for (const payment of payments) {
+      const bucketKey = this.resolvePerformanceBucket({
+        channelCode: payment.salesOrder?.channel?.code || payment.channel,
+        notes: payment.salesOrder?.notes || payment.notes,
+        fallbackNotes: payment.notes,
+        stores,
+      });
+      const bucket = bucketMap.get(bucketKey) || bucketMap.get('other');
+      if (!bucket) {
+        continue;
+      }
+
+      bucket.payoutGross += Number(payment.amountGrossOriginal || 0);
+      bucket.payoutNet += Number(payment.amountNetOriginal || 0);
+      bucket.feeTotal +=
+        Number(payment.feePlatformOriginal || 0) +
+        Number(payment.feeGatewayOriginal || 0);
+      bucket.paymentCount += 1;
+      if (payment.reconciledFlag) {
+        bucket.reconciledCount += 1;
+      } else {
+        bucket.pendingPayoutCount += 1;
+      }
+    }
+
+    const bucketItems = Array.from(bucketMap.values());
+    const total = bucketItems.reduce(
+      (acc, bucket) => ({
+        key: 'total',
+        label: '總業績',
+        gross: acc.gross + bucket.gross,
+        orderCount: acc.orderCount + bucket.orderCount,
+        payoutGross: acc.payoutGross + bucket.payoutGross,
+        payoutNet: acc.payoutNet + bucket.payoutNet,
+        feeTotal: acc.feeTotal + bucket.feeTotal,
+        paymentCount: acc.paymentCount + bucket.paymentCount,
+        reconciledCount: acc.reconciledCount + bucket.reconciledCount,
+        pendingPayoutCount: acc.pendingPayoutCount + bucket.pendingPayoutCount,
+      }),
+      {
+        key: 'total',
+        label: '總業績',
+        gross: 0,
+        orderCount: 0,
+        payoutGross: 0,
+        payoutNet: 0,
+        feeTotal: 0,
+        paymentCount: 0,
+        reconciledCount: 0,
+        pendingPayoutCount: 0,
+      },
+    );
+
+    return {
+      entityId,
+      range: {
+        startDate: startDate?.toISOString() || null,
+        endDate: endDate?.toISOString() || null,
+      },
+      buckets: bucketItems,
+      total,
+    };
+  }
 
   /**
    * 損益表 (Income Statement / P&L)
@@ -111,5 +282,95 @@ export class ReportsService {
    */
   async exportToPDF(reportType: string, data: any) {
     // TODO: 使用 pdfkit 或 puppeteer 產生PDF
+  }
+
+  private buildDateFilter(startDate?: Date, endDate?: Date) {
+    const filter: { gte?: Date; lte?: Date } = {};
+    if (startDate) {
+      filter.gte = startDate;
+    }
+    if (endDate) {
+      filter.lte = endDate;
+    }
+    return Object.keys(filter).length ? filter : null;
+  }
+
+  private getOneShopStores() {
+    const storesJson =
+      this.configService.get<string>('ONESHOP_STORES_JSON', '') || '';
+
+    if (!storesJson.trim()) {
+      return [] as Array<{ account: string; storeName?: string }>;
+    }
+
+    try {
+      const parsed = JSON.parse(storesJson);
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+
+      return parsed
+        .map((store) => ({
+          account:
+            typeof store?.account === 'string' ? store.account.trim() : '',
+          storeName:
+            typeof store?.storeName === 'string'
+              ? store.storeName.trim()
+              : '',
+        }))
+        .filter((store) => store.account);
+    } catch {
+      return [];
+    }
+  }
+
+  private resolvePerformanceBucket(params: {
+    channelCode?: string | null;
+    notes?: string | null;
+    fallbackNotes?: string | null;
+    stores: Array<{ account: string; storeName?: string }>;
+  }) {
+    const channelCode = (params.channelCode || '').trim().toUpperCase();
+    const primaryMeta = this.extractMetadata(params.notes);
+    const fallbackMeta = this.extractMetadata(params.fallbackNotes);
+    const storeAccount =
+      primaryMeta.storeAccount || fallbackMeta.storeAccount || '';
+
+    if (channelCode === 'SHOPIFY') {
+      return 'shopify';
+    }
+
+    if (channelCode === '1SHOP') {
+      const matchedStore = params.stores.find(
+        (store) => store.account === storeAccount,
+      );
+      if (matchedStore) {
+        return `oneshop:${matchedStore.account}`;
+      }
+    }
+
+    return 'other';
+  }
+
+  private extractMetadata(notes?: string | null) {
+    const lines = (notes || '')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const meta: Record<string, string> = {};
+
+    for (const line of lines) {
+      const separator = line.indexOf('] ');
+      const raw = separator >= 0 ? line.slice(separator + 2) : line;
+      for (const pair of raw.split(';')) {
+        const [key, ...rest] = pair.split('=');
+        if (!key || !rest.length) {
+          continue;
+        }
+        meta[key.trim()] = rest.join('=').trim();
+      }
+    }
+
+    return meta;
   }
 }

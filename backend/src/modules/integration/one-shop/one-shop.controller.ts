@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Post, Query } from '@nestjs/common';
 import { IsDateString, IsOptional, IsString } from 'class-validator';
 import { OneShopService } from './one-shop.service';
+import { Public } from '../../../common/decorators/public.decorator';
 
 class SyncRequestDto {
   @IsString()
@@ -45,6 +46,30 @@ export class OneShopController {
   @Post('sync/orders')
   async syncOrders(@Body() body: SyncRequestDto) {
     return this.oneShopService.syncOrders({
+      entityId: body.entityId,
+      since: body.since ? new Date(body.since) : undefined,
+      until: body.until ? new Date(body.until) : undefined,
+    });
+  }
+
+  @Post('sync/transactions')
+  async syncTransactions(@Body() body: SyncRequestDto) {
+    return this.oneShopService.syncTransactions({
+      entityId: body.entityId,
+      since: body.since ? new Date(body.since) : undefined,
+      until: body.until ? new Date(body.until) : undefined,
+    });
+  }
+
+  @Public()
+  @Post('sync/auto')
+  async autoSync(
+    @Headers('x-sync-token') syncToken: string | undefined,
+    @Body() body: Partial<SyncRequestDto>,
+  ) {
+    this.oneShopService.assertSchedulerToken(syncToken);
+
+    return this.oneShopService.autoSync({
       entityId: body.entityId,
       since: body.since ? new Date(body.since) : undefined,
       until: body.until ? new Date(body.until) : undefined,
