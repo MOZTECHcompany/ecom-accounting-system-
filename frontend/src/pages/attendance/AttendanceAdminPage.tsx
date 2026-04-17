@@ -5,8 +5,10 @@ import {
   CheckCircleOutlined,
   ClockCircleOutlined,
   DashboardOutlined,
+  DeleteOutlined,
   EditOutlined,
   FileAddOutlined,
+  PlusOutlined,
   ReloadOutlined,
   SettingOutlined,
   TeamOutlined,
@@ -19,6 +21,7 @@ import {
   AdminLeaveRequest,
   LeaveStatus,
   LeaveType,
+  SeniorityTier,
 } from "../../types/attendance";
 import { GlassButton } from "../../components/ui/GlassButton";
 import { GlassCard } from "../../components/ui/GlassCard";
@@ -38,7 +41,48 @@ const emptyLeaveTypeForm = {
   requiresDocument: "false",
   allowCarryOver: "false",
   carryOverLimitHours: "0",
+  seniorityTiers: [] as SeniorityTier[],
 };
+
+const getSeniorityTiers = (leaveType?: LeaveType): SeniorityTier[] =>
+  Array.isArray(leaveType?.metadata?.seniorityTiers)
+    ? leaveType!.metadata!.seniorityTiers!
+    : [];
+
+const normalizeSeniorityTiers = (
+  tiers?: Array<
+    | {
+        minYears?: number | string | null;
+        maxYears?: number | string | null;
+        days?: number | string | null;
+      }
+    | null
+    | undefined
+  >,
+): SeniorityTier[] =>
+  (tiers || [])
+    .map((tier) => ({
+      minYears: Number(tier?.minYears),
+      maxYears:
+        tier?.maxYears === undefined ||
+        tier?.maxYears === null ||
+        tier?.maxYears === ""
+          ? undefined
+          : Number(tier.maxYears),
+      days: Number(tier?.days),
+    }))
+    .filter(
+      (tier) =>
+        Number.isFinite(tier.minYears) &&
+        Number.isFinite(tier.days) &&
+        (tier.maxYears === undefined || Number.isFinite(tier.maxYears)),
+    )
+    .sort((a, b) => a.minYears - b.minYears);
+
+const formatSeniorityTier = (tier: SeniorityTier) =>
+  tier.maxYears !== undefined
+    ? `${tier.minYears} - ${tier.maxYears} 年：${tier.days} 天`
+    : `${tier.minYears} 年以上：${tier.days} 天`;
 
 const AttendanceAdminPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AdminTab>("requests");
@@ -244,6 +288,7 @@ const AttendanceAdminPage: React.FC = () => {
         leaveType.carryOverLimitHours !== undefined
           ? String(leaveType.carryOverLimitHours)
           : "0",
+      seniorityTiers: getSeniorityTiers(leaveType),
     });
     setTypeModalOpen(true);
   };
@@ -275,6 +320,10 @@ const AttendanceAdminPage: React.FC = () => {
           typeForm.carryOverLimitHours !== ""
             ? Number(typeForm.carryOverLimitHours)
             : undefined,
+        seniorityTiers:
+          typeForm.code.trim().toUpperCase() === "ANNUAL"
+            ? normalizeSeniorityTiers(typeForm.seniorityTiers)
+            : [],
       };
 
       if (editingLeaveType) {
@@ -693,6 +742,11 @@ const AttendanceAdminPage: React.FC = () => {
                       <span className="rounded-full bg-white/30 px-3 py-1">
                         年度額度：{leaveType.maxDaysPerYear ?? "—"} 天
                       </span>
+                      {getSeniorityTiers(leaveType).length > 0 ? (
+                        <span className="rounded-full bg-white/30 px-3 py-1">
+                          自訂級距：{getSeniorityTiers(leaveType).length} 段
+                        </span>
+                      ) : null}
                     </div>
                     <div className="mt-4 text-sm leading-6 text-slate-500">
                       {leaveType.requiresDocument ? "需附件" : "免附件"}
@@ -701,6 +755,13 @@ const AttendanceAdminPage: React.FC = () => {
                         ? `可結轉，最多 ${leaveType.carryOverLimitHours ?? 0} 小時`
                         : "不結轉"}
                     </div>
+                    {getSeniorityTiers(leaveType).length > 0 ? (
+                      <div className="mt-3 rounded-2xl border border-sky-100/70 bg-sky-50/70 px-4 py-3 text-xs leading-6 text-sky-700">
+                        {getSeniorityTiers(leaveType)
+                          .map((tier) => formatSeniorityTier(tier))
+                          .join(" / ")}
+                      </div>
+                    ) : null}
                     {leaveType.code === "ANNUAL" ? (
                       <div className="mt-3 rounded-2xl border border-emerald-100/60 bg-emerald-50/70 px-4 py-3 text-xs leading-6 text-emerald-700">
                         特休目前會依到職年資自動計算年度額度，未手動設定固定天數時，系統會套用標準年資級距。
@@ -924,6 +985,129 @@ const AttendanceAdminPage: React.FC = () => {
               }
             />
           </div>
+          {(typeForm.code || editingLeaveType?.code) === "ANNUAL" ? (
+            <div className="md:col-span-2 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">
+                    自訂年資級距
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    沒有設定時，系統會採用內建的台灣標準特休級距。
+                  </div>
+                </div>
+                <GlassButton
+                  variant="secondary"
+                  className="gap-2 px-4 py-2 text-sm"
+                  onClick={() =>
+                    setTypeForm((prev) => ({
+                      ...prev,
+                      seniorityTiers: [
+                        ...prev.seniorityTiers,
+                        { minYears: 0, days: 0 },
+                      ],
+                    }))
+                  }
+                >
+                  <PlusOutlined />
+                  新增級距
+                </GlassButton>
+              </div>
+
+              <div className="space-y-3">
+                {typeForm.seniorityTiers.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 px-4 py-5 text-sm text-slate-400">
+                    目前沒有自訂級距。
+                  </div>
+                ) : null}
+
+                {typeForm.seniorityTiers.map((tier, index) => (
+                  <div
+                    key={`${tier.minYears}-${tier.maxYears ?? "open"}-${index}`}
+                    className="grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-white/80 p-4 md:grid-cols-[1fr_1fr_1fr_auto]"
+                  >
+                    <GlassInput
+                      label="起始年資"
+                      type="number"
+                      value={String(tier.minYears)}
+                      onChange={(event) =>
+                        setTypeForm((prev) => ({
+                          ...prev,
+                          seniorityTiers: prev.seniorityTiers.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? {
+                                  ...item,
+                                  minYears: Number(event.target.value),
+                                }
+                              : item,
+                          ),
+                        }))
+                      }
+                    />
+                    <GlassInput
+                      label="結束年資"
+                      type="number"
+                      value={
+                        tier.maxYears === undefined ? "" : String(tier.maxYears)
+                      }
+                      placeholder="留空代表以上"
+                      onChange={(event) =>
+                        setTypeForm((prev) => ({
+                          ...prev,
+                          seniorityTiers: prev.seniorityTiers.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? {
+                                  ...item,
+                                  maxYears:
+                                    event.target.value === ""
+                                      ? undefined
+                                      : Number(event.target.value),
+                                }
+                              : item,
+                          ),
+                        }))
+                      }
+                    />
+                    <GlassInput
+                      label="給假天數"
+                      type="number"
+                      value={String(tier.days)}
+                      onChange={(event) =>
+                        setTypeForm((prev) => ({
+                          ...prev,
+                          seniorityTiers: prev.seniorityTiers.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? {
+                                  ...item,
+                                  days: Number(event.target.value),
+                                }
+                              : item,
+                          ),
+                        }))
+                      }
+                    />
+                    <div className="flex items-end">
+                      <GlassButton
+                        variant="danger"
+                        className="gap-2 px-4 py-3 text-sm"
+                        onClick={() =>
+                          setTypeForm((prev) => ({
+                            ...prev,
+                            seniorityTiers: prev.seniorityTiers.filter(
+                              (_, itemIndex) => itemIndex !== index,
+                            ),
+                          }))
+                        }
+                      >
+                        <DeleteOutlined />
+                        刪除
+                      </GlassButton>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </GlassModal>
 

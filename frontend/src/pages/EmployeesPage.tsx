@@ -19,6 +19,7 @@ import {
 import {
   ApartmentOutlined,
   CalendarOutlined,
+  DeleteOutlined,
   EditOutlined,
   PlusOutlined,
   SettingOutlined,
@@ -32,7 +33,11 @@ import { payrollService } from "../services/payroll.service";
 import { usersService } from "../services/users.service";
 import { useAuth } from "../contexts/AuthContext";
 import { Department, Employee, ManagedUser } from "../types";
-import { AdminLeaveBalance, LeaveType } from "../types/attendance";
+import {
+  AdminLeaveBalance,
+  LeaveType,
+  SeniorityTier,
+} from "../types/attendance";
 
 const { Title, Text } = Typography;
 
@@ -64,6 +69,46 @@ const formatHoursAsDays = (hours?: number) => {
 
   return `${hours} 小時`;
 };
+
+const getSeniorityTiers = (leaveType?: LeaveType): SeniorityTier[] =>
+  Array.isArray(leaveType?.metadata?.seniorityTiers)
+    ? leaveType!.metadata!.seniorityTiers!
+    : [];
+
+const normalizeSeniorityTiers = (
+  tiers?: Array<
+    | {
+        minYears?: number | string | null;
+        maxYears?: number | string | null;
+        days?: number | string | null;
+      }
+    | null
+    | undefined
+  >,
+): SeniorityTier[] =>
+  (tiers || [])
+    .map((tier) => ({
+      minYears: Number(tier?.minYears),
+      maxYears:
+        tier?.maxYears === undefined ||
+        tier?.maxYears === null ||
+        tier?.maxYears === ""
+          ? undefined
+          : Number(tier.maxYears),
+      days: Number(tier?.days),
+    }))
+    .filter(
+      (tier) =>
+        Number.isFinite(tier.minYears) &&
+        Number.isFinite(tier.days) &&
+        (tier.maxYears === undefined || Number.isFinite(tier.maxYears)),
+    )
+    .sort((a, b) => a.minYears - b.minYears);
+
+const formatSeniorityTier = (tier: SeniorityTier) =>
+  tier.maxYears !== undefined
+    ? `${tier.minYears} - ${tier.maxYears} 年：${tier.days} 天`
+    : `${tier.minYears} 年以上：${tier.days} 天`;
 
 const EmployeesTab = ({ departments }: { departments: Department[] }) => {
   const { user } = useAuth();
@@ -468,6 +513,7 @@ const LeaveTypesTab = () => {
     null,
   );
   const [form] = Form.useForm();
+  const leaveTypeCode = String(Form.useWatch("code", form) || "").toUpperCase();
 
   const fetchLeaveTypes = async () => {
     setLoading(true);
@@ -495,6 +541,7 @@ const LeaveTypesTab = () => {
       requiresDocument: false,
       allowCarryOver: false,
       carryOverLimitHours: 0,
+      seniorityTiers: [],
     });
     setModalOpen(true);
   };
@@ -509,6 +556,7 @@ const LeaveTypesTab = () => {
       requiresDocument: Boolean(leaveType.requiresDocument),
       allowCarryOver: Boolean(leaveType.allowCarryOver),
       carryOverLimitHours: leaveType.carryOverLimitHours ?? 0,
+      seniorityTiers: getSeniorityTiers(leaveType),
     });
     setModalOpen(true);
   };
@@ -539,6 +587,10 @@ const LeaveTypesTab = () => {
           values.carryOverLimitHours === undefined
             ? undefined
             : Number(values.carryOverLimitHours),
+        seniorityTiers:
+          String(values.code || "").toUpperCase() === "ANNUAL"
+            ? normalizeSeniorityTiers(values.seniorityTiers)
+            : [],
       };
 
       if (editingLeaveType) {
@@ -610,6 +662,11 @@ const LeaveTypesTab = () => {
               ? `可結轉 ${record.carryOverLimitHours ?? 0} 小時`
               : "不結轉"}
           </Tag>
+          {getSeniorityTiers(record).length > 0 ? (
+            <Tag color="processing">
+              自訂級距 {getSeniorityTiers(record).length} 段
+            </Tag>
+          ) : null}
         </Space>
       ),
     },
@@ -662,6 +719,15 @@ const LeaveTypesTab = () => {
         onOk={() => void handleSave()}
       >
         <Form form={form} layout="vertical">
+          {leaveTypeCode === "ANNUAL" ? (
+            <Alert
+              type="info"
+              showIcon
+              className="mb-4"
+              message="特休可自訂年資級距"
+              description="如果不填，系統會使用內建的台灣標準特休級距；如果有填，薪資與額度計算會優先使用你設定的級距。"
+            />
+          ) : null}
           <Form.Item
             name="code"
             label="假別代碼"
@@ -718,6 +784,70 @@ const LeaveTypesTab = () => {
           >
             <Switch checkedChildren="可結轉" unCheckedChildren="不可結轉" />
           </Form.Item>
+          {leaveTypeCode === "ANNUAL" ? (
+            <Form.List name="seniorityTiers">
+              {(fields, { add, remove }) => (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <Text strong>年資級距</Text>
+                    <Button
+                      type="dashed"
+                      icon={<PlusOutlined />}
+                      onClick={() => add({ minYears: 0, days: 0 })}
+                    >
+                      新增級距
+                    </Button>
+                  </div>
+                  <div className="space-y-3">
+                    {fields.length === 0 ? (
+                      <Text type="secondary">
+                        尚未設定自訂級距，系統將使用內建標準特休級距。
+                      </Text>
+                    ) : null}
+                    {fields.map((field) => (
+                      <div
+                        key={field.key}
+                        className="grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-3 md:grid-cols-[1fr_1fr_1fr_auto]"
+                      >
+                        <Form.Item
+                          {...field}
+                          name={[field.name, "minYears"]}
+                          label="起始年資"
+                          rules={[{ required: true, message: "請輸入起始年資" }]}
+                        >
+                          <InputNumber className="w-full" min={0} step={0.5} />
+                        </Form.Item>
+                        <Form.Item
+                          {...field}
+                          name={[field.name, "maxYears"]}
+                          label="結束年資"
+                        >
+                          <InputNumber className="w-full" min={0} step={0.5} />
+                        </Form.Item>
+                        <Form.Item
+                          {...field}
+                          name={[field.name, "days"]}
+                          label="給假天數"
+                          rules={[{ required: true, message: "請輸入天數" }]}
+                        >
+                          <InputNumber className="w-full" min={0} step={0.5} />
+                        </Form.Item>
+                        <div className="flex items-end">
+                          <Button
+                            danger
+                            icon={<DeleteOutlined />}
+                            onClick={() => remove(field.name)}
+                          >
+                            刪除
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Form.List>
+          ) : null}
         </Form>
       </Modal>
     </div>

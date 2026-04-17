@@ -355,6 +355,7 @@ export class LeaveService {
 
   async createLeaveType(userId: string, dto: UpsertLeaveTypeDto) {
     const entityId = await this.resolveEntityId(userId, dto.entityId);
+    const metadata = this.mergeLeaveTypeMetadata(undefined, dto.seniorityTiers);
 
     const leaveType = await this.prisma.leaveType.create({
       data: {
@@ -374,6 +375,7 @@ export class LeaveService {
         minNoticeHours: dto.minNoticeHours,
         allowCarryOver: dto.allowCarryOver ?? false,
         carryOverLimitHours: new Prisma.Decimal(dto.carryOverLimitHours || 0),
+        metadata: metadata ?? undefined,
       },
     });
 
@@ -427,6 +429,10 @@ export class LeaveService {
           dto.carryOverLimitHours !== undefined
             ? new Prisma.Decimal(dto.carryOverLimitHours)
             : existing.carryOverLimitHours,
+        metadata:
+          dto.seniorityTiers !== undefined
+            ? this.mergeLeaveTypeMetadata(existing.metadata, dto.seniorityTiers)
+            : existing.metadata,
       },
     });
 
@@ -576,6 +582,53 @@ export class LeaveService {
     });
 
     return updated;
+  }
+
+  private mergeLeaveTypeMetadata(
+    existingMetadata: Prisma.JsonValue | null | undefined,
+    seniorityTiers:
+      | Array<{ minYears: number; maxYears?: number; days: number }>
+      | undefined,
+  ): Prisma.InputJsonValue | null {
+    const baseMetadata =
+      existingMetadata &&
+      typeof existingMetadata === 'object' &&
+      !Array.isArray(existingMetadata)
+        ? { ...(existingMetadata as Record<string, unknown>) }
+        : {};
+
+    if (seniorityTiers === undefined) {
+      return Object.keys(baseMetadata).length > 0
+        ? (baseMetadata as Prisma.InputJsonValue)
+        : null;
+    }
+
+    const normalizedTiers = seniorityTiers
+      .map((tier) => ({
+        minYears: Number(tier.minYears),
+        maxYears:
+          tier.maxYears === undefined || tier.maxYears === null
+            ? undefined
+            : Number(tier.maxYears),
+        days: Number(tier.days),
+      }))
+      .filter(
+        (tier) =>
+          Number.isFinite(tier.minYears) &&
+          Number.isFinite(tier.days) &&
+          (tier.maxYears === undefined || Number.isFinite(tier.maxYears)),
+      )
+      .sort((a, b) => a.minYears - b.minYears);
+
+    if (normalizedTiers.length === 0) {
+      delete baseMetadata.seniorityTiers;
+      return Object.keys(baseMetadata).length > 0
+        ? (baseMetadata as Prisma.InputJsonValue)
+        : null;
+    }
+
+    baseMetadata.seniorityTiers = normalizedTiers;
+    return baseMetadata as Prisma.InputJsonValue;
   }
 
   private async ensureDefaultLeaveTypes(entityId: string, actorUserId?: string) {

@@ -55,6 +55,12 @@ export interface CreateLeaveRequestDto {
   documents?: any[];
 }
 
+export interface SeniorityTier {
+  minYears: number;
+  maxYears?: number;
+  days: number;
+}
+
 export interface LeaveType {
   id: string;
   entityId?: string;
@@ -68,6 +74,11 @@ export interface LeaveType {
   minNoticeHours?: number;
   allowCarryOver?: boolean;
   carryOverLimitHours?: number;
+  metadata?: {
+    seniorityTiers?: SeniorityTier[];
+    systemDefault?: boolean;
+    locale?: string;
+  };
 }
 
 export interface LeaveBalance {

@@ -1,12 +1,29 @@
 import {
+  IsArray,
   IsBoolean,
   IsIn,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
+  ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+
+class LeaveSeniorityTierDto {
+  @Type(() => Number)
+  @IsNumber()
+  minYears: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  maxYears?: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  days: number;
+}
 
 export class UpsertLeaveTypeDto {
   @IsOptional()
@@ -52,4 +69,10 @@ export class UpsertLeaveTypeDto {
   @Type(() => Number)
   @IsNumber()
   carryOverLimitHours?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => LeaveSeniorityTierDto)
+  seniorityTiers?: LeaveSeniorityTierDto[];
 }
