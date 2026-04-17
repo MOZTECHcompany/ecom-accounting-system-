@@ -78,6 +78,47 @@ export type DashboardReconciliationFeed = {
   recentBatches: DashboardReconciliationBatch[];
 };
 
+export type DashboardExecutiveTask = {
+  key: string;
+  title: string;
+  value: number;
+  amount: number | null;
+  tone: "healthy" | "warning" | "attention" | "critical";
+  helper: string;
+};
+
+export type DashboardInventoryAlert = {
+  sku: string;
+  name: string;
+  qtyAvailable: number;
+  qtyOnHand: number;
+  severity: "critical" | "warning";
+};
+
+export type DashboardExecutiveOverview = {
+  entityId: string;
+  range: {
+    startDate: string | null;
+    endDate: string | null;
+  };
+  expenses: {
+    actualSpend: number;
+    actualSpendCount: number;
+    pendingApprovalAmount: number;
+    pendingApprovalCount: number;
+    approvedUnpaidAmount: number;
+    approvedUnpaidCount: number;
+  };
+  operations: {
+    pendingPayoutCount: number;
+    uninvoicedOrdersCount: number;
+    inventoryAlertCount: number;
+    outOfStockCount: number;
+  };
+  inventoryAlerts: DashboardInventoryAlert[];
+  tasks: DashboardExecutiveTask[];
+};
+
 export const dashboardService = {
   async getSalesOverview(params?: {
     entityId?: string;
@@ -121,6 +162,27 @@ export const dashboardService = {
 
     const response = await api.get<DashboardReconciliationFeed>(
       `/reports/dashboard-reconciliation-feed?${query.toString()}`,
+    );
+    return response.data;
+  },
+
+  async getExecutiveOverview(params?: {
+    entityId?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<DashboardExecutiveOverview> {
+    const query = new URLSearchParams();
+    query.set("entityId", params?.entityId?.trim() || DEFAULT_ENTITY_ID);
+    if (params?.startDate) {
+      query.set("startDate", params.startDate);
+    }
+    if (params?.endDate) {
+      query.set("endDate", params.endDate);
+    }
+    query.set("_ts", String(Date.now()));
+
+    const response = await api.get<DashboardExecutiveOverview>(
+      `/reports/dashboard-executive-overview?${query.toString()}`,
     );
     return response.data;
   },

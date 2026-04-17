@@ -225,6 +225,24 @@ export class ReportsController {
     );
   }
 
+  @Get('dashboard-executive-overview')
+  @ApiOperation({ summary: '儀錶板 CEO 總覽' })
+  @ApiResponse({ status: 200, description: '成功取得 CEO 視角的營運摘要' })
+  @ApiQuery({ name: 'entityId', required: true })
+  @ApiQuery({ name: 'startDate', required: false })
+  @ApiQuery({ name: 'endDate', required: false })
+  async getDashboardExecutiveOverview(
+    @Query('entityId') entityId: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.reportsService.getDashboardExecutiveOverview(
+      entityId,
+      startDate ? new Date(startDate) : undefined,
+      endDate ? new Date(endDate) : undefined,
+    );
+  }
+
   @Get(':id/export')
   @ApiOperation({ summary: '匯出報表 (Excel/PDF)' })
   @ApiResponse({ status: 200, description: '成功匯出報表' })

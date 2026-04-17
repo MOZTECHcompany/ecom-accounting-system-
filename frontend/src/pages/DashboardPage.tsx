@@ -3,7 +3,6 @@ import {
   Row,
   Col,
   Button,
-  Timeline,
   Card,
   message,
   Radio,
@@ -15,18 +14,17 @@ import {
 import {
   BankOutlined,
   DollarOutlined,
-  FileTextOutlined,
   ShoppingOutlined,
   SyncOutlined,
 } from "@ant-design/icons";
 import { motion } from "framer-motion";
-import FinancialHealthWidget from "../components/FinancialHealthWidget";
 import PageSkeleton from "../components/PageSkeleton";
 import AIInsightsWidget from "../components/AIInsightsWidget";
 import { shopifyService } from "../services/shopify.service";
 import { oneShopService } from "../services/oneshop.service";
 import {
   dashboardService,
+  DashboardExecutiveOverview,
   DashboardReconciliationBatch,
   DashboardReconciliationFeed,
   DashboardReconciliationItem,
@@ -190,6 +188,19 @@ function getBatchMeta(batch: DashboardReconciliationBatch) {
   };
 }
 
+function getTaskToneMeta(tone: DashboardExecutiveOverview["tasks"][number]["tone"]) {
+  switch (tone) {
+    case "critical":
+      return { color: "red" as const, badge: "立即處理" };
+    case "warning":
+      return { color: "gold" as const, badge: "本週重點" };
+    case "attention":
+      return { color: "blue" as const, badge: "需追蹤" };
+    default:
+      return { color: "green" as const, badge: "正常" };
+  }
+}
+
 const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [rangeMode, setRangeMode] = useState<RangeMode>("today");
@@ -198,6 +209,7 @@ const DashboardPage: React.FC = () => {
   const [syncing, setSyncing] = useState(false);
   const [overview, setOverview] = useState<DashboardSalesOverview | null>(null);
   const [feed, setFeed] = useState<DashboardReconciliationFeed | null>(null);
+  const [executive, setExecutive] = useState<DashboardExecutiveOverview | null>(null);
 
   useEffect(() => {
     if (rangeMode === "custom" && (!customRange?.[0] || !customRange?.[1])) {
@@ -213,7 +225,7 @@ const DashboardPage: React.FC = () => {
     const fetchSummary = async () => {
       setLoading(true);
       try {
-        const [summary, reconciliationFeed] = await Promise.all([
+        const [summary, reconciliationFeed, executiveOverview] = await Promise.all([
           dashboardService.getSalesOverview({
             entityId: storedEntityId,
             startDate: since,
@@ -225,12 +237,18 @@ const DashboardPage: React.FC = () => {
             endDate: until,
             limit: 10,
           }),
+          dashboardService.getExecutiveOverview({
+            entityId: storedEntityId,
+            startDate: since,
+            endDate: until,
+          }),
         ]);
 
         if (ignore) return;
 
         setOverview(summary);
         setFeed(reconciliationFeed);
+        setExecutive(executiveOverview);
       } catch (error: any) {
         if (!ignore) {
           message.error(error?.response?.data?.message || "讀取儀表板資料失敗");
@@ -304,12 +322,12 @@ const DashboardPage: React.FC = () => {
   if (loading) {
     return <PageSkeleton />;
   }
-  const performanceBuckets = overview
-    ? [...overview.buckets, overview.total]
-    : [];
+  const performanceBuckets = overview?.buckets || [];
   const total = overview?.total;
   const recentItems = feed?.recentItems || [];
   const recentBatches = feed?.recentBatches || [];
+  const tasks = executive?.tasks || [];
+  const inventoryAlerts = executive?.inventoryAlerts || [];
 
   return (
     <div className="space-y-8">
@@ -393,6 +411,104 @@ const DashboardPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.95fr)]"
+      >
+        <div className="glass-card overflow-hidden p-0">
+          <div className="bg-[linear-gradient(135deg,rgba(15,23,42,0.96),rgba(30,41,59,0.82),rgba(56,189,248,0.18))] px-7 py-7 text-white">
+            <div className="text-xs font-semibold uppercase tracking-[0.28em] text-white/55">
+              CEO Overview
+            </div>
+            <div className="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">
+              ${total?.gross.toFixed(2) || "0.00"}
+            </div>
+            <div className="mt-2 text-sm text-white/72">
+              這是目前選定區間內的總業績，下面同步看已入帳、支出與關鍵待辦。
+            </div>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-3xl border border-white/10 bg-white/8 px-4 py-4">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-white/55">
+                  <DollarOutlined />
+                  已入帳
+                </div>
+                <div className="mt-3 text-2xl font-semibold">
+                  ${total?.payoutNet.toFixed(2) || "0.00"}
+                </div>
+              </div>
+              <div className="rounded-3xl border border-white/10 bg-white/8 px-4 py-4">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-white/55">
+                  <BankOutlined />
+                  經費支出
+                </div>
+                <div className="mt-3 text-2xl font-semibold">
+                  ${executive?.expenses.actualSpend.toFixed(2) || "0.00"}
+                </div>
+              </div>
+              <div className="rounded-3xl border border-white/10 bg-white/8 px-4 py-4">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-white/55">
+                  <ShoppingOutlined />
+                  關鍵待辦
+                </div>
+                <div className="mt-3 text-2xl font-semibold">
+                  {(executive?.operations.pendingPayoutCount || 0) +
+                    (executive?.operations.inventoryAlertCount || 0) +
+                    (executive?.expenses.pendingApprovalCount || 0)}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-card p-6">
+          <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+            CEO Snapshot
+          </div>
+          <div className="mt-2 text-xl font-semibold text-slate-900">
+            業績、花費與營運風險
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
+              <div className="text-xs text-slate-400">待撥款 / 待對帳</div>
+              <div className="mt-2 text-2xl font-semibold text-amber-600">
+                {executive?.operations.pendingPayoutCount || 0}
+              </div>
+            </div>
+            <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
+              <div className="text-xs text-slate-400">待審費用</div>
+              <div className="mt-2 text-2xl font-semibold text-slate-900">
+                {executive?.expenses.pendingApprovalCount || 0}
+              </div>
+            </div>
+            <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
+              <div className="text-xs text-slate-400">已核准待付款</div>
+              <div className="mt-2 text-2xl font-semibold text-sky-600">
+                {executive?.expenses.approvedUnpaidCount || 0}
+              </div>
+            </div>
+            <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
+              <div className="text-xs text-slate-400">庫存警示</div>
+              <div className="mt-2 text-2xl font-semibold text-rose-600">
+                {executive?.operations.inventoryAlertCount || 0}
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 rounded-3xl border border-white/30 bg-white/45 px-4 py-4 text-sm text-slate-600">
+            本期經費支出
+            <span className="ml-2 font-semibold text-slate-900">
+              ${executive?.expenses.actualSpend.toFixed(2) || "0.00"}
+            </span>
+            ，待開立發票訂單
+            <span className="ml-2 font-semibold text-slate-900">
+              {executive?.operations.uninvoicedOrdersCount || 0}
+            </span>
+            筆。
+          </div>
+        </div>
+      </motion.div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.9fr)]">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
@@ -747,12 +863,6 @@ const DashboardPage: React.FC = () => {
         </motion.div>
       </div>
 
-      {/* Financial Health Widget */}
-      <div className="animate-slide-up" style={{ animationDelay: "400ms" }}>
-        <FinancialHealthWidget />
-      </div>
-
-      {/* Recent Activity & Tasks */}
       <Row
         gutter={[
           { xs: 16, sm: 24 },
@@ -765,61 +875,32 @@ const DashboardPage: React.FC = () => {
             style={{ animationDelay: "500ms" }}
           >
             <Card
-              title="近期活動 (Recent Activity)"
+              title="庫存警示 (Inventory Alerts)"
               className="glass-card !border-0 h-full"
             >
-              <Timeline
-                items={[
-                  {
-                    color: "green",
-                    children: (
-                      <div className="pb-4">
-                        <div className="font-medium">
-                          收到來自 Tech Solutions 的款項
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          2025-11-21 10:30 AM • NT$ 150,000
-                        </div>
+              <div className="space-y-3">
+                {inventoryAlerts.map((item) => (
+                  <div
+                    key={`${item.sku}-${item.name}`}
+                    className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3"
+                  >
+                    <div>
+                      <div className="font-medium text-slate-900">{item.name}</div>
+                      <div className="text-xs text-slate-400">
+                        SKU {item.sku} · 現有 {item.qtyAvailable}
                       </div>
-                    ),
-                  },
-                  {
-                    color: "blue",
-                    children: (
-                      <div className="pb-4">
-                        <div className="font-medium">開立發票 #INV-2025089</div>
-                        <div className="text-xs text-gray-400">
-                          2025-11-21 09:15 AM • 給 Global Trade Co.
-                        </div>
-                      </div>
-                    ),
-                  },
-                  {
-                    color: "red",
-                    children: (
-                      <div className="pb-4">
-                        <div className="font-medium">
-                          庫存警示：MacBook Pro M3
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          2025-11-20 16:45 PM • 庫存低於安全水位
-                        </div>
-                      </div>
-                    ),
-                  },
-                  {
-                    color: "gray",
-                    children: (
-                      <div className="pb-4">
-                        <div className="font-medium">系統自動備份完成</div>
-                        <div className="text-xs text-gray-400">
-                          2025-11-20 03:00 AM
-                        </div>
-                      </div>
-                    ),
-                  },
-                ]}
-              />
+                    </div>
+                    <Tag color={item.severity === "critical" ? "red" : "gold"}>
+                      {item.severity === "critical" ? "缺貨" : "低庫存"}
+                    </Tag>
+                  </div>
+                ))}
+                {!inventoryAlerts.length ? (
+                  <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-500">
+                    目前沒有庫存警示，這一區會優先顯示需要補貨的商品。
+                  </div>
+                ) : null}
+              </div>
             </Card>
           </div>
         </Col>
@@ -829,32 +910,15 @@ const DashboardPage: React.FC = () => {
             style={{ animationDelay: "600ms" }}
           >
             <Card
-              title="待辦事項 (Pending Tasks)"
+              title="CEO 待辦事項 (Priority Tasks)"
               className="glass-card !border-0 h-full"
             >
               <div className="space-y-4">
-                {[
-                  {
-                    title: "審核 11 月份行銷費用報銷",
-                    user: "Alice",
-                    time: "2h ago",
-                    tag: "Approval",
-                  },
-                  {
-                    title: "確認 Q4 財務預測報告",
-                    user: "Bob",
-                    time: "4h ago",
-                    tag: "Review",
-                  },
-                  {
-                    title: "更新供應商合約條款",
-                    user: "Charlie",
-                    time: "1d ago",
-                    tag: "Legal",
-                  },
-                ].map((task, idx) => (
+                {tasks.map((task, idx) => {
+                  const tone = getTaskToneMeta(task.tone);
+                  return (
                   <div
-                    key={idx}
+                    key={task.key}
                     className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
                   >
                     <div className="flex items-center gap-3">
@@ -862,30 +926,32 @@ const DashboardPage: React.FC = () => {
                         className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white"
                         style={{
                           backgroundColor:
-                            idx === 0
-                              ? "#f56a00"
-                              : idx === 1
-                                ? "#7265e6"
-                                : "#ffbf00",
+                            idx % 3 === 0 ? "#f56a00" : idx % 3 === 1 ? "#1677ff" : "#13c2c2",
                         }}
                       >
-                        {task.user.slice(0, 1)}
+                        {task.title.slice(0, 1)}
                       </div>
                       <div>
                         <div className="font-medium text-gray-800">
                           {task.title}
                         </div>
                         <div className="text-xs text-gray-400">
-                          {task.user} • {task.time}
+                          {task.helper}
+                          {task.amount ? ` • NT$ ${task.amount.toFixed(0)}` : ""}
                         </div>
                       </div>
                     </div>
-                    <Tag>{task.tag}</Tag>
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-semibold text-slate-900">{task.value}</div>
+                      <Tag color={tone.color}>{tone.badge}</Tag>
+                    </div>
                   </div>
-                ))}
-                <Button type="dashed" block className="mt-4">
-                  查看更多待辦
-                </Button>
+                )})}
+                {!tasks.length ? (
+                  <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-500">
+                    目前沒有需要特別追蹤的待辦，這裡會聚焦影響營運的關鍵項目。
+                  </div>
+                ) : null}
               </div>
             </Card>
           </div>

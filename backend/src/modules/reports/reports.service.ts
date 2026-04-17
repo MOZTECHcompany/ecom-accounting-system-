@@ -170,6 +170,231 @@ export class ReportsService {
     };
   }
 
+  async getDashboardExecutiveOverview(
+    entityId: string,
+    startDate?: Date,
+    endDate?: Date,
+  ) {
+    const orderDateFilter = this.buildDateFilter(startDate, endDate);
+    const expenseDateFilter = this.buildDateFilter(startDate, endDate);
+    const inventoryAlertThreshold = Number(
+      this.configService.get<string>('DASHBOARD_INVENTORY_ALERT_THRESHOLD', '5'),
+    );
+
+    const [
+      expenseAgg,
+      fallbackPaidExpenseAgg,
+      pendingExpenseAgg,
+      approvedExpenseAgg,
+      pendingPayoutCount,
+      uninvoicedOrdersCount,
+      inventorySnapshots,
+    ] = await Promise.all([
+      this.prisma.expense.aggregate({
+        where: {
+          entityId,
+          ...(expenseDateFilter ? { expenseDate: expenseDateFilter } : {}),
+        },
+        _sum: {
+          totalAmountOriginal: true,
+        },
+        _count: {
+          id: true,
+        },
+      }),
+      this.prisma.expenseRequest.aggregate({
+        where: {
+          entityId,
+          paymentStatus: 'paid',
+          ...(expenseDateFilter ? { updatedAt: expenseDateFilter } : {}),
+        },
+        _sum: {
+          amountOriginal: true,
+        },
+        _count: {
+          id: true,
+        },
+      }),
+      this.prisma.expenseRequest.aggregate({
+        where: {
+          entityId,
+          status: 'pending',
+          ...(expenseDateFilter ? { createdAt: expenseDateFilter } : {}),
+        },
+        _sum: {
+          amountOriginal: true,
+        },
+        _count: {
+          id: true,
+        },
+      }),
+      this.prisma.expenseRequest.aggregate({
+        where: {
+          entityId,
+          status: 'approved',
+          paymentStatus: {
+            not: 'paid',
+          },
+          ...(expenseDateFilter ? { approvedAt: expenseDateFilter } : {}),
+        },
+        _sum: {
+          amountOriginal: true,
+        },
+        _count: {
+          id: true,
+        },
+      }),
+      this.prisma.payment.count({
+        where: {
+          entityId,
+          reconciledFlag: false,
+          status: {
+            in: ['completed', 'success', 'pending'],
+          },
+        },
+      }),
+      this.prisma.salesOrder.count({
+        where: {
+          entityId,
+          hasInvoice: false,
+          status: {
+            notIn: ['cancelled', 'refunded'],
+          },
+          ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
+        },
+      }),
+      this.prisma.inventorySnapshot.findMany({
+        where: {
+          entityId,
+        },
+        select: {
+          productId: true,
+          qtyAvailable: true,
+          qtyOnHand: true,
+          product: {
+            select: {
+              sku: true,
+              name: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    const actualSpend =
+      Number(expenseAgg._sum.totalAmountOriginal || 0) ||
+      Number(fallbackPaidExpenseAgg._sum.amountOriginal || 0);
+    const actualSpendCount =
+      Number(expenseAgg._count.id || 0) ||
+      Number(fallbackPaidExpenseAgg._count.id || 0);
+    const pendingExpenseAmount = Number(pendingExpenseAgg._sum.amountOriginal || 0);
+    const pendingExpenseCount = Number(pendingExpenseAgg._count.id || 0);
+    const approvedExpenseAmount = Number(
+      approvedExpenseAgg._sum.amountOriginal || 0,
+    );
+    const approvedExpenseCount = Number(approvedExpenseAgg._count.id || 0);
+
+    const inventoryByProduct = new Map<
+      string,
+      { sku: string; name: string; qtyAvailable: number; qtyOnHand: number }
+    >();
+
+    for (const snapshot of inventorySnapshots) {
+      const current = inventoryByProduct.get(snapshot.productId) || {
+        sku: snapshot.product.sku,
+        name: snapshot.product.name,
+        qtyAvailable: 0,
+        qtyOnHand: 0,
+      };
+
+      current.qtyAvailable += Number(snapshot.qtyAvailable || 0);
+      current.qtyOnHand += Number(snapshot.qtyOnHand || 0);
+      inventoryByProduct.set(snapshot.productId, current);
+    }
+
+    const inventoryRows = Array.from(inventoryByProduct.values());
+    const outOfStockItems = inventoryRows.filter((item) => item.qtyAvailable <= 0);
+    const lowStockItems = inventoryRows
+      .filter(
+        (item) =>
+          item.qtyAvailable > 0 && item.qtyAvailable <= inventoryAlertThreshold,
+      )
+      .sort((a, b) => a.qtyAvailable - b.qtyAvailable);
+
+    const topAlerts = [...outOfStockItems, ...lowStockItems].slice(0, 6);
+
+    return {
+      entityId,
+      range: {
+        startDate: startDate?.toISOString() || null,
+        endDate: endDate?.toISOString() || null,
+      },
+      expenses: {
+        actualSpend,
+        actualSpendCount,
+        pendingApprovalAmount: pendingExpenseAmount,
+        pendingApprovalCount: pendingExpenseCount,
+        approvedUnpaidAmount: approvedExpenseAmount,
+        approvedUnpaidCount: approvedExpenseCount,
+      },
+      operations: {
+        pendingPayoutCount,
+        uninvoicedOrdersCount,
+        inventoryAlertCount: topAlerts.length,
+        outOfStockCount: outOfStockItems.length,
+      },
+      inventoryAlerts: topAlerts.map((item) => ({
+        sku: item.sku,
+        name: item.name,
+        qtyAvailable: item.qtyAvailable,
+        qtyOnHand: item.qtyOnHand,
+        severity: item.qtyAvailable <= 0 ? 'critical' : 'warning',
+      })),
+      tasks: [
+        {
+          key: 'pending-payout',
+          title: '待撥款與待對帳款項',
+          value: pendingPayoutCount,
+          amount: null,
+          tone: pendingPayoutCount > 0 ? 'warning' : 'healthy',
+          helper: '消費者可能已付款，但金流尚未正式撥款或未回填對帳結果。',
+        },
+        {
+          key: 'pending-expense-approval',
+          title: '待審核費用申請',
+          value: pendingExpenseCount,
+          amount: pendingExpenseAmount,
+          tone: pendingExpenseCount > 0 ? 'warning' : 'healthy',
+          helper: '有待主管或財務核准的支出，會影響當期費用掌握。',
+        },
+        {
+          key: 'approved-expense-payment',
+          title: '已核准但尚未付款',
+          value: approvedExpenseCount,
+          amount: approvedExpenseAmount,
+          tone: approvedExpenseCount > 0 ? 'attention' : 'healthy',
+          helper: '這些費用已核准，但尚未真正出款。',
+        },
+        {
+          key: 'uninvoiced-orders',
+          title: '待開立發票訂單',
+          value: uninvoicedOrdersCount,
+          amount: null,
+          tone: uninvoicedOrdersCount > 0 ? 'attention' : 'healthy',
+          helper: '已成交訂單但尚未完成發票流程，會影響帳務完整性。',
+        },
+        {
+          key: 'inventory-alerts',
+          title: '庫存警示商品',
+          value: topAlerts.length,
+          amount: null,
+          tone: topAlerts.length > 0 ? 'critical' : 'healthy',
+          helper: '低庫存或缺貨商品需要優先追補，避免影響銷售。',
+        },
+      ],
+    };
+  }
+
   async getDashboardReconciliationFeed(
     entityId: string,
     startDate?: Date,
@@ -438,7 +663,7 @@ export class ReportsService {
       },
       ...stores.slice(0, 2).map((store, index) => ({
         key: `oneshop:${store.account}`,
-        label: `1shop 第${index + 1}個帳號業績`,
+        label: store.storeName || `1shop 帳號 ${index + 1}`,
         account: store.account,
         storeName: store.storeName || null,
       })),
