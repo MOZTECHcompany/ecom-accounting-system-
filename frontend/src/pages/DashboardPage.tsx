@@ -520,9 +520,9 @@ const DashboardPage: React.FC = () => {
               </div>
             </div>
             <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
-              <div className="text-xs text-slate-400">未匹配撥款列</div>
+              <div className="text-xs text-slate-400">已對帳未落帳</div>
               <div className="mt-2 text-2xl font-semibold text-sky-600">
-                {executive?.operations.unmatchedPayoutLineCount || 0}
+                {executive?.operations.missingPayoutJournalCount || 0}
               </div>
             </div>
             <div className="rounded-3xl bg-slate-900/5 px-4 py-4">

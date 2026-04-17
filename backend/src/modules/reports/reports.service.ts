@@ -196,6 +196,7 @@ export class ReportsService {
       pendingPayoutCount,
       overduePendingPayoutAgg,
       feeBackfillAgg,
+      missingPayoutJournalAgg,
       unmatchedPayoutLineAgg,
       uninvoicedOrdersAgg,
       uninvoicedOrdersCount,
@@ -308,6 +309,30 @@ export class ReportsService {
           amountGrossOriginal: true,
         },
       }),
+      this.prisma.payment.aggregate({
+        where: {
+          entityId,
+          reconciledFlag: true,
+          OR: [
+            {
+              notes: null,
+            },
+            {
+              notes: {
+                not: {
+                  contains: 'journalEntryId=',
+                },
+              },
+            },
+          ],
+        },
+        _count: {
+          id: true,
+        },
+        _sum: {
+          amountNetOriginal: true,
+        },
+      }),
       this.prisma.payoutImportLine.aggregate({
         where: {
           batch: {
@@ -391,6 +416,12 @@ export class ReportsService {
     );
     const feeBackfillCount = Number(feeBackfillAgg._count.id || 0);
     const feeBackfillAmount = Number(feeBackfillAgg._sum.amountGrossOriginal || 0);
+    const missingPayoutJournalCount = Number(
+      missingPayoutJournalAgg._count.id || 0,
+    );
+    const missingPayoutJournalAmount = Number(
+      missingPayoutJournalAgg._sum.amountNetOriginal || 0,
+    );
     const unmatchedPayoutLineCount = Number(
       unmatchedPayoutLineAgg._count.id || 0,
     );
@@ -452,6 +483,18 @@ export class ReportsService {
         accountCode: '6131 / 6134',
         accountName: '佣金支出 / 其他營業費用',
         statusLabel: '待補費率',
+      },
+      {
+        key: 'missing-payout-journal',
+        title: '已對帳但尚未產生撥款分錄',
+        count: missingPayoutJournalCount,
+        amount: missingPayoutJournalAmount,
+        tone: missingPayoutJournalCount > 0 ? 'warning' : 'healthy',
+        helper:
+          '這些收款已完成對帳，但尚未在會計分錄留下 journalEntryId，需確認 1113 / 1191 / 6131 / 6134 是否已完整入帳。',
+        accountCode: '1113 / 1191 / 6131 / 6134',
+        accountName: '銀行存款 / 應收帳款 / 佣金支出 / 其他營業費用',
+        statusLabel: '待落帳',
       },
       {
         key: 'unmatched-provider-lines',
@@ -566,6 +609,7 @@ export class ReportsService {
         pendingPayoutCount,
         overduePendingPayoutCount,
         feeBackfillCount,
+        missingPayoutJournalCount,
         unmatchedPayoutLineCount,
         uninvoicedOrdersCount,
         inventoryAlertCount: topAlerts.length,
@@ -589,6 +633,14 @@ export class ReportsService {
           amount: null,
           tone: pendingPayoutCount > 0 ? 'warning' : 'healthy',
           helper: '消費者可能已付款，但金流尚未正式撥款或未回填對帳結果。',
+        },
+        {
+          key: 'missing-payout-journal',
+          title: '已對帳未落帳',
+          value: missingPayoutJournalCount,
+          amount: missingPayoutJournalAmount,
+          tone: missingPayoutJournalCount > 0 ? 'attention' : 'healthy',
+          helper: '對帳完成後應自動建立撥款分錄，這裡追蹤仍待補落帳的資料。',
         },
         {
           key: 'pending-expense-approval',

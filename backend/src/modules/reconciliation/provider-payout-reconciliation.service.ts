@@ -264,6 +264,7 @@ export class ProviderPayoutReconciliationService {
           batch.id,
           line,
           match.candidate,
+          userId,
         );
         matchedCount += 1;
 
@@ -632,6 +633,7 @@ export class ProviderPayoutReconciliationService {
     batchId: string,
     line: NormalizedPayoutLine,
     payment: MatchCandidate,
+    userId: string,
   ) {
     const currency = payment.amountGrossCurrency || line.currency || 'TWD';
     const fxRate = new Decimal(payment.amountGrossFxRate || 1);
@@ -639,6 +641,9 @@ export class ProviderPayoutReconciliationService {
     const keepShopifyPlatformFee = (payment.notes || '').includes(
       'feeSource=shopify.transaction.fee',
     );
+    const actualGross = (
+      line.grossAmount || payment.amountGrossOriginal
+    ).toDecimalPlaces(2);
     const hasSplitFee =
       Boolean(line.gatewayFeeAmount) ||
       Boolean(line.processingFeeAmount) ||
@@ -655,10 +660,24 @@ export class ProviderPayoutReconciliationService {
       : (line.feeAmount || zero).toDecimalPlaces(2);
     const actualNet = line.netAmount
       ? line.netAmount.toDecimalPlaces(2)
-      : (line.grossAmount || payment.amountGrossOriginal)
+      : actualGross
           .sub(actualPlatformFee)
           .sub(actualGatewayFee)
           .toDecimalPlaces(2);
+    const journalEntryId = await this.upsertPayoutJournalEntry(
+      tx,
+      payment,
+      line,
+      {
+        grossAmount: actualGross,
+        platformFeeAmount: actualPlatformFee,
+        gatewayFeeAmount: actualGatewayFee,
+        netAmount: actualNet,
+        currency,
+        fxRate,
+      },
+      userId,
+    );
     const notes = this.buildProviderPayoutNote(payment.notes, {
       provider: line.provider,
       batchId,
@@ -672,6 +691,8 @@ export class ProviderPayoutReconciliationService {
       gatewayFeeAmount: line.gatewayFeeAmount,
       processingFeeAmount: line.processingFeeAmount,
       platformFeeAmount: line.platformFeeAmount,
+      journalEntryId,
+      journalStatus: 'approved',
     });
 
     await tx.payment.update({
@@ -708,6 +729,8 @@ export class ProviderPayoutReconciliationService {
       gatewayFeeAmount: Decimal | null;
       processingFeeAmount: Decimal | null;
       platformFeeAmount: Decimal | null;
+      journalEntryId: string | null;
+      journalStatus: string | null;
     },
   ) {
     const parts = [
@@ -739,6 +762,12 @@ export class ProviderPayoutReconciliationService {
     if (params.platformFeeAmount) {
       parts.push(`platformFee=${params.platformFeeAmount.toFixed(2)}`);
     }
+    if (params.journalEntryId) {
+      parts.push(`journalEntryId=${params.journalEntryId}`);
+    }
+    if (params.journalStatus) {
+      parts.push(`journalStatus=${params.journalStatus}`);
+    }
     parts.push(`drBank=1113`);
     parts.push(`drPlatformFee=6131`);
     parts.push(`drGatewayFee=6134`);
@@ -752,6 +781,194 @@ export class ProviderPayoutReconciliationService {
       .trim();
 
     return preservedNotes ? `${preservedNotes}\n${payoutNote}` : payoutNote;
+  }
+
+  private async upsertPayoutJournalEntry(
+    tx: Prisma.TransactionClient,
+    payment: MatchCandidate,
+    line: NormalizedPayoutLine,
+    amounts: {
+      grossAmount: Decimal;
+      platformFeeAmount: Decimal;
+      gatewayFeeAmount: Decimal;
+      netAmount: Decimal;
+      currency: string;
+      fxRate: Decimal;
+    },
+    userId: string,
+  ) {
+    const [bankDepositAccount, clearingAccount, platformFeeAccount, gatewayFeeAccount] =
+      await Promise.all([
+        tx.account.findUnique({
+          where: {
+            entityId_code: {
+              entityId: payment.entityId,
+              code: '1113',
+            },
+          },
+          select: { id: true },
+        }),
+        tx.account.findUnique({
+          where: {
+            entityId_code: {
+              entityId: payment.entityId,
+              code: '1191',
+            },
+          },
+          select: { id: true },
+        }),
+        tx.account.findUnique({
+          where: {
+            entityId_code: {
+              entityId: payment.entityId,
+              code: '6131',
+            },
+          },
+          select: { id: true },
+        }),
+        tx.account.findUnique({
+          where: {
+            entityId_code: {
+              entityId: payment.entityId,
+              code: '6134',
+            },
+          },
+          select: { id: true },
+        }),
+      ]);
+
+    if (
+      !bankDepositAccount ||
+      !clearingAccount ||
+      !platformFeeAccount ||
+      !gatewayFeeAccount
+    ) {
+      throw new NotFoundException(
+        '缺少撥款自動對帳所需會計科目（1113 / 1191 / 6131 / 6134）',
+      );
+    }
+
+    const openPeriod = await tx.period.findFirst({
+      where: {
+        entityId: payment.entityId,
+        status: 'open',
+        startDate: { lte: line.payoutDate || payment.payoutDate },
+        endDate: { gte: line.payoutDate || payment.payoutDate },
+      },
+      select: { id: true },
+    });
+
+    const sourceModule = 'reconciliation_payout';
+    const sourceId = payment.id;
+    const description = `金流撥款對帳 ${line.provider.toUpperCase()} ${payment.salesOrder?.externalOrderId || payment.id}`;
+    const amountBase = (value: Decimal) =>
+      value.mul(amounts.fxRate).toDecimalPlaces(2);
+    const journalLines: Prisma.JournalLineCreateManyJournalEntryInput[] = [
+      {
+        accountId: bankDepositAccount.id,
+        debit: amounts.netAmount,
+        credit: new Decimal(0),
+        currency: amounts.currency,
+        fxRate: amounts.fxRate,
+        amountBase: amountBase(amounts.netAmount),
+        memo: `實際撥款淨額 ${line.provider.toUpperCase()}`,
+      },
+      ...(amounts.platformFeeAmount.greaterThan(0)
+        ? [
+            {
+              accountId: platformFeeAccount.id,
+              debit: amounts.platformFeeAmount,
+              credit: new Decimal(0),
+              currency: amounts.currency,
+              fxRate: amounts.fxRate,
+              amountBase: amountBase(amounts.platformFeeAmount),
+              memo: '平台手續費',
+            },
+          ]
+        : []),
+      ...(amounts.gatewayFeeAmount.greaterThan(0)
+        ? [
+            {
+              accountId: gatewayFeeAccount.id,
+              debit: amounts.gatewayFeeAmount,
+              credit: new Decimal(0),
+              currency: amounts.currency,
+              fxRate: amounts.fxRate,
+              amountBase: amountBase(amounts.gatewayFeeAmount),
+              memo: '金流手續費 / 處理費',
+            },
+          ]
+        : []),
+      {
+        accountId: clearingAccount.id,
+        debit: new Decimal(0),
+        credit: amounts.grossAmount,
+        currency: amounts.currency,
+        fxRate: amounts.fxRate,
+        amountBase: amountBase(amounts.grossAmount),
+        memo: `沖銷應收帳款 ${payment.salesOrder?.externalOrderId || payment.id}`,
+      },
+    ];
+
+    const existingJournal = await tx.journalEntry.findFirst({
+      where: {
+        sourceModule,
+        sourceId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (existingJournal) {
+      await tx.journalLine.deleteMany({
+        where: {
+          journalEntryId: existingJournal.id,
+        },
+      });
+
+      await tx.journalEntry.update({
+        where: { id: existingJournal.id },
+        data: {
+          date: line.payoutDate || payment.payoutDate,
+          description,
+          periodId: openPeriod?.id || null,
+          approvedBy: userId,
+          approvedAt: new Date(),
+        },
+      });
+
+      await tx.journalLine.createMany({
+        data: journalLines.map((entry) => ({
+          journalEntryId: existingJournal.id,
+          ...entry,
+        })),
+      });
+
+      return existingJournal.id;
+    }
+
+    const createdJournal = await tx.journalEntry.create({
+      data: {
+        entityId: payment.entityId,
+        date: line.payoutDate || payment.payoutDate,
+        description,
+        sourceModule,
+        sourceId,
+        periodId: openPeriod?.id,
+        createdBy: userId,
+        approvedBy: userId,
+        approvedAt: new Date(),
+        journalLines: {
+          create: journalLines,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    return createdJournal.id;
   }
 
   private toLineWrite(
