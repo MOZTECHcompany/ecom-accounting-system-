@@ -100,6 +100,22 @@ export class OneShopController {
     });
   }
 
+  @Public()
+  @Post('sync/backfill/auto')
+  async autoBackfillHistory(
+    @Headers('x-sync-token') syncToken: string | undefined,
+    @Body() body: BackfillHistoryDto,
+  ) {
+    this.oneShopService.assertSchedulerToken(syncToken);
+
+    return this.oneShopService.backfillHistory({
+      entityId: body.entityId,
+      beginDate: new Date(body.beginDate),
+      endDate: new Date(body.endDate),
+      windowDays: body.windowDays,
+    });
+  }
+
   @Post('sync/backfill')
   async backfillHistory(@Body() body: BackfillHistoryDto) {
     return this.oneShopService.backfillHistory({

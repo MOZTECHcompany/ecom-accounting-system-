@@ -4,6 +4,7 @@ import {
   InternalServerErrorException,
   Logger,
   ServiceUnavailableException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
@@ -190,6 +191,23 @@ export class EcpayShopifyPayoutService {
       recordCount: canonicalRows.length,
       importResult,
     };
+  }
+
+  assertSchedulerToken(providedToken?: string | null) {
+    const expected =
+      this.configService.get<string>('ECPAY_SYNC_JOB_TOKEN', '') ||
+      this.configService.get<string>('SHOPIFY_SYNC_JOB_TOKEN', '') ||
+      '';
+
+    if (!expected) {
+      throw new UnauthorizedException(
+        'ECPAY_SYNC_JOB_TOKEN is not configured',
+      );
+    }
+
+    if (!providedToken || providedToken !== expected) {
+      throw new UnauthorizedException('Invalid scheduler token');
+    }
   }
 
   async backfillHistory(

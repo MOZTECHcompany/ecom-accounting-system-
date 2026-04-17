@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Headers, Post, Query, RawBody } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { IsDateString, IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { Public } from '../../../common/decorators/public.decorator';
 import { ShopifyService } from './shopify.service';
@@ -40,6 +40,12 @@ class BackfillHistoryDto {
 
   @IsDateString()
   endDate!: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(31)
+  windowDays?: number;
 }
 
 @Controller('integrations/shopify')
@@ -78,6 +84,7 @@ export class ShopifyController {
       entityId: body.entityId,
       beginDate: new Date(body.beginDate),
       endDate: new Date(body.endDate),
+      windowDays: body.windowDays,
     });
   }
 
@@ -102,6 +109,22 @@ export class ShopifyController {
       entityId: body.entityId,
       since: body.since ? new Date(body.since) : undefined,
       until: body.until ? new Date(body.until) : undefined,
+    });
+  }
+
+  @Public()
+  @Post('sync/backfill/auto')
+  async autoBackfillHistory(
+    @Headers('x-sync-token') syncToken: string | undefined,
+    @Body() body: BackfillHistoryDto,
+  ) {
+    this.shopifyService.assertSchedulerToken(syncToken);
+
+    return this.shopifyService.backfillHistory({
+      entityId: body.entityId,
+      beginDate: new Date(body.beginDate),
+      endDate: new Date(body.endDate),
+      windowDays: body.windowDays,
     });
   }
 

@@ -6,6 +6,7 @@ import {
   Param,
   Query,
   UseGuards,
+  Headers,
 } from '@nestjs/common';
 import {
   IsArray,
@@ -28,6 +29,7 @@ import { SyncEcpayShopifyPayoutsDto } from './dto/sync-ecpay-shopify-payouts.dto
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 import { ProviderPayoutReconciliationService } from './provider-payout-reconciliation.service';
 import { EcpayShopifyPayoutService } from './ecpay-shopify-payout.service';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -213,5 +215,15 @@ export class ReconciliationController {
     @CurrentUser() user: any,
   ) {
     return this.ecpayShopifyPayoutService.backfillHistory(dto, user.userId);
+  }
+
+  @Public()
+  @Post('payouts/ecpay-shopify/backfill/auto')
+  async autoBackfillEcpayShopifyPayouts(
+    @Headers('x-sync-token') syncToken: string | undefined,
+    @Body() dto: BackfillEcpayShopifyHistoryDto,
+  ) {
+    this.ecpayShopifyPayoutService.assertSchedulerToken(syncToken);
+    return this.ecpayShopifyPayoutService.backfillHistory(dto);
   }
 }

@@ -89,6 +89,7 @@ export class ShopifyService {
     entityId: string;
     beginDate: Date;
     endDate: Date;
+    windowDays?: number;
   }) {
     await this.assertEntityExists(params.entityId);
 
@@ -120,14 +121,14 @@ export class ShopifyService {
       transactionUpdated: 0,
     };
 
+    const windowDays = Math.max(1, Math.min(params.windowDays || 31, 31));
     let cursor = new Date(begin);
     let windowIndex = 1;
 
     while (cursor <= end) {
       const windowStart = new Date(cursor);
       const windowEnd = new Date(cursor);
-      windowEnd.setMonth(windowEnd.getMonth() + 1);
-      windowEnd.setDate(0);
+      windowEnd.setDate(windowEnd.getDate() + windowDays - 1);
       windowEnd.setHours(23, 59, 59, 999);
       if (windowEnd > end) {
         windowEnd.setTime(end.getTime());
