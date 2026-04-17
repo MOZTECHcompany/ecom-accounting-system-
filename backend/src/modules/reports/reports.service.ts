@@ -661,6 +661,10 @@ export class ReportsService {
         key: 'shopify',
         label: 'Shopify 官網業績',
       },
+      {
+        key: 'shopline',
+        label: 'Shopline 業績',
+      },
       ...stores.slice(0, 2).map((store, index) => ({
         key: `oneshop:${store.account}`,
         label: store.storeName || `1shop 帳號 ${index + 1}`,
@@ -717,6 +721,10 @@ export class ReportsService {
 
     if (channelCode === 'SHOPIFY') {
       return 'shopify';
+    }
+
+    if (channelCode === 'SHOPLINE') {
+      return 'shopline';
     }
 
     if (channelCode === '1SHOP') {

@@ -39,6 +39,7 @@ import { AiModule } from './modules/ai/ai.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { ShopifyIntegrationModule } from './modules/integration/shopify/shopify.module';
 import { OneShopIntegrationModule } from './modules/integration/one-shop/one-shop.module';
+import { ShoplineIntegrationModule } from './modules/integration/shopline/shopline.module';
 import { PurchaseModule } from './modules/purchase/purchase.module';
 import { AssemblyModule } from './modules/assembly/assembly.module';
 
@@ -107,6 +108,7 @@ import { AssemblyModule } from './modules/assembly/assembly.module';
     ReconciliationModule, // → BankingModule, AccountingModule (銀行對帳)
     ShopifyIntegrationModule,
     OneShopIntegrationModule,
+    ShoplineIntegrationModule,
     NotificationModule,
     AiModule,
     AttendanceModule,
