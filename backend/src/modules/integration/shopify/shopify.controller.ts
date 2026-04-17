@@ -71,6 +71,21 @@ export class ShopifyController {
   }
 
   @Public()
+  @Post('sync/auto')
+  async autoSync(
+    @Headers('x-sync-token') syncToken: string | undefined,
+    @Body() body: Partial<SyncRequestDto>,
+  ) {
+    this.shopifyService.assertSchedulerToken(syncToken);
+
+    return this.shopifyService.autoSync({
+      entityId: body.entityId,
+      since: body.since ? new Date(body.since) : undefined,
+      until: body.until ? new Date(body.until) : undefined,
+    });
+  }
+
+  @Public()
   @Post('webhook')
   async webhook(
     @Headers('x-shopify-topic') topic: string,

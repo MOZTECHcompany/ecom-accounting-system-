@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -28,6 +33,71 @@ export class ShopifyService {
 
   async testConnection() {
     return this.adapter.testConnection();
+  }
+
+  async autoSync(options?: {
+    entityId?: string;
+    since?: Date;
+    until?: Date;
+  }) {
+    const enabled =
+      this.config.get<string>('SHOPIFY_SYNC_ENABLED', 'true') !== 'false';
+
+    if (!enabled) {
+      return {
+        success: false,
+        skipped: true,
+        message: 'SHOPIFY_SYNC_ENABLED is false',
+      };
+    }
+
+    const entityId = options?.entityId || this.defaultEntityId;
+    const lookbackMinutes = Number(
+      this.config.get<string>('SHOPIFY_SYNC_LOOKBACK_MINUTES', '180'),
+    );
+    const until = options?.until || new Date();
+    const since =
+      options?.since ||
+      new Date(until.getTime() - lookbackMinutes * 60 * 1000);
+
+    this.logger.log(
+      `Starting Shopify auto sync for entity=${entityId}, since=${since.toISOString()}, until=${until.toISOString()}`,
+    );
+
+    const [orders, transactions] = await Promise.all([
+      this.syncOrders({ entityId, since, until }),
+      this.syncTransactions({ entityId, since, until }),
+    ]);
+
+    const result = {
+      success: true,
+      entityId,
+      since: since.toISOString(),
+      until: until.toISOString(),
+      orders,
+      transactions,
+    };
+
+    this.logger.log(
+      `Shopify auto sync finished for entity=${entityId}: orders fetched=${orders.fetched}, tx fetched=${transactions.fetched}`,
+    );
+
+    return result;
+  }
+
+  assertSchedulerToken(providedToken?: string | null) {
+    const expected =
+      this.config.get<string>('SHOPIFY_SYNC_JOB_TOKEN', '') || '';
+
+    if (!expected) {
+      throw new UnauthorizedException(
+        'SHOPIFY_SYNC_JOB_TOKEN is not configured',
+      );
+    }
+
+    if (!providedToken || providedToken !== expected) {
+      throw new UnauthorizedException('Invalid scheduler token');
+    }
   }
 
   async syncOrders(params: { entityId: string; since?: Date; until?: Date }) {
@@ -98,6 +168,7 @@ export class ShopifyService {
 
   async getSummary(params: { entityId: string; since?: Date; until?: Date }) {
     const { entityId, since, until } = params;
+    const channel = await this.ensureSalesChannel(entityId);
 
     const dateFilter = (field: string) => {
       const filter: any = {};
@@ -108,6 +179,7 @@ export class ShopifyService {
 
     const paymentWhere = {
       entityId,
+      channelId: channel.id,
       ...dateFilter('payoutDate'),
     };
 
@@ -116,6 +188,7 @@ export class ShopifyService {
         this.prisma.salesOrder.aggregate({
           where: {
             entityId,
+            channelId: channel.id,
             ...dateFilter('orderDate'),
           },
           _sum: {
@@ -137,6 +210,7 @@ export class ShopifyService {
         this.prisma.salesOrder.count({
           where: {
             entityId,
+            channelId: channel.id,
             ...dateFilter('orderDate'),
           },
         }),
@@ -235,6 +309,7 @@ export class ShopifyService {
 
     return {
       entityId,
+      channel: SHOPIFY_CHANNEL_CODE,
       range: {
         since: since?.toISOString() || null,
         until: until?.toISOString() || null,
