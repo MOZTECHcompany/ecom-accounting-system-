@@ -24,6 +24,11 @@ import { shopifyService } from "../services/shopify.service";
 import { oneShopService } from "../services/oneshop.service";
 import { shoplineService } from "../services/shopline.service";
 import {
+  invoicingService,
+  InvoiceQueueItem,
+  InvoiceQueueResponse,
+} from "../services/invoicing.service";
+import {
   dashboardService,
   DashboardExecutiveOverview,
   DashboardReconciliationBatch,
@@ -213,15 +218,27 @@ function getRuleStatusMeta(status: "active" | "monitoring" | "pending") {
   }
 }
 
+function getInvoiceQueueMeta(item: InvoiceQueueItem) {
+  if (item.invoiceStatus === "completed") {
+    return { color: "green" as const, label: "已開票" };
+  }
+  if (item.invoiceStatus === "eligible") {
+    return { color: "gold" as const, label: "可批次開票" };
+  }
+  return { color: "blue" as const, label: "待付款後開票" };
+}
+
 const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [rangeMode, setRangeMode] = useState<RangeMode>("today");
   const [customRange, setCustomRange] = useState<CustomRange>(null);
   const [refreshToken, setRefreshToken] = useState(0);
   const [syncing, setSyncing] = useState(false);
+  const [issuingInvoices, setIssuingInvoices] = useState(false);
   const [overview, setOverview] = useState<DashboardSalesOverview | null>(null);
   const [feed, setFeed] = useState<DashboardReconciliationFeed | null>(null);
   const [executive, setExecutive] = useState<DashboardExecutiveOverview | null>(null);
+  const [invoiceQueue, setInvoiceQueue] = useState<InvoiceQueueResponse | null>(null);
 
   useEffect(() => {
     if (rangeMode === "custom" && (!customRange?.[0] || !customRange?.[1])) {
@@ -237,7 +254,7 @@ const DashboardPage: React.FC = () => {
     const fetchSummary = async () => {
       setLoading(true);
       try {
-        const [summary, reconciliationFeed, executiveOverview] = await Promise.all([
+        const [summary, reconciliationFeed, executiveOverview, invoiceQueueData] = await Promise.all([
           dashboardService.getSalesOverview({
             entityId: storedEntityId,
             startDate: since,
@@ -254,6 +271,12 @@ const DashboardPage: React.FC = () => {
             startDate: since,
             endDate: until,
           }),
+          invoicingService.getQueue({
+            entityId: storedEntityId,
+            startDate: since,
+            endDate: until,
+            limit: 8,
+          }),
         ]);
 
         if (ignore) return;
@@ -261,6 +284,7 @@ const DashboardPage: React.FC = () => {
         setOverview(summary);
         setFeed(reconciliationFeed);
         setExecutive(executiveOverview);
+        setInvoiceQueue(invoiceQueueData);
       } catch (error: any) {
         if (!ignore) {
           message.error(error?.response?.data?.message || "讀取儀表板資料失敗");
@@ -355,6 +379,29 @@ const DashboardPage: React.FC = () => {
     }
   };
 
+  const handleIssueEligibleInvoices = async () => {
+    const storedEntityId = localStorage.getItem("entityId")?.trim();
+    const { since, until } = resolveRange(rangeMode, DASHBOARD_TZ, customRange);
+    setIssuingInvoices(true);
+    try {
+      const result = await invoicingService.issueEligible({
+        entityId: storedEntityId,
+        startDate: since,
+        endDate: until,
+        limit: 12,
+        invoiceType: "B2C",
+      });
+      message.success(
+        `批次開票完成：成功 ${result.issuedCount} 筆，失敗 ${result.failedCount} 筆`,
+      );
+      setRefreshToken((prev) => prev + 1);
+    } catch (error: any) {
+      message.error(error?.response?.data?.message || "批次開票失敗");
+    } finally {
+      setIssuingInvoices(false);
+    }
+  };
+
   if (loading) {
     return <PageSkeleton />;
   }
@@ -366,6 +413,8 @@ const DashboardPage: React.FC = () => {
   const inventoryAlerts = executive?.inventoryAlerts || [];
   const anomalies = executive?.anomalies || [];
   const reconciliationRules = executive?.reconciliationRules || [];
+  const invoiceSummary = invoiceQueue?.summary;
+  const invoiceItems = invoiceQueue?.items || [];
 
   return (
     <div className="space-y-8">
@@ -898,6 +947,128 @@ const DashboardPage: React.FC = () => {
           </div>
         </motion.div>
       </div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="glass-card p-6"
+      >
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+              Invoice Closure
+            </div>
+            <div className="mt-2 text-xl font-semibold text-slate-900">
+              發票閉環與批次開票
+            </div>
+            <div className="mt-1 text-sm text-slate-500">
+              這裡會把已付款可開票、尚待付款、已開票的訂單放在同一個隊列，讓營運可以直接推進發票流程。
+            </div>
+          </div>
+          <Button
+            type="primary"
+            onClick={handleIssueEligibleInvoices}
+            loading={issuingInvoices}
+            className="bg-black hover:bg-gray-800 border-none shadow-sm"
+          >
+            {issuingInvoices ? "批次開票中..." : "批次開立可開票訂單"}
+          </Button>
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
+          <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
+            <div className="text-xs text-slate-400">本期已開票</div>
+            <div className="mt-2 text-2xl font-semibold text-emerald-600">
+              {invoiceSummary?.issuedCount || 0}
+            </div>
+            <div className="mt-1 text-[11px] text-slate-400">
+              NT$ {invoiceSummary?.issuedAmount.toFixed(0) || "0"}
+            </div>
+          </div>
+          <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
+            <div className="text-xs text-slate-400">可批次開票</div>
+            <div className="mt-2 text-2xl font-semibold text-amber-600">
+              {invoiceSummary?.eligibleCount || 0}
+            </div>
+          </div>
+          <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
+            <div className="text-xs text-slate-400">待付款後開票</div>
+            <div className="mt-2 text-2xl font-semibold text-sky-600">
+              {invoiceSummary?.waitingPaymentCount || 0}
+            </div>
+          </div>
+          <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
+            <div className="text-xs text-slate-400">已作廢發票</div>
+            <div className="mt-2 text-2xl font-semibold text-rose-600">
+              {invoiceSummary?.voidCount || 0}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {invoiceItems.map((item) => {
+            const meta = getInvoiceQueueMeta(item);
+            return (
+              <div
+                key={item.orderId}
+                className="rounded-3xl border border-white/30 bg-white/45 px-4 py-4"
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-semibold text-slate-900">
+                        {item.externalOrderId || item.orderId}
+                      </div>
+                      <Tag color={meta.color}>{meta.label}</Tag>
+                      {item.journalLinked ? <Tag color="green">已落帳</Tag> : <Tag color="blue">待落帳檢查</Tag>}
+                    </div>
+                    <div className="mt-2 text-xs leading-5 text-slate-500">
+                      {item.channelName || item.channelCode || "未知通路"} ·
+                      {" "}
+                      {item.customerName} ·
+                      {" "}
+                      下單 {dayjs(item.orderDate).tz(DASHBOARD_TZ).format("YYYY/MM/DD")}
+                      {" "}
+                      · 已過 {item.daysSinceOrder} 天
+                    </div>
+                    <div className="mt-1 text-xs leading-5 text-slate-400">
+                      {item.reason}
+                      {item.invoiceNumber ? ` · 發票 ${item.invoiceNumber}` : ""}
+                    </div>
+                  </div>
+
+                  <div className="grid min-w-[260px] grid-cols-3 gap-3 text-right text-sm">
+                    <div className="rounded-2xl bg-slate-900/5 px-3 py-3">
+                      <div className="text-[11px] text-slate-400">訂單金額</div>
+                      <div className="mt-1 font-semibold text-slate-900">
+                        ${item.totalAmount.toFixed(2)}
+                      </div>
+                    </div>
+                    <div className="rounded-2xl bg-slate-900/5 px-3 py-3">
+                      <div className="text-[11px] text-slate-400">付款狀態</div>
+                      <div className="mt-1 font-semibold text-slate-900">
+                        {item.paymentStatus}
+                      </div>
+                    </div>
+                    <div className="rounded-2xl bg-slate-900/5 px-3 py-3">
+                      <div className="text-[11px] text-slate-400">對帳狀態</div>
+                      <div className="mt-1 font-semibold text-slate-900">
+                        {item.reconciledFlag ? "已對帳" : "待對帳"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {!invoiceItems.length ? (
+            <div className="rounded-3xl border border-dashed border-slate-200 bg-white/30 px-5 py-6 text-sm text-slate-500">
+              目前沒有待追發票隊列。這裡會集中顯示可批次開票與仍待付款的訂單。
+            </div>
+          ) : null}
+        </div>
+      </motion.div>
 
       <Row
         gutter={[

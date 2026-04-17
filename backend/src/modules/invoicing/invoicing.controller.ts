@@ -4,6 +4,7 @@ import {
   Post,
   Param,
   Body,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -60,6 +61,26 @@ export class InvoicingController {
   })
   async getInvoiceByOrderId(@Param('orderId') orderId: string) {
     return this.invoicingService.getInvoiceByOrderId(orderId);
+  }
+
+  @Get('queue')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  @ApiOperation({
+    summary: '查詢發票待辦隊列',
+    description:
+      '取得目前待開票、可開票、已開票的訂單隊列，供 Dashboard 與營運中心使用。',
+  })
+  async getInvoiceQueue(
+    @Query('entityId') entityId: string,
+    @Query('limit') limit?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.invoicingService.getInvoiceQueue(entityId, {
+      limit: limit ? Number(limit) : undefined,
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+    });
   }
 
   /**
@@ -141,6 +162,33 @@ export class InvoicingController {
     @CurrentUser() user: any,
   ) {
     return this.invoicingService.issueInvoice(orderId, dto, user.userId);
+  }
+
+  @Post('issue-eligible')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: '批次開立符合條件的訂單發票',
+    description:
+      '依付款或對帳狀態篩出可開票訂單，並批次建立正式發票。',
+  })
+  async issueEligibleInvoices(
+    @Body()
+    body: {
+      entityId: string;
+      limit?: number;
+      startDate?: string;
+      endDate?: string;
+      invoiceType?: string;
+    },
+    @CurrentUser() user: any,
+  ) {
+    return this.invoicingService.issueEligibleInvoices(body.entityId, user.userId, {
+      limit: body.limit,
+      startDate: body.startDate ? new Date(body.startDate) : undefined,
+      endDate: body.endDate ? new Date(body.endDate) : undefined,
+      invoiceType: body.invoiceType,
+    });
   }
 
   /**

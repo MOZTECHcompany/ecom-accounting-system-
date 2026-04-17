@@ -475,6 +475,244 @@ export class InvoicingService {
     return invoices;
   }
 
+  async getInvoiceQueue(
+    entityId: string,
+    options?: {
+      limit?: number;
+      startDate?: Date;
+      endDate?: Date;
+    },
+  ) {
+    const normalizedLimit = Math.min(
+      Math.max(Math.floor(options?.limit || 12), 5),
+      50,
+    );
+    const orderDate =
+      options?.startDate || options?.endDate
+        ? {
+            ...(options?.startDate ? { gte: options.startDate } : {}),
+            ...(options?.endDate ? { lte: options.endDate } : {}),
+          }
+        : undefined;
+
+    const [orders, issuedAgg, voidAgg] = await Promise.all([
+      this.prisma.salesOrder.findMany({
+        where: {
+          entityId,
+          status: {
+            notIn: ['cancelled', 'refunded'],
+          },
+          ...(orderDate ? { orderDate } : {}),
+        },
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          channel: {
+            select: {
+              code: true,
+              name: true,
+            },
+          },
+          payments: {
+            orderBy: {
+              payoutDate: 'desc',
+            },
+            select: {
+              id: true,
+              payoutDate: true,
+              status: true,
+              reconciledFlag: true,
+              amountNetOriginal: true,
+              notes: true,
+            },
+          },
+          invoices: {
+            orderBy: {
+              createdAt: 'desc',
+            },
+            select: {
+              id: true,
+              invoiceNumber: true,
+              status: true,
+              issuedAt: true,
+            },
+          },
+        },
+        orderBy: {
+          orderDate: 'desc',
+        },
+        take: normalizedLimit * 4,
+      }),
+      this.prisma.invoice.aggregate({
+        where: {
+          entityId,
+          status: 'issued',
+          ...(orderDate ? { issuedAt: orderDate } : {}),
+        },
+        _count: {
+          id: true,
+        },
+        _sum: {
+          totalAmountOriginal: true,
+        },
+      }),
+      this.prisma.invoice.aggregate({
+        where: {
+          entityId,
+          status: 'void',
+          ...(orderDate ? { issuedAt: orderDate } : {}),
+        },
+        _count: {
+          id: true,
+        },
+      }),
+    ]);
+
+    const items = orders
+      .map((order) => {
+        const latestPayment = order.payments[0] || null;
+        const latestInvoice = order.invoices[0] || null;
+        const paymentCompleted = order.payments.some((payment) =>
+          ['completed', 'success'].includes((payment.status || '').toLowerCase()),
+        );
+        const reconciled = order.payments.some((payment) => payment.reconciledFlag);
+        const journalLinked = order.payments.some((payment) =>
+          (payment.notes || '').includes('journalEntryId='),
+        );
+        const latestPaymentStatus =
+          latestPayment?.status?.toLowerCase() || 'pending';
+        const invoiceStatus = order.hasInvoice
+          ? 'completed'
+          : paymentCompleted || reconciled
+            ? 'eligible'
+            : 'waiting_payment';
+        const reason = order.hasInvoice
+          ? '訂單已開立正式發票'
+          : paymentCompleted || reconciled
+            ? '已付款或已對帳，可進入批次開票'
+            : '尚未完成付款或撥款對帳，暫不建議開立';
+
+        return {
+          orderId: order.id,
+          externalOrderId: order.externalOrderId || null,
+          orderDate: order.orderDate.toISOString(),
+          channelCode: order.channel?.code || null,
+          channelName: order.channel?.name || null,
+          customerName: order.customer?.name || '散客',
+          customerEmail: order.customer?.email || null,
+          totalAmount: Number(order.totalGrossOriginal || 0),
+          paymentStatus: latestPaymentStatus,
+          paymentDate: latestPayment?.payoutDate?.toISOString() || null,
+          reconciledFlag: reconciled,
+          journalLinked,
+          invoiceStatus,
+          invoiceNumber: latestInvoice?.invoiceNumber || null,
+          invoiceIssuedAt: latestInvoice?.issuedAt?.toISOString() || null,
+          reason,
+          daysSinceOrder: Math.max(
+            0,
+            Math.floor(
+              (Date.now() - new Date(order.orderDate).getTime()) /
+                (24 * 60 * 60 * 1000),
+            ),
+          ),
+        };
+      })
+      .sort((left, right) => {
+        const score = (status: string) =>
+          status === 'eligible' ? 0 : status === 'waiting_payment' ? 1 : 2;
+        const scoreDiff = score(left.invoiceStatus) - score(right.invoiceStatus);
+        if (scoreDiff !== 0) {
+          return scoreDiff;
+        }
+        return right.daysSinceOrder - left.daysSinceOrder;
+      });
+
+    const limitedItems = items.slice(0, normalizedLimit);
+    const eligibleItems = items.filter((item) => item.invoiceStatus === 'eligible');
+    const waitingItems = items.filter(
+      (item) => item.invoiceStatus === 'waiting_payment',
+    );
+    const completedItems = items.filter((item) => item.invoiceStatus === 'completed');
+
+    return {
+      entityId,
+      range: {
+        startDate: options?.startDate?.toISOString() || null,
+        endDate: options?.endDate?.toISOString() || null,
+      },
+      summary: {
+        issuedCount: Number(issuedAgg._count.id || 0),
+        issuedAmount: Number(issuedAgg._sum.totalAmountOriginal || 0),
+        voidCount: Number(voidAgg._count.id || 0),
+        pendingCount: items.filter((item) => item.invoiceStatus !== 'completed')
+          .length,
+        eligibleCount: eligibleItems.length,
+        waitingPaymentCount: waitingItems.length,
+        completedOrderCount: completedItems.length,
+      },
+      items: limitedItems,
+    };
+  }
+
+  async issueEligibleInvoices(
+    entityId: string,
+    userId: string,
+    options?: {
+      limit?: number;
+      startDate?: Date;
+      endDate?: Date;
+      invoiceType?: string;
+    },
+  ) {
+    const queue = await this.getInvoiceQueue(entityId, options);
+    const targets = queue.items.filter((item) => item.invoiceStatus === 'eligible');
+    const issued: Array<{ orderId: string; invoiceId: string; invoiceNumber: string }> =
+      [];
+    const failed: Array<{ orderId: string; externalOrderId: string | null; reason: string }> =
+      [];
+
+    for (const item of targets) {
+      try {
+        const result = await this.issueInvoice(
+          item.orderId,
+          {
+            invoiceType: options?.invoiceType || 'B2C',
+            buyerName: item.customerName || undefined,
+            buyerEmail: item.customerEmail || undefined,
+          },
+          userId,
+        );
+        issued.push({
+          orderId: item.orderId,
+          invoiceId: result.invoiceId,
+          invoiceNumber: result.invoiceNumber,
+        });
+      } catch (error: any) {
+        failed.push({
+          orderId: item.orderId,
+          externalOrderId: item.externalOrderId,
+          reason: error?.message || '批次開票失敗',
+        });
+      }
+    }
+
+    return {
+      success: failed.length === 0,
+      scannedCount: queue.items.length,
+      eligibleCount: targets.length,
+      issuedCount: issued.length,
+      failedCount: failed.length,
+      issued,
+      failed,
+    };
+  }
+
   /**
    * 產生發票號碼（簡化版）
    * TODO: 實作完整的發票字軌管理
