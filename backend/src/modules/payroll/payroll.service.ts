@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { AttendanceIntegrationService } from '../attendance/services/integration.service';
+import { LeaveService } from '../attendance/services/leave.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { JournalService } from '../accounting/services/journal.service';
 import { AuditLogService } from '../../common/audit/audit-log.service';
@@ -35,6 +36,7 @@ export class PayrollService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly attendanceIntegration: AttendanceIntegrationService,
+    private readonly leaveService: LeaveService,
     private readonly journalService: JournalService,
     private readonly auditLogService: AuditLogService,
   ) {}
@@ -612,6 +614,12 @@ export class PayrollService {
           },
         },
       },
+    });
+
+    await this.leaveService.initializeEmployeeLeaveSetup(userId, {
+      id: employee.id,
+      entityId: employee.entityId,
+      hireDate: employee.hireDate,
     });
 
     await this.auditLogService.record({
