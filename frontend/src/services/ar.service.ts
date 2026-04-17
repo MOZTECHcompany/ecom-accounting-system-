@@ -27,6 +27,9 @@ export interface ReceivableMonitorItem {
   netAmount: number
   reconciledFlag: boolean
   payoutCount: number
+  feeStatus: 'actual' | 'estimated' | 'unavailable' | string
+  feeSource?: string | null
+  feeDiagnostic: string
   arInvoiceId?: string | null
   arStatus: string
   dueDate: string

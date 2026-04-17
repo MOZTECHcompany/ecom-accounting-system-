@@ -250,9 +250,12 @@ const DashboardLayout: React.FC = () => {
                   <BrandMark className="w-7 h-7" alt="System logo" />
                 </div>
                 {!collapsed && (
-                  <span className="text-lg font-semibold tracking-wide" style={{ color: 'var(--text-primary)' }}>
-                    E-Accounting
-                  </span>
+                  <div
+                    className="max-w-[160px] text-sm font-semibold leading-tight tracking-wide"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    AI 電子商務營運中樞
+                  </div>
                 )}
               </div>
             </div>
@@ -290,9 +293,12 @@ const DashboardLayout: React.FC = () => {
               <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md border border-white/30 shadow-lg">
                 <BrandMark className="w-7 h-7" alt="System logo" />
               </div>
-              <span className="text-lg font-semibold tracking-wide" style={{ color: 'var(--text-primary)' }}>
-                E-Accounting
-              </span>
+              <div
+                className="max-w-[180px] text-sm font-semibold leading-tight tracking-wide"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                AI 電子商務營運中樞
+              </div>
             </div>
           </div>
           <Menu

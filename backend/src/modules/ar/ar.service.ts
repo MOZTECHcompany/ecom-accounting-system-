@@ -94,6 +94,7 @@ export class ArService {
         const arInvoice = arMap.get(order.id) || null;
         const journal = journalMap.get(order.id) || null;
         const latestInvoice = order.invoices[0] || null;
+        const feeTelemetry = this.resolveFeeTelemetry(order.payments);
         const paidAmount = this.sumAmount(order.payments, 'amountGrossOriginal');
         const gatewayFeeAmount = this.sumAmount(
           order.payments,
@@ -163,6 +164,9 @@ export class ArService {
           netAmount,
           reconciledFlag: order.payments.some((payment) => payment.reconciledFlag),
           payoutCount: order.payments.length,
+          feeStatus: feeTelemetry.status,
+          feeSource: feeTelemetry.source,
+          feeDiagnostic: feeTelemetry.diagnostic,
           arInvoiceId: arInvoice?.id || null,
           arStatus: arInvoice?.status || computedStatus,
           dueDate: dueDate.toISOString(),
@@ -608,6 +612,59 @@ export class ArService {
     }
 
     return meta;
+  }
+
+  private resolveFeeTelemetry(
+    payments: Array<{ notes: string | null; reconciledFlag: boolean }>,
+  ) {
+    const candidates = payments.map((payment) => ({
+      meta: this.extractMetadata(payment.notes),
+      reconciledFlag: payment.reconciledFlag,
+    }));
+
+    const actual =
+      candidates.find(
+        (candidate) =>
+          candidate.reconciledFlag || candidate.meta.feeStatus === 'actual',
+      ) || null;
+    const estimated =
+      candidates.find((candidate) => candidate.meta.feeStatus === 'estimated') ||
+      null;
+    const fallback = candidates[0] || null;
+    const resolved = actual || estimated || fallback;
+    const status = resolved?.meta.feeStatus || 'unavailable';
+    const source = resolved?.meta.feeSource || null;
+
+    if (!payments.length) {
+      return {
+        status,
+        source,
+        diagnostic: '尚無收款紀錄，手續費會在收款後才開始追蹤。',
+      };
+    }
+
+    if (status === 'actual') {
+      return {
+        status,
+        source,
+        diagnostic: '已回填實際金流/平台手續費。',
+      };
+    }
+
+    if (status === 'estimated') {
+      return {
+        status,
+        source,
+        diagnostic: '目前仍是暫估手續費，需等待綠界/平台撥款對帳後才會轉成實際值。',
+      };
+    }
+
+    return {
+      status,
+      source,
+      diagnostic:
+        '原始訂單 API 沒有提供實際手續費，需等綠界或平台撥款資料回填。',
+    };
   }
 
   private buildArNote(existingNotes?: string | null, invoiceNumber?: string | null) {

@@ -51,6 +51,18 @@ const warningLabelMap: Record<string, string> = {
   missing_invoice_record: '發票主檔缺漏',
 }
 
+const feeStatusColorMap: Record<string, string> = {
+  actual: 'green',
+  estimated: 'gold',
+  unavailable: 'red',
+}
+
+const feeStatusLabelMap: Record<string, string> = {
+  actual: '實際值',
+  estimated: '暫估值',
+  unavailable: '待回填',
+}
+
 const EmptySummary: ReceivableMonitorSummary = {
   grossAmount: 0,
   paidAmount: 0,
@@ -181,13 +193,26 @@ const ArInvoicesPage: React.FC = () => {
     {
       title: '被抽成費用',
       key: 'fees',
-      width: 200,
+      width: 280,
       render: (_: unknown, record: ReceivableMonitorItem) => (
         <div>
           <div className="font-medium text-rose-600">{currency(record.feeTotal)}</div>
           <div className="text-xs text-slate-400">
             金流 {currency(record.gatewayFeeAmount)} · 平台 {currency(record.platformFeeAmount)}
           </div>
+          <div className="mt-2">
+            <Tag color={feeStatusColorMap[record.feeStatus] || 'default'}>
+              {feeStatusLabelMap[record.feeStatus] || record.feeStatus}
+            </Tag>
+          </div>
+          <div className="text-xs text-slate-400 mt-1">
+            {record.feeDiagnostic}
+          </div>
+          {record.feeSource ? (
+            <div className="text-[11px] text-slate-300 mt-1">
+              source: {record.feeSource}
+            </div>
+          ) : null}
         </div>
       ),
     },
@@ -307,6 +332,15 @@ const ArInvoicesPage: React.FC = () => {
         message="這個頁面現在會把銷售訂單、收款、綠界/平台手續費、發票號碼與會計分錄狀態放在同一張表追蹤。"
       />
 
+      {summary.missingFeeCount > 0 ? (
+        <Alert
+          showIcon
+          type="warning"
+          icon={<WarningOutlined />}
+          message={`目前有 ${summary.missingFeeCount} 筆已收款訂單還沒有實際手續費。這通常表示綠界或平台撥款對帳尚未成功回填，頁面內已會直接標示原因。`}
+        />
+      ) : null}
+
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
         <Card bordered={false} className="glass-card">
           <Statistic
@@ -397,7 +431,7 @@ const ArInvoicesPage: React.FC = () => {
           loading={loading}
           columns={columns}
           dataSource={filteredItems}
-          scroll={{ x: 1800 }}
+          scroll={{ x: 1960 }}
           pagination={{ pageSize: 10, showSizeChanger: true }}
         />
       </Card>
