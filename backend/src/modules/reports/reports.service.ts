@@ -1572,6 +1572,325 @@ export class ReportsService {
     };
   }
 
+  async getManagementSummary(
+    entityId: string,
+    groupBy: 'year' | 'quarter' | 'month' | 'week',
+    startDate?: Date,
+    endDate?: Date,
+  ) {
+    const orderDateFilter = this.buildDateFilter(startDate, endDate);
+    const paymentDateFilter = this.buildDateFilter(startDate, endDate);
+    const expenseDateFilter = this.buildDateFilter(startDate, endDate);
+    const arDateFilter = this.buildDateFilter(startDate, endDate);
+
+    const [orders, payments, expenses, expenseRequests, arInvoices] =
+      await Promise.all([
+        this.prisma.salesOrder.findMany({
+          where: {
+            entityId,
+            status: {
+              notIn: ['cancelled', 'refunded'],
+            },
+            ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
+          },
+          select: {
+            id: true,
+            orderDate: true,
+            totalGrossOriginal: true,
+            taxAmountOriginal: true,
+            items: {
+              select: {
+                qty: true,
+                product: {
+                  select: {
+                    purchaseCost: true,
+                    movingAverageCost: true,
+                    latestPurchasePrice: true,
+                  },
+                },
+              },
+            },
+          },
+        }),
+        this.prisma.payment.findMany({
+          where: {
+            entityId,
+            ...(paymentDateFilter ? { payoutDate: paymentDateFilter } : {}),
+          },
+          select: {
+            payoutDate: true,
+            amountGrossOriginal: true,
+            amountNetOriginal: true,
+            feeGatewayOriginal: true,
+            feePlatformOriginal: true,
+            reconciledFlag: true,
+          },
+        }),
+        this.prisma.expense.findMany({
+          where: {
+            entityId,
+            ...(expenseDateFilter ? { expenseDate: expenseDateFilter } : {}),
+          },
+          select: {
+            expenseDate: true,
+            totalAmountOriginal: true,
+          },
+        }),
+        this.prisma.expenseRequest.findMany({
+          where: {
+            entityId,
+            paymentStatus: 'paid',
+            ...(expenseDateFilter ? { updatedAt: expenseDateFilter } : {}),
+          },
+          select: {
+            updatedAt: true,
+            amountOriginal: true,
+          },
+        }),
+        this.prisma.arInvoice.findMany({
+          where: {
+            entityId,
+            ...(arDateFilter ? { issueDate: arDateFilter } : {}),
+          },
+          select: {
+            issueDate: true,
+            amountOriginal: true,
+            paidAmountOriginal: true,
+          },
+        }),
+      ]);
+
+    type PeriodAccumulator = {
+      key: string;
+      label: string;
+      startDate: string;
+      endDate: string;
+      revenue: number;
+      taxAmount: number;
+      estimatedCogs: number;
+      payoutGross: number;
+      payoutNet: number;
+      gatewayFee: number;
+      platformFee: number;
+      feeTotal: number;
+      actualExpenseAmount: number;
+      fallbackExpenseAmount: number;
+      operatingExpenses: number;
+      grossProfit: number;
+      grossMarginPct: number;
+      netProfit: number;
+      netMarginPct: number;
+      orderCount: number;
+      paymentCount: number;
+      reconciledCount: number;
+      expenseCount: number;
+      fallbackExpenseCount: number;
+      openArAmount: number;
+      arInvoiceCount: number;
+      collectedRatePct: number;
+    };
+
+    const periodMap = new Map<string, PeriodAccumulator>();
+
+    const ensurePeriod = (date: Date) => {
+      const descriptor = this.resolvePeriodDescriptor(date, groupBy);
+      const existing = periodMap.get(descriptor.key);
+      if (existing) {
+        return existing;
+      }
+
+      const created: PeriodAccumulator = {
+        key: descriptor.key,
+        label: descriptor.label,
+        startDate: descriptor.startDate.toISOString(),
+        endDate: descriptor.endDate.toISOString(),
+        revenue: 0,
+        taxAmount: 0,
+        estimatedCogs: 0,
+        payoutGross: 0,
+        payoutNet: 0,
+        gatewayFee: 0,
+        platformFee: 0,
+        feeTotal: 0,
+        actualExpenseAmount: 0,
+        fallbackExpenseAmount: 0,
+        operatingExpenses: 0,
+        grossProfit: 0,
+        grossMarginPct: 0,
+        netProfit: 0,
+        netMarginPct: 0,
+        orderCount: 0,
+        paymentCount: 0,
+        reconciledCount: 0,
+        expenseCount: 0,
+        fallbackExpenseCount: 0,
+        openArAmount: 0,
+        arInvoiceCount: 0,
+        collectedRatePct: 0,
+      };
+      periodMap.set(descriptor.key, created);
+      return created;
+    };
+
+    for (const order of orders) {
+      const period = ensurePeriod(order.orderDate);
+      const revenue = Number(order.totalGrossOriginal || 0);
+      const taxAmount = Number(order.taxAmountOriginal || 0);
+      const estimatedCogs = order.items.reduce((sum, item) => {
+        const unitCost = this.pickProductCost(item.product);
+        return sum + Number(item.qty || 0) * unitCost;
+      }, 0);
+
+      period.revenue += revenue;
+      period.taxAmount += taxAmount;
+      period.estimatedCogs += estimatedCogs;
+      period.orderCount += 1;
+    }
+
+    for (const payment of payments) {
+      const period = ensurePeriod(payment.payoutDate);
+      const payoutGross = Number(payment.amountGrossOriginal || 0);
+      const payoutNet = Number(payment.amountNetOriginal || 0);
+      const gatewayFee = Number(payment.feeGatewayOriginal || 0);
+      const platformFee = Number(payment.feePlatformOriginal || 0);
+
+      period.payoutGross += payoutGross;
+      period.payoutNet += payoutNet;
+      period.gatewayFee += gatewayFee;
+      period.platformFee += platformFee;
+      period.paymentCount += 1;
+      if (payment.reconciledFlag) {
+        period.reconciledCount += 1;
+      }
+    }
+
+    for (const expense of expenses) {
+      const period = ensurePeriod(expense.expenseDate);
+      period.actualExpenseAmount += Number(expense.totalAmountOriginal || 0);
+      period.expenseCount += 1;
+    }
+
+    for (const expenseRequest of expenseRequests) {
+      const period = ensurePeriod(expenseRequest.updatedAt);
+      period.fallbackExpenseAmount += Number(expenseRequest.amountOriginal || 0);
+      period.fallbackExpenseCount += 1;
+    }
+
+    for (const invoice of arInvoices) {
+      const period = ensurePeriod(invoice.issueDate);
+      const openAmount = Math.max(
+        Number(invoice.amountOriginal || 0) -
+          Number(invoice.paidAmountOriginal || 0),
+        0,
+      );
+      period.openArAmount += openAmount;
+      period.arInvoiceCount += 1;
+    }
+
+    const periods = Array.from(periodMap.values())
+      .map((period) => {
+        const feeTotal = Number(
+          (period.gatewayFee + period.platformFee).toFixed(2),
+        );
+        const operatingExpenses =
+          period.actualExpenseAmount > 0
+            ? period.actualExpenseAmount
+            : period.fallbackExpenseAmount;
+        const grossProfit = Number(
+          (period.revenue - period.estimatedCogs).toFixed(2),
+        );
+        const netProfit = Number(
+          (grossProfit - feeTotal - operatingExpenses).toFixed(2),
+        );
+        const grossMarginPct = this.toPercentage(grossProfit, period.revenue);
+        const netMarginPct = this.toPercentage(netProfit, period.revenue);
+        const collectedRatePct = this.toPercentage(
+          period.payoutGross,
+          period.revenue,
+        );
+
+        return {
+          ...period,
+          feeTotal,
+          operatingExpenses: Number(operatingExpenses.toFixed(2)),
+          grossProfit,
+          grossMarginPct,
+          netProfit,
+          netMarginPct,
+          collectedRatePct,
+        };
+      })
+      .sort((left, right) => left.startDate.localeCompare(right.startDate));
+
+    const summary = periods.reduce(
+      (acc, period) => ({
+        revenue: acc.revenue + period.revenue,
+        taxAmount: acc.taxAmount + period.taxAmount,
+        estimatedCogs: acc.estimatedCogs + period.estimatedCogs,
+        payoutGross: acc.payoutGross + period.payoutGross,
+        payoutNet: acc.payoutNet + period.payoutNet,
+        gatewayFee: acc.gatewayFee + period.gatewayFee,
+        platformFee: acc.platformFee + period.platformFee,
+        feeTotal: acc.feeTotal + period.feeTotal,
+        actualExpenseAmount: acc.actualExpenseAmount + period.actualExpenseAmount,
+        fallbackExpenseAmount:
+          acc.fallbackExpenseAmount + period.fallbackExpenseAmount,
+        operatingExpenses: acc.operatingExpenses + period.operatingExpenses,
+        grossProfit: acc.grossProfit + period.grossProfit,
+        netProfit: acc.netProfit + period.netProfit,
+        orderCount: acc.orderCount + period.orderCount,
+        paymentCount: acc.paymentCount + period.paymentCount,
+        reconciledCount: acc.reconciledCount + period.reconciledCount,
+        expenseCount: acc.expenseCount + period.expenseCount,
+        fallbackExpenseCount:
+          acc.fallbackExpenseCount + period.fallbackExpenseCount,
+        openArAmount: acc.openArAmount + period.openArAmount,
+        arInvoiceCount: acc.arInvoiceCount + period.arInvoiceCount,
+      }),
+      {
+        revenue: 0,
+        taxAmount: 0,
+        estimatedCogs: 0,
+        payoutGross: 0,
+        payoutNet: 0,
+        gatewayFee: 0,
+        platformFee: 0,
+        feeTotal: 0,
+        actualExpenseAmount: 0,
+        fallbackExpenseAmount: 0,
+        operatingExpenses: 0,
+        grossProfit: 0,
+        netProfit: 0,
+        orderCount: 0,
+        paymentCount: 0,
+        reconciledCount: 0,
+        expenseCount: 0,
+        fallbackExpenseCount: 0,
+        openArAmount: 0,
+        arInvoiceCount: 0,
+      },
+    );
+
+    return {
+      entityId,
+      groupBy,
+      range: {
+        startDate: startDate?.toISOString() || null,
+        endDate: endDate?.toISOString() || null,
+      },
+      summary: {
+        ...summary,
+        grossMarginPct: this.toPercentage(summary.grossProfit, summary.revenue),
+        netMarginPct: this.toPercentage(summary.netProfit, summary.revenue),
+        collectedRatePct: this.toPercentage(
+          summary.payoutGross,
+          summary.revenue,
+        ),
+      },
+      periods,
+    };
+  }
+
   /**
    * 損益表 (Income Statement / P&L)
    * 已在 AccountingModule 實作，這裡提供增強版
@@ -1901,5 +2220,97 @@ export class ReportsService {
     }
 
     return '這筆資料目前沒有明顯異常，可繼續觀察撥款與入帳狀態。';
+  }
+
+  private pickProductCost(product: {
+    movingAverageCost?: unknown;
+    latestPurchasePrice?: unknown;
+    purchaseCost?: unknown;
+  }) {
+    const movingAverageCost = Number(product.movingAverageCost || 0);
+    if (movingAverageCost > 0) {
+      return movingAverageCost;
+    }
+
+    const latestPurchasePrice = Number(product.latestPurchasePrice || 0);
+    if (latestPurchasePrice > 0) {
+      return latestPurchasePrice;
+    }
+
+    return Number(product.purchaseCost || 0);
+  }
+
+  private toPercentage(value: number, base: number) {
+    if (!base) {
+      return 0;
+    }
+    return Number(((value / base) * 100).toFixed(2));
+  }
+
+  private resolvePeriodDescriptor(
+    input: Date,
+    groupBy: 'year' | 'quarter' | 'month' | 'week',
+  ) {
+    const date = new Date(input);
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth();
+
+    if (groupBy === 'year') {
+      return {
+        key: `${year}`,
+        label: `${year} 年`,
+        startDate: new Date(Date.UTC(year, 0, 1, 0, 0, 0, 0)),
+        endDate: new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999)),
+      };
+    }
+
+    if (groupBy === 'quarter') {
+      const quarter = Math.floor(month / 3) + 1;
+      const startMonth = (quarter - 1) * 3;
+      return {
+        key: `${year}-Q${quarter}`,
+        label: `${year} Q${quarter}`,
+        startDate: new Date(Date.UTC(year, startMonth, 1, 0, 0, 0, 0)),
+        endDate: new Date(Date.UTC(year, startMonth + 3, 0, 23, 59, 59, 999)),
+      };
+    }
+
+    if (groupBy === 'month') {
+      const monthLabel = `${month + 1}`.padStart(2, '0');
+      return {
+        key: `${year}-${monthLabel}`,
+        label: `${year}/${monthLabel}`,
+        startDate: new Date(Date.UTC(year, month, 1, 0, 0, 0, 0)),
+        endDate: new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999)),
+      };
+    }
+
+    return this.resolveWeekDescriptor(date);
+  }
+
+  private resolveWeekDescriptor(date: Date) {
+    const utcDate = new Date(
+      Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+    );
+    const day = utcDate.getUTCDay() || 7;
+    utcDate.setUTCDate(utcDate.getUTCDate() + 4 - day);
+    const isoYear = utcDate.getUTCFullYear();
+    const yearStart = new Date(Date.UTC(isoYear, 0, 1));
+    const week = Math.ceil(
+      ((utcDate.getTime() - yearStart.getTime()) / 86400000 + 1) / 7,
+    );
+    const weekStart = new Date(utcDate);
+    weekStart.setUTCDate(utcDate.getUTCDate() - 3);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
+    weekStart.setUTCHours(0, 0, 0, 0);
+    weekEnd.setUTCHours(23, 59, 59, 999);
+
+    return {
+      key: `${isoYear}-W${String(week).padStart(2, '0')}`,
+      label: `${isoYear} W${String(week).padStart(2, '0')}`,
+      startDate: weekStart,
+      endDate: weekEnd,
+    };
   }
 }

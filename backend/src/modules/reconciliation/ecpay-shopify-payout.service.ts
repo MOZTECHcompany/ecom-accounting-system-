@@ -192,6 +192,66 @@ export class EcpayShopifyPayoutService {
     };
   }
 
+  async backfillHistory(
+    params: {
+      entityId: string;
+      beginDate: string;
+      endDate: string;
+      merchantKeys?: string[];
+      dateType?: '1' | '2';
+      paymentType?: '01' | '02' | '03' | '11';
+    },
+    importedBy?: string,
+  ) {
+    const merchantKeys =
+      params.merchantKeys && params.merchantKeys.length
+        ? Array.from(new Set(params.merchantKeys.map((key) => key.trim()).filter(Boolean)))
+        : this.merchantProfiles
+            .filter((profile) => this.hasApiCredentials(profile))
+            .map((profile) => profile.key);
+
+    if (!merchantKeys.length) {
+      throw new BadRequestException(
+        'No ECPay merchant profiles are available for historical backfill.',
+      );
+    }
+
+    const results = [];
+    let totalRecordCount = 0;
+    let importedMerchantCount = 0;
+
+    for (const merchantKey of merchantKeys) {
+      const result = await this.syncShopifyPayouts(
+        {
+          entityId: params.entityId,
+          merchantKey,
+          beginDate: params.beginDate,
+          endDate: params.endDate,
+          dateType: params.dateType,
+          paymentType: params.paymentType,
+        },
+        importedBy,
+      );
+
+      totalRecordCount += Number(result.recordCount || 0);
+      if (result.imported) {
+        importedMerchantCount += 1;
+      }
+      results.push(result);
+    }
+
+    return {
+      success: true,
+      entityId: params.entityId,
+      beginDate: params.beginDate,
+      endDate: params.endDate,
+      merchantCount: merchantKeys.length,
+      importedMerchantCount,
+      totalRecordCount,
+      results,
+    };
+  }
+
   private isTruthy(value?: string | boolean | null) {
     if (typeof value === 'boolean') {
       return value;

@@ -18,6 +18,7 @@ type MatchCandidate = Prisma.PaymentGetPayload<{
       select: {
         id: true;
         externalOrderId: true;
+        orderDate: true;
       };
     };
   };
@@ -28,6 +29,8 @@ type NormalizedPayoutLine = {
   rowIndex: number;
   payoutDate: Date | null;
   statementDate: Date | null;
+  transactionDate: Date | null;
+  feeRate: string | null;
   currency: string;
   gateway: string | null;
   payoutStatus: string | null;
@@ -152,6 +155,15 @@ const COMMON_ALIASES: Record<string, string[]> = {
     '交易日期',
   ],
   statementDate: ['statementDate', '對帳日期', '報表日期', '匯出日期'],
+  transactionDate: [
+    'transactionDate',
+    '交易日期',
+    '付款日期',
+    '交易時間',
+    '付款時間',
+    'paidAt',
+  ],
+  feeRate: ['feeRate', '手續費率', '手續費率(每筆)', '費率'],
   currency: ['currency', '幣別', 'Currency'],
   gateway: ['gateway', '付款方式', '支付方式', '收款方式', '交易方式'],
   payoutStatus: ['payoutStatus', '撥款狀態', '結算狀態', '入帳狀態', 'status'],
@@ -392,6 +404,12 @@ export class ProviderPayoutReconciliationService {
       statementDate: this.parseDate(
         this.pickFieldValue(provider, row, 'statementDate', mapping),
       ),
+      transactionDate: this.parseDate(
+        this.pickFieldValue(provider, row, 'transactionDate', mapping),
+      ),
+      feeRate: this.toCleanString(
+        this.pickFieldValue(provider, row, 'feeRate', mapping),
+      ),
       currency:
         this.toCleanString(
           this.pickFieldValue(provider, row, 'currency', mapping),
@@ -425,12 +443,17 @@ export class ProviderPayoutReconciliationService {
   }
 
   private validateNormalizedLine(line: NormalizedPayoutLine) {
-    if (!line.grossAmount && !line.netAmount) {
-      return '缺少交易金額或撥款金額，無法回填實際手續費。';
-    }
+    const hasMatchKey = Boolean(
+      line.providerPaymentId || line.providerTradeNo || line.externalOrderId,
+    );
+    const hasAmountContext = Boolean(line.grossAmount || line.netAmount);
 
     if (!line.feeAmount && !(line.grossAmount && line.netAmount)) {
       return '缺少手續費欄位，且無法由交易金額與撥款金額反推。';
+    }
+
+    if (!hasAmountContext && !hasMatchKey) {
+      return '缺少交易金額/撥款金額，且沒有可用的訂單或金流識別碼，無法回填實際手續費。';
     }
 
     return null;
@@ -479,6 +502,7 @@ export class ProviderPayoutReconciliationService {
           select: {
             id: true,
             externalOrderId: true,
+            orderDate: true,
           },
         },
       },
@@ -543,6 +567,7 @@ export class ProviderPayoutReconciliationService {
     let confidence = 0;
     const reasons: string[] = [];
     const metadata = this.extractMetadata(candidate.notes);
+    const inferredGrossAmount = this.inferGrossAmountFromFeeRate(line);
 
     if (
       line.providerPaymentId &&
@@ -581,17 +606,22 @@ export class ProviderPayoutReconciliationService {
       reasons.push('付款方式一致');
     }
 
-    if (line.grossAmount) {
+    if (line.grossAmount || inferredGrossAmount) {
+      const expectedGross = line.grossAmount || inferredGrossAmount;
       const grossDelta = this.decimalDelta(
         candidate.amountGrossOriginal,
-        line.grossAmount,
+        expectedGross,
       );
       if (grossDelta === 0) {
-        confidence += 20;
-        reasons.push('交易金額一致');
+        confidence += inferredGrossAmount ? 28 : 20;
+        reasons.push(
+          inferredGrossAmount ? '由費率反推交易金額一致' : '交易金額一致',
+        );
       } else if (grossDelta <= 1) {
-        confidence += 12;
-        reasons.push('交易金額接近');
+        confidence += inferredGrossAmount ? 18 : 12;
+        reasons.push(
+          inferredGrossAmount ? '由費率反推交易金額接近' : '交易金額接近',
+        );
       }
     }
 
@@ -622,6 +652,46 @@ export class ProviderPayoutReconciliationService {
         reasons.push('入帳日期接近');
       } else if (dateDelta <= 7) {
         confidence += 4;
+      }
+    }
+
+    if (line.transactionDate) {
+      const minuteDelta = this.dateDistanceInMinutes(
+        candidate.payoutDate,
+        line.transactionDate,
+      );
+      if (minuteDelta <= 2) {
+        confidence += 90;
+        reasons.push('交易時間幾乎一致');
+      } else if (minuteDelta <= 10) {
+        confidence += 72;
+        reasons.push('交易時間接近');
+      } else if (minuteDelta <= 60) {
+        confidence += 48;
+        reasons.push('交易時間相近');
+      } else if (minuteDelta <= 180) {
+        confidence += 28;
+        reasons.push('交易時間同日接近');
+      }
+
+      if (candidate.salesOrder?.orderDate) {
+        const orderMinuteDelta = this.dateDistanceInMinutes(
+          candidate.salesOrder.orderDate,
+          line.transactionDate,
+        );
+        if (orderMinuteDelta <= 5) {
+          confidence += 86;
+          reasons.push('訂單成交時間幾乎一致');
+        } else if (orderMinuteDelta <= 30) {
+          confidence += 64;
+          reasons.push('訂單成交時間接近');
+        } else if (orderMinuteDelta <= 180) {
+          confidence += 42;
+          reasons.push('訂單成交時間相近');
+        } else if (orderMinuteDelta <= 24 * 60) {
+          confidence += 18;
+          reasons.push('訂單成交日一致');
+        }
       }
     }
 
@@ -1106,9 +1176,41 @@ export class ProviderPayoutReconciliationService {
     return Number(left.sub(right).abs().toDecimalPlaces(2).toString());
   }
 
+  private inferGrossAmountFromFeeRate(line: NormalizedPayoutLine) {
+    if (line.grossAmount || !line.feeAmount || !line.feeRate) {
+      return null;
+    }
+
+    const rate = this.parsePercentRate(line.feeRate);
+    if (!rate || rate.lte(0)) {
+      return null;
+    }
+
+    return line.feeAmount.div(rate).toDecimalPlaces(2);
+  }
+
+  private parsePercentRate(value: string) {
+    const normalized = value.replace(/[%\s]/g, '').trim();
+    if (!normalized) {
+      return null;
+    }
+
+    const parsed = Number(normalized);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return null;
+    }
+
+    return new Decimal(parsed).div(100);
+  }
+
   private dateDistanceInDays(left: Date, right: Date) {
     const ms = Math.abs(left.getTime() - right.getTime());
     return Math.floor(ms / (24 * 60 * 60 * 1000));
+  }
+
+  private dateDistanceInMinutes(left: Date, right: Date) {
+    const ms = Math.abs(left.getTime() - right.getTime());
+    return Math.floor(ms / (60 * 1000));
   }
 
   private extractMetadata(notes: string | null | undefined) {

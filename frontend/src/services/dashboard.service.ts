@@ -279,6 +279,53 @@ export type MonthlyChannelReconciliation = {
   items: MonthlyChannelReconciliationItem[];
 };
 
+export type ManagementSummaryGroupBy =
+  | "year"
+  | "quarter"
+  | "month"
+  | "week";
+
+export type ManagementSummaryPeriod = {
+  key: string;
+  label: string;
+  startDate: string;
+  endDate: string;
+  revenue: number;
+  taxAmount: number;
+  estimatedCogs: number;
+  payoutGross: number;
+  payoutNet: number;
+  gatewayFee: number;
+  platformFee: number;
+  feeTotal: number;
+  actualExpenseAmount: number;
+  fallbackExpenseAmount: number;
+  operatingExpenses: number;
+  grossProfit: number;
+  grossMarginPct: number;
+  netProfit: number;
+  netMarginPct: number;
+  orderCount: number;
+  paymentCount: number;
+  reconciledCount: number;
+  expenseCount: number;
+  fallbackExpenseCount: number;
+  openArAmount: number;
+  arInvoiceCount: number;
+  collectedRatePct: number;
+};
+
+export type ManagementSummary = {
+  entityId: string;
+  groupBy: ManagementSummaryGroupBy;
+  range: {
+    startDate: string | null;
+    endDate: string | null;
+  };
+  summary: Omit<ManagementSummaryPeriod, "key" | "label" | "startDate" | "endDate">;
+  periods: ManagementSummaryPeriod[];
+};
+
 export const dashboardService = {
   async getSalesOverview(params?: {
     entityId?: string;
@@ -410,6 +457,29 @@ export const dashboardService = {
 
     const response = await api.get<OrderReconciliationAudit>(
       `/reports/order-reconciliation-audit?${query.toString()}`,
+    );
+    return response.data;
+  },
+
+  async getManagementSummary(params?: {
+    entityId?: string;
+    groupBy?: ManagementSummaryGroupBy;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<ManagementSummary> {
+    const query = new URLSearchParams();
+    query.set("entityId", params?.entityId?.trim() || DEFAULT_ENTITY_ID);
+    query.set("groupBy", params?.groupBy || "month");
+    if (params?.startDate) {
+      query.set("startDate", params.startDate);
+    }
+    if (params?.endDate) {
+      query.set("endDate", params.endDate);
+    }
+    query.set("_ts", String(Date.now()));
+
+    const response = await api.get<ManagementSummary>(
+      `/reports/management-summary?${query.toString()}`,
     );
     return response.data;
   },

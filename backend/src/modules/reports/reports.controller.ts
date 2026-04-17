@@ -300,6 +300,31 @@ export class ReportsController {
     );
   }
 
+  @Get('management-summary')
+  @ApiOperation({ summary: '年 / 季 / 月 / 週營運管理報表' })
+  @ApiResponse({ status: 200, description: '成功取得管理報表彙整' })
+  @ApiQuery({ name: 'entityId', required: true })
+  @ApiQuery({
+    name: 'groupBy',
+    required: true,
+    enum: ['year', 'quarter', 'month', 'week'],
+  })
+  @ApiQuery({ name: 'startDate', required: false })
+  @ApiQuery({ name: 'endDate', required: false })
+  async getManagementSummary(
+    @Query('entityId') entityId: string,
+    @Query('groupBy') groupBy: 'year' | 'quarter' | 'month' | 'week',
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.reportsService.getManagementSummary(
+      entityId,
+      groupBy,
+      startDate ? new Date(startDate) : undefined,
+      endDate ? new Date(endDate) : undefined,
+    );
+  }
+
   @Get(':id/export')
   @ApiOperation({ summary: '匯出報表 (Excel/PDF)' })
   @ApiResponse({ status: 200, description: '成功匯出報表' })

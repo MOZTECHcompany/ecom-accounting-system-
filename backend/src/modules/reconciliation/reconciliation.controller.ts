@@ -8,6 +8,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  IsArray,
+  IsDateString,
+  IsIn,
+  IsOptional,
+  IsString,
+} from 'class-validator';
+import {
   ApiTags,
   ApiOperation,
   ApiBearerAuth,
@@ -24,6 +31,30 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { ProviderPayoutReconciliationService } from './provider-payout-reconciliation.service';
 import { EcpayShopifyPayoutService } from './ecpay-shopify-payout.service';
 import { RolesGuard } from '../../common/guards/roles.guard';
+
+class BackfillEcpayShopifyHistoryDto {
+  @IsString()
+  entityId!: string;
+
+  @IsDateString()
+  beginDate!: string;
+
+  @IsDateString()
+  endDate!: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  merchantKeys?: string[];
+
+  @IsOptional()
+  @IsIn(['1', '2'])
+  dateType?: '1' | '2';
+
+  @IsOptional()
+  @IsIn(['01', '02', '03', '11'])
+  paymentType?: '01' | '02' | '03' | '11';
+}
 
 @ApiTags('Reconciliation')
 @ApiBearerAuth()
@@ -166,5 +197,21 @@ export class ReconciliationController {
     @CurrentUser() user: any,
   ) {
     return this.ecpayShopifyPayoutService.syncShopifyPayouts(dto, user.userId);
+  }
+
+  @Post('payouts/ecpay-shopify/backfill')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  @ApiOperation({
+    summary: '按歷史區間回補綠界撥款資料',
+    description:
+      '系統會自動按月切片向綠界 API 回補歷史資料，可同時處理多個 merchant profile。',
+  })
+  @ApiResponse({ status: 201, description: '回補成功' })
+  async backfillEcpayShopifyPayouts(
+    @Body() dto: BackfillEcpayShopifyHistoryDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.ecpayShopifyPayoutService.backfillHistory(dto, user.userId);
   }
 }

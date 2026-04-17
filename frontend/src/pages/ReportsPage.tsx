@@ -56,6 +56,8 @@ import {
 import {
   dashboardService,
   DashboardOperationsHub,
+  ManagementSummary,
+  ManagementSummaryGroupBy,
   MonthlyChannelReconciliation,
   OrderReconciliationAudit,
 } from '../services/dashboard.service'
@@ -86,6 +88,8 @@ const ReportsPage: React.FC = () => {
   const [trialBalance, setTrialBalance] = useState<TrialBalance | null>(null)
   const [generalLedger, setGeneralLedger] = useState<GeneralLedger | null>(null)
   const [operationsHub, setOperationsHub] = useState<DashboardOperationsHub | null>(null)
+  const [managementSummary, setManagementSummary] = useState<ManagementSummary | null>(null)
+  const [managementGroupBy, setManagementGroupBy] = useState<ManagementSummaryGroupBy>('month')
   const [monthlyReconciliation, setMonthlyReconciliation] = useState<MonthlyChannelReconciliation | null>(null)
   const [invoiceQueue, setInvoiceQueue] = useState<InvoiceQueueResponse | null>(null)
   const [reconciliationAudit, setReconciliationAudit] = useState<OrderReconciliationAudit | null>(null)
@@ -100,12 +104,17 @@ const ReportsPage: React.FC = () => {
     setLoading(true)
     try {
       const [start, end] = dateRange
-      const [isData, bsData, tbData, glData, opsData, monthlyData, invoiceData, auditData] = await Promise.all([
+      const [isData, bsData, tbData, glData, opsData, managementData, monthlyData, invoiceData, auditData] = await Promise.all([
         accountingService.getIncomeStatement(start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD')),
         accountingService.getBalanceSheet(end.format('YYYY-MM-DD')),
         accountingService.getTrialBalance(end.format('YYYY-MM-DD')),
         accountingService.getGeneralLedger(start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD')),
         dashboardService.getOperationsHub({
+          startDate: start.format('YYYY-MM-DD'),
+          endDate: end.format('YYYY-MM-DD'),
+        }),
+        dashboardService.getManagementSummary({
+          groupBy: managementGroupBy,
           startDate: start.format('YYYY-MM-DD'),
           endDate: end.format('YYYY-MM-DD'),
         }),
@@ -129,6 +138,7 @@ const ReportsPage: React.FC = () => {
       setTrialBalance(tbData)
       setGeneralLedger(glData)
       setOperationsHub(opsData)
+      setManagementSummary(managementData)
       setMonthlyReconciliation(monthlyData)
       setInvoiceQueue(invoiceData)
       setReconciliationAudit(auditData)
@@ -142,7 +152,7 @@ const ReportsPage: React.FC = () => {
 
   useEffect(() => {
     fetchData()
-  }, [dateRange])
+  }, [dateRange, managementGroupBy])
 
   const handleExport = () => {
     message.info('匯出功能開發中')
@@ -317,6 +327,168 @@ const ReportsPage: React.FC = () => {
       <div className="glass-card p-6 min-h-[600px]">
         <Spin spinning={loading}>
           <Tabs defaultActiveKey="1" type="card" size="large" className="custom-tabs">
+            <TabPane
+              tab={
+                <span className="flex items-center gap-2">
+                  <RiseOutlined />
+                  營運彙整
+                </span>
+              }
+              key="0.5"
+            >
+              <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <Title level={4} className="!mb-1 !text-slate-800">
+                    年 / 季 / 月 / 週管理報表
+                  </Title>
+                  <Text className="text-slate-500">
+                    先用真實訂單、收款、手續費、估算成本與費用去彙整公司營運數字。
+                  </Text>
+                </div>
+                <Select<ManagementSummaryGroupBy>
+                  value={managementGroupBy}
+                  onChange={setManagementGroupBy}
+                  options={[
+                    { label: '年度', value: 'year' },
+                    { label: '季度', value: 'quarter' },
+                    { label: '月度', value: 'month' },
+                    { label: '每週', value: 'week' },
+                  ]}
+                  style={{ width: 160 }}
+                />
+              </div>
+
+              <Row gutter={[16, 16]}>
+                <Col xs={24} md={8} xl={4}>
+                  <Card bordered={false} className="shadow-sm">
+                    <Statistic title="營業額" value={managementSummary?.summary.revenue || 0} precision={0} prefix="NT$" />
+                  </Card>
+                </Col>
+                <Col xs={24} md={8} xl={4}>
+                  <Card bordered={false} className="shadow-sm">
+                    <Statistic title="毛利" value={managementSummary?.summary.grossProfit || 0} precision={0} prefix="NT$" />
+                  </Card>
+                </Col>
+                <Col xs={24} md={8} xl={4}>
+                  <Card bordered={false} className="shadow-sm">
+                    <Statistic title="毛利率" value={managementSummary?.summary.grossMarginPct || 0} precision={2} suffix="%" />
+                  </Card>
+                </Col>
+                <Col xs={24} md={8} xl={4}>
+                  <Card bordered={false} className="shadow-sm">
+                    <Statistic title="淨利" value={managementSummary?.summary.netProfit || 0} precision={0} prefix="NT$" />
+                  </Card>
+                </Col>
+                <Col xs={24} md={8} xl={4}>
+                  <Card bordered={false} className="shadow-sm">
+                    <Statistic title="手續費" value={managementSummary?.summary.feeTotal || 0} precision={0} prefix="NT$" />
+                  </Card>
+                </Col>
+                <Col xs={24} md={8} xl={4}>
+                  <Card bordered={false} className="shadow-sm">
+                    <Statistic title="應收未收" value={managementSummary?.summary.openArAmount || 0} precision={0} prefix="NT$" />
+                  </Card>
+                </Col>
+              </Row>
+
+              <Row gutter={[16, 16]} className="mt-4">
+                <Col xs={24} lg={10}>
+                  <Card title="趨勢總覽" bordered={false} className="shadow-sm h-full">
+                    {managementSummary?.periods.length ? (
+                      <div className="h-[320px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={managementSummary.periods}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="label" />
+                            <YAxis />
+                            <Tooltip formatter={(value: number) => `NT$ ${value.toLocaleString()}`} />
+                            <Legend />
+                            <Line type="monotone" dataKey="revenue" name="營業額" stroke="#2563eb" strokeWidth={2} />
+                            <Line type="monotone" dataKey="grossProfit" name="毛利" stroke="#16a34a" strokeWidth={2} />
+                            <Line type="monotone" dataKey="netProfit" name="淨利" stroke="#f97316" strokeWidth={2} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    ) : <Empty description="尚無營運彙整資料" />}
+                  </Card>
+                </Col>
+                <Col xs={24} lg={14}>
+                  <Card title="管理報表明細" bordered={false} className="shadow-sm h-full">
+                    <Table
+                      rowKey="key"
+                      dataSource={managementSummary?.periods || []}
+                      size="small"
+                      scroll={{ x: 1320 }}
+                      pagination={{ pageSize: 8 }}
+                      columns={[
+                        {
+                          title: '期間',
+                          dataIndex: 'label',
+                          key: 'label',
+                          width: 120,
+                        },
+                        {
+                          title: '營業額',
+                          dataIndex: 'revenue',
+                          key: 'revenue',
+                          align: 'right',
+                          render: (value: number) => value.toLocaleString(),
+                        },
+                        {
+                          title: '估算成本',
+                          dataIndex: 'estimatedCogs',
+                          key: 'estimatedCogs',
+                          align: 'right',
+                          render: (value: number) => value.toLocaleString(),
+                        },
+                        {
+                          title: '毛利 / 毛利率',
+                          key: 'grossProfit',
+                          align: 'right',
+                          render: (_, record) => `${record.grossProfit.toLocaleString()} / ${record.grossMarginPct.toFixed(2)}%`,
+                        },
+                        {
+                          title: '手續費',
+                          dataIndex: 'feeTotal',
+                          key: 'feeTotal',
+                          align: 'right',
+                          render: (value: number) => value.toLocaleString(),
+                        },
+                        {
+                          title: '營運費用',
+                          dataIndex: 'operatingExpenses',
+                          key: 'operatingExpenses',
+                          align: 'right',
+                          render: (value: number) => value.toLocaleString(),
+                        },
+                        {
+                          title: '淨利 / 淨利率',
+                          key: 'netProfit',
+                          align: 'right',
+                          render: (_, record) => `${record.netProfit.toLocaleString()} / ${record.netMarginPct.toFixed(2)}%`,
+                        },
+                        {
+                          title: '已收率',
+                          dataIndex: 'collectedRatePct',
+                          key: 'collectedRatePct',
+                          align: 'right',
+                          render: (value: number) => `${value.toFixed(2)}%`,
+                        },
+                        {
+                          title: '應收未收',
+                          dataIndex: 'openArAmount',
+                          key: 'openArAmount',
+                          align: 'right',
+                          render: (value: number) => value.toLocaleString(),
+                        },
+                      ]}
+                      locale={{ emptyText: <Empty description="尚無管理報表資料" /> }}
+                    />
+                  </Card>
+                </Col>
+              </Row>
+            </TabPane>
+
             <TabPane
               tab={
                 <span className="flex items-center gap-2">

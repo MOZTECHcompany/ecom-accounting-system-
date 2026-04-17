@@ -1,5 +1,12 @@
 import { Body, Controller, Get, Headers, Post, Query } from '@nestjs/common';
-import { IsDateString, IsOptional, IsString } from 'class-validator';
+import {
+  IsDateString,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
 import { OneShopService } from './one-shop.service';
 import { Public } from '../../../common/decorators/public.decorator';
 
@@ -27,6 +34,23 @@ class SummaryQueryDto {
   @IsOptional()
   @IsDateString()
   until?: string;
+}
+
+class BackfillHistoryDto {
+  @IsString()
+  entityId!: string;
+
+  @IsDateString()
+  beginDate!: string;
+
+  @IsDateString()
+  endDate!: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(7)
+  @Max(90)
+  windowDays?: number;
 }
 
 @Controller('integrations/1shop')
@@ -73,6 +97,16 @@ export class OneShopController {
       entityId: body.entityId,
       since: body.since ? new Date(body.since) : undefined,
       until: body.until ? new Date(body.until) : undefined,
+    });
+  }
+
+  @Post('sync/backfill')
+  async backfillHistory(@Body() body: BackfillHistoryDto) {
+    return this.oneShopService.backfillHistory({
+      entityId: body.entityId,
+      beginDate: new Date(body.beginDate),
+      endDate: new Date(body.endDate),
+      windowDays: body.windowDays,
     });
   }
 
