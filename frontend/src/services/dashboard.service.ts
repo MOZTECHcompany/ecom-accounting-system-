@@ -326,6 +326,59 @@ export type ManagementSummary = {
   periods: ManagementSummaryPeriod[];
 };
 
+export type EcommerceHistoryPeriod = {
+  key: string;
+  label: string;
+  startDate: string;
+  endDate: string;
+  revenue: number;
+  orderCount: number;
+  customerCount: number;
+};
+
+export type EcommerceHistoryBrand = {
+  brand: string;
+  sourceLabel: string;
+  channelCode: string | null;
+  revenue: number;
+  orderCount: number;
+  customerCount: number;
+  averageOrderValue: number;
+  topProducts: Array<{
+    sku: string;
+    quantity: number;
+  }>;
+};
+
+export type EcommerceHistoryProduct = {
+  sku: string;
+  name: string;
+  category: string | null;
+  brand: string;
+  revenue: number;
+  quantity: number;
+  orderCount: number;
+};
+
+export type EcommerceHistory = {
+  entityId: string;
+  groupBy: ManagementSummaryGroupBy;
+  range: {
+    startDate: string | null;
+    endDate: string | null;
+  };
+  summary: {
+    revenue: number;
+    orderCount: number;
+    customerCount: number;
+    brandCount: number;
+    productCount: number;
+  };
+  periods: EcommerceHistoryPeriod[];
+  brands: EcommerceHistoryBrand[];
+  products: EcommerceHistoryProduct[];
+};
+
 export const dashboardService = {
   async getSalesOverview(params?: {
     entityId?: string;
@@ -480,6 +533,29 @@ export const dashboardService = {
 
     const response = await api.get<ManagementSummary>(
       `/reports/management-summary?${query.toString()}`,
+    );
+    return response.data;
+  },
+
+  async getEcommerceHistory(params?: {
+    entityId?: string;
+    groupBy?: ManagementSummaryGroupBy;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<EcommerceHistory> {
+    const query = new URLSearchParams();
+    query.set("entityId", params?.entityId?.trim() || DEFAULT_ENTITY_ID);
+    query.set("groupBy", params?.groupBy || "month");
+    if (params?.startDate) {
+      query.set("startDate", params.startDate);
+    }
+    if (params?.endDate) {
+      query.set("endDate", params.endDate);
+    }
+    query.set("_ts", String(Date.now()));
+
+    const response = await api.get<EcommerceHistory>(
+      `/reports/ecommerce-history?${query.toString()}`,
     );
     return response.data;
   },

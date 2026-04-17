@@ -56,6 +56,7 @@ import {
 import {
   dashboardService,
   DashboardOperationsHub,
+  EcommerceHistory,
   ManagementSummary,
   ManagementSummaryGroupBy,
   MonthlyChannelReconciliation,
@@ -89,6 +90,7 @@ const ReportsPage: React.FC = () => {
   const [generalLedger, setGeneralLedger] = useState<GeneralLedger | null>(null)
   const [operationsHub, setOperationsHub] = useState<DashboardOperationsHub | null>(null)
   const [managementSummary, setManagementSummary] = useState<ManagementSummary | null>(null)
+  const [ecommerceHistory, setEcommerceHistory] = useState<EcommerceHistory | null>(null)
   const [managementGroupBy, setManagementGroupBy] = useState<ManagementSummaryGroupBy>('month')
   const [monthlyReconciliation, setMonthlyReconciliation] = useState<MonthlyChannelReconciliation | null>(null)
   const [invoiceQueue, setInvoiceQueue] = useState<InvoiceQueueResponse | null>(null)
@@ -104,7 +106,7 @@ const ReportsPage: React.FC = () => {
     setLoading(true)
     try {
       const [start, end] = dateRange
-      const [isData, bsData, tbData, glData, opsData, managementData, monthlyData, invoiceData, auditData] = await Promise.all([
+      const [isData, bsData, tbData, glData, opsData, managementData, ecommerceData, monthlyData, invoiceData, auditData] = await Promise.all([
         accountingService.getIncomeStatement(start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD')),
         accountingService.getBalanceSheet(end.format('YYYY-MM-DD')),
         accountingService.getTrialBalance(end.format('YYYY-MM-DD')),
@@ -114,6 +116,11 @@ const ReportsPage: React.FC = () => {
           endDate: end.format('YYYY-MM-DD'),
         }),
         dashboardService.getManagementSummary({
+          groupBy: managementGroupBy,
+          startDate: start.format('YYYY-MM-DD'),
+          endDate: end.format('YYYY-MM-DD'),
+        }),
+        dashboardService.getEcommerceHistory({
           groupBy: managementGroupBy,
           startDate: start.format('YYYY-MM-DD'),
           endDate: end.format('YYYY-MM-DD'),
@@ -139,6 +146,7 @@ const ReportsPage: React.FC = () => {
       setGeneralLedger(glData)
       setOperationsHub(opsData)
       setManagementSummary(managementData)
+      setEcommerceHistory(ecommerceData)
       setMonthlyReconciliation(monthlyData)
       setInvoiceQueue(invoiceData)
       setReconciliationAudit(auditData)
@@ -327,6 +335,171 @@ const ReportsPage: React.FC = () => {
       <div className="glass-card p-6 min-h-[600px]">
         <Spin spinning={loading}>
           <Tabs defaultActiveKey="1" type="card" size="large" className="custom-tabs">
+            <TabPane
+              tab={
+                <span className="flex items-center gap-2">
+                  <PieChartOutlined />
+                  電商資料整合
+                </span>
+              }
+              key="0.7"
+            >
+              <Row gutter={[16, 16]}>
+                <Col xs={24} md={6}>
+                  <Card bordered={false} className="shadow-sm">
+                    <Statistic title="歷年電商營收" value={ecommerceHistory?.summary.revenue || 0} precision={0} prefix="NT$" />
+                  </Card>
+                </Col>
+                <Col xs={24} md={6}>
+                  <Card bordered={false} className="shadow-sm">
+                    <Statistic title="訂單數" value={ecommerceHistory?.summary.orderCount || 0} />
+                  </Card>
+                </Col>
+                <Col xs={24} md={6}>
+                  <Card bordered={false} className="shadow-sm">
+                    <Statistic title="客戶數" value={ecommerceHistory?.summary.customerCount || 0} />
+                  </Card>
+                </Col>
+                <Col xs={24} md={6}>
+                  <Card bordered={false} className="shadow-sm">
+                    <Statistic title="品牌 / 商品" value={`${ecommerceHistory?.summary.brandCount || 0} / ${ecommerceHistory?.summary.productCount || 0}`} />
+                  </Card>
+                </Col>
+              </Row>
+
+              <Row gutter={[16, 16]} className="mt-4">
+                <Col xs={24} lg={10}>
+                  <Card title="歷年電商業績趨勢" bordered={false} className="shadow-sm h-full">
+                    {ecommerceHistory?.periods.length ? (
+                      <div className="h-[300px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={ecommerceHistory.periods}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="label" />
+                            <YAxis />
+                            <Tooltip formatter={(value: number) => `NT$ ${value.toLocaleString()}`} />
+                            <Legend />
+                            <Bar dataKey="revenue" name="營收" fill="#2563eb" radius={[6, 6, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    ) : <Empty description="尚無歷年電商資料" />}
+                  </Card>
+                </Col>
+                <Col xs={24} lg={14}>
+                  <Card title="品牌 / 來源 / 顧客彙整" bordered={false} className="shadow-sm h-full">
+                    <Table
+                      rowKey={(record) => `${record.brand}-${record.sourceLabel}`}
+                      dataSource={ecommerceHistory?.brands || []}
+                      size="small"
+                      scroll={{ x: 980 }}
+                      pagination={{ pageSize: 8 }}
+                      columns={[
+                        {
+                          title: '品牌 / 來源',
+                          key: 'brand',
+                          render: (_, record) => (
+                            <div>
+                              <div className="font-medium text-slate-900">{record.brand}</div>
+                              <div className="text-xs text-slate-400">
+                                {record.sourceLabel} · {record.channelCode || 'OTHER'}
+                              </div>
+                            </div>
+                          ),
+                        },
+                        {
+                          title: '營收',
+                          dataIndex: 'revenue',
+                          key: 'revenue',
+                          align: 'right',
+                          render: (value: number) => value.toLocaleString(),
+                        },
+                        {
+                          title: '訂單 / 顧客',
+                          key: 'counts',
+                          align: 'right',
+                          render: (_, record) => `${record.orderCount} / ${record.customerCount}`,
+                        },
+                        {
+                          title: '客單價',
+                          dataIndex: 'averageOrderValue',
+                          key: 'averageOrderValue',
+                          align: 'right',
+                          render: (value: number) => value.toLocaleString(),
+                        },
+                        {
+                          title: '熱銷商品',
+                          key: 'topProducts',
+                          render: (_, record) => (
+                            <div className="flex flex-wrap gap-1">
+                              {record.topProducts.map((item) => (
+                                <Tag key={`${record.brand}-${item.sku}`} color="blue">
+                                  {item.sku} × {item.quantity}
+                                </Tag>
+                              ))}
+                            </div>
+                          ),
+                        },
+                      ]}
+                      locale={{ emptyText: <Empty description="尚無品牌 / 顧客整合資料" /> }}
+                    />
+                  </Card>
+                </Col>
+              </Row>
+
+              <div className="mt-4">
+                <Card title="商品與品牌細項" bordered={false} className="shadow-sm">
+                  <Table
+                    rowKey={(record) => `${record.brand}-${record.sku}`}
+                    dataSource={ecommerceHistory?.products || []}
+                    size="small"
+                    scroll={{ x: 980 }}
+                    pagination={{ pageSize: 10 }}
+                    columns={[
+                      {
+                        title: '商品',
+                        key: 'product',
+                        render: (_, record) => (
+                          <div>
+                            <div className="font-medium text-slate-900">{record.name}</div>
+                            <div className="text-xs text-slate-400">
+                              {record.sku} · {record.category || '未分類'}
+                            </div>
+                          </div>
+                        ),
+                      },
+                      {
+                        title: '品牌',
+                        dataIndex: 'brand',
+                        key: 'brand',
+                      },
+                      {
+                        title: '營收',
+                        dataIndex: 'revenue',
+                        key: 'revenue',
+                        align: 'right',
+                        render: (value: number) => value.toLocaleString(),
+                      },
+                      {
+                        title: '數量',
+                        dataIndex: 'quantity',
+                        key: 'quantity',
+                        align: 'right',
+                        render: (value: number) => value.toLocaleString(),
+                      },
+                      {
+                        title: '訂單數',
+                        dataIndex: 'orderCount',
+                        key: 'orderCount',
+                        align: 'right',
+                      },
+                    ]}
+                    locale={{ emptyText: <Empty description="尚無商品分類資料" /> }}
+                  />
+                </Card>
+              </div>
+            </TabPane>
+
             <TabPane
               tab={
                 <span className="flex items-center gap-2">

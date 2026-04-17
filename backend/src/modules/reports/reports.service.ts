@@ -1891,6 +1891,246 @@ export class ReportsService {
     };
   }
 
+  async getEcommerceHistory(
+    entityId: string,
+    groupBy: 'year' | 'quarter' | 'month' | 'week',
+    startDate?: Date,
+    endDate?: Date,
+  ) {
+    const stores = this.getOneShopStores();
+    const orderDateFilter = this.buildDateFilter(startDate, endDate);
+
+    const orders = await this.prisma.salesOrder.findMany({
+      where: {
+        entityId,
+        status: {
+          notIn: ['cancelled', 'refunded'],
+        },
+        ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
+      },
+      orderBy: {
+        orderDate: 'asc',
+      },
+      select: {
+        id: true,
+        orderDate: true,
+        notes: true,
+        totalGrossOriginal: true,
+        customerId: true,
+        channel: {
+          select: {
+            code: true,
+            name: true,
+          },
+        },
+        items: {
+          select: {
+            qty: true,
+            unitPriceOriginal: true,
+            discountOriginal: true,
+            taxAmountOriginal: true,
+            product: {
+              select: {
+                sku: true,
+                name: true,
+                category: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const periodMap = new Map<
+      string,
+      {
+        key: string;
+        label: string;
+        startDate: string;
+        endDate: string;
+        revenue: number;
+        orderCount: number;
+        customerIds: Set<string>;
+      }
+    >();
+    const brandMap = new Map<
+      string,
+      {
+        brand: string;
+        sourceLabel: string;
+        channelCode: string | null;
+        revenue: number;
+        orderCount: number;
+        customerIds: Set<string>;
+        productQty: Map<string, number>;
+      }
+    >();
+    const productMap = new Map<
+      string,
+      {
+        sku: string;
+        name: string;
+        category: string | null;
+        brand: string;
+        revenue: number;
+        quantity: number;
+        orderIds: Set<string>;
+      }
+    >();
+    const customerIds = new Set<string>();
+
+    for (const order of orders) {
+      const revenue = Number(order.totalGrossOriginal || 0);
+      if (order.customerId) {
+        customerIds.add(order.customerId);
+      }
+      const source = this.resolveSourceContext({
+        channelCode: order.channel?.code,
+        channelName: order.channel?.name,
+        notes: order.notes,
+        stores,
+      });
+      const periodDescriptor = this.resolvePeriodDescriptor(order.orderDate, groupBy);
+      const period =
+        periodMap.get(periodDescriptor.key) ||
+        {
+          key: periodDescriptor.key,
+          label: periodDescriptor.label,
+          startDate: periodDescriptor.startDate.toISOString(),
+          endDate: periodDescriptor.endDate.toISOString(),
+          revenue: 0,
+          orderCount: 0,
+          customerIds: new Set<string>(),
+        };
+      period.revenue += revenue;
+      period.orderCount += 1;
+      if (order.customerId) {
+        period.customerIds.add(order.customerId);
+      }
+      periodMap.set(periodDescriptor.key, period);
+
+      const brandKey = `${source.brand}::${source.label}::${source.channelCode || 'unknown'}`;
+      const brand =
+        brandMap.get(brandKey) ||
+        {
+          brand: source.brand,
+          sourceLabel: source.label,
+          channelCode: source.channelCode,
+          revenue: 0,
+          orderCount: 0,
+          customerIds: new Set<string>(),
+          productQty: new Map<string, number>(),
+        };
+      brand.revenue += revenue;
+      brand.orderCount += 1;
+      if (order.customerId) {
+        brand.customerIds.add(order.customerId);
+      }
+
+      for (const item of order.items) {
+        const qty = Number(item.qty || 0);
+        const itemRevenue = Number(
+          (
+            Number(item.unitPriceOriginal || 0) * qty -
+            Number(item.discountOriginal || 0) +
+            Number(item.taxAmountOriginal || 0)
+          ).toFixed(2),
+        );
+        const productSku = item.product?.sku || 'UNMAPPED';
+        const productName = item.product?.name || '未建商品';
+        const productKey = `${source.brand}::${productSku}`;
+        const product =
+          productMap.get(productKey) ||
+          {
+            sku: productSku,
+            name: productName,
+            category: item.product?.category || null,
+            brand: source.brand,
+            revenue: 0,
+            quantity: 0,
+            orderIds: new Set<string>(),
+          };
+
+        product.revenue += itemRevenue;
+        product.quantity += qty;
+        product.orderIds.add(order.id);
+        productMap.set(productKey, product);
+
+        brand.productQty.set(
+          productSku,
+          (brand.productQty.get(productSku) || 0) + qty,
+        );
+      }
+
+      brandMap.set(brandKey, brand);
+    }
+
+    const periods = Array.from(periodMap.values())
+      .map((period) => ({
+        key: period.key,
+        label: period.label,
+        startDate: period.startDate,
+        endDate: period.endDate,
+        revenue: Number(period.revenue.toFixed(2)),
+        orderCount: period.orderCount,
+        customerCount: period.customerIds.size,
+      }))
+      .sort((left, right) => left.startDate.localeCompare(right.startDate));
+
+    const brands = Array.from(brandMap.values())
+      .map((brand) => ({
+        brand: brand.brand,
+        sourceLabel: brand.sourceLabel,
+        channelCode: brand.channelCode,
+        revenue: Number(brand.revenue.toFixed(2)),
+        orderCount: brand.orderCount,
+        customerCount: brand.customerIds.size,
+        averageOrderValue: brand.orderCount
+          ? Number((brand.revenue / brand.orderCount).toFixed(2))
+          : 0,
+        topProducts: Array.from(brand.productQty.entries())
+          .sort((left, right) => right[1] - left[1])
+          .slice(0, 5)
+          .map(([sku, quantity]) => ({
+            sku,
+            quantity,
+          })),
+      }))
+      .sort((left, right) => right.revenue - left.revenue);
+
+    const products = Array.from(productMap.values())
+      .map((product) => ({
+        sku: product.sku,
+        name: product.name,
+        category: product.category,
+        brand: product.brand,
+        revenue: Number(product.revenue.toFixed(2)),
+        quantity: Number(product.quantity.toFixed(2)),
+        orderCount: product.orderIds.size,
+      }))
+      .sort((left, right) => right.revenue - left.revenue)
+      .slice(0, 50);
+
+    return {
+      entityId,
+      groupBy,
+      range: {
+        startDate: startDate?.toISOString() || null,
+        endDate: endDate?.toISOString() || null,
+      },
+      summary: {
+        revenue: periods.reduce((sum, period) => sum + period.revenue, 0),
+        orderCount: periods.reduce((sum, period) => sum + period.orderCount, 0),
+        customerCount: customerIds.size,
+        brandCount: brands.length,
+        productCount: products.length,
+      },
+      periods,
+      brands,
+      products,
+    };
+  }
+
   /**
    * 損益表 (Income Statement / P&L)
    * 已在 AccountingModule 實作，這裡提供增強版
@@ -2311,6 +2551,59 @@ export class ReportsService {
       label: `${isoYear} W${String(week).padStart(2, '0')}`,
       startDate: weekStart,
       endDate: weekEnd,
+    };
+  }
+
+  private resolveSourceContext(params: {
+    channelCode?: string | null;
+    channelName?: string | null;
+    notes?: string | null;
+    stores: Array<{ account: string; storeName?: string }>;
+  }) {
+    const channelCode = (params.channelCode || '').trim().toUpperCase();
+    const meta = this.extractMetadata(params.notes);
+
+    if (channelCode === 'SHOPIFY') {
+      return {
+        label: 'MOZTECH 官網',
+        brand: 'MOZTECH',
+        channelCode,
+      };
+    }
+
+    if (channelCode === '1SHOP') {
+      const storeAccount = meta.storeAccount || '';
+      const matchedStore = params.stores.find(
+        (store) => store.account === storeAccount,
+      );
+      const storeName =
+        meta.storeName ||
+        matchedStore?.storeName ||
+        meta.storeAccount ||
+        '萬魔未來工學院團購';
+
+      return {
+        label: storeName,
+        brand: storeName.includes('萬魔') ? '萬魔未來工學院' : storeName,
+        channelCode,
+      };
+    }
+
+    if (channelCode === 'SHOPLINE') {
+      const storeName =
+        meta.storeName || meta.storeHandle || params.channelName || 'Shopline';
+      return {
+        label: storeName,
+        brand: storeName.includes('萬魔') ? '萬魔未來工學院' : storeName,
+        channelCode,
+      };
+    }
+
+    const fallback = meta.storeName || meta.storeHandle || params.channelName || '其他來源';
+    return {
+      label: fallback,
+      brand: fallback,
+      channelCode: channelCode || null,
     };
   }
 }

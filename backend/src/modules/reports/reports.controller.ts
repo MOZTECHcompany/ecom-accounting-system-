@@ -325,6 +325,31 @@ export class ReportsController {
     );
   }
 
+  @Get('ecommerce-history')
+  @ApiOperation({ summary: '歷年電商業績、顧客來源與產品品牌彙整' })
+  @ApiResponse({ status: 200, description: '成功取得歷史電商彙整資料' })
+  @ApiQuery({ name: 'entityId', required: true })
+  @ApiQuery({
+    name: 'groupBy',
+    required: true,
+    enum: ['year', 'quarter', 'month', 'week'],
+  })
+  @ApiQuery({ name: 'startDate', required: false })
+  @ApiQuery({ name: 'endDate', required: false })
+  async getEcommerceHistory(
+    @Query('entityId') entityId: string,
+    @Query('groupBy') groupBy: 'year' | 'quarter' | 'month' | 'week',
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.reportsService.getEcommerceHistory(
+      entityId,
+      groupBy,
+      startDate ? new Date(startDate) : undefined,
+      endDate ? new Date(endDate) : undefined,
+    );
+  }
+
   @Get(':id/export')
   @ApiOperation({ summary: '匯出報表 (Excel/PDF)' })
   @ApiResponse({ status: 200, description: '成功匯出報表' })
