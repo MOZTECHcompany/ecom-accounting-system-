@@ -7,6 +7,7 @@ import {
   Input,
   InputNumber,
   Modal,
+  Popconfirm,
   Select,
   Space,
   Switch,
@@ -430,6 +431,11 @@ const DepartmentsTab = ({
   reload: () => void;
 }) => {
   const [createOpen, setCreateOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(
+    null,
+  );
   const [form] = Form.useForm();
 
   const handleCreate = async () => {
@@ -449,6 +455,60 @@ const DepartmentsTab = ({
     }
   };
 
+  const handleEdit = (record: Department) => {
+    setSelectedDepartment(record);
+    form.setFieldsValue({
+      name: record.name,
+      costCenterId: record.costCenterId,
+    });
+    setEditOpen(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!selectedDepartment) {
+      return;
+    }
+
+    try {
+      const values = await form.validateFields();
+      setUpdatingId(selectedDepartment.id);
+      await payrollService.updateDepartment(selectedDepartment.id, values);
+      message.success("部門更新成功");
+      setEditOpen(false);
+      setSelectedDepartment(null);
+      form.resetFields();
+      reload();
+    } catch (error) {
+      if ((error as any)?.errorFields) {
+        return;
+      }
+
+      message.error(getErrorMessage(error, "部門更新失敗"));
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleToggleStatus = async (record: Department) => {
+    setUpdatingId(record.id);
+    try {
+      await payrollService.updateDepartment(record.id, {
+        isActive: !record.isActive,
+      });
+      message.success(`部門已${record.isActive ? "停用" : "啟用"}`);
+      reload();
+    } catch (error) {
+      message.error(
+        getErrorMessage(
+          error,
+          `${record.isActive ? "停用" : "啟用"}部門失敗`,
+        ),
+      );
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
   const columns = [
     { title: "部門名稱", dataIndex: "name", key: "name" },
     { title: "成本中心代碼", dataIndex: "costCenterId", key: "costCenterId" },
@@ -462,6 +522,29 @@ const DepartmentsTab = ({
         </Tag>
       ),
     },
+    {
+      title: "操作",
+      key: "actions",
+      render: (_: unknown, record: Department) => (
+        <Space size="small">
+          <Button
+            type="text"
+            icon={<EditOutlined />}
+            onClick={() => handleEdit(record)}
+          >
+            編輯
+          </Button>
+          <Popconfirm
+            title={`確認${record.isActive ? "停用" : "啟用"}部門？`}
+            onConfirm={() => void handleToggleStatus(record)}
+          >
+            <Button type="link" loading={updatingId === record.id}>
+              {record.isActive ? "停用" : "啟用"}
+            </Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
   ];
 
   return (
@@ -473,7 +556,10 @@ const DepartmentsTab = ({
         <Button
           type="primary"
           icon={<PlusOutlined />}
-          onClick={() => setCreateOpen(true)}
+          onClick={() => {
+            form.resetFields();
+            setCreateOpen(true);
+          }}
         >
           新增部門
         </Button>
@@ -491,6 +577,27 @@ const DepartmentsTab = ({
         open={createOpen}
         onCancel={() => setCreateOpen(false)}
         onOk={() => void handleCreate()}
+      >
+        <Form form={form} layout="vertical">
+          <Form.Item name="name" label="部門名稱" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="costCenterId" label="成本中心代碼">
+            <Input />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="編輯部門"
+        open={editOpen}
+        onCancel={() => {
+          setEditOpen(false);
+          setSelectedDepartment(null);
+          form.resetFields();
+        }}
+        onOk={() => void handleUpdate()}
+        confirmLoading={updatingId === selectedDepartment?.id}
       >
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="部門名稱" rules={[{ required: true }]}>
