@@ -28,6 +28,56 @@ export type DashboardSalesOverview = {
   total: DashboardPerformanceBucket;
 };
 
+export type DashboardReconciliationItem = {
+  paymentId: string;
+  salesOrderId: string | null;
+  externalOrderId: string | null;
+  orderDate: string | null;
+  payoutDate: string | null;
+  channelCode: string | null;
+  bucketKey: string;
+  bucketLabel: string;
+  account: string | null;
+  storeName: string | null;
+  orderStatus: string | null;
+  paymentStatus: string | null;
+  logisticStatus: string | null;
+  gateway: string | null;
+  feeStatus: string;
+  feeSource: string | null;
+  settlementStatus: "reconciled" | "pending_payout" | "pending_payment" | "failed";
+  provider: string | null;
+  providerPaymentId: string | null;
+  providerTradeNo: string | null;
+  gross: number;
+  feeTotal: number;
+  net: number;
+  reconciledFlag: boolean;
+};
+
+export type DashboardReconciliationBatch = {
+  id: string;
+  provider: string;
+  sourceType: string;
+  importedAt: string;
+  fileName: string | null;
+  recordCount: number;
+  matchedCount: number;
+  unmatchedCount: number;
+  invalidCount: number;
+  notes: string | null;
+};
+
+export type DashboardReconciliationFeed = {
+  entityId: string;
+  range: {
+    startDate: string | null;
+    endDate: string | null;
+  };
+  recentItems: DashboardReconciliationItem[];
+  recentBatches: DashboardReconciliationBatch[];
+};
+
 export const dashboardService = {
   async getSalesOverview(params?: {
     entityId?: string;
@@ -46,6 +96,31 @@ export const dashboardService = {
 
     const response = await api.get<DashboardSalesOverview>(
       `/reports/dashboard-sales-overview?${query.toString()}`,
+    );
+    return response.data;
+  },
+
+  async getReconciliationFeed(params?: {
+    entityId?: string;
+    startDate?: string;
+    endDate?: string;
+    limit?: number;
+  }): Promise<DashboardReconciliationFeed> {
+    const query = new URLSearchParams();
+    query.set("entityId", params?.entityId?.trim() || DEFAULT_ENTITY_ID);
+    if (params?.startDate) {
+      query.set("startDate", params.startDate);
+    }
+    if (params?.endDate) {
+      query.set("endDate", params.endDate);
+    }
+    if (params?.limit) {
+      query.set("limit", String(params.limit));
+    }
+    query.set("_ts", String(Date.now()));
+
+    const response = await api.get<DashboardReconciliationFeed>(
+      `/reports/dashboard-reconciliation-feed?${query.toString()}`,
     );
     return response.data;
   },

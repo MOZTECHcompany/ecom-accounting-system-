@@ -24,22 +24,7 @@ export class ReportsService {
     endDate?: Date,
   ) {
     const stores = this.getOneShopStores();
-    const buckets = [
-      {
-        key: 'shopify',
-        label: 'Shopify 官網業績',
-      },
-      ...stores.slice(0, 2).map((store, index) => ({
-        key: `oneshop:${store.account}`,
-        label: `1shop 第${index + 1}個帳號業績`,
-        account: store.account,
-        storeName: store.storeName || null,
-      })),
-      {
-        key: 'other',
-        label: '其他業績',
-      },
-    ];
+    const buckets = this.buildDashboardBuckets(stores);
 
     const bucketMap = new Map(
       buckets.map((bucket) => [
@@ -185,6 +170,154 @@ export class ReportsService {
     };
   }
 
+  async getDashboardReconciliationFeed(
+    entityId: string,
+    startDate?: Date,
+    endDate?: Date,
+    limit = 12,
+  ) {
+    const stores = this.getOneShopStores();
+    const buckets = this.buildDashboardBuckets(stores);
+    const bucketMap = new Map(buckets.map((bucket) => [bucket.key, bucket]));
+    const paymentDateFilter = this.buildDateFilter(startDate, endDate);
+    const normalizedLimit = Math.min(Math.max(Math.floor(limit || 12), 5), 30);
+
+    const [payments, payoutBatches] = await Promise.all([
+      this.prisma.payment.findMany({
+        where: {
+          entityId,
+          ...(paymentDateFilter ? { payoutDate: paymentDateFilter } : {}),
+        },
+        orderBy: {
+          payoutDate: 'desc',
+        },
+        take: normalizedLimit,
+        select: {
+          id: true,
+          salesOrderId: true,
+          channel: true,
+          payoutDate: true,
+          amountGrossOriginal: true,
+          amountNetOriginal: true,
+          feePlatformOriginal: true,
+          feeGatewayOriginal: true,
+          reconciledFlag: true,
+          status: true,
+          notes: true,
+          salesOrder: {
+            select: {
+              externalOrderId: true,
+              orderDate: true,
+              status: true,
+              notes: true,
+              channel: {
+                select: {
+                  code: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.payoutImportBatch.findMany({
+        where: {
+          entityId,
+        },
+        orderBy: {
+          importedAt: 'desc',
+        },
+        take: 6,
+        select: {
+          id: true,
+          provider: true,
+          sourceType: true,
+          importedAt: true,
+          fileName: true,
+          recordCount: true,
+          matchedCount: true,
+          unmatchedCount: true,
+          invalidCount: true,
+          notes: true,
+        },
+      }),
+    ]);
+
+    const recentItems = payments.map((payment) => {
+      const notes = payment.salesOrder?.notes || payment.notes;
+      const fallbackNotes = payment.notes;
+      const bucketKey = this.resolvePerformanceBucket({
+        channelCode: payment.salesOrder?.channel?.code || payment.channel,
+        notes,
+        fallbackNotes,
+        stores,
+      });
+      const bucket = bucketMap.get(bucketKey) || bucketMap.get('other');
+      const metadata = {
+        ...this.extractMetadata(payment.notes),
+        ...this.extractMetadata(payment.salesOrder?.notes),
+      };
+      const feeTotal =
+        Number(payment.feePlatformOriginal || 0) +
+        Number(payment.feeGatewayOriginal || 0);
+
+      return {
+        paymentId: payment.id,
+        salesOrderId: payment.salesOrderId,
+        externalOrderId: payment.salesOrder?.externalOrderId || null,
+        orderDate: payment.salesOrder?.orderDate?.toISOString() || null,
+        payoutDate: payment.payoutDate?.toISOString() || null,
+        channelCode: payment.salesOrder?.channel?.code || payment.channel || null,
+        bucketKey,
+        bucketLabel: bucket?.label || '其他業績',
+        account: bucketKey.startsWith('oneshop:')
+          ? bucketKey.replace('oneshop:', '')
+          : null,
+        storeName:
+          stores.find((store) => `oneshop:${store.account}` === bucketKey)
+            ?.storeName || null,
+        orderStatus: payment.salesOrder?.status || null,
+        paymentStatus: metadata.paymentStatus || payment.status || null,
+        logisticStatus: metadata.logisticStatus || null,
+        gateway: metadata.gateway || null,
+        feeStatus: metadata.feeStatus || 'unavailable',
+        feeSource: metadata.feeSource || null,
+        settlementStatus: this.resolveSettlementStatus({
+          reconciledFlag: payment.reconciledFlag,
+          paymentStatus: metadata.paymentStatus || payment.status,
+          rawStatus: payment.status,
+        }),
+        provider: this.resolveProviderSource(metadata.feeSource),
+        providerPaymentId: metadata.providerPaymentId || null,
+        providerTradeNo: metadata.providerTradeNo || null,
+        gross: Number(payment.amountGrossOriginal || 0),
+        feeTotal,
+        net: Number(payment.amountNetOriginal || 0),
+        reconciledFlag: payment.reconciledFlag,
+      };
+    });
+
+    return {
+      entityId,
+      range: {
+        startDate: startDate?.toISOString() || null,
+        endDate: endDate?.toISOString() || null,
+      },
+      recentItems,
+      recentBatches: payoutBatches.map((batch) => ({
+        id: batch.id,
+        provider: batch.provider,
+        sourceType: batch.sourceType,
+        importedAt: batch.importedAt.toISOString(),
+        fileName: batch.fileName || null,
+        recordCount: batch.recordCount,
+        matchedCount: batch.matchedCount,
+        unmatchedCount: batch.unmatchedCount,
+        invalidCount: batch.invalidCount,
+        notes: batch.notes || null,
+      })),
+    };
+  }
+
   /**
    * 損益表 (Income Statement / P&L)
    * 已在 AccountingModule 實作，這裡提供增強版
@@ -295,6 +428,27 @@ export class ReportsService {
     return Object.keys(filter).length ? filter : null;
   }
 
+  private buildDashboardBuckets(
+    stores: Array<{ account: string; storeName?: string }>,
+  ) {
+    return [
+      {
+        key: 'shopify',
+        label: 'Shopify 官網業績',
+      },
+      ...stores.slice(0, 2).map((store, index) => ({
+        key: `oneshop:${store.account}`,
+        label: `1shop 第${index + 1}個帳號業績`,
+        account: store.account,
+        storeName: store.storeName || null,
+      })),
+      {
+        key: 'other',
+        label: '其他業績',
+      },
+    ];
+  }
+
   private getOneShopStores() {
     const storesJson =
       this.configService.get<string>('ONESHOP_STORES_JSON', '') || '';
@@ -350,6 +504,43 @@ export class ReportsService {
     }
 
     return 'other';
+  }
+
+  private resolveSettlementStatus(params: {
+    reconciledFlag: boolean;
+    paymentStatus?: string | null;
+    rawStatus?: string | null;
+  }) {
+    if (params.reconciledFlag) {
+      return 'reconciled';
+    }
+
+    const paymentStatus = (params.paymentStatus || '').trim().toLowerCase();
+    const rawStatus = (params.rawStatus || '').trim().toLowerCase();
+
+    if (
+      ['paid', 'cod', 'completed', 'success'].includes(paymentStatus) ||
+      ['completed', 'success'].includes(rawStatus)
+    ) {
+      return 'pending_payout';
+    }
+
+    if (['failed', 'cancelled', 'refunded'].includes(paymentStatus)) {
+      return 'failed';
+    }
+
+    return 'pending_payment';
+  }
+
+  private resolveProviderSource(feeSource?: string | null) {
+    const value = (feeSource || '').trim().toLowerCase();
+    if (value.startsWith('provider-payout:ecpay')) {
+      return 'ecpay';
+    }
+    if (value.startsWith('provider-payout:hitrust')) {
+      return 'hitrust';
+    }
+    return null;
   }
 
   private extractMetadata(notes?: string | null) {

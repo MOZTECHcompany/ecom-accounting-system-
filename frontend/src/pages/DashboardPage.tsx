@@ -27,6 +27,9 @@ import { shopifyService } from "../services/shopify.service";
 import { oneShopService } from "../services/oneshop.service";
 import {
   dashboardService,
+  DashboardReconciliationBatch,
+  DashboardReconciliationFeed,
+  DashboardReconciliationItem,
   DashboardPerformanceBucket,
   DashboardSalesOverview,
 } from "../services/dashboard.service";
@@ -122,6 +125,71 @@ function getBucketStatus(bucket: DashboardPerformanceBucket) {
   };
 }
 
+function getSettlementMeta(item: DashboardReconciliationItem) {
+  if (item.settlementStatus === "reconciled") {
+    return {
+      color: "green" as const,
+      label: "已撥款",
+      helper: item.provider ? `${item.provider.toUpperCase()} 已回填` : "已完成對帳",
+    };
+  }
+
+  if (item.settlementStatus === "pending_payout") {
+    return {
+      color: "gold" as const,
+      label: "待撥款",
+      helper: "已付款，等待金流撥款或對帳匯入",
+    };
+  }
+
+  if (item.settlementStatus === "failed") {
+    return {
+      color: "red" as const,
+      label: "失敗 / 退款",
+      helper: "這筆交易已失敗、取消或退款",
+    };
+  }
+
+  return {
+    color: "blue" as const,
+    label: "待付款",
+    helper: "訂單已進系統，但付款尚未完成",
+  };
+}
+
+function getFeeMeta(item: DashboardReconciliationItem) {
+  if (item.feeStatus === "actual") {
+    return { color: "green" as const, label: "實際手續費" };
+  }
+
+  if (item.feeStatus === "estimated") {
+    return { color: "gold" as const, label: "預估手續費" };
+  }
+
+  return { color: "default" as const, label: "待補手續費" };
+}
+
+function getBatchMeta(batch: DashboardReconciliationBatch) {
+  if (batch.unmatchedCount === 0 && batch.invalidCount === 0) {
+    return {
+      color: "green" as const,
+      label: "已吃進",
+    };
+  }
+
+  if (batch.matchedCount > 0) {
+    return {
+      color: "gold" as const,
+      label: "部分待處理",
+    };
+  }
+
+  return {
+    color: "blue" as const,
+    label: "待匹配",
+  };
+}
+
 const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [rangeMode, setRangeMode] = useState<RangeMode>("today");
@@ -129,6 +197,7 @@ const DashboardPage: React.FC = () => {
   const [refreshToken, setRefreshToken] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [overview, setOverview] = useState<DashboardSalesOverview | null>(null);
+  const [feed, setFeed] = useState<DashboardReconciliationFeed | null>(null);
 
   useEffect(() => {
     if (rangeMode === "custom" && (!customRange?.[0] || !customRange?.[1])) {
@@ -144,15 +213,24 @@ const DashboardPage: React.FC = () => {
     const fetchSummary = async () => {
       setLoading(true);
       try {
-        const summary = await dashboardService.getSalesOverview({
-          entityId: storedEntityId,
-          startDate: since,
-          endDate: until,
-        });
+        const [summary, reconciliationFeed] = await Promise.all([
+          dashboardService.getSalesOverview({
+            entityId: storedEntityId,
+            startDate: since,
+            endDate: until,
+          }),
+          dashboardService.getReconciliationFeed({
+            entityId: storedEntityId,
+            startDate: since,
+            endDate: until,
+            limit: 10,
+          }),
+        ]);
 
         if (ignore) return;
 
         setOverview(summary);
+        setFeed(reconciliationFeed);
       } catch (error: any) {
         if (!ignore) {
           message.error(error?.response?.data?.message || "讀取儀表板資料失敗");
@@ -230,6 +308,8 @@ const DashboardPage: React.FC = () => {
     ? [...overview.buckets, overview.total]
     : [];
   const total = overview?.total;
+  const recentItems = feed?.recentItems || [];
+  const recentBatches = feed?.recentBatches || [];
 
   return (
     <div className="space-y-8">
@@ -492,6 +572,177 @@ const DashboardPage: React.FC = () => {
                 </div>
               </div>
             </div>
+          </div>
+        </motion.div>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.9fr)]">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass-card p-6"
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+                Reconciliation Feed
+              </div>
+              <div className="mt-2 text-xl font-semibold text-slate-900">
+                最近收款與撥款追蹤
+              </div>
+              <div className="mt-1 text-sm text-slate-500">
+                把信用卡、超商、貨到付款與實際撥款狀態放在同一排，方便每天追帳。
+              </div>
+            </div>
+            <Tag color="blue" className="rounded-full px-3 py-1">
+              {recentItems.length} 筆重點
+            </Tag>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {recentItems.map((item) => {
+              const settlement = getSettlementMeta(item);
+              const feeMeta = getFeeMeta(item);
+
+              return (
+                <div
+                  key={item.paymentId}
+                  className="rounded-3xl border border-white/30 bg-white/45 px-4 py-4"
+                >
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-sm font-semibold text-slate-900">
+                          {item.bucketLabel}
+                        </div>
+                        <Tag color={settlement.color} className="rounded-full">
+                          {settlement.label}
+                        </Tag>
+                        <Tag color={feeMeta.color} className="rounded-full">
+                          {feeMeta.label}
+                        </Tag>
+                      </div>
+                      <div className="mt-2 text-xs leading-5 text-slate-500">
+                        訂單 {item.externalOrderId || "未綁定"} ·
+                        {" "}
+                        {item.gateway || "未知付款方式"} ·
+                        {" "}
+                        付款狀態 {item.paymentStatus || "未回填"} ·
+                        {" "}
+                        物流 {item.logisticStatus || "未回填"}
+                      </div>
+                      <div className="mt-1 text-xs leading-5 text-slate-400">
+                        {settlement.helper}
+                        {item.providerTradeNo ? ` · 綠界/金流單號 ${item.providerTradeNo}` : ""}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3 text-right text-sm min-w-[260px]">
+                      <div className="rounded-2xl bg-slate-900/5 px-3 py-3">
+                        <div className="text-[11px] text-slate-400">收款總額</div>
+                        <div className="mt-1 font-semibold text-slate-900">
+                          ${item.gross.toFixed(2)}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl bg-slate-900/5 px-3 py-3">
+                        <div className="text-[11px] text-slate-400">手續費</div>
+                        <div className="mt-1 font-semibold text-slate-900">
+                          ${item.feeTotal.toFixed(2)}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl bg-slate-900/5 px-3 py-3">
+                        <div className="text-[11px] text-slate-400">淨額</div>
+                        <div className="mt-1 font-semibold text-slate-900">
+                          ${item.net.toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {!recentItems.length ? (
+              <div className="rounded-3xl border border-dashed border-slate-200 bg-white/30 px-5 py-6 text-sm text-slate-500">
+                目前還沒有可顯示的收款追蹤資料，先按一次「即時同步」或等待排程把最新訂單與金流帶進來。
+              </div>
+            ) : null}
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass-card p-6"
+        >
+          <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+            Provider Batches
+          </div>
+          <div className="mt-2 text-xl font-semibold text-slate-900">
+            最近對帳批次
+          </div>
+          <div className="mt-1 text-sm text-slate-500">
+            這裡會列出最近匯入的金流對帳批次，方便追哪一批已經回填、哪一批還有未匹配。
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {recentBatches.map((batch) => {
+              const meta = getBatchMeta(batch);
+              return (
+                <div
+                  key={batch.id}
+                  className="rounded-3xl border border-white/30 bg-white/45 px-4 py-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm font-semibold text-slate-900">
+                          {batch.provider.toUpperCase()} 對帳批次
+                        </div>
+                        <Tag color={meta.color} className="rounded-full">
+                          {meta.label}
+                        </Tag>
+                      </div>
+                      <div className="mt-2 text-xs leading-5 text-slate-500">
+                        {dayjs(batch.importedAt).tz(DASHBOARD_TZ).format("YYYY/MM/DD HH:mm")}
+                        {" · "}
+                        {batch.fileName || "系統同步批次"}
+                      </div>
+                    </div>
+                    <div className="text-right text-xs text-slate-400">
+                      source: {batch.sourceType}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
+                    <div className="rounded-2xl bg-slate-900/5 px-3 py-3">
+                      <div className="text-[11px] text-slate-400">匯入列數</div>
+                      <div className="mt-1 font-semibold text-slate-900">
+                        {batch.recordCount}
+                      </div>
+                    </div>
+                    <div className="rounded-2xl bg-slate-900/5 px-3 py-3">
+                      <div className="text-[11px] text-slate-400">已匹配</div>
+                      <div className="mt-1 font-semibold text-emerald-600">
+                        {batch.matchedCount}
+                      </div>
+                    </div>
+                    <div className="rounded-2xl bg-slate-900/5 px-3 py-3">
+                      <div className="text-[11px] text-slate-400">待處理</div>
+                      <div className="mt-1 font-semibold text-amber-600">
+                        {batch.unmatchedCount + batch.invalidCount}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {!recentBatches.length ? (
+              <div className="rounded-3xl border border-dashed border-slate-200 bg-white/30 px-5 py-6 text-sm text-slate-500">
+                目前還沒有金流對帳批次。等匯入綠界 / HiTRUST 撥款報表後，這裡會開始顯示。
+              </div>
+            ) : null}
           </div>
         </motion.div>
       </div>

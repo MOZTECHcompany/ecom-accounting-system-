@@ -204,6 +204,27 @@ export class ReportsController {
     );
   }
 
+  @Get('dashboard-reconciliation-feed')
+  @ApiOperation({ summary: '儀錶板最近收款與撥款追蹤' })
+  @ApiResponse({ status: 200, description: '成功取得最近對帳與撥款明細' })
+  @ApiQuery({ name: 'entityId', required: true })
+  @ApiQuery({ name: 'startDate', required: false })
+  @ApiQuery({ name: 'endDate', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  async getDashboardReconciliationFeed(
+    @Query('entityId') entityId: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.reportsService.getDashboardReconciliationFeed(
+      entityId,
+      startDate ? new Date(startDate) : undefined,
+      endDate ? new Date(endDate) : undefined,
+      limit ? Number(limit) : undefined,
+    );
+  }
+
   @Get(':id/export')
   @ApiOperation({ summary: '匯出報表 (Excel/PDF)' })
   @ApiResponse({ status: 200, description: '成功匯出報表' })
