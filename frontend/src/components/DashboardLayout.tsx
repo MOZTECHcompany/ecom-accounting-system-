@@ -134,11 +134,11 @@ const DashboardLayout: React.FC = () => {
     {
       key: 'payroll',
       icon: <TeamOutlined />,
-      label: '薪資管理',
+      label: '考勤後臺',
       children: [
-        { key: '/payroll/runs', label: '薪資計算', onClick: () => navigate('/payroll/runs') },
         { key: '/payroll/employees', label: '員工與部門', onClick: () => navigate('/payroll/employees') },
-        { key: '/attendance/admin', label: '完整考勤後台', onClick: () => navigate('/attendance/admin') },
+        { key: '/attendance/admin', label: '總覽與審核', onClick: () => navigate('/attendance/admin') },
+        { key: '/payroll/runs', label: '薪資計算', onClick: () => navigate('/payroll/runs') },
       ],
     },
     {

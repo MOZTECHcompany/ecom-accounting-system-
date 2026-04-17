@@ -89,11 +89,11 @@ const Sidebar: React.FC<SidebarProps> = ({
     {
       key: '/payroll',
       icon: <DollarOutlined />,
-      label: '薪資管理',
+      label: '考勤後臺',
       children: [
-        { key: '/payroll/runs', label: '薪資計算' },
         { key: '/payroll/employees', label: '員工與部門' },
-        { key: '/attendance/admin', label: '完整考勤後台' },
+        { key: '/attendance/admin', label: '總覽與審核' },
+        { key: '/payroll/runs', label: '薪資計算' },
       ],
     },
     {

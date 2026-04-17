@@ -28,11 +28,11 @@ import {
 } from "@ant-design/icons";
 import { motion } from "framer-motion";
 import dayjs from "dayjs";
-import { useNavigate } from "react-router-dom";
 import { attendanceService } from "../services/attendance.service";
 import { payrollService } from "../services/payroll.service";
 import { usersService } from "../services/users.service";
 import { useAuth } from "../contexts/AuthContext";
+import { GlassCard } from "../components/ui/GlassCard";
 import { Department, Employee, ManagedUser } from "../types";
 import {
   AdminLeaveBalance,
@@ -284,6 +284,31 @@ const EmployeesTab = ({ departments }: { departments: Department[] }) => {
 
   return (
     <div className="glass-card p-6">
+      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <Title level={4} className="!mb-1 !font-light">
+            員工名單
+          </Title>
+          <Text className="text-gray-500">
+            在這裡建立員工、綁定登入帳號與維護到職資訊，後續請假、打卡與薪資流程都會直接沿用。
+          </Text>
+        </div>
+        <div className="flex shrink-0 items-center">
+          <Button
+            type="primary"
+            size="large"
+            icon={<PlusOutlined />}
+            className="h-12 rounded-2xl px-6 shadow-[0_14px_32px_rgba(26,115,232,0.22)]"
+            onClick={() => {
+              form.resetFields();
+              setCreateOpen(true);
+            }}
+          >
+            新增員工
+          </Button>
+        </div>
+      </div>
+
       {!currentUserEmployee && user ? (
         <Alert
           type="warning"
@@ -294,20 +319,8 @@ const EmployeesTab = ({ departments }: { departments: Department[] }) => {
         />
       ) : null}
 
-      <div className="flex justify-between items-center mb-6">
-        <Title level={4} className="!mb-0 !font-light">
-          員工名單
-        </Title>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => {
-            form.resetFields();
-            setCreateOpen(true);
-          }}
-        >
-          新增員工
-        </Button>
+      <div className="rounded-2xl border border-white/30 bg-white/45 px-4 py-3 text-xs leading-6 text-slate-500 shadow-[0_10px_30px_rgba(148,163,184,0.08)]">
+        建議先建立部門，再新增員工與綁定登入帳號；若需要處理假別或額度，可切換上方頁籤接續設定。
       </div>
 
       <Table
@@ -316,6 +329,7 @@ const EmployeesTab = ({ departments }: { departments: Department[] }) => {
         columns={columns}
         dataSource={employees}
         scroll={{ x: 1000 }}
+        className="mt-6"
       />
 
       <Modal
@@ -1230,7 +1244,6 @@ const LeaveBalancesTab = () => {
 };
 
 const EmployeesPage: React.FC = () => {
-  const navigate = useNavigate();
   const [departments, setDepartments] = useState<Department[]>([]);
 
   const fetchDepartments = async () => {
@@ -1254,25 +1267,50 @@ const EmployeesPage: React.FC = () => {
       transition={{ duration: 0.5 }}
       className="space-y-6"
     >
-      <div>
-        <Title level={2} className="!mb-1 !font-light">
-          員工與部門管理
-        </Title>
-        <Text className="text-gray-500">
-          現在這一頁已經整合員工、部門、假別規則與年度額度，不用再分散到不同頁面才能接著管理。
-        </Text>
-      </div>
+      <GlassCard className="relative overflow-hidden border-white/35 bg-white/40">
+        <div className="absolute inset-y-0 right-0 w-56 bg-[radial-gradient(circle_at_center,rgba(255,197,94,0.28),transparent_72%)]" />
+        <div className="relative flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div className="max-w-3xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/35 bg-white/60 px-4 py-2 text-xs font-semibold tracking-[0.24em] text-slate-500 uppercase">
+              <ApartmentOutlined />
+              Workforce Console
+            </div>
+            <Title level={2} className="!mb-2 !mt-4 !font-light">
+              員工與部門管理
+            </Title>
+            <Text className="text-[15px] leading-7 text-slate-500">
+              員工、部門、假別規則與年度額度都已整合在同一個管理頁。你可以照建立組織、維護人員、設定規則的順序一路完成，不需要再跳往其他入口。
+            </Text>
+          </div>
 
-      <Alert
-        type="info"
-        showIcon
-        message="建議操作順序：先建立部門，再新增員工並綁定登入帳號，接著設定假別規則與年度額度。"
-        action={
-          <Button size="small" onClick={() => navigate("/attendance/admin")}>
-            開啟完整考勤後台
-          </Button>
-        }
-      />
+          <div className="grid gap-3 sm:grid-cols-3 xl:w-[420px]">
+            <div className="rounded-2xl border border-white/35 bg-white/55 px-4 py-4">
+              <div className="text-xs font-semibold tracking-[0.16em] text-slate-400 uppercase">
+                Step 1
+              </div>
+              <div className="mt-2 text-sm font-medium text-slate-700">
+                建立部門
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/35 bg-white/55 px-4 py-4">
+              <div className="text-xs font-semibold tracking-[0.16em] text-slate-400 uppercase">
+                Step 2
+              </div>
+              <div className="mt-2 text-sm font-medium text-slate-700">
+                新增員工並綁帳號
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/35 bg-white/55 px-4 py-4">
+              <div className="text-xs font-semibold tracking-[0.16em] text-slate-400 uppercase">
+                Step 3
+              </div>
+              <div className="mt-2 text-sm font-medium text-slate-700">
+                補假別與年度額度
+              </div>
+            </div>
+          </div>
+        </div>
+      </GlassCard>
 
       <Tabs
         defaultActiveKey="employees"

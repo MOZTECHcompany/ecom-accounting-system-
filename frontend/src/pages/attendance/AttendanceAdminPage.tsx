@@ -412,51 +412,60 @@ const AttendanceAdminPage: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-[fadeInUp_0.4s_ease-out]">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/20 px-4 py-2 text-xs font-semibold tracking-[0.25em] text-slate-500 uppercase">
-            <TeamOutlined />
-            HR Control Deck
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <GlassCard className="relative overflow-hidden border-white/35 bg-white/40">
+          <div className="absolute inset-y-0 right-0 w-56 bg-[radial-gradient(circle_at_center,rgba(96,165,250,0.24),transparent_72%)]" />
+          <div className="relative">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/35 px-4 py-2 text-xs font-semibold tracking-[0.25em] text-slate-500 uppercase">
+              <TeamOutlined />
+              Attendance Control Deck
+            </div>
+            <h1 className="mt-4 text-3xl font-semibold text-slate-900">
+              考勤後臺
+            </h1>
+            <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-500">
+              這個工作台把每日出勤、假單審核、假別規則與年度額度整合在一起。主管與人資可以在同一個後臺快速切換日常巡檢、審核與規則維護，不需要再來回翻頁找按鈕。
+            </p>
           </div>
-          <h1 className="mt-4 text-3xl font-semibold text-slate-900">
-            考勤、請假與薪資前置管理
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-            這個工作台把每日出勤、假單審核、假別規則與年度額度整合在一起。人資與主管不需要再來回切頁，就能直接處理會影響薪資的前置資料。
-          </p>
-        </div>
+        </GlassCard>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="w-40">
+        <GlassCard className="border-white/35 bg-white/45 p-5">
+          <div className="mb-3 text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">
+            工具列
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
             <GlassInput
               type="date"
               value={selectedDate.format("YYYY-MM-DD")}
               onChange={(event) => setSelectedDate(dayjs(event.target.value))}
             />
-          </div>
-          <div className="w-28">
             <GlassInput
               type="number"
               value={String(selectedYear)}
               onChange={(event) => setSelectedYear(Number(event.target.value))}
             />
           </div>
-          <GlassButton
-            variant="secondary"
-            className="gap-2"
-            onClick={() => {
-              void loadAttendance();
-              void loadManagementData();
-            }}
-          >
-            <ReloadOutlined />
-            重新整理
-          </GlassButton>
-          <GlassButton className="gap-2" onClick={openCreateLeaveType}>
-            <FileAddOutlined />
-            新增假別
-          </GlassButton>
-        </div>
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
+            <GlassButton
+              variant="secondary"
+              className="h-12 gap-2 text-sm text-slate-800"
+              onClick={() => {
+                void loadAttendance();
+                void loadManagementData();
+              }}
+            >
+              <ReloadOutlined />
+              重新整理資料
+            </GlassButton>
+            <GlassButton
+              className="h-12 gap-2 text-sm"
+              onClick={openCreateLeaveType}
+            >
+              <FileAddOutlined />
+              新增假別規則
+            </GlassButton>
+          </div>
+        </GlassCard>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">

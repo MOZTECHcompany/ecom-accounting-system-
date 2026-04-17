@@ -148,7 +148,7 @@ const EmployeeDashboardPage: React.FC = () => {
           type="warning"
           showIcon
           message="目前登入帳號尚未綁定員工資料"
-          description="請到「薪資管理 > 員工與部門」將這個登入帳號綁定到對應員工後，再進行打卡與請假。"
+          description="請到「考勤後臺 > 員工與部門」將這個登入帳號綁定到對應員工後，再進行打卡與請假。"
         />
       ) : null}
       
