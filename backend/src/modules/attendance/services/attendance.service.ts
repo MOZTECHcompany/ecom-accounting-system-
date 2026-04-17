@@ -26,53 +26,67 @@ export class AttendanceService {
       throw new BadRequestException('Employee record not found for this user');
     }
 
-    // Validate Policy
-    const schedules = await this.prisma.attendanceSchedule.findMany({
-      where: {
-        OR: [
-          { employeeId: employee.id },
-          { departmentId: employee.departmentId },
-        ],
-      },
-      include: { policy: true },
-    });
+    const now = new Date();
+    const schedule = await this.scheduleService.getScheduleForDate(employee.id, now);
+    const policy = this.policyService.resolvePolicy(schedule?.policy);
 
-    const activeSchedule = schedules.find(s => s.employeeId === employee.id) 
-                        || schedules.find(s => s.departmentId === employee.departmentId);
+    if (policy?.requiresPhoto && !dto.photoUrl) {
+      throw new ForbiddenException('Photo is required by attendance policy.');
+    }
 
-    if (activeSchedule?.policy) {
-      const { policy } = activeSchedule;
+    if (schedule && now < schedule.allowedClockInFrom) {
+      throw new ForbiddenException(
+        `Clock-in is allowed after ${schedule.allowedClockInFrom.toISOString()}.`,
+      );
+    }
 
-      // GPS Validation
-      if (policy.geofence) {
-        if (!dto.latitude || !dto.longitude) {
-           throw new ForbiddenException('Location data is required by policy.');
-        }
-        if (!this.gpsStrategy.validate(dto.latitude, dto.longitude, policy.geofence)) {
-           throw new ForbiddenException('You are outside the allowed clock-in area.');
-        }
+    let isWithinFence = true;
+    let isWithinIpRange = true;
+
+    if (policy?.geofence) {
+      if (!dto.latitude || !dto.longitude) {
+        throw new ForbiddenException('Location data is required by policy.');
       }
-
-      // IP Validation
-      if (policy.ipAllowList && dto.ipAddress) {
-         if (!this.ipStrategy.validate(dto.ipAddress, policy.ipAllowList)) {
-            throw new ForbiddenException(`IP address ${dto.ipAddress} is not authorized.`);
-         }
+      isWithinFence = this.gpsStrategy.validate(
+        dto.latitude,
+        dto.longitude,
+        policy.geofence,
+      );
+      if (!isWithinFence) {
+        throw new ForbiddenException('You are outside the allowed clock-in area.');
       }
     }
-    
+
+    if (policy?.ipAllowList) {
+      if (!dto.ipAddress) {
+        throw new ForbiddenException('IP address is required by policy.');
+      }
+      isWithinIpRange = this.ipStrategy.validate(
+        dto.ipAddress,
+        policy.ipAllowList,
+      );
+      if (!isWithinIpRange) {
+        throw new ForbiddenException(
+          `IP address ${dto.ipAddress} is not authorized.`,
+        );
+      }
+    }
+
     const record = await this.prisma.attendanceRecord.create({
       data: {
         entityId: employee.entityId,
         employeeId: employee.id,
+        scheduleId: schedule?.id,
         eventType: AttendanceEventType.CLOCK_IN,
         method: dto.method,
-        timestamp: new Date(),
+        timestamp: now,
         latitude: dto.latitude,
         longitude: dto.longitude,
         ipAddress: dto.ipAddress,
         deviceInfo: dto.deviceInfo ?? undefined,
         photoUrl: dto.photoUrl,
+        isWithinFence,
+        isWithinIpRange,
         notes: dto.notes,
       },
     });
@@ -91,12 +105,18 @@ export class AttendanceService {
       },
       update: {
         clockInTime: record.timestamp,
+        breakMinutes: schedule?.breakMinutes ?? 0,
+        status:
+          schedule && record.timestamp > schedule.lateThreshold ? 'late' : 'pending',
       },
       create: {
         entityId: employee.entityId,
         employeeId: employee.id,
         workDate: today,
         clockInTime: record.timestamp,
+        breakMinutes: schedule?.breakMinutes ?? 0,
+        status:
+          schedule && record.timestamp > schedule.lateThreshold ? 'late' : 'pending',
       },
     });
 
@@ -111,38 +131,43 @@ export class AttendanceService {
       throw new BadRequestException('Employee record not found for this user');
     }
 
-    // Validate Policy
-    const schedules = await this.prisma.attendanceSchedule.findMany({
-      where: {
-        OR: [
-          { employeeId: employee.id },
-          { departmentId: employee.departmentId },
-        ],
-      },
-      include: { policy: true },
-    });
+    const now = new Date();
+    const schedule = await this.scheduleService.getScheduleForDate(employee.id, now);
+    const policy = this.policyService.resolvePolicy(schedule?.policy);
 
-    const activeSchedule = schedules.find(s => s.employeeId === employee.id) 
-                        || schedules.find(s => s.departmentId === employee.departmentId);
+    if (policy?.requiresPhoto && !dto.photoUrl) {
+      throw new ForbiddenException('Photo is required by attendance policy.');
+    }
 
-    if (activeSchedule?.policy) {
-      const { policy } = activeSchedule;
+    let isWithinFence = true;
+    let isWithinIpRange = true;
 
-      // GPS Validation
-      if (policy.geofence) {
-        if (!dto.latitude || !dto.longitude) {
-           throw new ForbiddenException('Location data is required by policy.');
-        }
-        if (!this.gpsStrategy.validate(dto.latitude, dto.longitude, policy.geofence)) {
-           throw new ForbiddenException('You are outside the allowed clock-out area.');
-        }
+    if (policy?.geofence) {
+      if (!dto.latitude || !dto.longitude) {
+        throw new ForbiddenException('Location data is required by policy.');
       }
+      isWithinFence = this.gpsStrategy.validate(
+        dto.latitude,
+        dto.longitude,
+        policy.geofence,
+      );
+      if (!isWithinFence) {
+        throw new ForbiddenException('You are outside the allowed clock-out area.');
+      }
+    }
 
-      // IP Validation
-      if (policy.ipAllowList && dto.ipAddress) {
-         if (!this.ipStrategy.validate(dto.ipAddress, policy.ipAllowList)) {
-            throw new ForbiddenException(`IP address ${dto.ipAddress} is not authorized.`);
-         }
+    if (policy?.ipAllowList) {
+      if (!dto.ipAddress) {
+        throw new ForbiddenException('IP address is required by policy.');
+      }
+      isWithinIpRange = this.ipStrategy.validate(
+        dto.ipAddress,
+        policy.ipAllowList,
+      );
+      if (!isWithinIpRange) {
+        throw new ForbiddenException(
+          `IP address ${dto.ipAddress} is not authorized.`,
+        );
       }
     }
 
@@ -150,14 +175,17 @@ export class AttendanceService {
       data: {
         entityId: employee.entityId,
         employeeId: employee.id,
+        scheduleId: schedule?.id,
         eventType: AttendanceEventType.CLOCK_OUT,
         method: dto.method,
-        timestamp: new Date(),
+        timestamp: now,
         latitude: dto.latitude,
         longitude: dto.longitude,
         ipAddress: dto.ipAddress,
         deviceInfo: dto.deviceInfo ?? undefined,
         photoUrl: dto.photoUrl,
+        isWithinFence,
+        isWithinIpRange,
         notes: dto.notes,
       },
     });
@@ -178,9 +206,18 @@ export class AttendanceService {
     });
 
     let workedMinutes = 0;
+    let breakMinutes = schedule?.breakMinutes ?? summary?.breakMinutes ?? 0;
+    let overtimeMinutes = 0;
     if (summary && summary.clockInTime) {
       const diffMs = record.timestamp.getTime() - summary.clockInTime.getTime();
-      workedMinutes = Math.floor(diffMs / 60000);
+      workedMinutes = Math.max(0, Math.floor(diffMs / 60000) - breakMinutes);
+    }
+
+    if (schedule && record.timestamp > schedule.shiftEndAt) {
+      overtimeMinutes = Math.max(
+        0,
+        Math.floor((record.timestamp.getTime() - schedule.shiftEndAt.getTime()) / 60000),
+      );
     }
 
     await this.prisma.attendanceDailySummary.upsert({
@@ -194,7 +231,14 @@ export class AttendanceService {
       update: {
         clockOutTime: record.timestamp,
         workedMinutes: workedMinutes,
-        status: 'completed', // Simplified status update
+        breakMinutes,
+        overtimeMinutes,
+        status:
+          summary?.clockInTime
+            ? summary.status === 'late'
+              ? 'late'
+              : 'completed'
+            : 'missing_clock',
       },
       create: {
         entityId: employee.entityId,
@@ -202,7 +246,9 @@ export class AttendanceService {
         workDate: today,
         clockOutTime: record.timestamp,
         workedMinutes: 0,
-        status: 'completed',
+        breakMinutes,
+        overtimeMinutes,
+        status: 'missing_clock',
       },
     });
 

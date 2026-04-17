@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { NotificationService } from '../../notification/notification.service';
+import { ScheduleService } from './schedule.service';
 
 @Injectable()
 export class AnomalyService {
@@ -10,6 +11,7 @@ export class AnomalyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationService: NotificationService,
+    private readonly scheduleService: ScheduleService,
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
@@ -61,43 +63,29 @@ export class AnomalyService {
         workDate: date,
         clockInTime: { not: null },
       },
-      include: {
-        employee: {
-          include: {
-            attendanceSchedules: true,
-          },
-        },
-      },
     });
 
     for (const summary of summaries) {
       const clockIn = summary.clockInTime;
       if (!clockIn) continue;
 
-      // Find applicable schedule for the day of week
-      const dayOfWeek = date.getDay(); // 0=Sun
-      const schedule = summary.employee.attendanceSchedules.find(s => s.weekday === dayOfWeek);
+      const schedule = await this.scheduleService.getScheduleForDate(
+        summary.employeeId,
+        date,
+      );
 
-      if (schedule) {
-        const [sh, sm] = schedule.shiftStart.split(':').map(Number);
-        const shiftStart = new Date(date);
-        shiftStart.setHours(sh, sm, 0, 0);
-
-        // Allow 5 minutes grace period (or fetch from policy)
-        const graceMinutes = 5; 
-        const lateThreshold = new Date(shiftStart.getTime() + graceMinutes * 60000);
-
-        if (clockIn > lateThreshold) {
-          const diffMinutes = Math.floor((clockIn.getTime() - shiftStart.getTime()) / 60000);
-          await this.createAnomaly(
-            summary.entityId,
-            summary.employeeId,
-            summary.id,
-            'LATE_ARRIVAL',
-            'low',
-            `Arrived ${diffMinutes} minutes late. Shift starts at ${schedule.shiftStart}.`,
-          );
-        }
+      if (schedule && clockIn > schedule.lateThreshold) {
+        const diffMinutes = Math.floor(
+          (clockIn.getTime() - schedule.shiftStartAt.getTime()) / 60000,
+        );
+        await this.createAnomaly(
+          summary.entityId,
+          summary.employeeId,
+          summary.id,
+          'LATE_ARRIVAL',
+          'low',
+          `Arrived ${diffMinutes} minutes late. Shift starts at ${schedule.shiftStart}.`,
+        );
       }
     }
   }
@@ -110,41 +98,29 @@ export class AnomalyService {
         workDate: date,
         clockOutTime: { not: null },
       },
-      include: {
-        employee: {
-          include: {
-            attendanceSchedules: true,
-          },
-        },
-      },
     });
 
     for (const summary of summaries) {
       const clockOut = summary.clockOutTime;
       if (!clockOut) continue;
 
-      const dayOfWeek = date.getDay();
-      const schedule = summary.employee.attendanceSchedules.find(s => s.weekday === dayOfWeek);
+      const schedule = await this.scheduleService.getScheduleForDate(
+        summary.employeeId,
+        date,
+      );
 
-      if (schedule) {
-        const [eh, em] = schedule.shiftEnd.split(':').map(Number);
-        const shiftEnd = new Date(date);
-        shiftEnd.setHours(eh, em, 0, 0);
-
-        // Allow 0 minutes grace for early leave usually, or maybe 5
-        const earlyThreshold = new Date(shiftEnd.getTime());
-
-        if (clockOut < earlyThreshold) {
-           const diffMinutes = Math.floor((shiftEnd.getTime() - clockOut.getTime()) / 60000);
-           await this.createAnomaly(
-            summary.entityId,
-            summary.employeeId,
-            summary.id,
-            'EARLY_DEPARTURE',
-            'low',
-            `Left ${diffMinutes} minutes early. Shift ends at ${schedule.shiftEnd}.`,
-          );
-        }
+      if (schedule && clockOut < schedule.earlyLeaveThreshold) {
+        const diffMinutes = Math.floor(
+          (schedule.earlyLeaveThreshold.getTime() - clockOut.getTime()) / 60000,
+        );
+        await this.createAnomaly(
+          summary.entityId,
+          summary.employeeId,
+          summary.id,
+          'EARLY_DEPARTURE',
+          'low',
+          `Left ${diffMinutes} minutes early. Shift ends at ${schedule.shiftEnd}.`,
+        );
       }
     }
   }

@@ -1,9 +1,22 @@
 import axios from 'axios'
 
+declare global {
+  interface Window {
+    __APP_CONFIG__?: {
+      apiUrl?: string
+    }
+  }
+}
+
 // 根據環境自動選擇 baseURL
 // 本地開發：使用 proxy (/api/v1)
 // 正式環境：使用環境變數 (VITE_API_URL)
 const getBaseURL = () => {
+  const runtimeUrlRaw = window.__APP_CONFIG__?.apiUrl?.trim()
+  if (runtimeUrlRaw) {
+    return runtimeUrlRaw.replace(/\/+$/, '')
+  }
+
   const envUrlRaw = import.meta.env.VITE_API_URL?.trim()
   if (envUrlRaw) {
     const envUrl = envUrlRaw.replace(/\/+$/, '')
@@ -35,8 +48,13 @@ const getBaseURL = () => {
   if (import.meta.env.DEV) {
     return '/api/v1'
   }
-  // Fallback to Render production backend
-  return 'https://ecom-accounting-backend.onrender.com/api/v1'
+
+  const origin =
+    typeof window !== 'undefined' && window.location?.origin
+      ? window.location.origin.replace(/\/+$/, '')
+      : ''
+
+  return origin ? `${origin}/api/v1` : '/api/v1'
 }
 
 export const API_URL = getBaseURL()

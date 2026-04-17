@@ -14,6 +14,14 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
   const prefix = configService.get('API_PREFIX') || '/api/v1';
+  const corsOriginRaw = configService.get<string>('CORS_ORIGIN') || '*';
+  const corsOrigins =
+    corsOriginRaw === '*'
+      ? true
+      : corsOriginRaw
+          .split(',')
+          .map((origin) => origin.trim())
+          .filter(Boolean);
 
   // Register parsers once with Nest's rawBody support so webhook HMAC validation
   // uses the original Shopify payload instead of a re-serialized JSON string.
@@ -34,11 +42,7 @@ async function bootstrap() {
 
   // CORS 設定
   app.enableCors({
-    origin: [
-      'https://ecom-accounting-frontend.onrender.com',
-      'http://localhost:5173',
-      'http://localhost:3000',
-    ],
+    origin: corsOrigins,
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: 'Content-Type, Accept, Authorization',
