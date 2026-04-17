@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Get,
   Param,
@@ -90,6 +91,35 @@ export class AccountingController {
   ) {
     const safeEntityId = this.ensureEntityId(entityId);
     return this.journalService.getJournalEntriesByPeriod(safeEntityId, periodId);
+  }
+
+  @Post('journals')
+  @ApiOperation({ summary: '手動建立會計分錄' })
+  async createManualJournalEntry(
+    @Body()
+    body: {
+      entityId: string;
+      date: string;
+      description: string;
+      lines: Array<{
+        accountId: string;
+        debit: number;
+        credit: number;
+        currency?: string;
+        fxRate?: number;
+        memo?: string;
+      }>;
+    },
+    @CurrentUser('id') userId: string,
+  ) {
+    const safeEntityId = this.ensureEntityId(body.entityId);
+    return this.accountingService.createManualJournalEntry({
+      entityId: safeEntityId,
+      date: new Date(body.date),
+      description: body.description,
+      lines: body.lines || [],
+      createdBy: userId,
+    });
   }
 
   @Post('journals/:journalEntryId/approve')

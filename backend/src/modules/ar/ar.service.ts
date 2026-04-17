@@ -425,10 +425,47 @@ export class ArService {
    * TODO: 自動產生會計分錄（借：應收帳款 / 貸：銷貨收入）
    */
   async createInvoice(data: any) {
-    // TODO: 驗證資料
-    // TODO: 計算金額
-    // TODO: 呼叫 AccountingService.createJournalEntry()
-    return this.arRepository.createInvoice(data);
+    if (!data?.entityId || !data?.issueDate || !data?.dueDate) {
+      throw new NotFoundException('entityId / issueDate / dueDate 為必填');
+    }
+
+    const amountOriginal = Number(data.amountOriginal || 0);
+    const paidAmountOriginal = Number(data.paidAmountOriginal || 0);
+    const fxRate = Number(data.amountFxRate || 1);
+    const paidFxRate = Number(data.paidAmountFxRate || fxRate || 1);
+    const dueDate = new Date(data.dueDate);
+    const invoice = await this.arRepository.createInvoice({
+      entityId: data.entityId,
+      customerId: data.customerId || null,
+      invoiceNo: data.invoiceNo || null,
+      amountOriginal: new Decimal(amountOriginal),
+      amountCurrency: data.amountCurrency || 'TWD',
+      amountFxRate: new Decimal(fxRate),
+      amountBase: new Decimal(
+        Number(data.amountBase || (amountOriginal * fxRate).toFixed(2)),
+      ),
+      paidAmountOriginal: new Decimal(paidAmountOriginal),
+      paidAmountCurrency: data.paidAmountCurrency || data.amountCurrency || 'TWD',
+      paidAmountFxRate: new Decimal(paidFxRate),
+      paidAmountBase: new Decimal(
+        Number(data.paidAmountBase || (paidAmountOriginal * paidFxRate).toFixed(2)),
+      ),
+      issueDate: new Date(data.issueDate),
+      dueDate,
+      status:
+        data.status ||
+        this.resolveReceivableStatus({
+          grossAmount: amountOriginal,
+          paidAmount: paidAmountOriginal,
+          dueDate,
+        }),
+      priority: data.priority || 'normal',
+      sourceModule: data.sourceModule || null,
+      sourceId: data.sourceId || null,
+      notes: data.notes || null,
+    });
+
+    return invoice;
   }
 
   /**
@@ -436,10 +473,88 @@ export class ArService {
    * TODO: 產生收款分錄（借：銀行存款 / 貸：應收帳款）
    */
   async recordPayment(invoiceId: string, data: any) {
-    // TODO: 更新AR發票的 paid_amount
-    // TODO: 檢查是否已全部收清（status = PAID）
-    // TODO: 產生會計分錄
-    return this.arRepository.recordPayment(invoiceId, data);
+    const invoice = await this.arRepository.findInvoiceById(invoiceId);
+    if (!invoice) {
+      throw new NotFoundException(`AR invoice ${invoiceId} not found`);
+    }
+
+    const paymentAmount = Number(data.amount || 0);
+    if (paymentAmount <= 0) {
+      throw new NotFoundException('收款金額必須大於 0');
+    }
+
+    const paidAmount = Number(invoice.paidAmountOriginal || 0) + paymentAmount;
+    const grossAmount = Number(invoice.amountOriginal || 0);
+    const dueDate = new Date(invoice.dueDate);
+    const newStatus = this.resolveReceivableStatus({
+      grossAmount,
+      paidAmount,
+      dueDate,
+    });
+
+    const updatedInvoice = await this.arRepository.recordPayment(invoiceId, {
+      amount: paymentAmount,
+      newStatus,
+    });
+
+    const accounts = await this.prisma.account.findMany({
+      where: {
+        entityId: invoice.entityId,
+        code: { in: ['1113', '1191'] },
+        isActive: true,
+      },
+    });
+    const accountMap = new Map(accounts.map((account) => [account.code, account]));
+    const bankAccount = accountMap.get('1113');
+    const arAccount = accountMap.get('1191');
+
+    if (bankAccount && arAccount) {
+      const period = await this.prisma.period.findFirst({
+        where: {
+          entityId: invoice.entityId,
+          status: 'open',
+          startDate: { lte: new Date() },
+          endDate: { gte: new Date() },
+        },
+        orderBy: { startDate: 'desc' },
+      });
+
+      await this.journalService.createJournalEntry({
+        entityId: invoice.entityId,
+        date: new Date(data.paymentDate || new Date()),
+        description: `AR 收款 ${invoice.invoiceNo || invoice.id}`,
+        sourceModule: 'ar_payment',
+        sourceId: invoice.id,
+        periodId: period?.id,
+        createdBy: data.userId || 'system',
+        lines: [
+          {
+            accountId: bankAccount.id,
+            debit: paymentAmount,
+            credit: 0,
+            currency: invoice.amountCurrency,
+            fxRate: Number(invoice.amountFxRate || 1),
+            amountBase: Number(
+              (paymentAmount * Number(invoice.amountFxRate || 1)).toFixed(2),
+            ),
+            memo: '銀行收款',
+          },
+          {
+            accountId: arAccount.id,
+            debit: 0,
+            credit: paymentAmount,
+            currency: invoice.amountCurrency,
+            fxRate: Number(invoice.amountFxRate || 1),
+            amountBase: Number(
+              (paymentAmount * Number(invoice.amountFxRate || 1)).toFixed(2),
+            ),
+            memo: '沖銷應收帳款',
+          },
+        ],
+      });
+    }
+
+    return updatedInvoice;
   }
 
   /**
@@ -465,8 +580,72 @@ export class ArService {
    * @returns 建立的應收發票
    */
   async createArFromOrder(orderId: string) {
-    this.logger.log(`Creating AR invoice from order: ${orderId}`);
-    throw new Error('Not implemented: createArFromOrder');
+    const order = await this.prisma.salesOrder.findUnique({
+      where: { id: orderId },
+      include: {
+        invoices: {
+          orderBy: [{ issuedAt: 'desc' }, { createdAt: 'desc' }],
+        },
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Sales order ${orderId} not found`);
+    }
+
+    const latestInvoice = order.invoices[0] || null;
+    const paidAmount = await this.prisma.payment.aggregate({
+      where: { salesOrderId: order.id },
+      _sum: { amountGrossOriginal: true },
+    });
+    const grossAmount = Number(order.totalGrossOriginal || 0);
+    const paid = Number(paidAmount._sum.amountGrossOriginal || 0);
+    const dueDate = this.buildDueDate(order.orderDate, grossAmount - paid);
+    const status = this.resolveReceivableStatus({
+      grossAmount,
+      paidAmount: paid,
+      dueDate,
+    });
+
+    const existing = await this.prisma.arInvoice.findFirst({
+      where: {
+        entityId: order.entityId,
+        sourceModule: 'sales_order',
+        sourceId: order.id,
+      },
+    });
+
+    const payload = {
+      entityId: order.entityId,
+      customerId: order.customerId,
+      invoiceNo: latestInvoice?.invoiceNumber || order.externalOrderId || null,
+      amountOriginal: new Decimal(grossAmount),
+      amountCurrency: order.totalGrossCurrency,
+      amountFxRate: order.totalGrossFxRate,
+      amountBase: order.totalGrossBase,
+      paidAmountOriginal: new Decimal(paid),
+      paidAmountCurrency: order.totalGrossCurrency,
+      paidAmountFxRate: order.totalGrossFxRate,
+      paidAmountBase: new Decimal(
+        Number((paid * Number(order.totalGrossFxRate || 1)).toFixed(2)),
+      ),
+      issueDate: order.orderDate,
+      dueDate,
+      status,
+      priority: status === 'overdue' ? 'urgent' : 'normal',
+      sourceModule: 'sales_order',
+      sourceId: order.id,
+      notes: this.buildArNote(order.notes, latestInvoice?.invoiceNumber || null),
+    };
+
+    if (existing) {
+      return this.prisma.arInvoice.update({
+        where: { id: existing.id },
+        data: payload,
+      });
+    }
+
+    return this.prisma.arInvoice.create({ data: payload });
   }
 
   /**
@@ -481,10 +660,11 @@ export class ArService {
     paymentAmount: number,
     paymentDate: Date,
   ) {
-    this.logger.log(
-      `Applying payment of ${paymentAmount} to invoice ${invoiceId}`,
-    );
-    throw new Error('Not implemented: applyPayment');
+    return this.recordPayment(invoiceId, {
+      amount: paymentAmount,
+      paymentDate,
+      userId: 'system',
+    });
   }
 
   /**
@@ -494,10 +674,64 @@ export class ArService {
    * @returns 帳齡分析報表
    */
   async getAgingReport(entityId: string, asOfDate: Date) {
-    this.logger.log(
-      `Generating aging report for entity ${entityId} as of ${asOfDate}`,
-    );
-    throw new Error('Not implemented: getAgingReport');
+    const invoices = await this.prisma.arInvoice.findMany({
+      where: { entityId },
+      include: {
+        customer: true,
+      },
+      orderBy: { dueDate: 'asc' },
+    });
+
+    const buckets = {
+      current: 0,
+      days1to30: 0,
+      days31to60: 0,
+      days61to90: 0,
+      over90: 0,
+    };
+
+    const items = invoices.map((invoice) => {
+      const amount = Number(invoice.amountOriginal || 0);
+      const paid = Number(invoice.paidAmountOriginal || 0);
+      const outstanding = Math.max(amount - paid, 0);
+      const daysPastDue = Math.max(
+        0,
+        Math.floor(
+          (asOfDate.getTime() - new Date(invoice.dueDate).getTime()) /
+            (24 * 60 * 60 * 1000),
+        ),
+      );
+
+      let bucket: keyof typeof buckets = 'current';
+      if (daysPastDue > 90) bucket = 'over90';
+      else if (daysPastDue > 60) bucket = 'days61to90';
+      else if (daysPastDue > 30) bucket = 'days31to60';
+      else if (daysPastDue > 0) bucket = 'days1to30';
+
+      buckets[bucket] += outstanding;
+
+      return {
+        id: invoice.id,
+        invoiceNo: invoice.invoiceNo,
+        customerName: invoice.customer?.name || '散客',
+        dueDate: invoice.dueDate,
+        status: invoice.status,
+        outstandingAmount: outstanding,
+        daysPastDue,
+        bucket,
+      };
+    });
+
+    return {
+      entityId,
+      asOfDate: asOfDate.toISOString(),
+      summary: buckets,
+      totalOutstanding: items.reduce(
+        (sum, item) => sum + item.outstandingAmount,
+        0,
+      ),
+      items,
+    };
   }
 
   /**
@@ -508,10 +742,83 @@ export class ArService {
    * @returns 沖銷記錄
    */
   async writeOffBadDebt(invoiceId: string, amount: number, reason: string) {
-    this.logger.log(
-      `Writing off bad debt for invoice ${invoiceId}, amount: ${amount}, reason: ${reason}`,
+    const invoice = await this.arRepository.findInvoiceById(invoiceId);
+    if (!invoice) {
+      throw new NotFoundException(`AR invoice ${invoiceId} not found`);
+    }
+
+    const outstanding = Math.max(
+      Number(invoice.amountOriginal || 0) - Number(invoice.paidAmountOriginal || 0),
+      0,
     );
-    throw new Error('Not implemented: writeOffBadDebt');
+    const writeOffAmount = Math.min(Math.max(amount, 0), outstanding);
+
+    const updated = await this.prisma.arInvoice.update({
+      where: { id: invoiceId },
+      data: {
+        status: 'written_off',
+        notes: [invoice.notes, `[write-off] amount=${writeOffAmount}; reason=${reason}`]
+          .filter(Boolean)
+          .join('\n'),
+      },
+    });
+
+    const accounts = await this.prisma.account.findMany({
+      where: {
+        entityId: invoice.entityId,
+        code: { in: ['1191', '6134'] },
+        isActive: true,
+      },
+    });
+    const accountMap = new Map(accounts.map((account) => [account.code, account]));
+    const arAccount = accountMap.get('1191');
+    const badDebtExpense = accountMap.get('6134');
+
+    if (writeOffAmount > 0 && arAccount && badDebtExpense) {
+      const period = await this.prisma.period.findFirst({
+        where: {
+          entityId: invoice.entityId,
+          status: 'open',
+        },
+        orderBy: { startDate: 'desc' },
+      });
+
+      await this.journalService.createJournalEntry({
+        entityId: invoice.entityId,
+        date: new Date(),
+        description: `呆帳沖銷 ${invoice.invoiceNo || invoice.id}`,
+        sourceModule: 'ar_write_off',
+        sourceId: invoice.id,
+        periodId: period?.id,
+        createdBy: 'system',
+        lines: [
+          {
+            accountId: badDebtExpense.id,
+            debit: writeOffAmount,
+            credit: 0,
+            currency: invoice.amountCurrency,
+            fxRate: Number(invoice.amountFxRate || 1),
+            amountBase: Number(
+              (writeOffAmount * Number(invoice.amountFxRate || 1)).toFixed(2),
+            ),
+            memo: reason || '呆帳沖銷',
+          },
+          {
+            accountId: arAccount.id,
+            debit: 0,
+            credit: writeOffAmount,
+            currency: invoice.amountCurrency,
+            fxRate: Number(invoice.amountFxRate || 1),
+            amountBase: Number(
+              (writeOffAmount * Number(invoice.amountFxRate || 1)).toFixed(2),
+            ),
+            memo: '沖銷應收帳款',
+          },
+        ],
+      });
+    }
+
+    return updated;
   }
 
   private sumAmount<T extends Record<string, any>>(

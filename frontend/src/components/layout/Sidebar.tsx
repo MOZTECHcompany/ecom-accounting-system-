@@ -124,7 +124,9 @@ const Sidebar: React.FC<SidebarProps> = ({
             <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center shadow-lg">
               <BrandMark className="w-5 h-5" alt="System logo" />
             </div>
-            <span className="text-gray-800 font-medium text-lg tracking-wide">Ecom System</span>
+            <div className="max-w-[152px] text-gray-800 font-medium text-sm leading-tight tracking-wide">
+              AI 電子商務營運中樞
+            </div>
           </div>
         ) : (
           <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center shadow-lg">

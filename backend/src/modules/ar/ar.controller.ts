@@ -71,8 +71,12 @@ export class ArController {
 
   @Put('invoices/:id/receive')
   @ApiOperation({ summary: '記錄收款' })
-  async recordPayment(@Param('id') id: string, @Body() data: any) {
-    return this.arService.recordPayment(id, data);
+  async recordPayment(
+    @Param('id') id: string,
+    @Body() data: any,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.arService.recordPayment(id, { ...data, userId });
   }
 
   @Get('aging-report')

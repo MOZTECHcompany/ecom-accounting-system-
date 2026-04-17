@@ -4,7 +4,9 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { JournalService } from './services/journal.service';
 
 /**
  * AccountingService
@@ -14,7 +16,10 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 export class AccountingService {
   private readonly logger = new Logger(AccountingService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly journalService: JournalService,
+  ) {}
 
   /**
    * 查詢指定實體的會計科目表
@@ -120,12 +125,90 @@ export class AccountingService {
     }>;
     createdBy: string;
   }) {
-    // TODO: 實作手動建立會計分錄
-    // 1. 驗證借貸平衡
-    // 2. 檢查期間是否開放
-    // 3. 建立 JournalEntry 與 JournalLines
-    this.logger.log('Creating manual journal entry...');
-    throw new Error('Not implemented: createManualJournalEntry');
+    if (!data.lines?.length) {
+      throw new BadRequestException('至少要有一筆分錄明細');
+    }
+
+    const totalDebit = data.lines.reduce(
+      (sum, line) => sum + Number(line.debit || 0),
+      0,
+    );
+    const totalCredit = data.lines.reduce(
+      (sum, line) => sum + Number(line.credit || 0),
+      0,
+    );
+
+    if (Math.abs(totalDebit - totalCredit) > 0.01) {
+      throw new BadRequestException('借貸金額不平衡');
+    }
+
+    const accountIds = [...new Set(data.lines.map((line) => line.accountId))];
+    const accounts = await this.prisma.account.findMany({
+      where: {
+        entityId: data.entityId,
+        id: { in: accountIds },
+        isActive: true,
+      },
+    });
+
+    if (accounts.length !== accountIds.length) {
+      throw new NotFoundException('分錄中包含不存在或停用的會計科目');
+    }
+
+    const period =
+      (await this.prisma.period.findFirst({
+        where: {
+          entityId: data.entityId,
+          startDate: { lte: data.date },
+          endDate: { gte: data.date },
+        },
+        orderBy: { startDate: 'desc' },
+      })) || null;
+
+    if (period && period.status !== 'open') {
+      throw new BadRequestException('該日期落在已關閉或已鎖定的會計期間');
+    }
+
+    const journal = await this.journalService.createJournalEntry({
+      entityId: data.entityId,
+      date: data.date,
+      description: data.description.trim(),
+      sourceModule: 'manual',
+      sourceId: null,
+      periodId: period?.id,
+      createdBy: data.createdBy,
+      lines: data.lines.map((line) => {
+        const fxRate = Number(line.fxRate || 1);
+        const amount = Number(line.debit || line.credit || 0);
+        return {
+          accountId: line.accountId,
+          debit: Number(line.debit || 0),
+          credit: Number(line.credit || 0),
+          currency: line.currency || 'TWD',
+          fxRate,
+          amountBase: Number((amount * fxRate).toFixed(2)),
+          memo: line.memo?.trim() || undefined,
+        };
+      }),
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: data.createdBy,
+        tableName: 'journal_entries',
+        recordId: journal.id,
+        action: 'CREATE',
+        newData: {
+          sourceModule: 'manual',
+          description: journal.description,
+          totalDebit: totalDebit.toFixed(2),
+          totalCredit: totalCredit.toFixed(2),
+        },
+      },
+    });
+
+    this.logger.log(`Created manual journal entry ${journal.id}`);
+    return journal;
   }
 
   /**

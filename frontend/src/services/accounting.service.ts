@@ -33,6 +33,27 @@ export const accountingService = {
     return response.data
   },
 
+  async createManualJournal(data: {
+    entityId?: string
+    date: string
+    description: string
+    lines: Array<{
+      accountId: string
+      debit: number
+      credit: number
+      currency?: string
+      fxRate?: number
+      memo?: string
+    }>
+  }): Promise<JournalEntry> {
+    const effectiveEntityId = data.entityId?.trim() || DEFAULT_ENTITY_ID
+    const response = await api.post<JournalEntry>('/accounting/journals', {
+      ...data,
+      entityId: effectiveEntityId,
+    })
+    return response.data
+  },
+
   async approveJournal(journalEntryId: string): Promise<JournalEntry> {
     const response = await api.post<JournalEntry>(`/accounting/journals/${journalEntryId}/approve`)
     return response.data

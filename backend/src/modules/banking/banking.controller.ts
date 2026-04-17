@@ -39,7 +39,7 @@ export class BankingController {
   @ApiOperation({ summary: '查詢單一銀行帳戶' })
   @ApiResponse({ status: 200, description: '成功取得銀行帳戶詳情' })
   async getBankAccount(@Param('id') id: string) {
-    throw new Error('Not implemented');
+    return this.bankingService.getBankAccount(id);
   }
 
   @Post('accounts')
@@ -68,20 +68,20 @@ export class BankingController {
   @ApiOperation({ summary: '建立銀行交易' })
   @ApiResponse({ status: 201, description: '成功建立交易記錄' })
   async createTransaction(@Body() data: any) {
-    throw new Error('Not implemented');
+    return this.bankingService.createBankTransaction(data);
   }
 
   @Put('transactions/:id/reconcile')
   @ApiOperation({ summary: '更新對帳狀態' })
   @ApiResponse({ status: 200, description: '成功更新對帳狀態' })
   async updateReconciliation(@Param('id') id: string, @Body() data: any) {
-    throw new Error('Not implemented');
+    return this.bankingService.updateReconciliation(id, data);
   }
 
   @Get('accounts/:id/balance')
   @ApiOperation({ summary: '查詢帳戶餘額' })
   @ApiResponse({ status: 200, description: '成功取得帳戶餘額' })
   async getAccountBalance(@Param('id') id: string) {
-    throw new Error('Not implemented');
+    return this.bankingService.getAccountBalance(id);
   }
 }

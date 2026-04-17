@@ -1,4 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { Decimal } from '@prisma/client/runtime/library';
+import { BankingRepository } from './banking.repository';
+import { PrismaService } from '../../common/prisma/prisma.service';
 
 /**
  * 銀行管理服務
@@ -11,18 +14,53 @@ import { Injectable } from '@nestjs/common';
  */
 @Injectable()
 export class BankingService {
+  constructor(
+    private readonly bankingRepository: BankingRepository,
+    private readonly prisma: PrismaService,
+  ) {}
+
   /**
    * 查詢銀行帳戶列表
    */
   async getBankAccounts(entityId: string) {
-    // TODO: 查詢銀行帳戶
+    return this.bankingRepository.findBankAccounts(entityId);
+  }
+
+  async getBankAccount(id: string) {
+    const account = await this.prisma.bankAccount.findUnique({
+      where: { id },
+      include: {
+        bankTransactions: {
+          orderBy: { txnDate: 'desc' },
+          take: 20,
+        },
+        virtualAccounts: {
+          orderBy: { virtualAccountNo: 'asc' },
+        },
+      },
+    });
+
+    if (!account) {
+      throw new NotFoundException(`Bank account ${id} not found`);
+    }
+
+    return account;
   }
 
   /**
    * 建立銀行帳戶
    */
   async createBankAccount(data: any) {
-    // TODO: 建立銀行帳戶
+    return this.bankingRepository.createBankAccount({
+      entityId: data.entityId,
+      bankName: data.bankName,
+      branch: data.branch || null,
+      accountNo: data.accountNo,
+      currency: data.currency || 'TWD',
+      isVirtualSupport: Boolean(data.isVirtualSupport),
+      metaJson: data.metaJson || null,
+      isActive: data.isActive ?? true,
+    });
   }
 
   /**
@@ -33,7 +71,88 @@ export class BankingService {
     startDate?: Date,
     endDate?: Date,
   ) {
-    // TODO: 查詢銀行交易流水
+    return this.prisma.bankTransaction.findMany({
+      where: {
+        ...(bankAccountId && { bankAccountId }),
+        ...(startDate || endDate
+          ? {
+              txnDate: {
+                ...(startDate && { gte: startDate }),
+                ...(endDate && { lte: endDate }),
+              },
+            }
+          : {}),
+      },
+      include: {
+        bankAccount: true,
+      },
+      orderBy: { txnDate: 'desc' },
+    });
+  }
+
+  async createBankTransaction(data: any) {
+    const amountOriginal = Number(data.amountOriginal || 0);
+    const amountFxRate = Number(data.amountFxRate || 1);
+
+    return this.bankingRepository.createBankTransaction({
+      bankAccountId: data.bankAccountId,
+      txnDate: new Date(data.txnDate || new Date()),
+      valueDate: new Date(data.valueDate || data.txnDate || new Date()),
+      amountOriginal: new Decimal(amountOriginal),
+      amountCurrency: data.amountCurrency || 'TWD',
+      amountFxRate: new Decimal(amountFxRate),
+      amountBase: new Decimal(
+        Number(data.amountBase || (amountOriginal * amountFxRate).toFixed(2)),
+      ),
+      descriptionRaw: data.descriptionRaw || '',
+      referenceNo: data.referenceNo || null,
+      virtualAccountNo: data.virtualAccountNo || null,
+      batchId: data.batchId || null,
+      matchedType: data.matchedType || null,
+      matchedId: data.matchedId || null,
+      reconcileStatus: data.reconcileStatus || 'unmatched',
+    });
+  }
+
+  async updateReconciliation(bankTransactionId: string, data: any) {
+    return this.prisma.bankTransaction.update({
+      where: { id: bankTransactionId },
+      data: {
+        matchedType: data.matchedType || null,
+        matchedId: data.matchedId || null,
+        reconcileStatus: data.reconcileStatus || 'matched',
+      },
+    });
+  }
+
+  async getAccountBalance(id: string) {
+    const account = await this.getBankAccount(id);
+    const aggregate = await this.prisma.bankTransaction.aggregate({
+      where: { bankAccountId: id },
+      _sum: { amountOriginal: true, amountBase: true },
+    });
+
+    const reconciled = await this.prisma.bankTransaction.aggregate({
+      where: { bankAccountId: id, reconcileStatus: 'matched' },
+      _sum: { amountOriginal: true, amountBase: true },
+    });
+
+    return {
+      account: {
+        id: account.id,
+        bankName: account.bankName,
+        branch: account.branch,
+        accountNo: account.accountNo,
+        currency: account.currency,
+      },
+      balanceOriginal: Number(aggregate._sum.amountOriginal || 0),
+      balanceBase: Number(aggregate._sum.amountBase || 0),
+      reconciledOriginal: Number(reconciled._sum.amountOriginal || 0),
+      reconciledBase: Number(reconciled._sum.amountBase || 0),
+      unreconciledCount: account.bankTransactions.filter(
+        (txn) => txn.reconcileStatus !== 'matched',
+      ).length,
+    };
   }
 
   /**
