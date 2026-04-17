@@ -3,6 +3,15 @@ import { IsIn, IsOptional, IsString, Matches } from 'class-validator';
 
 export class SyncEcpayShopifyPayoutsDto {
   @ApiPropertyOptional({
+    description:
+      '綠界 merchant profile key。未提供時會使用預設 profile，例如 shopify-main / groupbuy-main。',
+    example: 'shopify-main',
+  })
+  @IsOptional()
+  @IsString()
+  merchantKey?: string;
+
+  @ApiPropertyOptional({
     description: '公司實體 ID。未提供時會退回 SHOPIFY_DEFAULT_ENTITY_ID。',
     example: 'tw-entity-001',
   })

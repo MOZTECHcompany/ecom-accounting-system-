@@ -75,6 +75,15 @@ SHOPLINE_STORES_JSON: >-
   [{"token":"replace-me","handle":"replace-me","storeName":"SHOPLINE 主店","merchantId":"replace-me"}]
 ```
 
+如果要把雙綠界帳號一起部署到 Cloud Run，建議使用：
+
+```yaml
+ECPAY_MERCHANTS_JSON: >-
+  [{"key":"shopify-main","merchantId":"3290494","hashKey":"replace-me","hashIv":"replace-me","entityId":"tw-entity-001","syncEnabled":true,"lookbackDays":90,"dateType":"2","description":"MOZTECH 官方網站 / Shopify"},{"key":"groupbuy-main","merchantId":"3150241","hashKey":"replace-me","hashIv":"replace-me","entityId":"tw-entity-001","syncEnabled":false,"lookbackDays":90,"dateType":"2","description":"團購 / 1Shop / 未來 Shopline"}]
+```
+
+建議把 `hashKey / hashIv` 放進 `GCP Secret Manager` 後，再在 Cloud Run 用 secret 或 env file 注入，不要直接寫進 repo。
+
 ## 建議遷移順序
 1. 先部署後端到 Cloud Run
 2. 驗證 `/health`、`/api-docs`、登入 API

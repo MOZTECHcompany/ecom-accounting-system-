@@ -11,6 +11,22 @@
 
 ## 目前已完成的底座
 
+### 綠界帳號分流
+
+- `3290494`
+  - 用途：`MOZTECH 官方網站`
+  - 對應通路：`Shopify`
+  - 說明：目前已驗證的綠界匯出檔 [NoEscrowStatistic_20260416182627.xls](</Users/moztecheason/Downloads/NoEscrowStatistic_20260416182627.xls>) 全部來自這個商店代號，且平台名稱皆為 `綠界科技 Shopify`
+- `3150241`
+  - 用途：`團購`
+  - 對應通路：`1Shop`，以及後續 `Shopline`
+  - 說明：這個商店代號應獨立成第二條綠界對帳鏈，不可與 Shopify 官方站混用
+
+補充：
+
+- 綠界金流 / MPOS / 電子發票 / 物流 / 電子收據的憑證資訊已由使用者提供
+- 基於安全性，憑證本身不寫入本文件，後續應存放於 `GCP Secret Manager`
+
 ### 通路整合
 
 - Shopify：
@@ -36,6 +52,9 @@
   - `Payment`
   - `Provider Payout Import`
   - 實際 / 預估 / 不可得手續費狀態
+- 正在收斂為「多綠界帳號」架構：
+  - 綠界帳號 A：Shopify 官方站
+  - 綠界帳號 B：1Shop / 團購 / 未來 Shopline
 
 ### 可直接複用的技術骨架
 

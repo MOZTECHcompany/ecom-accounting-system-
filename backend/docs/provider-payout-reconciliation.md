@@ -92,6 +92,7 @@
 
 ```json
 {
+  "merchantKey": "shopify-main",
   "entityId": "tw-entity-001",
   "beginDate": "2026-04-01",
   "endDate": "2026-04-16",
@@ -105,6 +106,7 @@
 
 ```json
 {
+  "merchantKey": "shopify-main",
   "entityId": "tw-entity-001",
   "paymentId": "shopify-payment-id-from-transaction-receipt"
 }
@@ -112,18 +114,50 @@
 
 ### 後端設定
 
+建議改成多 merchant profile：
+
+```env
+ECPAY_MERCHANTS_JSON='[
+  {
+    "key": "shopify-main",
+    "merchantId": "3290494",
+    "hashKey": "replace-me",
+    "hashIv": "replace-me",
+    "entityId": "tw-entity-001",
+    "syncEnabled": true,
+    "lookbackDays": 90,
+    "dateType": "2",
+    "description": "MOZTECH 官方網站 / Shopify"
+  },
+  {
+    "key": "groupbuy-main",
+    "merchantId": "3150241",
+    "hashKey": "replace-me",
+    "hashIv": "replace-me",
+    "entityId": "tw-entity-001",
+    "syncEnabled": false,
+    "lookbackDays": 90,
+    "dateType": "2",
+    "description": "團購 / 1Shop / 未來 Shopline"
+  }
+]'
+```
+
+如果目前只想沿用舊設定，原本單一帳號環境變數仍可用：
+
 ```env
 ECPAY_SHOPIFY_API_URL="https://ecpayment.ecpay.com.tw/Cashier/ShopifyQueryTradeMedia"
 ECPAY_SHOPIFY_MERCHANT_ID="..."
 ECPAY_SHOPIFY_HASH_KEY="..."
 ECPAY_SHOPIFY_HASH_IV="..."
 ECPAY_SHOPIFY_SYNC_ENABLED="true"
-ECPAY_SHOPIFY_SYNC_LOOKBACK_DAYS="14"
+ECPAY_SHOPIFY_SYNC_LOOKBACK_DAYS="90"
 ECPAY_SHOPIFY_QUERY_DATE_TYPE="2"
 ```
 
 ### 注意事項
 
 1. 綠界 API 會檢查來源 IP，Cloud Run 需要固定對外靜態 IP，並把該 IP 加到綠界後台白名單。
-2. 若未提供日期區間，系統會用 `ECPAY_SHOPIFY_SYNC_LOOKBACK_DAYS` 的最近天數自動補查。
+2. 若未提供日期區間，系統會用 merchant profile 的 `lookbackDays` 自動補查；若仍沿用舊設定，則使用 `ECPAY_SHOPIFY_SYNC_LOOKBACK_DAYS`。
 3. 綠界回來的欄位會先轉成既有的 `payout import` 格式，再回填到 `Payment`；因此同一套批次查詢頁就能看到 API 與手動匯入結果。
+4. `HashKey / HashIV` 不應寫死在 repo，正式環境建議放在 `GCP Secret Manager`，再由 Cloud Run 注入 `ECPAY_MERCHANTS_JSON`。
