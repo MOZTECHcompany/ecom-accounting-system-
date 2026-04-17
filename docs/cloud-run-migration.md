@@ -13,7 +13,7 @@
 
 ## 前端
 - `frontend/Dockerfile` 會在建置時注入 `VITE_API_URL`
-- `frontend/server.mjs` 也支援在執行時透過 `API_URL` 提供 `/config.js`
+- `frontend/server.mjs` 也支援在執行時透過 `API_URL` / `WS_URL` 提供 `/config.js`
 - 如果之後改後端網域，不一定要重新改前端程式碼
 
 ## 後端

@@ -43,6 +43,7 @@ const server = http.createServer(async (req, res) => {
 
   if (requestUrl.pathname === '/config.js') {
     const apiUrl = (process.env.API_URL || '').trim();
+    const wsUrl = (process.env.WS_URL || '').trim();
     const defaultEntityId = (process.env.DEFAULT_ENTITY_ID || 'tw-entity-001').trim();
 
     res.statusCode = 200;
@@ -50,6 +51,7 @@ const server = http.createServer(async (req, res) => {
     res.end(
       `window.__APP_CONFIG__ = ${JSON.stringify({
         apiUrl,
+        wsUrl,
         defaultEntityId,
       })};`,
     );

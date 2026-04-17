@@ -2,6 +2,16 @@ import { io, Socket } from 'socket.io-client'
 import { authService } from './auth.service'
 import { Notification } from './notification.service'
 
+declare global {
+  interface Window {
+    __APP_CONFIG__?: {
+      apiUrl?: string
+      defaultEntityId?: string
+      wsUrl?: string
+    }
+  }
+}
+
 class WebSocketService {
   private socket: Socket | null = null
   private listeners: ((notification: Notification) => void)[] = []
@@ -10,9 +20,12 @@ class WebSocketService {
     const token = authService.getToken()
     if (!token) return
 
-    // Assuming backend is on the same host/port or configured via env
-    // For dev: http://localhost:3000
-    const url = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+    const runtimeUrl =
+      window.__APP_CONFIG__?.wsUrl?.trim() ||
+      window.__APP_CONFIG__?.apiUrl?.trim() ||
+      import.meta.env.VITE_API_URL ||
+      'http://localhost:3000'
+    const url = runtimeUrl.replace(/\/api\/v1\/?$/, '')
     
     this.socket = io(url, {
       auth: {

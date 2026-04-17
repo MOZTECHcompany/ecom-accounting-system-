@@ -4,6 +4,8 @@ declare global {
   interface Window {
     __APP_CONFIG__?: {
       apiUrl?: string
+      defaultEntityId?: string
+      wsUrl?: string
     }
   }
 }

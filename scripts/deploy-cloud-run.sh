@@ -66,7 +66,7 @@ gcloud run deploy "${FRONTEND_SERVICE}" \
   --image="${FRONTEND_IMAGE}" \
   --allow-unauthenticated \
   --port=8080 \
-  --set-env-vars="API_URL=${FRONTEND_API_URL},DEFAULT_ENTITY_ID=${DEFAULT_ENTITY_ID}"
+  --set-env-vars="API_URL=${FRONTEND_API_URL},WS_URL=${FRONTEND_API_URL%/api/v1},DEFAULT_ENTITY_ID=${DEFAULT_ENTITY_ID}"
 
 echo "Building backend image..."
 gcloud builds submit backend \
