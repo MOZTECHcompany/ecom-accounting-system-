@@ -29,6 +29,11 @@ import {
   InvoiceQueueResponse,
 } from "../services/invoicing.service";
 import {
+  arService,
+  ReceivableMonitorResponse,
+} from "../services/ar.service";
+import { salesService } from "../services/sales.service";
+import {
   dashboardService,
   DashboardExecutiveOverview,
   DashboardOperationsHub,
@@ -250,12 +255,15 @@ const DashboardPage: React.FC = () => {
   const [refreshToken, setRefreshToken] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [issuingInvoices, setIssuingInvoices] = useState(false);
+  const [syncingInvoiceStatuses, setSyncingInvoiceStatuses] = useState(false);
   const [overview, setOverview] = useState<DashboardSalesOverview | null>(null);
   const [feed, setFeed] = useState<DashboardReconciliationFeed | null>(null);
   const [executive, setExecutive] = useState<DashboardExecutiveOverview | null>(null);
   const [operationsHub, setOperationsHub] = useState<DashboardOperationsHub | null>(null);
   const [invoiceQueue, setInvoiceQueue] = useState<InvoiceQueueResponse | null>(null);
   const [audit, setAudit] = useState<OrderReconciliationAudit | null>(null);
+  const [receivableMonitor, setReceivableMonitor] =
+    useState<ReceivableMonitorResponse | null>(null);
 
   useEffect(() => {
     if (rangeMode === "custom" && (!customRange?.[0] || !customRange?.[1])) {
@@ -271,7 +279,15 @@ const DashboardPage: React.FC = () => {
     const fetchSummary = async () => {
       setLoading(true);
       try {
-        const [summary, reconciliationFeed, executiveOverview, operationsHubData, invoiceQueueData, auditData] = await Promise.all([
+        const [
+          summary,
+          reconciliationFeed,
+          executiveOverview,
+          operationsHubData,
+          invoiceQueueData,
+          auditData,
+          receivableMonitorData,
+        ] = await Promise.all([
           dashboardService.getSalesOverview({
             entityId: storedEntityId,
             startDate: since,
@@ -305,6 +321,11 @@ const DashboardPage: React.FC = () => {
             endDate: until,
             limit: 16,
           }),
+          arService.getReceivableMonitor({
+            entityId: storedEntityId,
+            startDate: since,
+            endDate: until,
+          }),
         ]);
 
         if (ignore) return;
@@ -315,6 +336,7 @@ const DashboardPage: React.FC = () => {
         setOperationsHub(operationsHubData);
         setInvoiceQueue(invoiceQueueData);
         setAudit(auditData);
+        setReceivableMonitor(receivableMonitorData);
       } catch (error: any) {
         if (!ignore) {
           message.error(error?.response?.data?.message || "讀取儀表板資料失敗");
@@ -432,6 +454,31 @@ const DashboardPage: React.FC = () => {
     }
   };
 
+  const handleSyncInvoiceStatuses = async () => {
+    const storedEntityId = localStorage.getItem("entityId")?.trim();
+    const { since, until } = resolveRange(rangeMode, DASHBOARD_TZ, customRange);
+    setSyncingInvoiceStatuses(true);
+    try {
+      const result = await salesService.syncInvoiceStatusBatch({
+        entityId: storedEntityId || "tw-entity-001",
+        startDate: since,
+        endDate: until,
+        limit: 120,
+      });
+      const syncedCount = Number(result?.synced || 0);
+      const skippedCount = Number(result?.skipped || 0);
+      const failedCount = Number(result?.failed || 0);
+      message.success(
+        `發票狀態同步完成：成功 ${syncedCount} 筆，略過 ${skippedCount} 筆，失敗 ${failedCount} 筆`,
+      );
+      setRefreshToken((prev) => prev + 1);
+    } catch (error: any) {
+      message.error(error?.response?.data?.message || "同步發票狀態失敗");
+    } finally {
+      setSyncingInvoiceStatuses(false);
+    }
+  };
+
   if (loading) {
     return <PageSkeleton />;
   }
@@ -446,6 +493,7 @@ const DashboardPage: React.FC = () => {
   const invoiceSummary = invoiceQueue?.summary;
   const invoiceItems = invoiceQueue?.items || [];
   const operationsHighlights = operationsHub?.highlights || [];
+  const arSummary = receivableMonitor?.summary;
   const auditSummary = audit?.summary;
   const auditItems = audit?.items || [];
 
@@ -622,6 +670,15 @@ const DashboardPage: React.FC = () => {
                 {executive?.operations.inventoryAlertCount || 0}
               </div>
             </div>
+            <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
+              <div className="text-xs text-slate-400">應收未收</div>
+              <div className="mt-2 text-2xl font-semibold text-red-600">
+                {arSummary?.outstandingOrderCount || 0}
+              </div>
+              <div className="mt-1 text-[11px] text-slate-400">
+                NT$ {(arSummary?.outstandingAmount || 0).toFixed(0)}
+              </div>
+            </div>
           </div>
           <div className="mt-4 rounded-3xl border border-white/30 bg-white/45 px-4 py-4 text-sm text-slate-600">
             本期經費支出
@@ -635,6 +692,10 @@ const DashboardPage: React.FC = () => {
             ，待開立發票訂單
             <span className="ml-2 font-semibold text-slate-900">
               {executive?.operations.uninvoicedOrdersCount || 0}
+            </span>
+            筆，逾期應收
+            <span className="ml-2 font-semibold text-slate-900">
+              {arSummary?.overdueReceivableCount || 0}
             </span>
             筆。
           </div>
@@ -1072,14 +1133,24 @@ const DashboardPage: React.FC = () => {
               這裡會把已付款可開票、尚待付款、已開票的訂單放在同一個隊列，讓營運可以直接推進發票流程。
             </div>
           </div>
-          <Button
-            type="primary"
-            onClick={handleIssueEligibleInvoices}
-            loading={issuingInvoices}
-            className="bg-black hover:bg-gray-800 border-none shadow-sm"
-          >
-            {issuingInvoices ? "批次開票中..." : "批次開立可開票訂單"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              icon={<SyncOutlined />}
+              onClick={handleSyncInvoiceStatuses}
+              loading={syncingInvoiceStatuses}
+              className="shadow-sm"
+            >
+              {syncingInvoiceStatuses ? "同步中..." : "同步綠界發票狀態"}
+            </Button>
+            <Button
+              type="primary"
+              onClick={handleIssueEligibleInvoices}
+              loading={issuingInvoices}
+              className="bg-black hover:bg-gray-800 border-none shadow-sm"
+            >
+              {issuingInvoices ? "批次開票中..." : "批次開立可開票訂單"}
+            </Button>
+          </div>
         </div>
 
         <div className="mt-5 grid gap-3 md:grid-cols-4">
@@ -1108,6 +1179,27 @@ const DashboardPage: React.FC = () => {
             <div className="text-xs text-slate-400">已作廢發票</div>
             <div className="mt-2 text-2xl font-semibold text-rose-600">
               {invoiceSummary?.voidCount || 0}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-3">
+          <div className="rounded-2xl border border-white/30 bg-white/45 px-4 py-4">
+            <div className="text-xs text-slate-400">待補發票</div>
+            <div className="mt-2 text-xl font-semibold text-amber-600">
+              {arSummary?.missingInvoiceCount || 0}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-white/30 bg-white/45 px-4 py-4">
+            <div className="text-xs text-slate-400">已開票未落帳</div>
+            <div className="mt-2 text-xl font-semibold text-violet-600">
+              {arSummary?.issuedUnpostedCount || 0}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-white/30 bg-white/45 px-4 py-4">
+            <div className="text-xs text-slate-400">已開票未收款</div>
+            <div className="mt-2 text-xl font-semibold text-sky-600">
+              {arSummary?.issuedUnpaidCount || 0}
             </div>
           </div>
         </div>

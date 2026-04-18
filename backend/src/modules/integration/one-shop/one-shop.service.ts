@@ -169,11 +169,11 @@ export class OneShopService implements OnModuleInit {
     const since =
       options?.since ||
       new Date(until.getTime() - lookbackDays * 24 * 60 * 60 * 1000);
-
-    const [orders, transactions] = await Promise.all([
-      this.syncOrders({ entityId, since, until }),
-      this.syncTransactions({ entityId, since, until }),
-    ]);
+    const { orders, transactions } = await this.syncWindow({
+      entityId,
+      since,
+      until,
+    });
 
     return {
       success: true,
@@ -190,6 +190,7 @@ export class OneShopService implements OnModuleInit {
     beginDate: Date;
     endDate: Date;
     windowDays?: number;
+    maxWindows?: number;
   }) {
     await this.assertEntityExists(params.entityId);
 
@@ -204,6 +205,34 @@ export class OneShopService implements OnModuleInit {
     if (begin > end) {
       throw new BadRequestException('beginDate cannot be later than endDate');
     }
+
+    const allWindows: Array<{
+      since: Date;
+      until: Date;
+    }> = [];
+
+    let cursor = new Date(begin);
+    while (cursor <= end) {
+      const windowStart = new Date(cursor);
+      const windowEnd = new Date(cursor);
+      windowEnd.setDate(windowEnd.getDate() + windowDays - 1);
+      if (windowEnd > end) {
+        windowEnd.setTime(end.getTime());
+      }
+
+      allWindows.push({
+        since: windowStart,
+        until: windowEnd,
+      });
+
+      cursor = new Date(windowEnd);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    const selectedWindows =
+      params.maxWindows && params.maxWindows > 0
+        ? allWindows.slice(0, params.maxWindows)
+        : allWindows;
 
     const windows: Array<{
       index: number;
@@ -222,29 +251,16 @@ export class OneShopService implements OnModuleInit {
       transactionUpdated: 0,
     };
 
-    let cursor = new Date(begin);
     let windowIndex = 1;
 
-    while (cursor <= end) {
-      const windowStart = new Date(cursor);
-      const windowEnd = new Date(cursor);
-      windowEnd.setDate(windowEnd.getDate() + windowDays - 1);
-      if (windowEnd > end) {
-        windowEnd.setTime(end.getTime());
-      }
-
-      const [orders, transactions] = await Promise.all([
-        this.syncOrders({
-          entityId: params.entityId,
-          since: windowStart,
-          until: windowEnd,
-        }),
-        this.syncTransactions({
-          entityId: params.entityId,
-          since: windowStart,
-          until: windowEnd,
-        }),
-      ]);
+    for (const window of selectedWindows) {
+      const windowStart = new Date(window.since);
+      const windowEnd = new Date(window.until);
+      const { orders, transactions } = await this.syncWindow({
+        entityId: params.entityId,
+        since: windowStart,
+        until: windowEnd,
+      });
 
       totals.orderFetched += orders.fetched;
       totals.orderCreated += orders.created;
@@ -261,18 +277,29 @@ export class OneShopService implements OnModuleInit {
         transactions,
       });
 
-      cursor = new Date(windowEnd);
-      cursor.setDate(cursor.getDate() + 1);
       windowIndex += 1;
     }
+
+    const remainingWindows = Math.max(allWindows.length - selectedWindows.length, 0);
+    const lastWindow = selectedWindows[selectedWindows.length - 1];
+    const nextBeginDate =
+      remainingWindows > 0 && lastWindow
+        ? new Date(lastWindow.until.getTime() + 24 * 60 * 60 * 1000).toISOString()
+        : null;
 
     return {
       success: true,
       entityId: params.entityId,
-      beginDate: begin.toISOString(),
-      endDate: end.toISOString(),
+      beginDate: selectedWindows[0]?.since.toISOString() || begin.toISOString(),
+      endDate:
+        selectedWindows[selectedWindows.length - 1]?.until.toISOString() ||
+        end.toISOString(),
       windowDays,
       windowCount: windows.length,
+      totalWindowCount: allWindows.length,
+      remainingWindows,
+      nextBeginDate,
+      completedAllWindows: remainingWindows === 0,
       totals,
       windows,
     };
@@ -372,6 +399,68 @@ export class OneShopService implements OnModuleInit {
             : '目前已建立待對帳收款紀錄，待綠界撥款或匯入對帳單後可回填實際手續費與淨額。',
         paymentCount,
         reconciledCount,
+      },
+    };
+  }
+
+  private async syncWindow(params: {
+    entityId: string;
+    since: Date;
+    until: Date;
+  }) {
+    await this.assertEntityExists(params.entityId);
+
+    const orders = await this.adapter.fetchOrders({
+      start: params.since,
+      end: params.until,
+    });
+    const transactions = this.adapter.buildTransactionsFromOrders(orders);
+    const channel = await this.ensureSalesChannel(params.entityId);
+
+    let orderCreated = 0;
+    let orderUpdated = 0;
+    for (const order of orders) {
+      try {
+        const result = await this.upsertSalesOrder(
+          params.entityId,
+          channel.id,
+          order,
+        );
+        if (result === 'created') orderCreated += 1;
+        if (result === 'updated') orderUpdated += 1;
+      } catch (error: any) {
+        this.logger.error(
+          `Failed to sync 1Shop order ${order.externalId}: ${error.message}`,
+        );
+      }
+    }
+
+    let transactionCreated = 0;
+    let transactionUpdated = 0;
+    for (const tx of transactions) {
+      try {
+        const result = await this.upsertPayment(params.entityId, channel.id, tx);
+        if (result === 'created') transactionCreated += 1;
+        if (result === 'updated') transactionUpdated += 1;
+      } catch (error: any) {
+        this.logger.error(
+          `Failed to sync 1Shop payment ${tx.externalId}: ${error.message}`,
+        );
+      }
+    }
+
+    return {
+      orders: {
+        success: true,
+        fetched: orders.length,
+        created: orderCreated,
+        updated: orderUpdated,
+      },
+      transactions: {
+        success: true,
+        fetched: transactions.length,
+        created: transactionCreated,
+        updated: transactionUpdated,
       },
     };
   }

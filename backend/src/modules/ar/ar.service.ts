@@ -31,13 +31,26 @@ export class ArService {
     return this.arRepository.findInvoices({ entityId, status });
   }
 
-  async getReceivableMonitor(entityId: string, status?: string) {
+  async getReceivableMonitor(
+    entityId: string,
+    status?: string,
+    startDate?: Date,
+    endDate?: Date,
+  ) {
     const orders = await this.prisma.salesOrder.findMany({
       where: {
         entityId,
         status: {
           notIn: ['cancelled', 'refunded'],
         },
+        ...(startDate || endDate
+          ? {
+              orderDate: {
+                ...(startDate ? { gte: startDate } : {}),
+                ...(endDate ? { lte: endDate } : {}),
+              },
+            }
+          : {}),
       },
       include: {
         customer: true,
@@ -139,6 +152,15 @@ export class ArService {
         if (!latestInvoice && paidAmount > 0) {
           warningCodes.push('invoice_pending');
         }
+        if ((latestInvoice?.invoiceNumber || arInvoice?.invoiceNo) && !journal) {
+          warningCodes.push('invoice_issued_unposted');
+        }
+        if ((latestInvoice?.invoiceNumber || arInvoice?.invoiceNo) && outstandingAmount > 0) {
+          warningCodes.push('invoice_issued_unpaid');
+        }
+        if (outstandingAmount > 0 && dueDate < new Date()) {
+          warningCodes.push('overdue_receivable');
+        }
 
         return {
           orderId: order.id,
@@ -200,6 +222,21 @@ export class ArService {
         acc.missingInvoiceCount += item.warningCodes.includes('invoice_pending')
           ? 1
           : 0;
+        acc.outstandingOrderCount += item.outstandingAmount > 0 ? 1 : 0;
+        acc.overdueReceivableCount += item.warningCodes.includes('overdue_receivable')
+          ? 1
+          : 0;
+        acc.overdueReceivableAmount += item.warningCodes.includes('overdue_receivable')
+          ? item.outstandingAmount
+          : 0;
+        acc.issuedUnpostedCount += item.warningCodes.includes(
+          'invoice_issued_unposted',
+        )
+          ? 1
+          : 0;
+        acc.issuedUnpaidCount += item.warningCodes.includes('invoice_issued_unpaid')
+          ? 1
+          : 0;
         return acc;
       },
       {
@@ -214,6 +251,11 @@ export class ArService {
         missingFeeCount: 0,
         missingJournalCount: 0,
         missingInvoiceCount: 0,
+        outstandingOrderCount: 0,
+        overdueReceivableCount: 0,
+        overdueReceivableAmount: 0,
+        issuedUnpostedCount: 0,
+        issuedUnpaidCount: 0,
       },
     );
 

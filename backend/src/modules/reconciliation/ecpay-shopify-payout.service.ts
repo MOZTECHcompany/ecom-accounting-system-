@@ -218,6 +218,8 @@ export class EcpayShopifyPayoutService {
       merchantKeys?: string[];
       dateType?: '1' | '2';
       paymentType?: '01' | '02' | '03' | '11';
+      windowDays?: number;
+      maxWindows?: number;
     },
     importedBy?: string,
   ) {
@@ -234,38 +236,105 @@ export class EcpayShopifyPayoutService {
       );
     }
 
+    const { begin, end } = this.parseDateRange(params.beginDate, params.endDate);
+    const windows = this.buildRollingWindows(
+      begin,
+      end,
+      Math.max(1, Math.min(params.windowDays || 31, 31)),
+    );
+    const limitedWindows =
+      params.maxWindows && params.maxWindows > 0
+        ? windows.slice(0, params.maxWindows)
+        : windows;
+
     const results = [];
     let totalRecordCount = 0;
     let importedMerchantCount = 0;
+    let processedWindowCount = 0;
 
     for (const merchantKey of merchantKeys) {
-      const result = await this.syncShopifyPayouts(
-        {
-          entityId: params.entityId,
-          merchantKey,
-          beginDate: params.beginDate,
-          endDate: params.endDate,
-          dateType: params.dateType,
-          paymentType: params.paymentType,
-        },
-        importedBy,
-      );
+      let merchantImported = false;
 
-      totalRecordCount += Number(result.recordCount || 0);
-      if (result.imported) {
+      for (const window of limitedWindows) {
+        const result = await this.syncShopifyPayouts(
+          {
+            entityId: params.entityId,
+            merchantKey,
+            beginDate: window.beginDate,
+            endDate: window.endDate,
+            dateType: params.dateType,
+            paymentType: params.paymentType,
+          },
+          importedBy,
+        );
+
+        totalRecordCount += Number(result.recordCount || 0);
+        if (result.imported) {
+          merchantImported = true;
+        }
+        results.push({
+          ...result,
+          requestedWindow: window,
+        });
+      }
+
+      if (merchantImported) {
         importedMerchantCount += 1;
       }
-      results.push(result);
     }
+
+    if (!limitedWindows.length) {
+      return {
+        success: true,
+        entityId: params.entityId,
+        beginDate: params.beginDate,
+        endDate: params.endDate,
+        merchantCount: merchantKeys.length,
+        importedMerchantCount: 0,
+        totalRecordCount: 0,
+        processedWindowCount: 0,
+        totalWindowCount: 0,
+        remainingWindows: 0,
+        nextBeginDate: null,
+        completedAllWindows: true,
+        results: [],
+      };
+    }
+
+    processedWindowCount = limitedWindows.length;
+    const remainingWindows = Math.max(windows.length - processedWindowCount, 0);
+    const lastProcessedWindow = limitedWindows[limitedWindows.length - 1];
+    const nextBeginDate =
+      remainingWindows > 0
+        ? this.formatDate(
+            this.addDays(
+              this.parseDateRange(
+                lastProcessedWindow.endDate,
+                lastProcessedWindow.endDate,
+              ).end,
+              1,
+            ),
+          )
+        : null;
+
+    const requestedWindow = {
+      beginDate: limitedWindows[0].beginDate,
+      endDate: lastProcessedWindow.endDate,
+    };
 
     return {
       success: true,
       entityId: params.entityId,
-      beginDate: params.beginDate,
-      endDate: params.endDate,
+      beginDate: requestedWindow.beginDate,
+      endDate: requestedWindow.endDate,
       merchantCount: merchantKeys.length,
       importedMerchantCount,
       totalRecordCount,
+      processedWindowCount,
+      totalWindowCount: windows.length,
+      remainingWindows,
+      nextBeginDate,
+      completedAllWindows: remainingWindows === 0,
       results,
     };
   }
@@ -372,6 +441,24 @@ export class EcpayShopifyPayoutService {
         endDate: this.formatDate(windowEnd),
       });
       cursor = this.addDays(windowEnd, 1);
+    }
+
+    return windows;
+  }
+
+  private buildRollingWindows(begin: Date, end: Date, windowDays: number) {
+    const windows: Array<{ beginDate: string; endDate: string }> = [];
+    let cursor = new Date(begin);
+
+    while (cursor <= end) {
+      const windowEnd = new Date(cursor);
+      windowEnd.setDate(windowEnd.getDate() + windowDays - 1);
+      const boundedEnd = new Date(Math.min(windowEnd.getTime(), end.getTime()));
+      windows.push({
+        beginDate: this.formatDate(cursor),
+        endDate: this.formatDate(boundedEnd),
+      });
+      cursor = this.addDays(boundedEnd, 1);
     }
 
     return windows;

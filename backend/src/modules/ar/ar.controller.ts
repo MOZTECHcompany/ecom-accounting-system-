@@ -44,8 +44,15 @@ export class ArController {
   async getReceivableMonitor(
     @Query('entityId') entityId: string,
     @Query('status') status?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
   ) {
-    return this.arService.getReceivableMonitor(entityId, status);
+    return this.arService.getReceivableMonitor(
+      entityId,
+      status,
+      startDate ? new Date(startDate) : undefined,
+      endDate ? new Date(endDate) : undefined,
+    );
   }
 
   @Post('sync/sales-orders')

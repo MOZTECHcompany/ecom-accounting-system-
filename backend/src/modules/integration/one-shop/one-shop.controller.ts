@@ -51,6 +51,12 @@ class BackfillHistoryDto {
   @Min(7)
   @Max(90)
   windowDays?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(60)
+  maxWindows?: number;
 }
 
 @Controller('integrations/1shop')
@@ -113,6 +119,7 @@ export class OneShopController {
       beginDate: new Date(body.beginDate),
       endDate: new Date(body.endDate),
       windowDays: body.windowDays,
+      maxWindows: body.maxWindows,
     });
   }
 
@@ -123,6 +130,7 @@ export class OneShopController {
       beginDate: new Date(body.beginDate),
       endDate: new Date(body.endDate),
       windowDays: body.windowDays,
+      maxWindows: body.maxWindows,
     });
   }
 

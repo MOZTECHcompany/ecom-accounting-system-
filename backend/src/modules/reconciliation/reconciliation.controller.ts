@@ -12,8 +12,11 @@ import {
   IsArray,
   IsDateString,
   IsIn,
+  IsInt,
   IsOptional,
   IsString,
+  Max,
+  Min,
 } from 'class-validator';
 import {
   ApiTags,
@@ -56,6 +59,18 @@ class BackfillEcpayShopifyHistoryDto {
   @IsOptional()
   @IsIn(['01', '02', '03', '11'])
   paymentType?: '01' | '02' | '03' | '11';
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(31)
+  windowDays?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(90)
+  maxWindows?: number;
 }
 
 @ApiTags('Reconciliation')

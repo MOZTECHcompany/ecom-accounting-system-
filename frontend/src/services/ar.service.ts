@@ -56,6 +56,11 @@ export interface ReceivableMonitorSummary {
   missingFeeCount: number
   missingJournalCount: number
   missingInvoiceCount: number
+  outstandingOrderCount: number
+  overdueReceivableCount: number
+  overdueReceivableAmount: number
+  issuedUnpostedCount: number
+  issuedUnpaidCount: number
 }
 
 export interface ReceivableMonitorResponse {
@@ -91,7 +96,12 @@ export const arService = {
     await api.delete(`/ar/invoices/${id}`)
   },
 
-  getReceivableMonitor: async (params?: { entityId?: string; status?: string }) => {
+  getReceivableMonitor: async (params?: {
+    entityId?: string
+    status?: string
+    startDate?: string
+    endDate?: string
+  }) => {
     const entityId =
       params?.entityId?.trim() || localStorage.getItem('entityId')?.trim() || DEFAULT_ENTITY_ID
 
@@ -99,6 +109,8 @@ export const arService = {
       params: {
         entityId,
         status: params?.status,
+        startDate: params?.startDate,
+        endDate: params?.endDate,
       },
     })
     return response.data

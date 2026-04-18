@@ -49,6 +49,9 @@ const warningLabelMap: Record<string, string> = {
   missing_ar: '未建立應收',
   invoice_pending: '待補發票',
   missing_invoice_record: '發票主檔缺漏',
+  invoice_issued_unposted: '已開票未落帳',
+  invoice_issued_unpaid: '已開票未收款',
+  overdue_receivable: '應收已逾期',
 }
 
 const feeStatusColorMap: Record<string, string> = {
@@ -75,6 +78,11 @@ const EmptySummary: ReceivableMonitorSummary = {
   missingFeeCount: 0,
   missingJournalCount: 0,
   missingInvoiceCount: 0,
+  outstandingOrderCount: 0,
+  overdueReceivableCount: 0,
+  overdueReceivableAmount: 0,
+  issuedUnpostedCount: 0,
+  issuedUnpaidCount: 0,
 }
 
 const ArInvoicesPage: React.FC = () => {
@@ -390,7 +398,7 @@ const ArInvoicesPage: React.FC = () => {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
         <Card bordered={false} className="glass-card">
           <div className="text-sm text-slate-500">手續費欄待補</div>
           <div className="mt-2 text-3xl font-semibold text-rose-600">
@@ -407,6 +415,21 @@ const ArInvoicesPage: React.FC = () => {
           <div className="text-sm text-slate-500">待補發票</div>
           <div className="mt-2 text-3xl font-semibold text-blue-600">
             {summary.missingInvoiceCount}
+          </div>
+        </Card>
+        <Card bordered={false} className="glass-card">
+          <div className="text-sm text-slate-500">已開票未落帳</div>
+          <div className="mt-2 text-3xl font-semibold text-violet-600">
+            {summary.issuedUnpostedCount}
+          </div>
+        </Card>
+        <Card bordered={false} className="glass-card">
+          <div className="text-sm text-slate-500">逾期應收</div>
+          <div className="mt-2 text-3xl font-semibold text-red-600">
+            {summary.overdueReceivableCount}
+          </div>
+          <div className="mt-1 text-xs text-slate-400">
+            {currency(summary.overdueReceivableAmount)}
           </div>
         </Card>
       </div>

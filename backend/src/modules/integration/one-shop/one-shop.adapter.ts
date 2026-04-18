@@ -209,6 +209,10 @@ export class OneShopHttpAdapter implements ISalesChannelAdapter {
     this.assertConfig();
     const orders = await this.fetchOrders(params);
 
+    return this.buildTransactionsFromOrders(orders);
+  }
+
+  buildTransactionsFromOrders(orders: UnifiedOrder[]): UnifiedTransaction[] {
     return orders
       .map((order) => this.mapOrderToUnifiedTransaction(order))
       .filter((value): value is UnifiedTransaction => Boolean(value));
