@@ -33,6 +33,15 @@ export class OneShopService implements OnModuleInit {
       this.config.get<string>('ONESHOP_DEFAULT_ENTITY_ID') || 'tw-entity-001';
   }
 
+  private createSyncWindowCaches() {
+    return {
+      salesOrdersByExternalId: new Map<string, any>(),
+      paymentsByExternalId: new Map<string, any>(),
+      customersByEmail: new Map<string, any>(),
+      customersByPhone: new Map<string, any>(),
+    };
+  }
+
   async testConnection() {
     return this.adapter.testConnection();
   }
@@ -173,6 +182,7 @@ export class OneShopService implements OnModuleInit {
       entityId,
       since,
       until,
+      includeDetails: true,
     });
 
     return {
@@ -260,6 +270,7 @@ export class OneShopService implements OnModuleInit {
         entityId: params.entityId,
         since: windowStart,
         until: windowEnd,
+        includeDetails: false,
       });
 
       totals.orderFetched += orders.fetched;
@@ -407,15 +418,30 @@ export class OneShopService implements OnModuleInit {
     entityId: string;
     since: Date;
     until: Date;
+    includeDetails?: boolean;
   }) {
     await this.assertEntityExists(params.entityId);
 
-    const orders = await this.adapter.fetchOrders({
-      start: params.since,
-      end: params.until,
-    });
+    const startedAt = Date.now();
+    const orders = await this.adapter.fetchOrders(
+      {
+        start: params.since,
+        end: params.until,
+      },
+      {
+        includeDetails: params.includeDetails,
+      },
+    );
     const transactions = this.adapter.buildTransactionsFromOrders(orders);
     const channel = await this.ensureSalesChannel(params.entityId);
+    const caches = this.createSyncWindowCaches();
+    await this.primeSyncWindowCaches(
+      params.entityId,
+      channel.id,
+      orders,
+      transactions,
+      caches,
+    );
 
     let orderCreated = 0;
     let orderUpdated = 0;
@@ -425,6 +451,7 @@ export class OneShopService implements OnModuleInit {
           params.entityId,
           channel.id,
           order,
+          caches,
         );
         if (result === 'created') orderCreated += 1;
         if (result === 'updated') orderUpdated += 1;
@@ -439,7 +466,12 @@ export class OneShopService implements OnModuleInit {
     let transactionUpdated = 0;
     for (const tx of transactions) {
       try {
-        const result = await this.upsertPayment(params.entityId, channel.id, tx);
+        const result = await this.upsertPayment(
+          params.entityId,
+          channel.id,
+          tx,
+          caches,
+        );
         if (result === 'created') transactionCreated += 1;
         if (result === 'updated') transactionUpdated += 1;
       } catch (error: any) {
@@ -448,6 +480,19 @@ export class OneShopService implements OnModuleInit {
         );
       }
     }
+
+    this.logger.log(
+      [
+        '[1shop-sync-window]',
+        `entityId=${params.entityId}`,
+        `since=${params.since.toISOString()}`,
+        `until=${params.until.toISOString()}`,
+        `includeDetails=${params.includeDetails !== false}`,
+        `orders=${orders.length}`,
+        `transactions=${transactions.length}`,
+        `durationMs=${Date.now() - startedAt}`,
+      ].join(' '),
+    );
 
     return {
       orders: {
@@ -463,6 +508,93 @@ export class OneShopService implements OnModuleInit {
         updated: transactionUpdated,
       },
     };
+  }
+
+  private async primeSyncWindowCaches(
+    entityId: string,
+    channelId: string,
+    orders: UnifiedOrder[],
+    transactions: UnifiedTransaction[],
+    caches: ReturnType<OneShopService['createSyncWindowCaches']>,
+  ) {
+    const uniqueOrderIds = [...new Set(orders.map((order) => order.externalId))];
+    const uniquePaymentIds = [
+      ...new Set(transactions.map((tx) => tx.externalId).filter(Boolean)),
+    ];
+    const uniqueEmails = [
+      ...new Set(
+        orders
+          .map((order) => order.customer?.email?.trim().toLowerCase())
+          .filter((value): value is string => Boolean(value)),
+      ),
+    ];
+    const uniquePhones = [
+      ...new Set(
+        orders
+          .map((order) => order.customer?.phone?.trim())
+          .filter((value): value is string => Boolean(value)),
+      ),
+    ];
+
+    const [existingOrders, existingPayments, customersByEmail, customersByPhone] =
+      await Promise.all([
+        uniqueOrderIds.length
+          ? this.prisma.salesOrder.findMany({
+              where: {
+                entityId,
+                channelId,
+                externalOrderId: { in: uniqueOrderIds },
+              },
+            })
+          : Promise.resolve([]),
+        uniquePaymentIds.length
+          ? this.prisma.payment.findMany({
+              where: {
+                entityId,
+                channelId,
+                payoutBatchId: { in: uniquePaymentIds },
+              },
+            })
+          : Promise.resolve([]),
+        uniqueEmails.length
+          ? this.prisma.customer.findMany({
+              where: {
+                entityId,
+                email: { in: uniqueEmails },
+              },
+            })
+          : Promise.resolve([]),
+        uniquePhones.length
+          ? this.prisma.customer.findMany({
+              where: {
+                entityId,
+                phone: { in: uniquePhones },
+              },
+            })
+          : Promise.resolve([]),
+      ]);
+
+    for (const order of existingOrders) {
+      caches.salesOrdersByExternalId.set(order.externalOrderId, order);
+    }
+
+    for (const payment of existingPayments) {
+      if (payment.payoutBatchId) {
+        caches.paymentsByExternalId.set(payment.payoutBatchId, payment);
+      }
+    }
+
+    for (const customer of customersByEmail) {
+      if (customer.email) {
+        caches.customersByEmail.set(customer.email.trim().toLowerCase(), customer);
+      }
+    }
+
+    for (const customer of customersByPhone) {
+      if (customer.phone) {
+        caches.customersByPhone.set(customer.phone.trim(), customer);
+      }
+    }
   }
 
   @Cron('0 40 8 * * *', {
@@ -531,21 +663,24 @@ export class OneShopService implements OnModuleInit {
     entityId: string,
     channelId: string,
     order: UnifiedOrder,
+    caches?: ReturnType<OneShopService['createSyncWindowCaches']>,
   ): Promise<'created' | 'updated'> {
-    const existing = await this.prisma.salesOrder.findFirst({
-      where: {
-        entityId,
-        channelId,
-        externalOrderId: order.externalId,
-      },
-    });
+    const existing =
+      caches?.salesOrdersByExternalId.get(order.externalId) ||
+      (await this.prisma.salesOrder.findFirst({
+        where: {
+          entityId,
+          channelId,
+          externalOrderId: order.externalId,
+        },
+      }));
 
     const currency = order.totals.currency;
     const fxRate = new Decimal(await this.getFxRate(currency));
     const toBase = (amount: Decimal) => amount.mul(fxRate);
 
     const customerId = order.customer
-      ? await this.ensureCustomer(entityId, order.customer)
+      ? await this.ensureCustomer(entityId, order.customer, caches)
       : undefined;
 
     const data = {
@@ -572,17 +707,18 @@ export class OneShopService implements OnModuleInit {
     };
 
     if (existing) {
-      await this.prisma.salesOrder.update({
+      const updated = await this.prisma.salesOrder.update({
         where: { id: existing.id },
         data: {
           ...data,
           hasInvoice: existing.hasInvoice,
         },
       });
+      caches?.salesOrdersByExternalId.set(order.externalId, updated);
       return 'updated';
     }
 
-    await this.prisma.salesOrder.create({
+    const created = await this.prisma.salesOrder.create({
       data: {
         entityId,
         channelId,
@@ -591,6 +727,7 @@ export class OneShopService implements OnModuleInit {
         ...data,
       },
     });
+    caches?.salesOrdersByExternalId.set(order.externalId, created);
 
     return 'created';
   }
@@ -599,24 +736,28 @@ export class OneShopService implements OnModuleInit {
     entityId: string,
     channelId: string,
     tx: UnifiedTransaction,
+    caches?: ReturnType<OneShopService['createSyncWindowCaches']>,
   ): Promise<'created' | 'updated'> {
     const salesOrder = tx.orderId
-      ? await this.prisma.salesOrder.findFirst({
+      ? caches?.salesOrdersByExternalId.get(tx.orderId) ||
+        (await this.prisma.salesOrder.findFirst({
           where: {
             entityId,
             channelId,
             externalOrderId: tx.orderId,
           },
-        })
+        }))
       : null;
 
-    const existing = await this.prisma.payment.findFirst({
-      where: {
-        entityId,
-        channelId,
-        payoutBatchId: tx.externalId,
-      },
-    });
+    const existing =
+      caches?.paymentsByExternalId.get(tx.externalId) ||
+      (await this.prisma.payment.findFirst({
+        where: {
+          entityId,
+          channelId,
+          payoutBatchId: tx.externalId,
+        },
+      }));
 
     const currency = tx.currency || 'TWD';
     const fxRate = new Decimal(await this.getFxRate(currency));
@@ -662,14 +803,16 @@ export class OneShopService implements OnModuleInit {
     };
 
     if (existing) {
-      await this.prisma.payment.update({
+      const updated = await this.prisma.payment.update({
         where: { id: existing.id },
         data,
       });
+      caches?.paymentsByExternalId.set(tx.externalId, updated);
       return 'updated';
     }
 
-    await this.prisma.payment.create({ data });
+    const created = await this.prisma.payment.create({ data });
+    caches?.paymentsByExternalId.set(tx.externalId, created);
     return 'created';
   }
 
@@ -797,22 +940,35 @@ export class OneShopService implements OnModuleInit {
   private async ensureCustomer(
     entityId: string,
     customerData: NonNullable<UnifiedOrder['customer']>,
+    caches?: ReturnType<OneShopService['createSyncWindowCaches']>,
   ) {
     let customer = null;
+    const normalizedEmail = customerData.email?.trim().toLowerCase();
+    const normalizedPhone = customerData.phone?.trim();
 
-    if (customerData.email) {
-      customer = await this.prisma.customer.findFirst({
-        where: { entityId, email: customerData.email },
-      });
+    if (normalizedEmail) {
+      customer =
+        caches?.customersByEmail.get(normalizedEmail) ||
+        (await this.prisma.customer.findFirst({
+          where: { entityId, email: customerData.email },
+        }));
     }
 
-    if (!customer && customerData.phone) {
-      customer = await this.prisma.customer.findFirst({
-        where: { entityId, phone: customerData.phone },
-      });
+    if (!customer && normalizedPhone) {
+      customer =
+        caches?.customersByPhone.get(normalizedPhone) ||
+        (await this.prisma.customer.findFirst({
+          where: { entityId, phone: customerData.phone },
+        }));
     }
 
     if (customer) {
+      if (normalizedEmail) {
+        caches?.customersByEmail.set(normalizedEmail, customer);
+      }
+      if (normalizedPhone) {
+        caches?.customersByPhone.set(normalizedPhone, customer);
+      }
       return customer.id;
     }
 
@@ -824,6 +980,13 @@ export class OneShopService implements OnModuleInit {
         phone: customerData.phone,
       },
     });
+
+    if (normalizedEmail) {
+      caches?.customersByEmail.set(normalizedEmail, created);
+    }
+    if (normalizedPhone) {
+      caches?.customersByPhone.set(normalizedPhone, created);
+    }
 
     return created.id;
   }

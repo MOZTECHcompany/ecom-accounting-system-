@@ -19,8 +19,21 @@ export class PrismaService
   private readonly logger = new Logger(PrismaService.name);
 
   constructor() {
+    const logLevels: Array<'query' | 'info' | 'warn' | 'error'> = [
+      'info',
+      'warn',
+      'error',
+    ];
+    const queryLogEnabled =
+      process.env.PRISMA_QUERY_LOG_ENABLED === 'true' ||
+      process.env.NODE_ENV !== 'production';
+
+    if (queryLogEnabled) {
+      logLevels.unshift('query');
+    }
+
     super({
-      log: ['query', 'info', 'warn', 'error'],
+      log: logLevels,
     });
   }
 

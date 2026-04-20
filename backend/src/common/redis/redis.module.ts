@@ -9,13 +9,27 @@ import { redisStore } from 'cache-manager-ioredis-yet';
   imports: [
     CacheModule.registerAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        store: await redisStore({
-          host: configService.get('REDIS_HOST', 'localhost'),
-          port: configService.get('REDIS_PORT', 6379),
-          ttl: configService.get('CACHE_TTL', 600) * 1000,
-        }),
-      }),
+      useFactory: async (configService: ConfigService) => {
+        const ttl = configService.get('CACHE_TTL', 600) * 1000;
+        const redisEnabled = configService.get('REDIS_ENABLED', 'false') === 'true';
+        const redisHost = configService.get<string>('REDIS_HOST', '').trim();
+        const redisPort = configService.get('REDIS_PORT', 6379);
+
+        if (!redisEnabled || !redisHost) {
+          return {
+            ttl,
+          };
+        }
+
+        return {
+          store: await redisStore({
+            host: redisHost,
+            port: redisPort,
+            ttl,
+          }),
+          ttl,
+        };
+      },
       inject: [ConfigService],
     }),
   ],
@@ -23,9 +37,17 @@ import { redisStore } from 'cache-manager-ioredis-yet';
     {
       provide: 'REDIS_CLIENT',
       useFactory: (configService: ConfigService) => {
+        const redisEnabled = configService.get('REDIS_ENABLED', 'false') === 'true';
+        const redisHost = configService.get<string>('REDIS_HOST', '').trim();
+        const redisPort = configService.get('REDIS_PORT', 6379);
+
+        if (!redisEnabled || !redisHost) {
+          return null;
+        }
+
         return new Redis({
-          host: configService.get('REDIS_HOST', 'localhost'),
-          port: configService.get('REDIS_PORT', 6379),
+          host: redisHost,
+          port: redisPort,
         });
       },
       inject: [ConfigService],

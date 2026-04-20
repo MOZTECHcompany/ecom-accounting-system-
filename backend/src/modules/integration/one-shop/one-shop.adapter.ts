@@ -156,14 +156,21 @@ export class OneShopHttpAdapter implements ISalesChannelAdapter {
     return this.stores;
   }
 
-  async fetchOrders(params: {
-    start: Date;
-    end: Date;
-  }): Promise<UnifiedOrder[]> {
+  async fetchOrders(
+    params: {
+      start: Date;
+      end: Date;
+    },
+    options?: {
+      includeDetails?: boolean;
+    },
+  ): Promise<UnifiedOrder[]> {
     this.assertConfig();
 
     const orders = await Promise.all(
-      this.stores.map((store) => this.fetchOrdersForStore(store, params)),
+      this.stores.map((store) =>
+        this.fetchOrdersForStore(store, params, options),
+      ),
     );
 
     return orders.flat();
@@ -175,12 +182,16 @@ export class OneShopHttpAdapter implements ISalesChannelAdapter {
       start: Date;
       end: Date;
     },
+    options?: {
+      includeDetails?: boolean;
+    },
   ): Promise<UnifiedOrder[]> {
     this.assertStoreConfig(store);
 
     const allOrders: UnifiedOrder[] = [];
     let page = 1;
     let totalPages = 1;
+    const includeDetails = options?.includeDetails !== false;
 
     do {
       const body = await this.fetchOrderPage(store, {
@@ -191,7 +202,9 @@ export class OneShopHttpAdapter implements ISalesChannelAdapter {
       const orders = this.extractOrders(body);
 
       for (const order of orders) {
-        const detail = await this.fetchOrderDetail(store, order.order_number);
+        const detail = includeDetails
+          ? await this.fetchOrderDetail(store, order.order_number)
+          : undefined;
         allOrders.push(this.mapToUnifiedOrder(store, order, detail));
       }
 
