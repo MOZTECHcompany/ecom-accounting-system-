@@ -6,6 +6,10 @@ import { AutoMatchDto } from './dto/auto-match.dto';
 import { Decimal } from '@prisma/client/runtime/library';
 import { ArService } from '../ar/ar.service';
 import { ReportsService } from '../reports/reports.service';
+import { ShopifyService } from '../integration/shopify/shopify.service';
+import { OneShopService } from '../integration/one-shop/one-shop.service';
+import { EcpayShopifyPayoutService } from './ecpay-shopify-payout.service';
+import { SalesOrderService } from '../sales/services/sales-order.service';
 
 /**
  * ReconciliationService
@@ -19,7 +23,125 @@ export class ReconciliationService {
     private readonly prisma: PrismaService,
     private readonly arService: ArService,
     private readonly reportsService: ReportsService,
+    private readonly shopifyService: ShopifyService,
+    private readonly oneShopService: OneShopService,
+    private readonly ecpayShopifyPayoutService: EcpayShopifyPayoutService,
+    private readonly salesOrderService: SalesOrderService,
   ) {}
+
+  async runCoreReconciliationJob(params: {
+    entityId: string;
+    startDate?: Date;
+    endDate?: Date;
+    userId?: string;
+    syncShopify?: boolean;
+    syncOneShop?: boolean;
+    syncEcpayPayouts?: boolean;
+    syncInvoices?: boolean;
+  }) {
+    const entityId = params.entityId;
+    const until = params.endDate || new Date();
+    const since =
+      params.startDate || new Date(until.getTime() - 3 * 24 * 60 * 60 * 1000);
+    const steps: Array<{
+      key: string;
+      label: string;
+      status: 'success' | 'skipped' | 'failed';
+      result?: any;
+      error?: string;
+    }> = [];
+
+    const runStep = async (
+      key: string,
+      label: string,
+      enabled: boolean,
+      task: () => Promise<any>,
+    ) => {
+      if (!enabled) {
+        steps.push({ key, label, status: 'skipped', result: { skipped: true } });
+        return null;
+      }
+      try {
+        const result = await task();
+        steps.push({ key, label, status: 'success', result });
+        return result;
+      } catch (error: any) {
+        this.logger.warn(`${label} failed: ${error?.message || error}`);
+        steps.push({
+          key,
+          label,
+          status: 'failed',
+          error: error?.message || String(error),
+        });
+        return null;
+      }
+    };
+
+    await runStep(
+      'shopify-sync',
+      '同步 Shopify 訂單與交易',
+      params.syncShopify !== false,
+      () => this.shopifyService.autoSync({ entityId, since, until }),
+    );
+
+    await runStep(
+      'oneshop-sync',
+      '同步 1Shop 訂單與交易',
+      params.syncOneShop !== false,
+      () => this.oneShopService.autoSync({ entityId, since, until }),
+    );
+
+    await runStep(
+      'ecpay-payout-sync',
+      '同步綠界 Shopify 撥款',
+      params.syncEcpayPayouts !== false,
+      () =>
+        this.ecpayShopifyPayoutService.syncShopifyPayouts(
+          {
+            entityId,
+            beginDate: this.formatDate(since),
+            endDate: this.formatDate(until),
+          } as any,
+          params.userId,
+        ),
+    );
+
+    await runStep(
+      'ar-sync',
+      '同步銷售訂單到 AR / 分錄',
+      true,
+      () => this.arService.syncSalesReceivables(entityId, params.userId || ''),
+    );
+
+    await runStep(
+      'invoice-status-sync',
+      '同步電子發票狀態',
+      params.syncInvoices !== false,
+      () =>
+        this.salesOrderService.syncInvoiceStatusForOrders({
+          entityId,
+          startDate: since,
+          endDate: until,
+          limit: 300,
+        }),
+    );
+
+    const center = await this.getReconciliationCenter(entityId, since, until, 500);
+    const failedCount = steps.filter((step) => step.status === 'failed').length;
+
+    return {
+      success: failedCount === 0,
+      entityId,
+      range: {
+        startDate: since.toISOString(),
+        endDate: until.toISOString(),
+      },
+      steps,
+      failedCount,
+      summary: center.summary,
+      priorityItems: center.priorityItems,
+    };
+  }
 
   async getReconciliationCenter(
     entityId: string,
@@ -230,6 +352,13 @@ export class ReconciliationService {
 
   private sumCenterItems(items: any[], field: string) {
     return items.reduce((sum, item) => sum + Number(item[field] || 0), 0);
+  }
+
+  private formatDate(date: Date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   /**

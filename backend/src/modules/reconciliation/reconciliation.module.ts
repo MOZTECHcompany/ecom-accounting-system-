@@ -8,6 +8,9 @@ import { EcpayShopifyPayoutService } from './ecpay-shopify-payout.service';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { ArModule } from '../ar/ar.module';
 import { ReportsModule } from '../reports/reports.module';
+import { ShopifyIntegrationModule } from '../integration/shopify/shopify.module';
+import { OneShopIntegrationModule } from '../integration/one-shop/one-shop.module';
+import { SalesModule } from '../sales/sales.module';
 
 /**
  * ReconciliationModule
@@ -29,7 +32,15 @@ import { ReportsModule } from '../reports/reports.module';
  * - 異常交易告警
  */
 @Module({
-  imports: [ConfigModule, PrismaModule, ArModule, ReportsModule],
+  imports: [
+    ConfigModule,
+    PrismaModule,
+    ArModule,
+    ReportsModule,
+    SalesModule,
+    ShopifyIntegrationModule,
+    OneShopIntegrationModule,
+  ],
   controllers: [ReconciliationController],
   providers: [
     ReconciliationService,

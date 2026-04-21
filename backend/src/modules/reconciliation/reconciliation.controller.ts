@@ -105,6 +105,38 @@ export class ReconciliationController {
     );
   }
 
+  @Post('run')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  @ApiOperation({
+    summary: '執行核心對帳 Job',
+    description:
+      '依序同步平台訂單、綠界撥款、AR、發票狀態，最後重算對帳中心四個隊列。',
+  })
+  async runCoreReconciliation(
+    @Body()
+    body: {
+      entityId: string;
+      startDate?: string;
+      endDate?: string;
+      syncShopify?: boolean;
+      syncOneShop?: boolean;
+      syncEcpayPayouts?: boolean;
+      syncInvoices?: boolean;
+    },
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.reconciliationService.runCoreReconciliationJob({
+      entityId: body.entityId,
+      startDate: body.startDate ? new Date(body.startDate) : undefined,
+      endDate: body.endDate ? new Date(body.endDate) : undefined,
+      userId,
+      syncShopify: body.syncShopify,
+      syncOneShop: body.syncOneShop,
+      syncEcpayPayouts: body.syncEcpayPayouts,
+      syncInvoices: body.syncInvoices,
+    });
+  }
+
   @Post('bank/import')
   @Roles('ADMIN')
   @ApiOperation({
