@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { AttendanceIntegrationService } from '../attendance/services/integration.service';
+import { BalanceService } from '../attendance/services/balance.service';
 import { LeaveService } from '../attendance/services/leave.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { JournalService } from '../accounting/services/journal.service';
@@ -36,6 +37,7 @@ export class PayrollService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly attendanceIntegration: AttendanceIntegrationService,
+    private readonly balanceService: BalanceService,
     private readonly leaveService: LeaveService,
     private readonly journalService: JournalService,
     private readonly auditLogService: AuditLogService,
@@ -128,7 +130,10 @@ export class PayrollService {
       size: 'A4',
       margin: 48,
       info: {
-        Title: this.buildPayslipFileName(params.employee.employeeNo, params.run.payDate),
+        Title: this.buildPayslipFileName(
+          params.employee.employeeNo,
+          params.run.payDate,
+        ),
         Author: 'MOZTECH E-Accounting',
       },
     });
@@ -158,7 +163,9 @@ export class PayrollService {
         .fontSize(11)
         .fillColor('#475569')
         .text(`Entity: ${params.run.entity?.name ?? '—'}`)
-        .text(`Employee: ${params.employee.name} (${params.employee.employeeNo})`)
+        .text(
+          `Employee: ${params.employee.name} (${params.employee.employeeNo})`,
+        )
         .text(`Department: ${params.employee.department?.name ?? '—'}`)
         .text(
           `Period: ${params.run.periodStart.toISOString().slice(0, 10)} - ${params.run.periodEnd.toISOString().slice(0, 10)}`,
@@ -236,10 +243,15 @@ export class PayrollService {
             width: 200,
           })
           .fillColor('#0f172a')
-          .text(formatCurrency(this.toNumber(item.amountBase)), amountColX, currentY, {
-            width: 70,
-            align: 'right',
-          });
+          .text(
+            formatCurrency(this.toNumber(item.amountBase)),
+            amountColX,
+            currentY,
+            {
+              width: 70,
+              align: 'right',
+            },
+          );
         doc.moveDown(1.2);
         doc
           .moveTo(startX, doc.y - 6)
@@ -1165,7 +1177,9 @@ export class PayrollService {
     );
 
     if (employeeItems.length === 0) {
-      throw new NotFoundException('Payroll items not found for selected employee');
+      throw new NotFoundException(
+        'Payroll items not found for selected employee',
+      );
     }
 
     const employee = employeeItems[0].employee;
@@ -1940,6 +1954,27 @@ export class PayrollService {
       });
     }
 
+    if (
+      employee.country === 'TW' &&
+      employee.terminateDate &&
+      employee.terminateDate >= periodStart &&
+      employee.terminateDate <= periodEnd
+    ) {
+      const annualLeaveAdjustment =
+        await this.balanceService.getTerminationAnnualLeaveAdjustment(
+          employee.id,
+          employee.terminateDate,
+        );
+
+      if (annualLeaveAdjustment?.excessHours) {
+        items.push({
+          type: 'ANNUAL_LEAVE_OVERUSE_DEDUCTION',
+          amount: -Math.round(annualLeaveAdjustment.excessHours * hourlyRate),
+          remark: annualLeaveAdjustment.note,
+        });
+      }
+    }
+
     // 4. Deductions (Insurance & Tax)
     if (employee.country === 'TW') {
       const laborIns = Math.round(baseSalary * twLaborInsuranceRate);
@@ -2056,10 +2091,12 @@ export class PayrollService {
       periodStart,
       periodEnd,
       runCount: runs.length,
-      totalsByType: Array.from(totalsByType.entries()).map(([type, amount]) => ({
-        type,
-        amount,
-      })),
+      totalsByType: Array.from(totalsByType.entries()).map(
+        ([type, amount]) => ({
+          type,
+          amount,
+        }),
+      ),
       totalsByEmployee: Array.from(totalsByEmployee.values()).sort(
         (a, b) => b.total - a.total,
       ),
@@ -2076,7 +2113,11 @@ export class PayrollService {
   async getAnnualPayrollSummary(entityId: string, year: number) {
     const annualStart = new Date(year, 0, 1);
     const annualEnd = new Date(year, 11, 31, 23, 59, 59, 999);
-    const report = await this.getPayrollReport(entityId, annualStart, annualEnd);
+    const report = await this.getPayrollReport(
+      entityId,
+      annualStart,
+      annualEnd,
+    );
 
     const monthlyRuns = await this.prisma.payrollRun.findMany({
       where: {
@@ -2138,7 +2179,11 @@ export class PayrollService {
     const results = [];
     for (const employee of employees) {
       results.push(
-        await this.calculateEmployeePayroll(employee.id, periodStart, periodEnd),
+        await this.calculateEmployeePayroll(
+          employee.id,
+          periodStart,
+          periodEnd,
+        ),
       );
     }
 
@@ -2173,10 +2218,7 @@ export class PayrollService {
       throw new NotFoundException('Payroll run not found');
     }
 
-    return this.postPayrollRun(
-      payrollRunId,
-      run.approvedBy || run.createdBy,
-    );
+    return this.postPayrollRun(payrollRunId, run.approvedBy || run.createdBy);
   }
 
   /**

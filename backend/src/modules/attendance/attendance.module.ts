@@ -29,6 +29,11 @@ import { RolesGuard } from '../../common/guards/roles.guard';
     IpValidationStrategy,
     RolesGuard,
   ],
-  exports: [AttendanceService, LeaveService, AttendanceIntegrationService],
+  exports: [
+    AttendanceService,
+    LeaveService,
+    BalanceService,
+    AttendanceIntegrationService,
+  ],
 })
 export class AttendanceModule {}

@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { LeaveType, Prisma } from '@prisma/client';
+import { LeaveStatus, LeaveType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 
 type EmployeeRecord = {
@@ -18,6 +18,19 @@ type SeniorityTier = {
   minYears: number;
   maxYears?: number;
   days: number;
+};
+
+type AnnualLeaveTerminationAdjustment = {
+  excessHours: number;
+  excessDays: number;
+  vestedHours: number;
+  vestedDays: number;
+  usedHours: number;
+  usedDays: number;
+  serviceMonths: number;
+  stageStart: Date;
+  stageEnd: Date;
+  note?: string;
 };
 
 const DEFAULT_TW_ANNUAL_LEAVE_TIERS: SeniorityTier[] = [
@@ -231,11 +244,81 @@ export class BalanceService {
         accruedHours: this.calculateDefaultAccruedHours(
           leaveType,
           employee,
-          referenceDate,
+          leaveType.balanceResetPolicy === 'CALENDAR_YEAR'
+            ? period.end
+            : referenceDate,
         ),
         carryOverHours,
       },
     });
+  }
+
+  async getTerminationAnnualLeaveAdjustment(
+    employeeId: string,
+    terminateDate: Date,
+  ): Promise<AnnualLeaveTerminationAdjustment | null> {
+    const employee = await this.prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: {
+        id: true,
+        entityId: true,
+        hireDate: true,
+        country: true,
+      },
+    });
+
+    if (!employee || employee.country !== 'TW') {
+      return null;
+    }
+
+    const annualLeaveType = await this.prisma.leaveType.findFirst({
+      where: {
+        entityId: employee.entityId,
+        code: 'ANNUAL',
+        isActive: true,
+      },
+    });
+
+    if (!annualLeaveType) {
+      return null;
+    }
+
+    const stage = this.resolveAnnualLeaveSettlementStage(
+      employee.hireDate,
+      terminateDate,
+    );
+    const usedHours = await this.sumApprovedAnnualLeaveHours({
+      employeeId: employee.id,
+      leaveTypeId: annualLeaveType.id,
+      stageStart: stage.stageStart,
+      terminateDate,
+    });
+    const serviceMonths = this.roundTo(
+      this.calculateServiceMonths(stage.stageStart, terminateDate),
+    );
+    const vestedDays = this.roundTo(
+      (stage.fullStageDays * Math.min(serviceMonths, 12)) / 12,
+    );
+    const vestedHours = this.roundTo(vestedDays * 8);
+    const excessHours = this.roundTo(Math.max(0, usedHours - vestedHours));
+    const excessDays = this.roundTo(excessHours / 8);
+    const usedDays = this.roundTo(usedHours / 8);
+
+    return {
+      excessHours,
+      excessDays,
+      vestedHours,
+      vestedDays,
+      usedHours,
+      usedDays,
+      serviceMonths,
+      stageStart: stage.stageStart,
+      stageEnd: terminateDate,
+      note:
+        excessHours > 0
+          ? `曆年制離職結算：按 ${serviceMonths} 個月比例可得 ${vestedDays} 天，已請特休 ${usedDays} 天，超休 ${excessDays} 天需轉事假扣薪。`
+          : undefined,
+    };
   }
 
   leaveTypeUsesBalance(leaveType: LeaveType) {
@@ -287,13 +370,13 @@ export class BalanceService {
     employee: EmployeeRecord,
     referenceDate: Date,
   ) {
-    if (leaveType.maxDaysPerYear !== null) {
-      return leaveType.maxDaysPerYear.mul(8);
-    }
-
     const tierDays = this.calculateTierDays(leaveType, employee, referenceDate);
     if (tierDays !== null) {
       return new Prisma.Decimal(tierDays).mul(8);
+    }
+
+    if (leaveType.maxDaysPerYear !== null) {
+      return leaveType.maxDaysPerYear.mul(8);
     }
 
     const days = leaveType.maxDaysPerYear || new Prisma.Decimal(0);
@@ -310,7 +393,10 @@ export class BalanceService {
       return null;
     }
 
-    const serviceYears = this.calculateServiceYears(employee.hireDate, referenceDate);
+    const serviceYears = this.calculateServiceYears(
+      employee.hireDate,
+      referenceDate,
+    );
     const matchedTier = tiers.find((tier) => {
       if (serviceYears < tier.minYears) {
         return false;
@@ -342,6 +428,111 @@ export class BalanceService {
     }
 
     return diffMs / (365.2425 * 24 * 60 * 60 * 1000);
+  }
+
+  private resolveAnnualLeaveSettlementStage(
+    hireDate: Date,
+    terminateDate: Date,
+  ) {
+    const completedYears = Math.max(
+      0,
+      Math.floor(this.calculateServiceMonths(hireDate, terminateDate) / 12),
+    );
+    const stageStart = this.addYears(this.startOfDay(hireDate), completedYears);
+
+    return {
+      stageStart,
+      fullStageDays: this.getAnnualLeaveStageDays(completedYears),
+    };
+  }
+
+  private getAnnualLeaveStageDays(completedYears: number) {
+    if (completedYears <= 0) {
+      return 7;
+    }
+
+    if (completedYears === 1) {
+      return 10;
+    }
+
+    if (completedYears === 2 || completedYears === 3) {
+      return 14;
+    }
+
+    if (completedYears >= 4 && completedYears < 10) {
+      return 15;
+    }
+
+    return Math.min(30, 16 + Math.max(0, completedYears - 10));
+  }
+
+  private calculateServiceMonths(startDate: Date, endDate: Date) {
+    const start = this.startOfDay(startDate);
+    const end = this.startOfDay(endDate);
+    if (end <= start) {
+      return 0;
+    }
+
+    let fullMonths =
+      (end.getFullYear() - start.getFullYear()) * 12 +
+      (end.getMonth() - start.getMonth());
+    let anchor = this.addMonths(start, fullMonths);
+
+    if (anchor > end) {
+      fullMonths -= 1;
+      anchor = this.addMonths(start, fullMonths);
+    }
+
+    const nextAnchor = this.addMonths(anchor, 1);
+    const remainderMs = end.getTime() - anchor.getTime();
+    const monthMs = nextAnchor.getTime() - anchor.getTime();
+
+    return fullMonths + Math.max(0, remainderMs / monthMs);
+  }
+
+  private async sumApprovedAnnualLeaveHours(params: {
+    employeeId: string;
+    leaveTypeId: string;
+    stageStart: Date;
+    terminateDate: Date;
+  }) {
+    const aggregate = await this.prisma.leaveRequest.aggregate({
+      where: {
+        employeeId: params.employeeId,
+        leaveTypeId: params.leaveTypeId,
+        status: LeaveStatus.APPROVED,
+        startAt: { lte: params.terminateDate },
+        endAt: { gte: params.stageStart },
+      },
+      _sum: {
+        hours: true,
+      },
+    });
+
+    return Number(aggregate._sum.hours || 0);
+  }
+
+  private addYears(date: Date, years: number) {
+    const next = new Date(date);
+    next.setFullYear(next.getFullYear() + years);
+    return next;
+  }
+
+  private addMonths(date: Date, months: number) {
+    const next = new Date(date);
+    next.setMonth(next.getMonth() + months);
+    return next;
+  }
+
+  private startOfDay(date: Date) {
+    const next = new Date(date);
+    next.setHours(0, 0, 0, 0);
+    return next;
+  }
+
+  private roundTo(value: number, digits = 2) {
+    const factor = 10 ** digits;
+    return Math.round((value + Number.EPSILON) * factor) / factor;
   }
 
   private getSeniorityTiers(leaveType: LeaveType): SeniorityTier[] {
@@ -463,7 +654,10 @@ export class BalanceService {
         }
       }
 
-      if (['REJECTED', 'CANCELLED'].includes(fromStatus) && ['SUBMITTED', 'UNDER_REVIEW'].includes(toStatus)) {
+      if (
+        ['REJECTED', 'CANCELLED'].includes(fromStatus) &&
+        ['SUBMITTED', 'UNDER_REVIEW'].includes(toStatus)
+      ) {
         next = next.add(hours);
       }
     }
@@ -473,7 +667,10 @@ export class BalanceService {
         next = next.add(hours);
       }
 
-      if (fromStatus === 'APPROVED' && ['REJECTED', 'CANCELLED'].includes(toStatus)) {
+      if (
+        fromStatus === 'APPROVED' &&
+        ['REJECTED', 'CANCELLED'].includes(toStatus)
+      ) {
         next = next.sub(hours);
       }
     }

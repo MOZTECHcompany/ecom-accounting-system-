@@ -43,7 +43,7 @@ const DEFAULT_TW_LEAVE_TYPES: DefaultLeaveTypeTemplate[] = [
   {
     code: 'ANNUAL',
     name: '特休',
-    balanceResetPolicy: 'HIRE_ANNIVERSARY',
+    balanceResetPolicy: 'CALENDAR_YEAR',
     requiresDocument: false,
     paidPercentage: 100,
     minNoticeHours: 24,
@@ -128,7 +128,10 @@ export class LeaveService {
     const referenceDate = this.resolveEmployeeReferenceDate(employee.hireDate);
 
     for (const leaveType of leaveTypes) {
-      if (!leaveType.isActive || !this.balanceService.leaveTypeUsesBalance(leaveType)) {
+      if (
+        !leaveType.isActive ||
+        !this.balanceService.leaveTypeUsesBalance(leaveType)
+      ) {
         continue;
       }
 
@@ -472,19 +475,25 @@ export class LeaveService {
 
   async createLeaveType(userId: string, dto: UpsertLeaveTypeDto) {
     const entityId = await this.resolveEntityId(userId, dto.entityId);
+    const normalizedCode = dto.code.trim().toUpperCase();
     const metadata = this.mergeLeaveTypeMetadata(undefined, dto.seniorityTiers);
 
     const leaveType = await this.prisma.leaveType.create({
       data: {
         entityId,
-        code: dto.code.trim().toUpperCase(),
+        code: normalizedCode,
         name: dto.name.trim(),
-        balanceResetPolicy: dto.balanceResetPolicy || 'CALENDAR_YEAR',
+        balanceResetPolicy: this.resolveLeaveTypeResetPolicy(
+          normalizedCode,
+          dto.balanceResetPolicy,
+        ),
         requiresDocument: dto.requiresDocument ?? false,
         maxDaysPerYear:
-          dto.maxDaysPerYear !== undefined
-            ? new Prisma.Decimal(dto.maxDaysPerYear)
-            : undefined,
+          normalizedCode === 'ANNUAL'
+            ? null
+            : dto.maxDaysPerYear !== undefined
+              ? new Prisma.Decimal(dto.maxDaysPerYear)
+              : undefined,
         paidPercentage:
           dto.paidPercentage !== undefined
             ? new Prisma.Decimal(dto.paidPercentage)
@@ -521,18 +530,26 @@ export class LeaveService {
       throw new BadRequestException('Leave type not found in current entity');
     }
 
+    const normalizedCode = dto.code
+      ? dto.code.trim().toUpperCase()
+      : existing.code;
+
     const leaveType = await this.prisma.leaveType.update({
       where: { id },
       data: {
-        code: dto.code ? dto.code.trim().toUpperCase() : existing.code,
+        code: normalizedCode,
         name: dto.name ? dto.name.trim() : existing.name,
-        balanceResetPolicy:
+        balanceResetPolicy: this.resolveLeaveTypeResetPolicy(
+          normalizedCode,
           dto.balanceResetPolicy || existing.balanceResetPolicy,
+        ),
         requiresDocument: dto.requiresDocument ?? existing.requiresDocument,
         maxDaysPerYear:
-          dto.maxDaysPerYear !== undefined
-            ? new Prisma.Decimal(dto.maxDaysPerYear)
-            : existing.maxDaysPerYear,
+          normalizedCode === 'ANNUAL'
+            ? null
+            : dto.maxDaysPerYear !== undefined
+              ? new Prisma.Decimal(dto.maxDaysPerYear)
+              : existing.maxDaysPerYear,
         paidPercentage:
           dto.paidPercentage !== undefined
             ? new Prisma.Decimal(dto.paidPercentage)
@@ -733,7 +750,10 @@ export class LeaveService {
       checksum?: string;
     }>;
   }) {
-    if (Number.isNaN(params.startAt.getTime()) || Number.isNaN(params.endAt.getTime())) {
+    if (
+      Number.isNaN(params.startAt.getTime()) ||
+      Number.isNaN(params.endAt.getTime())
+    ) {
       throw new BadRequestException('請假日期格式不正確');
     }
 
@@ -902,7 +922,10 @@ export class LeaveService {
     return baseMetadata as Prisma.InputJsonValue;
   }
 
-  private async ensureDefaultLeaveTypes(entityId: string, actorUserId?: string) {
+  private async ensureDefaultLeaveTypes(
+    entityId: string,
+    actorUserId?: string,
+  ) {
     const entity = await this.prisma.entity.findUnique({
       where: { id: entityId },
       select: { country: true },
@@ -931,6 +954,17 @@ export class LeaveService {
       });
 
       if (existing) {
+        if (
+          template.code === 'ANNUAL' &&
+          existing.balanceResetPolicy === 'HIRE_ANNIVERSARY' &&
+          template.balanceResetPolicy === 'CALENDAR_YEAR' &&
+          this.isSystemDefaultLeaveType(existing.metadata)
+        ) {
+          await this.prisma.leaveType.update({
+            where: { id: existing.id },
+            data: { balanceResetPolicy: 'CALENDAR_YEAR' },
+          });
+        }
         continue;
       }
 
@@ -989,6 +1023,26 @@ export class LeaveService {
     }
 
     return [];
+  }
+
+  private resolveLeaveTypeResetPolicy(
+    code: string,
+    requestedPolicy?: string | null,
+  ) {
+    if (code === 'ANNUAL' && requestedPolicy === 'NONE') {
+      return 'CALENDAR_YEAR';
+    }
+
+    return requestedPolicy || 'CALENDAR_YEAR';
+  }
+
+  private isSystemDefaultLeaveType(metadata: Prisma.JsonValue | null) {
+    return (
+      typeof metadata === 'object' &&
+      metadata !== null &&
+      !Array.isArray(metadata) &&
+      (metadata as { systemDefault?: unknown }).systemDefault === true
+    );
   }
 
   private async resolveEntityId(userId: string, requestedEntityId?: string) {

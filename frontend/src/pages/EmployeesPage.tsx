@@ -447,9 +447,8 @@ const DepartmentsTab = ({
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(
-    null,
-  );
+  const [selectedDepartment, setSelectedDepartment] =
+    useState<Department | null>(null);
   const [form] = Form.useForm();
 
   const handleCreate = async () => {
@@ -513,10 +512,7 @@ const DepartmentsTab = ({
       reload();
     } catch (error) {
       message.error(
-        getErrorMessage(
-          error,
-          `${record.isActive ? "停用" : "啟用"}部門失敗`,
-        ),
+        getErrorMessage(error, `${record.isActive ? "停用" : "啟用"}部門失敗`),
       );
     } finally {
       setUpdatingId(null);
@@ -635,6 +631,16 @@ const LeaveTypesTab = () => {
   );
   const [form] = Form.useForm();
   const leaveTypeCode = String(Form.useWatch("code", form) || "").toUpperCase();
+  const isAnnualLeaveType = leaveTypeCode === "ANNUAL";
+
+  useEffect(() => {
+    if (
+      isAnnualLeaveType &&
+      form.getFieldValue("balanceResetPolicy") === "NONE"
+    ) {
+      form.setFieldValue("balanceResetPolicy", "CALENDAR_YEAR");
+    }
+  }, [form, isAnnualLeaveType]);
 
   const fetchLeaveTypes = async () => {
     setLoading(true);
@@ -685,12 +691,18 @@ const LeaveTypesTab = () => {
   const handleSave = async () => {
     try {
       const values = await form.validateFields();
+      const normalizedCode = String(values.code || "").toUpperCase();
       const payload = {
         code: values.code,
         name: values.name,
-        balanceResetPolicy: values.balanceResetPolicy,
+        balanceResetPolicy:
+          normalizedCode === "ANNUAL" && values.balanceResetPolicy === "NONE"
+            ? "CALENDAR_YEAR"
+            : values.balanceResetPolicy,
         maxDaysPerYear:
-          values.maxDaysPerYear === null || values.maxDaysPerYear === undefined
+          normalizedCode === "ANNUAL" ||
+          values.maxDaysPerYear === null ||
+          values.maxDaysPerYear === undefined
             ? undefined
             : Number(values.maxDaysPerYear),
         paidPercentage:
@@ -709,7 +721,7 @@ const LeaveTypesTab = () => {
             ? undefined
             : Number(values.carryOverLimitHours),
         seniorityTiers:
-          String(values.code || "").toUpperCase() === "ANNUAL"
+          normalizedCode === "ANNUAL"
             ? normalizeSeniorityTiers(values.seniorityTiers)
             : [],
       };
@@ -762,7 +774,14 @@ const LeaveTypesTab = () => {
       title: "年度額度",
       dataIndex: "maxDaysPerYear",
       key: "maxDaysPerYear",
-      render: (value?: number) => (value !== undefined ? `${value} 天` : "依規則"),
+      render: (value?: number | null, record?: LeaveType) =>
+        record?.code === "ANNUAL" ? (
+          <Tag color="processing">依法自動計算</Tag>
+        ) : value !== undefined && value !== null ? (
+          `${value} 天`
+        ) : (
+          "依規則"
+        ),
     },
     {
       title: "支薪比例",
@@ -840,13 +859,13 @@ const LeaveTypesTab = () => {
         onOk={() => void handleSave()}
       >
         <Form form={form} layout="vertical">
-          {leaveTypeCode === "ANNUAL" ? (
+          {isAnnualLeaveType ? (
             <Alert
               type="info"
               showIcon
               className="mb-4"
               message="特休可自訂年資級距"
-              description="如果不填，系統會使用內建的台灣標準特休級距；如果有填，薪資與額度計算會優先使用你設定的級距。"
+              description="如果不填，系統會使用內建的台灣標準特休級距；曆年制會先給年度額度，離職時再依實際任職月份比例結算，超休會轉事假扣薪。"
             />
           ) : null}
           <Form.Item
@@ -872,23 +891,32 @@ const LeaveTypesTab = () => {
               options={[
                 { label: "曆年制", value: "CALENDAR_YEAR" },
                 { label: "到職週年制", value: "HIRE_ANNIVERSARY" },
-                { label: "不建年度額度", value: "NONE" },
+                ...(isAnnualLeaveType
+                  ? []
+                  : [{ label: "不建年度額度", value: "NONE" }]),
               ]}
             />
           </Form.Item>
-          <Form.Item name="maxDaysPerYear" label="年度額度（天）">
-            <InputNumber className="w-full" min={0} />
-          </Form.Item>
+          {isAnnualLeaveType ? (
+            <Alert
+              type="success"
+              showIcon
+              className="mb-4"
+              message="特休年度額度會依法自動換算成小時"
+              description="系統以 1 天 = 8 小時計算，例如 7 天會成為 56 小時；員工申請時可用小時為單位請假。"
+            />
+          ) : (
+            <Form.Item name="maxDaysPerYear" label="年度額度（天）">
+              <InputNumber className="w-full" min={0} />
+            </Form.Item>
+          )}
           <Form.Item name="paidPercentage" label="支薪比例（%）">
             <InputNumber className="w-full" min={0} max={100} />
           </Form.Item>
           <Form.Item name="minNoticeHours" label="最低提前時數">
             <InputNumber className="w-full" min={0} />
           </Form.Item>
-          <Form.Item
-            name="carryOverLimitHours"
-            label="結轉上限（小時）"
-          >
+          <Form.Item name="carryOverLimitHours" label="結轉上限（小時）">
             <InputNumber className="w-full" min={0} />
           </Form.Item>
           <Form.Item
@@ -905,7 +933,7 @@ const LeaveTypesTab = () => {
           >
             <Switch checkedChildren="可結轉" unCheckedChildren="不可結轉" />
           </Form.Item>
-          {leaveTypeCode === "ANNUAL" ? (
+          {isAnnualLeaveType ? (
             <Form.List name="seniorityTiers">
               {(fields, { add, remove }) => (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -934,7 +962,9 @@ const LeaveTypesTab = () => {
                           {...field}
                           name={[field.name, "minYears"]}
                           label="起始年資"
-                          rules={[{ required: true, message: "請輸入起始年資" }]}
+                          rules={[
+                            { required: true, message: "請輸入起始年資" },
+                          ]}
                         >
                           <InputNumber className="w-full" min={0} step={0.5} />
                         </Form.Item>
@@ -1167,7 +1197,9 @@ const LeaveBalancesTab = () => {
             min={2020}
             max={2100}
             value={selectedYear}
-            onChange={(value) => setSelectedYear(Number(value || dayjs().year()))}
+            onChange={(value) =>
+              setSelectedYear(Number(value || dayjs().year()))
+            }
             placeholder="年度"
           />
           <Select
