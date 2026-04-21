@@ -5,10 +5,16 @@ import {
   Card,
   Col,
   DatePicker,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
   Progress,
   Row,
+  Select,
   Space,
   Statistic,
+  Switch,
   Table,
   Tabs,
   Tag,
@@ -21,7 +27,9 @@ import {
   BankOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
+  DeleteOutlined,
   ExceptionOutlined,
+  PlusOutlined,
   ReloadOutlined,
   SafetyCertificateOutlined,
 } from '@ant-design/icons'
@@ -40,6 +48,7 @@ import {
 } from '../services/dashboard.service'
 import { arService, ReceivableMonitorResponse, ReceivableMonitorItem } from '../services/ar.service'
 import { salesService } from '../services/sales.service'
+import { apService } from '../services/ap.service'
 
 const { Title, Text } = Typography
 const { RangePicker } = DatePicker
@@ -47,6 +56,11 @@ const { RangePicker } = DatePicker
 type WorkbenchRange = [Dayjs, Dayjs]
 
 const DEFAULT_ENTITY_ID = import.meta.env.VITE_DEFAULT_ENTITY_ID?.trim() || 'tw-entity-001'
+
+const ECPAY_MERCHANT_OPTIONS = [
+  { label: '3290494 · MOZTECH 官方網站 / Shopify', value: '3290494' },
+  { label: '3150241 · 萬魔未來工學院 / 團購 / 1Shop', value: '3150241' },
+]
 
 const money = (value?: number | null) =>
   `NT$ ${Number(value || 0).toLocaleString('zh-TW', { maximumFractionDigits: 0 })}`
@@ -80,6 +94,7 @@ const auditMeta = (severity: OrderReconciliationAuditItem['severity']) => {
 
 const AccountingWorkbenchPage: React.FC = () => {
   const navigate = useNavigate()
+  const [feeImportForm] = Form.useForm()
   const [dateRange, setDateRange] = useState<WorkbenchRange>([
     dayjs().subtract(6, 'day').startOf('day'),
     dayjs().endOf('day'),
@@ -87,6 +102,8 @@ const AccountingWorkbenchPage: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [syncingAr, setSyncingAr] = useState(false)
   const [syncingInvoiceStatus, setSyncingInvoiceStatus] = useState(false)
+  const [feeImportOpen, setFeeImportOpen] = useState(false)
+  const [importingFeeInvoices, setImportingFeeInvoices] = useState(false)
   const [executive, setExecutive] = useState<DashboardExecutiveOverview | null>(null)
   const [feed, setFeed] = useState<DashboardReconciliationFeed | null>(null)
   const [audit, setAudit] = useState<OrderReconciliationAudit | null>(null)
@@ -150,6 +167,60 @@ const AccountingWorkbenchPage: React.FC = () => {
       message.error(error?.response?.data?.message || '同步發票狀態失敗')
     } finally {
       setSyncingInvoiceStatus(false)
+    }
+  }
+
+  const openFeeImportModal = () => {
+    feeImportForm.setFieldsValue({
+      merchantId: '3290494',
+      verifyIssuedStatus: true,
+      autoOffsetByMatchedFees: true,
+      records: [
+        {
+          invoiceStatus: 'issued',
+          serviceType: 'gateway_fee',
+          amountCurrency: 'TWD',
+        },
+      ],
+    })
+    setFeeImportOpen(true)
+  }
+
+  const handleImportFeeInvoices = async () => {
+    try {
+      const values = await feeImportForm.validateFields()
+      setImportingFeeInvoices(true)
+      const records = (values.records || []).map((record: any) => ({
+        invoiceNo: record.invoiceNo,
+        invoiceDate: record.invoiceDate?.format('YYYY-MM-DD'),
+        amountOriginal: Number(record.amountOriginal || 0),
+        amountCurrency: record.amountCurrency || 'TWD',
+        serviceType: record.serviceType || 'gateway_fee',
+        invoiceStatus: record.invoiceStatus || 'issued',
+        taxAmount: record.taxAmount !== undefined ? Number(record.taxAmount) : undefined,
+        relateNumber: record.relateNumber || undefined,
+        note: record.note || undefined,
+      }))
+
+      const result = await apService.importEcpayServiceFeeInvoices({
+        entityId,
+        merchantId: values.merchantId,
+        vendorName: values.vendorName || '綠界科技',
+        verifyIssuedStatus: values.verifyIssuedStatus,
+        autoOffsetByMatchedFees: values.autoOffsetByMatchedFees,
+        records,
+      })
+
+      message.success(
+        `綠界服務費發票匯入完成：新增 ${result.created || 0} 筆，更新 ${result.updated || 0} 筆，驗證 ${result.verifiedCount || 0} 筆`,
+      )
+      setFeeImportOpen(false)
+      await fetchWorkbench()
+    } catch (error: any) {
+      if (error?.errorFields) return
+      message.error(error?.response?.data?.message || '匯入綠界服務費發票失敗')
+    } finally {
+      setImportingFeeInvoices(false)
     }
   }
 
@@ -462,6 +533,12 @@ const AccountingWorkbenchPage: React.FC = () => {
             </Button>
             <Button
               icon={<BankOutlined />}
+              onClick={openFeeImportModal}
+            >
+              匯入綠界服務費發票
+            </Button>
+            <Button
+              icon={<CheckCircleOutlined />}
               onClick={() => navigate('/ap/payable?tab=ecpay-fees')}
             >
               處理綠界服務費 AP
@@ -572,6 +649,145 @@ const AccountingWorkbenchPage: React.FC = () => {
           },
         ]}
       />
+
+      <Modal
+        title="匯入綠界服務費發票"
+        open={feeImportOpen}
+        onCancel={() => setFeeImportOpen(false)}
+        onOk={handleImportFeeInvoices}
+        confirmLoading={importingFeeInvoices}
+        okText="匯入並核對"
+        cancelText="取消"
+        width={860}
+      >
+        <Alert
+          showIcon
+          type="warning"
+          className="mb-4"
+          message="這是綠界開給我們的服務費發票，不是客戶訂單發票"
+          description="匯入後會建立 AP 發票，並按月份與 merchant 去核對已回填的綠界金流手續費。若金額對得上，系統可自動標記為已沖抵。"
+        />
+        <Form
+          form={feeImportForm}
+          layout="vertical"
+          initialValues={{
+            merchantId: '3290494',
+            vendorName: '綠界科技',
+            verifyIssuedStatus: true,
+            autoOffsetByMatchedFees: true,
+            records: [{ invoiceStatus: 'issued', serviceType: 'gateway_fee', amountCurrency: 'TWD' }],
+          }}
+        >
+          <div className="grid gap-3 md:grid-cols-2">
+            <Form.Item
+              name="merchantId"
+              label="綠界商店代號"
+              rules={[{ required: true, message: '請選擇商店代號' }]}
+            >
+              <Select options={ECPAY_MERCHANT_OPTIONS} />
+            </Form.Item>
+            <Form.Item name="vendorName" label="供應商名稱">
+              <Input placeholder="綠界科技" />
+            </Form.Item>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <Form.Item name="verifyIssuedStatus" label="向綠界確認已開立" valuePropName="checked">
+              <Switch checkedChildren="驗證" unCheckedChildren="略過" />
+            </Form.Item>
+            <Form.Item name="autoOffsetByMatchedFees" label="若與手續費金額相符，自動沖抵" valuePropName="checked">
+              <Switch checkedChildren="自動" unCheckedChildren="手動" />
+            </Form.Item>
+          </div>
+
+          <Form.List name="records">
+            {(fields, { add, remove }) => (
+              <div className="space-y-4">
+                {fields.map((field, index) => (
+                  <Card
+                    key={field.key}
+                    size="small"
+                    className="rounded-2xl bg-slate-50/80"
+                    title={`服務費發票 ${index + 1}`}
+                    extra={
+                      fields.length > 1 ? (
+                        <Button danger type="text" icon={<DeleteOutlined />} onClick={() => remove(field.name)} />
+                      ) : null
+                    }
+                  >
+                    <div className="grid gap-3 md:grid-cols-4">
+                      <Form.Item
+                        {...field}
+                        name={[field.name, 'invoiceNo']}
+                        label="發票號碼"
+                        rules={[{ required: true, message: '請輸入發票號碼' }]}
+                      >
+                        <Input placeholder="例如 YM04187700" />
+                      </Form.Item>
+                      <Form.Item
+                        {...field}
+                        name={[field.name, 'invoiceDate']}
+                        label="發票日期"
+                        rules={[{ required: true, message: '請選擇發票日期' }]}
+                      >
+                        <DatePicker className="w-full" />
+                      </Form.Item>
+                      <Form.Item
+                        {...field}
+                        name={[field.name, 'amountOriginal']}
+                        label="發票金額"
+                        rules={[{ required: true, message: '請輸入金額' }]}
+                      >
+                        <InputNumber min={0} precision={0} className="w-full" />
+                      </Form.Item>
+                      <Form.Item {...field} name={[field.name, 'taxAmount']} label="稅額">
+                        <InputNumber min={0} precision={0} className="w-full" placeholder="留白自動估算" />
+                      </Form.Item>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-4">
+                      <Form.Item {...field} name={[field.name, 'serviceType']} label="費用類型">
+                        <Select
+                          options={[
+                            { label: '金流手續費', value: 'gateway_fee' },
+                            { label: '電子發票服務費', value: 'einvoice_fee' },
+                            { label: '物流服務費', value: 'logistics_fee' },
+                            { label: '其他服務費', value: 'service_fee' },
+                          ]}
+                        />
+                      </Form.Item>
+                      <Form.Item {...field} name={[field.name, 'invoiceStatus']} label="發票狀態">
+                        <Select
+                          options={[
+                            { label: '已開立', value: 'issued' },
+                            { label: '待確認', value: 'unknown' },
+                          ]}
+                        />
+                      </Form.Item>
+                      <Form.Item {...field} name={[field.name, 'relateNumber']} label="關聯編號">
+                        <Input placeholder="選填" />
+                      </Form.Item>
+                      <Form.Item {...field} name={[field.name, 'amountCurrency']} label="幣別">
+                        <Select options={[{ label: 'TWD', value: 'TWD' }]} />
+                      </Form.Item>
+                    </div>
+                    <Form.Item {...field} name={[field.name, 'note']} label="備註">
+                      <Input.TextArea rows={2} placeholder="例如：2026/03 金物流手續費" />
+                    </Form.Item>
+                  </Card>
+                ))}
+                <Button
+                  block
+                  type="dashed"
+                  icon={<PlusOutlined />}
+                  onClick={() => add({ invoiceStatus: 'issued', serviceType: 'gateway_fee', amountCurrency: 'TWD' })}
+                >
+                  新增一筆服務費發票
+                </Button>
+              </div>
+            )}
+          </Form.List>
+        </Form>
+      </Modal>
     </motion.div>
   )
 }
