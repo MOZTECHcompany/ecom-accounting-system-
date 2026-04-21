@@ -84,6 +84,27 @@ export class ReconciliationController {
     private readonly ecpayShopifyPayoutService: EcpayShopifyPayoutService,
   ) {}
 
+  @Get('center')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  @ApiOperation({
+    summary: '對帳中心',
+    description:
+      '將訂單、應收、綠界/平台撥款、手續費、發票與分錄收斂成待撥款、可核銷、已核銷、異常四個隊列。',
+  })
+  async getReconciliationCenter(
+    @Query('entityId') entityId: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.reconciliationService.getReconciliationCenter(
+      entityId,
+      startDate ? new Date(startDate) : undefined,
+      endDate ? new Date(endDate) : undefined,
+      limit ? Number(limit) : undefined,
+    );
+  }
+
   @Post('bank/import')
   @Roles('ADMIN')
   @ApiOperation({

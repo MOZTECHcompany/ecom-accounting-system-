@@ -26,44 +26,17 @@ import {
 import { motion } from 'framer-motion'
 import dayjs, { Dayjs } from 'dayjs'
 import { useNavigate } from 'react-router-dom'
-import {
-  dashboardService,
-  OrderReconciliationAudit,
-  OrderReconciliationAuditItem,
-} from '../services/dashboard.service'
-import {
-  arService,
-  ReceivableMonitorItem,
-  ReceivableMonitorResponse,
-} from '../services/ar.service'
+import { arService } from '../services/ar.service'
 import { salesService } from '../services/sales.service'
+import {
+  reconciliationService,
+  ReconciliationBucketKey,
+  ReconciliationCenterItem,
+  ReconciliationCenterResponse,
+} from '../services/reconciliation.service'
 
 const { Title, Text } = Typography
 const { RangePicker } = DatePicker
-
-type ReconciliationBucketKey = 'pending_payout' | 'ready_to_clear' | 'cleared' | 'exceptions'
-
-type ReconciliationQueueItem = {
-  key: string
-  bucket: ReconciliationBucketKey
-  orderNumber: string
-  customerName: string
-  sourceLabel: string
-  orderDate: string
-  dueDate?: string | null
-  grossAmount: number
-  paidAmount: number
-  netAmount: number
-  feeTotal: number
-  outstandingAmount: number
-  invoiceNumber?: string | null
-  feeStatus?: string | null
-  reconciledFlag: boolean
-  accountingPosted: boolean
-  severity: 'healthy' | 'warning' | 'critical'
-  reason: string
-  nextAction: string
-}
 
 const DEFAULT_ENTITY_ID = import.meta.env.VITE_DEFAULT_ENTITY_ID?.trim() || 'tw-entity-001'
 
@@ -100,88 +73,10 @@ const bucketMeta: Record<
   },
 }
 
-const severityColor = (severity: ReconciliationQueueItem['severity']) => {
+const severityColor = (severity: ReconciliationCenterItem['severity']) => {
   if (severity === 'critical') return 'red'
   if (severity === 'warning') return 'gold'
   return 'green'
-}
-
-const normalizeAuditMap = (audit?: OrderReconciliationAudit | null) => {
-  const map = new Map<string, OrderReconciliationAuditItem>()
-  for (const item of audit?.items || []) {
-    map.set(item.orderId, item)
-  }
-  return map
-}
-
-const classifyItem = (
-  item: ReceivableMonitorItem,
-  auditItem?: OrderReconciliationAuditItem,
-): ReconciliationQueueItem => {
-  const hasException =
-    auditItem?.severity === 'critical' ||
-    auditItem?.severity === 'warning' ||
-    item.warningCodes.some((code) =>
-      [
-        'missing_fee',
-        'missing_journal',
-        'invoice_pending',
-        'invoice_issued_unposted',
-        'invoice_issued_unpaid',
-        'overdue_receivable',
-      ].includes(code),
-    )
-
-  let bucket: ReconciliationBucketKey = 'pending_payout'
-  let reason = item.settlementDiagnostic || '等待綠界或平台撥款資料回填。'
-  let nextAction = '等待下一次自動同步，或手動匯入綠界撥款資料。'
-
-  if (
-    item.reconciledFlag &&
-    item.accountingPosted &&
-    item.invoiceNumber &&
-    item.feeStatus === 'actual' &&
-    item.outstandingAmount <= 0
-  ) {
-    bucket = 'cleared'
-    reason = '訂單、撥款、手續費、發票與分錄已對齊。'
-    nextAction = '不需處理。'
-  } else if (hasException) {
-    bucket = 'exceptions'
-    reason =
-      auditItem?.anomalyMessages?.[0] ||
-      item.warningCodes.join('、') ||
-      '這筆訂單有資料缺口，需要人工確認。'
-    nextAction =
-      auditItem?.recommendation ||
-      '先補綠界撥款/手續費或發票狀態，再重新同步。'
-  } else if (item.paidAmount > 0 || item.reconciledFlag) {
-    bucket = 'ready_to_clear'
-    reason = '已看到收款或撥款資料，可以進入核銷檢查。'
-    nextAction = '確認手續費、發票與分錄後核銷。'
-  }
-
-  return {
-    key: item.orderId,
-    bucket,
-    orderNumber: item.orderNumber,
-    customerName: item.customerName,
-    sourceLabel: item.sourceLabel,
-    orderDate: item.orderDate,
-    dueDate: item.dueDate,
-    grossAmount: item.grossAmount,
-    paidAmount: item.paidAmount,
-    netAmount: item.netAmount,
-    feeTotal: item.feeTotal,
-    outstandingAmount: item.outstandingAmount,
-    invoiceNumber: item.invoiceNumber,
-    feeStatus: item.feeStatus,
-    reconciledFlag: item.reconciledFlag,
-    accountingPosted: item.accountingPosted,
-    severity: bucket === 'exceptions' ? auditItem?.severity || 'warning' : 'healthy',
-    reason,
-    nextAction,
-  }
 }
 
 const ReconciliationCenterPage: React.FC = () => {
@@ -193,8 +88,7 @@ const ReconciliationCenterPage: React.FC = () => {
   const [activeBucket, setActiveBucket] = useState<ReconciliationBucketKey>('exceptions')
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
-  const [receivables, setReceivables] = useState<ReceivableMonitorResponse | null>(null)
-  const [audit, setAudit] = useState<OrderReconciliationAudit | null>(null)
+  const [center, setCenter] = useState<ReconciliationCenterResponse | null>(null)
 
   const entityId = localStorage.getItem('entityId')?.trim() || DEFAULT_ENTITY_ID
   const startDate = dateRange[0].startOf('day').toISOString()
@@ -203,17 +97,13 @@ const ReconciliationCenterPage: React.FC = () => {
   const fetchData = async () => {
     setLoading(true)
     try {
-      const [receivableData, auditData] = await Promise.all([
-        arService.getReceivableMonitor({ entityId, startDate, endDate }),
-        dashboardService.getOrderReconciliationAudit({
-          entityId,
-          startDate,
-          endDate,
-          limit: 300,
-        }),
-      ])
-      setReceivables(receivableData)
-      setAudit(auditData)
+      const centerData = await reconciliationService.getCenter({
+        entityId,
+        startDate,
+        endDate,
+        limit: 300,
+      })
+      setCenter(centerData)
     } catch (error: any) {
       message.error(error?.response?.data?.message || '讀取對帳中心失敗')
     } finally {
@@ -225,35 +115,16 @@ const ReconciliationCenterPage: React.FC = () => {
     fetchData()
   }, [dateRange[0].valueOf(), dateRange[1].valueOf()])
 
-  const queueItems = useMemo(() => {
-    const auditMap = normalizeAuditMap(audit)
-    return (receivables?.items || []).map((item) => classifyItem(item, auditMap.get(item.orderId)))
-  }, [audit, receivables])
-
-  const bucketSummary = useMemo(() => {
-    return queueItems.reduce(
-      (acc, item) => {
-        acc[item.bucket].count += 1
-        acc[item.bucket].grossAmount += item.grossAmount
-        acc[item.bucket].outstandingAmount += item.outstandingAmount
-        acc[item.bucket].feeTotal += item.feeTotal
-        return acc
-      },
-      {
-        pending_payout: { count: 0, grossAmount: 0, outstandingAmount: 0, feeTotal: 0 },
-        ready_to_clear: { count: 0, grossAmount: 0, outstandingAmount: 0, feeTotal: 0 },
-        cleared: { count: 0, grossAmount: 0, outstandingAmount: 0, feeTotal: 0 },
-        exceptions: { count: 0, grossAmount: 0, outstandingAmount: 0, feeTotal: 0 },
-      } as Record<ReconciliationBucketKey, { count: number; grossAmount: number; outstandingAmount: number; feeTotal: number }>,
-    )
-  }, [queueItems])
-
-  const visibleItems = queueItems.filter((item) => item.bucket === activeBucket)
-  const totalCount = queueItems.length
-  const clearedCount = bucketSummary.cleared.count
-  const completionRate = totalCount ? Math.round((clearedCount / totalCount) * 100) : 0
-  const exceptionAmount = bucketSummary.exceptions.outstandingAmount
-  const pendingAmount = bucketSummary.pending_payout.outstandingAmount
+  const bucketSummary = center?.buckets || {
+    pending_payout: { count: 0, grossAmount: 0, outstandingAmount: 0, feeTotal: 0, items: [] },
+    ready_to_clear: { count: 0, grossAmount: 0, outstandingAmount: 0, feeTotal: 0, items: [] },
+    cleared: { count: 0, grossAmount: 0, outstandingAmount: 0, feeTotal: 0, items: [] },
+    exceptions: { count: 0, grossAmount: 0, outstandingAmount: 0, feeTotal: 0, items: [] },
+  }
+  const visibleItems = center?.buckets?.[activeBucket]?.items || []
+  const completionRate = center?.summary.completionRate || 0
+  const exceptionAmount = center?.summary.exceptionAmount || 0
+  const pendingAmount = center?.summary.pendingPayoutAmount || 0
 
   const handleSyncCore = async () => {
     setSyncing(true)
@@ -269,7 +140,7 @@ const ReconciliationCenterPage: React.FC = () => {
     }
   }
 
-  const columns: ColumnsType<ReconciliationQueueItem> = [
+  const columns: ColumnsType<ReconciliationCenterItem> = [
     {
       title: '訂單 / 通路',
       render: (_, record) => (

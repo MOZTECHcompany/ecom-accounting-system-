@@ -6,6 +6,8 @@ import { ProviderPayoutReconciliationService } from './provider-payout-reconcili
 import { PrismaModule } from '../../common/prisma/prisma.module';
 import { EcpayShopifyPayoutService } from './ecpay-shopify-payout.service';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { ArModule } from '../ar/ar.module';
+import { ReportsModule } from '../reports/reports.module';
 
 /**
  * ReconciliationModule
@@ -27,7 +29,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
  * - 異常交易告警
  */
 @Module({
-  imports: [ConfigModule, PrismaModule],
+  imports: [ConfigModule, PrismaModule, ArModule, ReportsModule],
   controllers: [ReconciliationController],
   providers: [
     ReconciliationService,
