@@ -1,0 +1,579 @@
+import React, { useEffect, useState } from 'react'
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  DatePicker,
+  Progress,
+  Row,
+  Space,
+  Statistic,
+  Table,
+  Tabs,
+  Tag,
+  Typography,
+  message,
+} from 'antd'
+import type { ColumnsType } from 'antd/es/table'
+import {
+  AuditOutlined,
+  BankOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  ExceptionOutlined,
+  ReloadOutlined,
+  SafetyCertificateOutlined,
+} from '@ant-design/icons'
+import { motion } from 'framer-motion'
+import dayjs, { Dayjs } from 'dayjs'
+import { useNavigate } from 'react-router-dom'
+import {
+  dashboardService,
+  DashboardExecutiveAnomaly,
+  DashboardExecutiveOverview,
+  DashboardReconciliationBatch,
+  DashboardReconciliationFeed,
+  DashboardReconciliationItem,
+  OrderReconciliationAudit,
+  OrderReconciliationAuditItem,
+} from '../services/dashboard.service'
+import { arService, ReceivableMonitorResponse, ReceivableMonitorItem } from '../services/ar.service'
+import { salesService } from '../services/sales.service'
+
+const { Title, Text } = Typography
+const { RangePicker } = DatePicker
+
+type WorkbenchRange = [Dayjs, Dayjs]
+
+const DEFAULT_ENTITY_ID = import.meta.env.VITE_DEFAULT_ENTITY_ID?.trim() || 'tw-entity-001'
+
+const money = (value?: number | null) =>
+  `NT$ ${Number(value || 0).toLocaleString('zh-TW', { maximumFractionDigits: 0 })}`
+
+const statusTone = (tone?: string) => {
+  if (tone === 'critical') return 'red'
+  if (tone === 'warning') return 'gold'
+  if (tone === 'attention') return 'blue'
+  return 'green'
+}
+
+const settlementMeta = (item: DashboardReconciliationItem) => {
+  if (item.settlementStatus === 'reconciled') return { color: 'green' as const, label: '已對帳' }
+  if (item.settlementStatus === 'pending_payout') return { color: 'gold' as const, label: '待撥款' }
+  if (item.settlementStatus === 'failed') return { color: 'red' as const, label: '失敗 / 退款' }
+  return { color: 'blue' as const, label: '待付款' }
+}
+
+const feeMeta = (status?: string) => {
+  if (status === 'actual') return { color: 'green' as const, label: '實際費用' }
+  if (status === 'estimated') return { color: 'gold' as const, label: '預估費用' }
+  if (status === 'unavailable') return { color: 'red' as const, label: '來源不可得' }
+  return { color: 'default' as const, label: '待補費用' }
+}
+
+const auditMeta = (severity: OrderReconciliationAuditItem['severity']) => {
+  if (severity === 'critical') return { color: 'red' as const, label: '高風險' }
+  if (severity === 'warning') return { color: 'gold' as const, label: '需追蹤' }
+  return { color: 'green' as const, label: '正常' }
+}
+
+const AccountingWorkbenchPage: React.FC = () => {
+  const navigate = useNavigate()
+  const [dateRange, setDateRange] = useState<WorkbenchRange>([
+    dayjs().subtract(6, 'day').startOf('day'),
+    dayjs().endOf('day'),
+  ])
+  const [loading, setLoading] = useState(false)
+  const [syncingAr, setSyncingAr] = useState(false)
+  const [syncingInvoiceStatus, setSyncingInvoiceStatus] = useState(false)
+  const [executive, setExecutive] = useState<DashboardExecutiveOverview | null>(null)
+  const [feed, setFeed] = useState<DashboardReconciliationFeed | null>(null)
+  const [audit, setAudit] = useState<OrderReconciliationAudit | null>(null)
+  const [receivables, setReceivables] = useState<ReceivableMonitorResponse | null>(null)
+
+  const entityId = localStorage.getItem('entityId')?.trim() || DEFAULT_ENTITY_ID
+  const startDate = dateRange[0].startOf('day').toISOString()
+  const endDate = dateRange[1].endOf('day').toISOString()
+
+  const fetchWorkbench = async () => {
+    setLoading(true)
+    try {
+      const [executiveData, feedData, auditData, receivableData] = await Promise.all([
+        dashboardService.getExecutiveOverview({ entityId, startDate, endDate }),
+        dashboardService.getReconciliationFeed({ entityId, startDate, endDate, limit: 24 }),
+        dashboardService.getOrderReconciliationAudit({ entityId, startDate, endDate, limit: 80 }),
+        arService.getReceivableMonitor({ entityId, startDate, endDate }),
+      ])
+      setExecutive(executiveData)
+      setFeed(feedData)
+      setAudit(auditData)
+      setReceivables(receivableData)
+    } catch (error: any) {
+      message.error(error?.response?.data?.message || '讀取會計工作台失敗')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchWorkbench()
+  }, [dateRange[0].valueOf(), dateRange[1].valueOf()])
+
+  const handleSyncAr = async () => {
+    setSyncingAr(true)
+    try {
+      const result = await arService.syncSalesOrders(entityId)
+      message.success(`應收同步完成：新增 ${result.created || 0} 筆，更新 ${result.updated || 0} 筆`)
+      await fetchWorkbench()
+    } catch (error: any) {
+      message.error(error?.response?.data?.message || '同步應收失敗')
+    } finally {
+      setSyncingAr(false)
+    }
+  }
+
+  const handleSyncInvoiceStatuses = async () => {
+    setSyncingInvoiceStatus(true)
+    try {
+      const result = await salesService.syncInvoiceStatusBatch({
+        entityId,
+        startDate,
+        endDate,
+        limit: 120,
+      })
+      message.success(
+        `發票狀態同步完成：成功 ${result.synced || 0} 筆，略過 ${result.skipped || 0} 筆，失敗 ${result.failed || 0} 筆`,
+      )
+      await fetchWorkbench()
+    } catch (error: any) {
+      message.error(error?.response?.data?.message || '同步發票狀態失敗')
+    } finally {
+      setSyncingInvoiceStatus(false)
+    }
+  }
+
+  const anomalies = executive?.anomalies || []
+  const recentItems = feed?.recentItems || []
+  const recentBatches = feed?.recentBatches || []
+  const auditItems = audit?.items || []
+  const arItems = receivables?.items || []
+  const arSummary = receivables?.summary
+  const auditSummary = audit?.summary
+  const automationCompletion = auditSummary?.auditedOrderCount
+    ? Math.round((auditSummary.reconciledOrderCount / auditSummary.auditedOrderCount) * 100)
+    : 0
+
+  const anomalyColumns: ColumnsType<DashboardExecutiveAnomaly> = [
+    {
+      title: '待辦',
+      dataIndex: 'title',
+      render: (_, record) => (
+        <div>
+          <div className="font-semibold text-slate-900">{record.title}</div>
+          <div className="mt-1 text-xs leading-5 text-slate-500">{record.helper}</div>
+          {record.accountCode ? (
+            <div className="mt-1 text-[11px] text-slate-400">
+              科目 {record.accountCode} · {record.accountName}
+            </div>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      title: '狀態',
+      width: 120,
+      render: (_, record) => <Tag color={statusTone(record.tone)}>{record.statusLabel}</Tag>,
+    },
+    {
+      title: '影響',
+      width: 140,
+      align: 'right',
+      render: (_, record) => (
+        <div>
+          <div className="font-semibold text-slate-900">{record.count} 筆</div>
+          <div className="text-xs text-slate-400">{record.amount !== null ? money(record.amount) : '待處理'}</div>
+        </div>
+      ),
+    },
+  ]
+
+  const paymentColumns: ColumnsType<DashboardReconciliationItem> = [
+    {
+      title: '訂單 / 通路',
+      render: (_, record) => (
+        <div>
+          <div className="font-semibold text-blue-600">{record.externalOrderId || record.salesOrderId || '未綁定訂單'}</div>
+          <div className="text-xs text-slate-400">{record.bucketLabel} · {record.gateway || '未知付款方式'}</div>
+        </div>
+      ),
+    },
+    {
+      title: '狀態',
+      width: 170,
+      render: (_, record) => {
+        const settlement = settlementMeta(record)
+        const fee = feeMeta(record.feeStatus)
+        return (
+          <Space size={[4, 4]} wrap>
+            <Tag color={settlement.color}>{settlement.label}</Tag>
+            <Tag color={fee.color}>{fee.label}</Tag>
+          </Space>
+        )
+      },
+    },
+    {
+      title: '金額',
+      width: 220,
+      align: 'right',
+      render: (_, record) => (
+        <div className="text-sm">
+          <div>總額 {money(record.gross)}</div>
+          <div className="text-rose-500">手續費 {money(record.feeTotal)}</div>
+          <div className="font-semibold text-emerald-600">淨額 {money(record.net)}</div>
+        </div>
+      ),
+    },
+    {
+      title: '金流單號',
+      width: 170,
+      render: (_, record) => (
+        <div className="text-xs text-slate-500">
+          {record.providerTradeNo || record.providerPaymentId || '待回填'}
+        </div>
+      ),
+    },
+  ]
+
+  const batchColumns: ColumnsType<DashboardReconciliationBatch> = [
+    {
+      title: '批次',
+      render: (_, record) => (
+        <div>
+          <div className="font-semibold text-slate-900">{record.provider.toUpperCase()} 對帳批次</div>
+          <div className="text-xs text-slate-400">
+            {dayjs(record.importedAt).format('YYYY/MM/DD HH:mm')} · {record.fileName || '系統同步'}
+          </div>
+        </div>
+      ),
+    },
+    { title: '匯入', dataIndex: 'recordCount', width: 90, align: 'right' },
+    { title: '已匹配', dataIndex: 'matchedCount', width: 90, align: 'right' },
+    {
+      title: '待處理',
+      width: 100,
+      align: 'right',
+      render: (_, record) => (
+        <span className={record.unmatchedCount + record.invalidCount > 0 ? 'font-semibold text-amber-600' : 'text-emerald-600'}>
+          {record.unmatchedCount + record.invalidCount}
+        </span>
+      ),
+    },
+  ]
+
+  const auditColumns: ColumnsType<OrderReconciliationAuditItem> = [
+    {
+      title: '訂單',
+      render: (_, record) => (
+        <div>
+          <div className="font-semibold text-blue-600">{record.externalOrderId || record.orderId}</div>
+          <div className="text-xs text-slate-400">{record.channelName} · {dayjs(record.orderDate).format('YYYY/MM/DD')}</div>
+        </div>
+      ),
+    },
+    {
+      title: 'AI 判斷',
+      render: (_, record) => {
+        const meta = auditMeta(record.severity)
+        return (
+          <div>
+            <Tag color={meta.color}>{meta.label}</Tag>
+            <div className="mt-2 flex flex-wrap gap-1">
+              {record.anomalyMessages.slice(0, 3).map((item, index) => (
+                <Tag key={`${record.orderId}-${index}`} color="red">{item}</Tag>
+              ))}
+            </div>
+          </div>
+        )
+      },
+    },
+    {
+      title: '核對金額',
+      width: 220,
+      align: 'right',
+      render: (_, record) => (
+        <div className="text-sm">
+          <div>訂單 / 收款 {money(record.grossAmount)} / {money(record.paymentGrossAmount)}</div>
+          <div>手續費 {money(record.feeTotalAmount)} · {record.feeRatePct.toFixed(2)}%</div>
+          <div>稅額 {money(record.orderTaxAmount)} / {money(record.invoiceTaxAmount)}</div>
+        </div>
+      ),
+    },
+  ]
+
+  const arColumns: ColumnsType<ReceivableMonitorItem> = [
+    {
+      title: '訂單 / 客戶',
+      render: (_, record) => (
+        <div>
+          <div className="font-semibold text-blue-600">{record.orderNumber}</div>
+          <div className="text-xs text-slate-400">{record.customerName} · {record.sourceLabel}</div>
+        </div>
+      ),
+    },
+    {
+      title: '缺口',
+      render: (_, record) => (
+        <Space size={[4, 4]} wrap>
+          {!record.reconciledFlag ? <Tag color="gold">待對帳</Tag> : <Tag color="green">已對帳</Tag>}
+          {record.feeStatus !== 'actual' ? <Tag color="red">手續費待補</Tag> : null}
+          {!record.invoiceNumber ? <Tag color="blue">待補發票</Tag> : null}
+          {!record.accountingPosted ? <Tag>待入帳</Tag> : null}
+        </Space>
+      ),
+    },
+    {
+      title: '應收',
+      width: 180,
+      align: 'right',
+      render: (_, record) => (
+        <div>
+          <div className="font-semibold text-slate-900">{money(record.outstandingAmount)}</div>
+          <div className="text-xs text-slate-400">淨額 {money(record.netAmount)}</div>
+        </div>
+      ),
+    },
+  ]
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45 }}
+      className="space-y-6 p-6"
+    >
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <Title level={2} className="!mb-1 !font-light">會計工作台</Title>
+          <Text type="secondary">集中處理待撥款、手續費、發票、應收與分錄核銷。</Text>
+        </div>
+        <Space wrap>
+          <RangePicker
+            value={dateRange}
+            onChange={(value) => {
+              if (value?.[0] && value?.[1]) setDateRange([value[0], value[1]])
+            }}
+            allowClear={false}
+          />
+          <Button icon={<ReloadOutlined />} loading={loading} onClick={fetchWorkbench}>
+            重新整理
+          </Button>
+        </Space>
+      </div>
+
+      <Card className="overflow-hidden rounded-3xl border-0 shadow-sm" bodyStyle={{ padding: 0 }}>
+        <div className="grid gap-0 lg:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
+          <div className="bg-[linear-gradient(135deg,#0f172a,#1e293b,#0f766e)] px-7 py-7 text-white">
+            <div className="text-xs font-semibold uppercase tracking-[0.28em] text-white/55">
+              Accounting Control Room
+            </div>
+            <div className="mt-3 text-4xl font-semibold">自動對帳閉環</div>
+            <div className="mt-3 max-w-3xl text-sm leading-6 text-white/72">
+              系統先自動比對；只有缺綠界撥款、缺手續費、未開票、金額不一致或尚未產生分錄時，才會留在這裡讓會計處理。
+            </div>
+            <div className="mt-6 grid gap-3 sm:grid-cols-4">
+              <div className="rounded-3xl border border-white/10 bg-white/10 px-4 py-4">
+                <div className="text-xs text-white/50">開放異常</div>
+                <div className="mt-2 text-2xl font-semibold">{executive?.operations.openAnomalyCount || 0}</div>
+              </div>
+              <div className="rounded-3xl border border-white/10 bg-white/10 px-4 py-4">
+                <div className="text-xs text-white/50">待補費率</div>
+                <div className="mt-2 text-2xl font-semibold">{executive?.operations.feeBackfillCount || 0}</div>
+              </div>
+              <div className="rounded-3xl border border-white/10 bg-white/10 px-4 py-4">
+                <div className="text-xs text-white/50">已對帳未落帳</div>
+                <div className="mt-2 text-2xl font-semibold">{executive?.operations.missingPayoutJournalCount || 0}</div>
+              </div>
+              <div className="rounded-3xl border border-white/10 bg-white/10 px-4 py-4">
+                <div className="text-xs text-white/50">逾期應收</div>
+                <div className="mt-2 text-2xl font-semibold">{arSummary?.overdueReceivableCount || 0}</div>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white/70 px-7 py-7">
+            <div className="flex items-center gap-3">
+              <SafetyCertificateOutlined className="text-2xl text-emerald-600" />
+              <div>
+                <div className="text-sm font-semibold text-slate-900">自動核銷完成度</div>
+                <div className="text-xs text-slate-400">以目前稽核區間已對帳訂單計算</div>
+              </div>
+            </div>
+            <Progress
+              percent={automationCompletion}
+              strokeColor={{ '0%': '#0f766e', '100%': '#22c55e' }}
+              className="mt-6"
+            />
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <Statistic title="已稽核" value={auditSummary?.auditedOrderCount || 0} />
+              <Statistic title="已對帳" value={auditSummary?.reconciledOrderCount || 0} />
+              <Statistic title="手續費異常" value={auditSummary?.feeIssueCount || 0} />
+              <Statistic title="發票異常" value={auditSummary?.invoiceIssueCount || 0} />
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Alert
+        showIcon
+        type="info"
+        message="自動判斷規則"
+        description="平台手續費優先吃平台 API；金流手續費以綠界撥款/對帳資料為最終依據。抓不到時不亂估，而是標記待補並進入會計工作台。"
+      />
+
+      <Card className="rounded-3xl border-0 bg-white/65 shadow-sm">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+              Action Rail
+            </div>
+            <div className="mt-2 text-lg font-semibold text-slate-900">
+              把警示往核銷推進
+            </div>
+            <div className="mt-1 text-sm text-slate-500">
+              先同步應收與發票狀態；綠界服務費發票與月度稽核則進入 AP / 報表中心處理。
+            </div>
+          </div>
+          <Space wrap>
+            <Button
+              type="primary"
+              icon={<ClockCircleOutlined />}
+              loading={syncingAr}
+              onClick={handleSyncAr}
+              className="bg-slate-950 hover:!bg-slate-800"
+            >
+              同步銷售到 AR
+            </Button>
+            <Button
+              icon={<SafetyCertificateOutlined />}
+              loading={syncingInvoiceStatus}
+              onClick={handleSyncInvoiceStatuses}
+            >
+              同步發票狀態
+            </Button>
+            <Button
+              icon={<BankOutlined />}
+              onClick={() => navigate('/ap/payable?tab=ecpay-fees')}
+            >
+              處理綠界服務費 AP
+            </Button>
+            <Button
+              icon={<AuditOutlined />}
+              onClick={() => navigate('/reports')}
+            >
+              查看報表稽核
+            </Button>
+          </Space>
+        </div>
+      </Card>
+
+      <Tabs
+        items={[
+          {
+            key: 'exceptions',
+            label: (
+              <span><ExceptionOutlined /> 異常待辦</span>
+            ),
+            children: (
+              <Table
+                rowKey="key"
+                loading={loading}
+                columns={anomalyColumns}
+                dataSource={anomalies}
+                pagination={false}
+                className="rounded-3xl bg-white/60"
+              />
+            ),
+          },
+          {
+            key: 'payments',
+            label: (
+              <span><BankOutlined /> 收款與撥款</span>
+            ),
+            children: (
+              <Table
+                rowKey="paymentId"
+                loading={loading}
+                columns={paymentColumns}
+                dataSource={recentItems}
+                pagination={{ pageSize: 10 }}
+                className="rounded-3xl bg-white/60"
+              />
+            ),
+          },
+          {
+            key: 'batches',
+            label: (
+              <span><CheckCircleOutlined /> 對帳批次</span>
+            ),
+            children: (
+              <Table
+                rowKey="id"
+                loading={loading}
+                columns={batchColumns}
+                dataSource={recentBatches}
+                pagination={{ pageSize: 10 }}
+                className="rounded-3xl bg-white/60"
+              />
+            ),
+          },
+          {
+            key: 'audit',
+            label: (
+              <span><AuditOutlined /> 逐筆稽核</span>
+            ),
+            children: (
+              <Table
+                rowKey="orderId"
+                loading={loading}
+                columns={auditColumns}
+                dataSource={auditItems}
+                pagination={{ pageSize: 10 }}
+                className="rounded-3xl bg-white/60"
+              />
+            ),
+          },
+          {
+            key: 'ar',
+            label: (
+              <span><ClockCircleOutlined /> 應收缺口</span>
+            ),
+            children: (
+              <Row gutter={[16, 16]}>
+                <Col span={24}>
+                  <div className="grid gap-3 md:grid-cols-4">
+                    <Card><Statistic title="應收未收" value={arSummary?.outstandingAmount || 0} prefix="NT$" precision={0} /></Card>
+                    <Card><Statistic title="手續費待補" value={arSummary?.missingFeeCount || 0} /></Card>
+                    <Card><Statistic title="待補發票" value={arSummary?.missingInvoiceCount || 0} /></Card>
+                    <Card><Statistic title="尚未分錄" value={arSummary?.missingJournalCount || 0} /></Card>
+                  </div>
+                </Col>
+                <Col span={24}>
+                  <Table
+                    rowKey="orderId"
+                    loading={loading}
+                    columns={arColumns}
+                    dataSource={arItems}
+                    pagination={{ pageSize: 10 }}
+                    className="rounded-3xl bg-white/60"
+                  />
+                </Col>
+              </Row>
+            ),
+          },
+        ]}
+      />
+    </motion.div>
+  )
+}
+
+export default AccountingWorkbenchPage
