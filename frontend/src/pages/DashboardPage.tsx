@@ -37,9 +37,6 @@ import {
   dashboardService,
   DashboardExecutiveOverview,
   DashboardOperationsHub,
-  DashboardReconciliationBatch,
-  DashboardReconciliationFeed,
-  DashboardReconciliationItem,
   DashboardPerformanceBucket,
   DashboardSalesOverview,
   OrderReconciliationAudit,
@@ -137,71 +134,6 @@ function getBucketStatus(bucket: DashboardPerformanceBucket) {
   };
 }
 
-function getSettlementMeta(item: DashboardReconciliationItem) {
-  if (item.settlementStatus === "reconciled") {
-    return {
-      color: "green" as const,
-      label: "已撥款",
-      helper: item.provider ? `${item.provider.toUpperCase()} 已回填` : "已完成對帳",
-    };
-  }
-
-  if (item.settlementStatus === "pending_payout") {
-    return {
-      color: "gold" as const,
-      label: "待撥款",
-      helper: "已付款，等待金流撥款或對帳匯入",
-    };
-  }
-
-  if (item.settlementStatus === "failed") {
-    return {
-      color: "red" as const,
-      label: "失敗 / 退款",
-      helper: "這筆交易已失敗、取消或退款",
-    };
-  }
-
-  return {
-    color: "blue" as const,
-    label: "待付款",
-    helper: "訂單已進系統，但付款尚未完成",
-  };
-}
-
-function getFeeMeta(item: DashboardReconciliationItem) {
-  if (item.feeStatus === "actual") {
-    return { color: "green" as const, label: "實際手續費" };
-  }
-
-  if (item.feeStatus === "estimated") {
-    return { color: "gold" as const, label: "預估手續費" };
-  }
-
-  return { color: "default" as const, label: "待補手續費" };
-}
-
-function getBatchMeta(batch: DashboardReconciliationBatch) {
-  if (batch.unmatchedCount === 0 && batch.invalidCount === 0) {
-    return {
-      color: "green" as const,
-      label: "已吃進",
-    };
-  }
-
-  if (batch.matchedCount > 0) {
-    return {
-      color: "gold" as const,
-      label: "部分待處理",
-    };
-  }
-
-  return {
-    color: "blue" as const,
-    label: "待匹配",
-  };
-}
-
 function getTaskToneMeta(tone: DashboardExecutiveOverview["tasks"][number]["tone"]) {
   switch (tone) {
     case "critical":
@@ -257,7 +189,6 @@ const DashboardPage: React.FC = () => {
   const [issuingInvoices, setIssuingInvoices] = useState(false);
   const [syncingInvoiceStatuses, setSyncingInvoiceStatuses] = useState(false);
   const [overview, setOverview] = useState<DashboardSalesOverview | null>(null);
-  const [feed, setFeed] = useState<DashboardReconciliationFeed | null>(null);
   const [executive, setExecutive] = useState<DashboardExecutiveOverview | null>(null);
   const [operationsHub, setOperationsHub] = useState<DashboardOperationsHub | null>(null);
   const [invoiceQueue, setInvoiceQueue] = useState<InvoiceQueueResponse | null>(null);
@@ -281,7 +212,6 @@ const DashboardPage: React.FC = () => {
       try {
         const [
           summary,
-          reconciliationFeed,
           executiveOverview,
           operationsHubData,
           invoiceQueueData,
@@ -292,12 +222,6 @@ const DashboardPage: React.FC = () => {
             entityId: storedEntityId,
             startDate: since,
             endDate: until,
-          }),
-          dashboardService.getReconciliationFeed({
-            entityId: storedEntityId,
-            startDate: since,
-            endDate: until,
-            limit: 10,
           }),
           dashboardService.getExecutiveOverview({
             entityId: storedEntityId,
@@ -331,7 +255,6 @@ const DashboardPage: React.FC = () => {
         if (ignore) return;
 
         setOverview(summary);
-        setFeed(reconciliationFeed);
         setExecutive(executiveOverview);
         setOperationsHub(operationsHubData);
         setInvoiceQueue(invoiceQueueData);
@@ -484,8 +407,6 @@ const DashboardPage: React.FC = () => {
   }
   const performanceBuckets = overview?.buckets || [];
   const total = overview?.total;
-  const recentItems = feed?.recentItems || [];
-  const recentBatches = feed?.recentBatches || [];
   const tasks = executive?.tasks || [];
   const inventoryAlerts = executive?.inventoryAlerts || [];
   const anomalies = executive?.anomalies || [];
@@ -496,6 +417,58 @@ const DashboardPage: React.FC = () => {
   const arSummary = receivableMonitor?.summary;
   const auditSummary = audit?.summary;
   const auditItems = audit?.items || [];
+  const accountingAutomationSteps = [
+    {
+      title: "訂單成立",
+      status: "自動建立應收",
+      detail: "Shopify、1Shop、Shopline 進來後先統一成 SalesOrder，應收帳款留在 1191。",
+      account: "借 1191；貸 4111 / 2194",
+    },
+    {
+      title: "付款完成",
+      status: "等待撥款",
+      detail: "Payment 紀錄付款方式、金額與通路，尚未看到撥款前不直接當成銀行入帳。",
+      account: "仍留 1191",
+    },
+    {
+      title: "綠界撥款",
+      status: "回填實際費用",
+      detail: "用綠界撥款列匹配訂單/交易，回填金流手續費、平台手續費與實收淨額。",
+      account: "借 1113 / 6131 / 6134；貸 1191",
+    },
+    {
+      title: "發票與核銷",
+      status: "自動完成閉環",
+      detail: "客戶發票接 AR，綠界服務費發票接 AP，異常才丟給會計工作台。",
+      account: "AR / AP / 分錄審核",
+    },
+  ];
+  const feeSourcePolicies = [
+    {
+      platform: "Shopify",
+      status: "可自動抓取較完整",
+      detail: "Shopify transaction / payout 可提供平台交易費；綠界信用卡金流費仍以綠界撥款資料回填為準。",
+      tone: "green" as const,
+    },
+    {
+      platform: "1Shop",
+      status: "需用綠界撥款補實際費用",
+      detail: "1Shop API 目前偏訂單/交易匯出，平台抽成若 API 沒提供，就標記待補，改用綠界撥款、服務費發票或匯出檔核對。",
+      tone: "gold" as const,
+    },
+    {
+      platform: "Shopline",
+      status: "先接訂單，再接付款/撥款來源",
+      detail: "Shopline 訂單與顧客可先進系統；平台費與金流費需等付款/撥款報表或 API 欄位確認後納入自動核銷。",
+      tone: "blue" as const,
+    },
+    {
+      platform: "綠界",
+      status: "金流手續費的最終依據",
+      detail: "實際有沒有撥款、扣多少手續費、淨收多少，以綠界撥款/對帳資料和服務費發票做最後閉環。",
+      tone: "purple" as const,
+    },
+  ];
 
   return (
     <div className="space-y-8">
@@ -884,97 +857,49 @@ const DashboardPage: React.FC = () => {
         </motion.div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.9fr)]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.9fr)]">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="glass-card p-6"
+          className="glass-card overflow-hidden p-0"
         >
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-                Reconciliation Feed
-              </div>
-              <div className="mt-2 text-xl font-semibold text-slate-900">
-                最近收款與撥款追蹤
-              </div>
-              <div className="mt-1 text-sm text-slate-500">
-                把信用卡、超商、貨到付款與實際撥款狀態放在同一排，方便每天追帳。
-              </div>
+          <div className="border-b border-white/30 bg-[linear-gradient(135deg,rgba(2,6,23,0.92),rgba(15,23,42,0.76),rgba(20,184,166,0.18))] px-6 py-6 text-white">
+            <div className="text-xs font-semibold uppercase tracking-[0.28em] text-white/55">
+              AI Accounting Engine
             </div>
-            <Tag color="blue" className="rounded-full px-3 py-1">
-              {recentItems.length} 筆重點
-            </Tag>
+            <div className="mt-2 text-2xl font-semibold">
+              自動對帳與核銷流程
+            </div>
+            <div className="mt-2 max-w-3xl text-sm leading-6 text-white/72">
+              系統會把訂單、付款、綠界撥款、平台抽成、發票與會計分錄串成同一條閉環；只有缺資料或金額不一致時，才進入會計工作台。
+            </div>
           </div>
 
-          <div className="mt-5 space-y-3">
-            {recentItems.map((item) => {
-              const settlement = getSettlementMeta(item);
-              const feeMeta = getFeeMeta(item);
-
-              return (
-                <div
-                  key={item.paymentId}
-                  className="rounded-3xl border border-white/30 bg-white/45 px-4 py-4"
-                >
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="text-sm font-semibold text-slate-900">
-                          {item.bucketLabel}
-                        </div>
-                        <Tag color={settlement.color} className="rounded-full">
-                          {settlement.label}
-                        </Tag>
-                        <Tag color={feeMeta.color} className="rounded-full">
-                          {feeMeta.label}
-                        </Tag>
-                      </div>
-                      <div className="mt-2 text-xs leading-5 text-slate-500">
-                        訂單 {item.externalOrderId || "未綁定"} ·
-                        {" "}
-                        {item.gateway || "未知付款方式"} ·
-                        {" "}
-                        付款狀態 {item.paymentStatus || "未回填"} ·
-                        {" "}
-                        物流 {item.logisticStatus || "未回填"}
-                      </div>
-                      <div className="mt-1 text-xs leading-5 text-slate-400">
-                        {settlement.helper}
-                        {item.providerTradeNo ? ` · 綠界/金流單號 ${item.providerTradeNo}` : ""}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-3 text-right text-sm min-w-[260px]">
-                      <div className="rounded-2xl bg-slate-900/5 px-3 py-3">
-                        <div className="text-[11px] text-slate-400">收款總額</div>
-                        <div className="mt-1 font-semibold text-slate-900">
-                          ${item.gross.toFixed(2)}
-                        </div>
-                      </div>
-                      <div className="rounded-2xl bg-slate-900/5 px-3 py-3">
-                        <div className="text-[11px] text-slate-400">手續費</div>
-                        <div className="mt-1 font-semibold text-slate-900">
-                          ${item.feeTotal.toFixed(2)}
-                        </div>
-                      </div>
-                      <div className="rounded-2xl bg-slate-900/5 px-3 py-3">
-                        <div className="text-[11px] text-slate-400">淨額</div>
-                        <div className="mt-1 font-semibold text-slate-900">
-                          ${item.net.toFixed(2)}
-                        </div>
-                      </div>
-                    </div>
+          <div className="grid gap-3 p-6 md:grid-cols-2">
+            {accountingAutomationSteps.map((step, index) => (
+              <div
+                key={step.title}
+                className="rounded-3xl border border-white/30 bg-white/50 px-5 py-5"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-sm font-semibold text-white">
+                    {index + 1}
                   </div>
+                  <Tag color="blue" className="rounded-full">
+                    {step.status}
+                  </Tag>
                 </div>
-              );
-            })}
-
-            {!recentItems.length ? (
-              <div className="rounded-3xl border border-dashed border-slate-200 bg-white/30 px-5 py-6 text-sm text-slate-500">
-                目前還沒有可顯示的收款追蹤資料，先按一次「即時同步」或等待排程把最新訂單與金流帶進來。
+                <div className="mt-4 text-lg font-semibold text-slate-900">
+                  {step.title}
+                </div>
+                <div className="mt-2 text-sm leading-6 text-slate-500">
+                  {step.detail}
+                </div>
+                <div className="mt-4 rounded-2xl bg-slate-900/5 px-4 py-3 text-xs font-medium text-slate-600">
+                  {step.account}
+                </div>
               </div>
-            ) : null}
+            ))}
           </div>
         </motion.div>
 
@@ -984,73 +909,68 @@ const DashboardPage: React.FC = () => {
           className="glass-card p-6"
         >
           <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-            Provider Batches
+            Fee Source Policy
           </div>
           <div className="mt-2 text-xl font-semibold text-slate-900">
-            最近對帳批次
+            手續費資料來源判斷
           </div>
-          <div className="mt-1 text-sm text-slate-500">
-            這裡會列出最近匯入的金流對帳批次，方便追哪一批已經回填、哪一批還有未匹配。
+          <div className="mt-1 text-sm leading-6 text-slate-500">
+            平台費與金流費不能混在一起。系統會先抓平台 API，有缺口時再用綠界撥款與服務費發票補實際數字。
           </div>
 
           <div className="mt-5 space-y-3">
-            {recentBatches.map((batch) => {
-              const meta = getBatchMeta(batch);
-              return (
-                <div
-                  key={batch.id}
-                  className="rounded-3xl border border-white/30 bg-white/45 px-4 py-4"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <div className="text-sm font-semibold text-slate-900">
-                          {batch.provider.toUpperCase()} 對帳批次
-                        </div>
-                        <Tag color={meta.color} className="rounded-full">
-                          {meta.label}
-                        </Tag>
-                      </div>
-                      <div className="mt-2 text-xs leading-5 text-slate-500">
-                        {dayjs(batch.importedAt).tz(DASHBOARD_TZ).format("YYYY/MM/DD HH:mm")}
-                        {" · "}
-                        {batch.fileName || "系統同步批次"}
-                      </div>
+            {feeSourcePolicies.map((policy) => (
+              <div
+                key={policy.platform}
+                className="rounded-3xl border border-white/30 bg-white/45 px-4 py-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">
+                      {policy.platform}
                     </div>
-                    <div className="text-right text-xs text-slate-400">
-                      source: {batch.sourceType}
+                    <div className="mt-2 text-xs leading-5 text-slate-500">
+                      {policy.detail}
                     </div>
                   </div>
-
-                  <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
-                    <div className="rounded-2xl bg-slate-900/5 px-3 py-3">
-                      <div className="text-[11px] text-slate-400">匯入列數</div>
-                      <div className="mt-1 font-semibold text-slate-900">
-                        {batch.recordCount}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl bg-slate-900/5 px-3 py-3">
-                      <div className="text-[11px] text-slate-400">已匹配</div>
-                      <div className="mt-1 font-semibold text-emerald-600">
-                        {batch.matchedCount}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl bg-slate-900/5 px-3 py-3">
-                      <div className="text-[11px] text-slate-400">待處理</div>
-                      <div className="mt-1 font-semibold text-amber-600">
-                        {batch.unmatchedCount + batch.invalidCount}
-                      </div>
-                    </div>
-                  </div>
+                  <Tag color={policy.tone} className="rounded-full">
+                    {policy.status}
+                  </Tag>
                 </div>
-              );
-            })}
-
-            {!recentBatches.length ? (
-              <div className="rounded-3xl border border-dashed border-slate-200 bg-white/30 px-5 py-6 text-sm text-slate-500">
-                目前還沒有金流對帳批次。等匯入綠界 / HiTRUST 撥款報表後，這裡會開始顯示。
               </div>
-            ) : null}
+            ))}
+          </div>
+
+          <div className="mt-5 rounded-3xl bg-slate-950 px-5 py-5 text-white">
+            <div className="text-xs uppercase tracking-[0.24em] text-white/45">
+              Current Automation Signal
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <div>
+                <div className="text-xs text-white/45">待補實際費率</div>
+                <div className="mt-1 text-2xl font-semibold">
+                  {executive?.operations.feeBackfillCount || 0}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-white/45">手續費異常</div>
+                <div className="mt-1 text-2xl font-semibold">
+                  {auditSummary?.feeIssueCount || 0}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-white/45">綠界服務費發票缺口</div>
+                <div className="mt-1 text-2xl font-semibold">
+                  NT$ {Math.abs(executive?.operations.ecpayServiceFeeInvoiceGapAmount || 0).toFixed(0)}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-white/45">已對帳未落帳</div>
+                <div className="mt-1 text-2xl font-semibold">
+                  {executive?.operations.missingPayoutJournalCount || 0}
+                </div>
+              </div>
+            </div>
           </div>
         </motion.div>
       </div>

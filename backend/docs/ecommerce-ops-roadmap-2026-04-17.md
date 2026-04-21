@@ -91,6 +91,38 @@
 - 發票狀態需從 `SalesOrder` / `Invoice` 接進 AR、報表中心與 AI 待辦，讓未開票、待補發票、稅額異常能形成可追蹤任務。
 - 銀行入帳與 AR 核銷已有 service/controller 骨架，下一步要補前端頁面與自動匹配結果呈現。
 
+### 手續費來源與自動對帳判斷
+
+- Shopify：
+  - 平台交易費可優先從 Shopify transaction / payout 資料回填。
+  - 若訂單是透過綠界收款，金流手續費仍以綠界撥款 / 對帳資料作為最終依據。
+  - 系統應保留 `feePlatformOriginal` 與 `feeGatewayOriginal`，不可把平台費與金流費混在同一欄。
+- 1Shop：
+  - 目前 1Shop API V1 主要是訂單 / 交易匯出，是否含平台抽成需依 API 實際欄位確認。
+  - 若 API 沒有平台費，系統不可猜測，應標記為 `feeStatus=unavailable` 或 `feeStatus=pending`。
+  - 實際金流手續費以綠界撥款資料、服務費發票或匯出 Excel 回填。
+- Shopline：
+  - 第一階段先接訂單與顧客。
+  - 平台費與金流費需等付款 / 撥款 API 或匯出報表確認欄位後，再納入自動核銷。
+- 綠界：
+  - 是金流撥款與實際手續費的最終核對來源。
+  - 匯入成功後應回填 `Payment.amountNetOriginal`、`Payment.feeGatewayOriginal`、`Payment.feePlatformOriginal`、`Payment.reconciledFlag`，並自動產生分錄。
+
+### 自動核銷目標狀態機
+
+- `SalesOrder created`：建立營收事件與 1191 應收帳款。
+- `Payment captured`：消費者已付款，但尚未確認綠界是否撥款。
+- `Provider payout matched`：綠界撥款列與訂單 / 付款匹配成功，回填實際手續費與淨額。
+- `Journal posted`：借 1113 銀行存款、6131 平台佣金、6134 金流手續費；貸 1191 應收帳款。
+- `Invoice verified`：確認客戶發票已開立，綠界服務費發票已進 AP。
+- `Closed`：訂單、款項、手續費、發票、分錄全部一致，才視為完成核銷。
+
+### Dashboard UI 原則
+
+- CEO Dashboard 不顯示「最近收款」與「最近對帳批次」流水帳。
+- CEO Dashboard 只顯示高價值事件：總業績、實收淨額、應收未收、待撥款、手續費缺口、未開票、庫存警示、AI 風險提醒。
+- 最近收款、撥款批次、未匹配列應移到「對帳中心 / 會計工作台」，讓會計處理細節，不佔用 CEO 首頁。
+
 ## 這次從 Shopline 官方文件確認到的事情
 
 ### 1. OpenAPI 訂單與顧客同步可直接做
