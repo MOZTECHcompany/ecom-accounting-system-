@@ -66,18 +66,37 @@ export class CustomerService {
   }
 
   async create(entityId: string, data: Prisma.CustomerCreateInput) {
+    const paymentTermDays = this.resolvePaymentTermDays(data);
     return this.prisma.customer.create({
       data: {
         ...data,
+        paymentTermDays,
+        isMonthlyBilling: Boolean(data.isMonthlyBilling || paymentTermDays > 0),
         entity: { connect: { id: entityId } },
       },
     });
   }
 
   async update(entityId: string, id: string, data: Prisma.CustomerUpdateInput) {
+    const existing = await this.prisma.customer.findFirst({
+      where: { id, entityId },
+      select: { id: true },
+    });
+    if (!existing) {
+      return null;
+    }
+    const paymentTermDays = this.resolvePaymentTermDays(data);
     return this.prisma.customer.update({
       where: { id },
-      data,
+      data: {
+        ...data,
+        ...(paymentTermDays !== undefined
+          ? {
+              paymentTermDays,
+              isMonthlyBilling: Boolean(data.isMonthlyBilling || paymentTermDays > 0),
+            }
+          : {}),
+      },
     });
   }
 
@@ -139,8 +158,69 @@ export class CustomerService {
         : ['未歸戶'],
       primarySourceLabel: primarySource.label,
       primarySourceBrand: primarySource.brand,
+      paymentSummary: this.buildPaymentSummary(customer),
       salesOrders: customer.salesOrders,
     };
+  }
+
+  private resolvePaymentTermDays(
+    data: Prisma.CustomerCreateInput | Prisma.CustomerUpdateInput,
+  ) {
+    const rawTermDays = Number(data.paymentTermDays ?? 0);
+    if (Number.isFinite(rawTermDays) && rawTermDays > 0) {
+      return rawTermDays;
+    }
+
+    const terms = String(data.paymentTerms || '').toLowerCase();
+    const netMatch = terms.match(/net\s*([0-9]+)/);
+    if (netMatch?.[1]) {
+      return Number(netMatch[1]);
+    }
+    if (terms.includes('月結')) {
+      return 30;
+    }
+    if (data.isMonthlyBilling) {
+      return 30;
+    }
+    if (data.type === 'company' && !terms.includes('prepaid')) {
+      return 30;
+    }
+
+    return data.paymentTermDays === undefined &&
+      data.paymentTerms === undefined &&
+      data.isMonthlyBilling === undefined &&
+      data.type === undefined
+      ? undefined
+      : 0;
+  }
+
+  private buildPaymentSummary(
+    customer: Prisma.CustomerGetPayload<{
+      include: {
+        salesOrders: {
+          select: {
+            id: true;
+            orderDate: true;
+            externalOrderId: true;
+            notes: true;
+            channel: {
+              select: {
+                code: true;
+                name: true;
+              };
+            };
+          };
+        };
+      };
+    }>,
+  ) {
+    if (customer.isMonthlyBilling || customer.paymentTermDays > 0) {
+      return `月結 ${customer.paymentTermDays || 30} 天`;
+    }
+    if (customer.paymentTerms) {
+      return customer.paymentTerms;
+    }
+    return customer.type === 'company' ? '公司客戶，預設月結 30 天' : '一般現結';
   }
 
   private resolveOrderSource(channelCode?: string | null, notes?: string | null) {

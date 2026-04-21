@@ -8,6 +8,15 @@ export interface Customer {
   taxId?: string
   type: 'individual' | 'company'
   address?: string
+  paymentTerms?: string
+  paymentTermDays?: number
+  isMonthlyBilling?: boolean
+  billingCycle?: string
+  statementEmail?: string
+  collectionOwner?: string
+  collectionNote?: string
+  creditLimit?: number | string
+  paymentSummary?: string
   isActive: boolean
   totalOrders?: number
   lastOrderDate?: string | null

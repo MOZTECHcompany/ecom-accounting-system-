@@ -123,11 +123,7 @@ export class ArService {
         const revenueAmount = Math.max(grossAmount - taxAmount, 0);
         const outstandingAmount = Math.max(grossAmount - paidAmount, 0);
         const orderMeta = this.extractMetadata(order.notes);
-        const termDays = this.resolvePaymentTermDays(
-          order.customer?.type || 'individual',
-          orderMeta,
-          outstandingAmount,
-        );
+        const termDays = this.resolvePaymentTermDays(order.customer, orderMeta, outstandingAmount);
         const dueDate =
           arInvoice?.dueDate ||
           this.buildDueDate(order.orderDate, outstandingAmount, termDays);
@@ -140,6 +136,7 @@ export class ArService {
         const classification = this.classifyReceivable({
           customerId: order.customerId || null,
           customerName: order.customer?.name || '散客',
+          customer: order.customer,
           customerType: order.customer?.type || 'individual',
           channelCode: order.channel?.code || null,
           channelName: order.channel?.name || null,
@@ -989,12 +986,22 @@ export class ArService {
   }
 
   private resolvePaymentTermDays(
-    customerType: string,
+    customer: {
+      type?: string | null;
+      paymentTermDays?: number | null;
+      paymentTerms?: string | null;
+      isMonthlyBilling?: boolean | null;
+    } | null,
     meta: Record<string, string>,
     outstandingAmount: number,
   ) {
     if (outstandingAmount <= 0) {
       return 0;
+    }
+
+    const customerTermDays = Number(customer?.paymentTermDays || 0);
+    if (Number.isFinite(customerTermDays) && customerTermDays > 0) {
+      return customerTermDays;
     }
 
     const explicitTerm = Number(meta.termDays || meta.paymentTermDays || 0);
@@ -1003,6 +1010,7 @@ export class ArService {
     }
 
     const paymentTerm = (
+      customer?.paymentTerms ||
       meta.paymentTerm ||
       meta.creditTerm ||
       meta.billingTerm ||
@@ -1014,7 +1022,8 @@ export class ArService {
     }
 
     if (
-      customerType === 'company' ||
+      customer?.type === 'company' ||
+      customer?.isMonthlyBilling ||
       ['true', '1', 'yes'].includes(
         (meta.monthlyBilling || meta.isMonthlyBilling || '').toLowerCase(),
       ) ||
@@ -1101,6 +1110,12 @@ export class ArService {
     channelCode?: string | null;
     channelName?: string | null;
     source: { label: string; brand: string };
+    customer?: {
+      type?: string | null;
+      paymentTerms?: string | null;
+      paymentTermDays?: number | null;
+      isMonthlyBilling?: boolean | null;
+    } | null;
     notes?: string | null;
     payments: Array<{
       channel: string;
@@ -1119,7 +1134,7 @@ export class ArService {
     const meta = this.extractMetadata(params.notes);
     const paymentMethodGroup = this.resolvePaymentMethodGroup(params.payments, meta);
     const paymentMethodLabel = this.paymentMethodLabel(paymentMethodGroup);
-    const isB2B = this.isB2BReceivable(params.customerType, meta);
+    const isB2B = this.isB2BReceivable(params.customerType, meta, params.customer);
     const isGroupBuy =
       channelCode === '1SHOP' ||
       params.source.brand.includes('萬魔') ||
@@ -1288,8 +1303,17 @@ export class ArService {
     return labels[paymentMethodGroup] || '其他應收';
   }
 
-  private isB2BReceivable(customerType: string, meta: Record<string, string>) {
+  private isB2BReceivable(
+    customerType: string,
+    meta: Record<string, string>,
+    customer?: {
+      paymentTerms?: string | null;
+      paymentTermDays?: number | null;
+      isMonthlyBilling?: boolean | null;
+    } | null,
+  ) {
     const paymentTerm = (
+      customer?.paymentTerms ||
       meta.paymentTerm ||
       meta.creditTerm ||
       meta.billingTerm ||
@@ -1297,6 +1321,8 @@ export class ArService {
     ).toLowerCase();
     return (
       customerType === 'company' ||
+      Boolean(customer?.isMonthlyBilling) ||
+      Number(customer?.paymentTermDays || 0) > 0 ||
       paymentTerm.includes('net') ||
       paymentTerm.includes('月結') ||
       ['true', '1', 'yes'].includes(

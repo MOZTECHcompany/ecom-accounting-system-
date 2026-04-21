@@ -9,7 +9,9 @@ import {
   Modal,
   Form,
   Input,
+  InputNumber,
   Select,
+  Switch,
   message,
   Popconfirm,
 } from 'antd'
@@ -27,6 +29,9 @@ import { customerService, Customer } from '../services/customer.service'
 
 const { Title, Text } = Typography
 const { Option } = Select
+
+const formatCurrency = (value?: number | string | null) =>
+  `NT$ ${Number(value || 0).toLocaleString('zh-TW', { maximumFractionDigits: 0 })}`
 
 const CustomersPage: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -170,6 +175,25 @@ const CustomersPage: React.FC = () => {
           <span className="text-xs text-slate-400">
             {record.taxId || '未填統編'}
           </span>
+        </Space>
+      ),
+    },
+    {
+      title: '帳期 / 追帳',
+      key: 'paymentTerms',
+      render: (_: unknown, record: Customer) => (
+        <Space direction="vertical" size={2}>
+          <Tag color={record.isMonthlyBilling || record.paymentTermDays ? 'gold' : 'default'}>
+            {record.paymentSummary || (record.type === 'company' ? '公司客戶' : '一般現結')}
+          </Tag>
+          <span className="text-xs text-slate-400">
+            {record.statementEmail || record.email || '未設定對帳單 Email'}
+          </span>
+          {Number(record.creditLimit || 0) > 0 ? (
+            <span className="text-xs text-slate-400">
+              額度 {formatCurrency(record.creditLimit)}
+            </span>
+          ) : null}
         </Space>
       ),
     },
@@ -323,6 +347,55 @@ const CustomersPage: React.FC = () => {
           <Form.Item name="address" label="地址">
             <Input.TextArea rows={2} />
           </Form.Item>
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <div className="mb-3 text-sm font-semibold text-slate-900">B2B 月結 / 應收條件</div>
+            <Form.Item name="isMonthlyBilling" label="是否月結帳戶" valuePropName="checked">
+              <Switch checkedChildren="月結" unCheckedChildren="現結" />
+            </Form.Item>
+            <div className="grid gap-3 md:grid-cols-2">
+              <Form.Item name="paymentTerms" label="付款條件">
+                <Select
+                  allowClear
+                  placeholder="選擇付款條件"
+                  options={[
+                    { label: '現結 / 預付', value: 'prepaid' },
+                    { label: '月結 30 天', value: 'net30' },
+                    { label: '月結 45 天', value: 'net45' },
+                    { label: '月結 60 天', value: 'net60' },
+                    { label: '自訂', value: 'custom' },
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item name="paymentTermDays" label="帳期天數">
+                <InputNumber min={0} max={180} className="w-full" placeholder="例如 30" />
+              </Form.Item>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <Form.Item name="billingCycle" label="對帳週期">
+                <Select
+                  allowClear
+                  placeholder="選擇週期"
+                  options={[
+                    { label: '每月出帳', value: 'monthly' },
+                    { label: '每兩週出帳', value: 'biweekly' },
+                    { label: '自訂', value: 'custom' },
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item name="creditLimit" label="信用額度">
+                <InputNumber min={0} precision={0} className="w-full" placeholder="例如 100000" />
+              </Form.Item>
+            </div>
+            <Form.Item name="statementEmail" label="對帳單 Email">
+              <Input placeholder="若留空，使用客戶 Email" />
+            </Form.Item>
+            <Form.Item name="collectionOwner" label="內部追帳窗口">
+              <Input placeholder="例如：財務部 / Eason / 會計窗口" />
+            </Form.Item>
+            <Form.Item name="collectionNote" label="追帳備註">
+              <Input.TextArea rows={2} placeholder="例如：每月 5 日寄送上月對帳單，下月 5 日前收款" />
+            </Form.Item>
+          </div>
         </Form>
       </Modal>
     </motion.div>

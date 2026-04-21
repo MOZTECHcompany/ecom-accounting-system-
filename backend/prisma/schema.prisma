@@ -329,17 +329,25 @@ model SalesChannel {
 
 // 客戶
 model Customer {
-  id        String   @id @default(uuid())
-  entityId  String   @map("entity_id")
-  name      String
-  email     String?
-  phone     String?
-  taxId     String?  @map("tax_id")
-  type      String   @default("individual") // individual, company
-  address   String?
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id                 String   @id @default(uuid())
+  entityId           String   @map("entity_id")
+  name               String
+  email              String?
+  phone              String?
+  taxId              String?  @map("tax_id")
+  type               String   @default("individual") // individual, company
+  address            String?
+  paymentTerms       String?  @map("payment_terms") // prepaid, net30, net45, custom
+  paymentTermDays    Int      @default(0) @map("payment_term_days")
+  isMonthlyBilling   Boolean  @default(false) @map("is_monthly_billing")
+  billingCycle       String?  @map("billing_cycle") // monthly, biweekly, custom
+  statementEmail     String?  @map("statement_email")
+  collectionOwner    String?  @map("collection_owner")
+  collectionNote     String?  @map("collection_note")
+  creditLimit        Decimal  @default(0) @map("credit_limit") @db.Decimal(18, 4)
+  isActive           Boolean  @default(true) @map("is_active")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   entity      Entity       @relation(fields: [entityId], references: [id], onDelete: Cascade)
   salesOrders SalesOrder[]
