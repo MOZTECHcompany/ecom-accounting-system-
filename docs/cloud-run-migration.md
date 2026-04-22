@@ -35,6 +35,48 @@ BACKEND_ENV_VARS_FILE=backend/.env.cloudrun.yaml \
 ./scripts/deploy-cloud-run.sh
 ```
 
+## Git Push 自動部署
+
+目前已補上 GitHub Actions 自動部署：
+
+- `.github/workflows/deploy-cloudrun-frontend.yml`
+  - `main` 分支有 `frontend/**` 變更時，自動部署 `ecom-accounting-frontend`。
+- `.github/workflows/deploy-cloudrun-backend.yml`
+  - `main` 分支有 `backend/**` 變更時，自動部署 `ecom-accounting-backend`。
+
+GitHub repo 需要設定以下 Secrets：
+
+```text
+GCP_WIF_PROVIDER
+GCP_WIF_SERVICE_ACCOUNT
+GCP_PROJECT_ID=moztech-main-db
+GCP_REGION=asia-east1
+CLOUD_RUN_FRONTEND_SERVICE=ecom-accounting-frontend
+CLOUD_RUN_BACKEND_SERVICE=ecom-accounting-backend
+```
+
+如果沿用舊 backend workflow 的 secret，也可以保留：
+
+```text
+CLOUD_RUN_SERVICE=ecom-accounting-backend
+```
+
+建議設定以下 GitHub Variables：
+
+```text
+CLOUD_RUN_ARTIFACT_REPOSITORY=cloud-run
+FRONTEND_API_URL=https://ecom-accounting-backend-sp5g377smq-de.a.run.app/api/v1
+FRONTEND_WS_URL=https://ecom-accounting-backend-sp5g377smq-de.a.run.app
+DEFAULT_ENTITY_ID=tw-entity-001
+```
+
+部署邏輯：
+
+1. GitHub Actions 用 Workload Identity 登入 GCP。
+2. Cloud Build 建立 Docker image 並推到 Artifact Registry。
+3. Cloud Run 使用該 image 建立新 revision。
+4. 前端會把 `API_URL` / `WS_URL` 寫進 Cloud Run runtime env，讓 `/config.js` 指向正確後端。
+
 ## 後端環境變數檔範例
 可以建立 `backend/.env.cloudrun.yaml`：
 

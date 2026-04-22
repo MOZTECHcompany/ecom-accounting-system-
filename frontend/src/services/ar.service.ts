@@ -183,6 +183,21 @@ export interface B2BStatementResponse {
   customers: B2BStatementCustomer[]
 }
 
+export interface CreateArInvoicePayload {
+  entityId: string
+  customerId?: string | null
+  invoiceNo?: string | null
+  amountOriginal: number
+  amountCurrency?: string
+  paidAmountOriginal?: number
+  issueDate: string
+  dueDate: string
+  status?: string
+  sourceModule?: string | null
+  sourceId?: string | null
+  notes?: string | null
+}
+
 export const arService = {
   getInvoices: async (page = 1, limit = 20) => {
     const response = await api.get<PaginatedResult<ArInvoice>>('/ar/invoices', {
@@ -196,7 +211,7 @@ export const arService = {
     return response.data
   },
 
-  createInvoice: async (data: Partial<ArInvoice>) => {
+  createInvoice: async (data: CreateArInvoicePayload) => {
     const response = await api.post<ArInvoice>('/ar/invoices', data)
     return response.data
   },

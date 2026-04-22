@@ -66,7 +66,7 @@ export class ArService {
     });
 
     const orderIds = orders.map((order) => order.id);
-    const [arInvoices, journals] = await Promise.all([
+    const [arInvoices, standaloneArInvoices, journals] = await Promise.all([
       this.prisma.arInvoice.findMany({
         where: {
           entityId,
@@ -75,6 +75,28 @@ export class ArService {
           },
         },
         orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.arInvoice.findMany({
+        where: {
+          entityId,
+          ...(startDate || endDate
+            ? {
+                issueDate: {
+                  ...(startDate ? { gte: startDate } : {}),
+                  ...(endDate ? { lte: endDate } : {}),
+                },
+              }
+            : {}),
+          OR: [
+            { sourceId: null },
+            { sourceModule: null },
+            { sourceModule: { not: 'sales_order' } },
+          ],
+        },
+        include: {
+          customer: true,
+        },
+        orderBy: { issueDate: 'desc' },
       }),
       this.prisma.journalEntry.findMany({
         where: {
@@ -102,7 +124,7 @@ export class ArService {
       }
     }
 
-    const items = orders
+    const salesOrderItems = orders
       .map((order) => {
         const arInvoice = arMap.get(order.id) || null;
         const journal = journalMap.get(order.id) || null;
@@ -242,8 +264,100 @@ export class ArService {
           warningCodes,
           notes: order.notes || null,
         };
-      })
-      .filter((item) => (status ? item.arStatus === status : true));
+      });
+
+    const standaloneItems = standaloneArInvoices.map((invoice) => {
+      const amount = Number(invoice.amountOriginal || 0);
+      const paid = Number(invoice.paidAmountOriginal || 0);
+      const outstandingAmount = Math.max(amount - paid, 0);
+      const notesMeta = this.extractMetadata(invoice.notes);
+      const dueDate = invoice.dueDate || this.buildDueDate(invoice.issueDate, outstandingAmount);
+      const customerName =
+        invoice.customer?.name ||
+        notesMeta.customerName ||
+        notesMeta.companyName ||
+        '未指定客戶';
+      const invoiceStatus = invoice.invoiceNo ? 'issued' : 'pending';
+      const warningCodes: string[] = [];
+
+      if (outstandingAmount > 0 && dueDate < new Date()) {
+        warningCodes.push('overdue_receivable');
+      }
+      if (!invoice.invoiceNo) {
+        warningCodes.push('invoice_pending');
+      }
+      warningCodes.push('missing_journal');
+
+      return {
+        orderId: `ar:${invoice.id}`,
+        orderNumber: invoice.invoiceNo || invoice.id,
+        orderDate: invoice.issueDate.toISOString(),
+        customerId: invoice.customerId || null,
+        customerName,
+        customerEmail:
+          invoice.customer?.statementEmail || invoice.customer?.email || notesMeta.customerEmail || null,
+        customerPhone: invoice.customer?.phone || null,
+        customerType: invoice.customer?.type || 'company',
+        paymentTerms: invoice.customer?.paymentTerms || notesMeta.paymentTerms || 'net30',
+        paymentTermDays: invoice.customer?.paymentTermDays || 30,
+        isMonthlyBilling: invoice.customer?.isMonthlyBilling ?? true,
+        billingCycle: invoice.customer?.billingCycle || 'monthly',
+        statementEmail:
+          invoice.customer?.statementEmail || invoice.customer?.email || notesMeta.customerEmail || null,
+        collectionOwnerName: invoice.customer?.collectionOwner || null,
+        collectionNote: invoice.customer?.collectionNote || null,
+        creditLimit: Number(invoice.customer?.creditLimit || 0),
+        channelCode: 'manual_ar',
+        channelName: '手動應收',
+        sourceLabel: notesMeta.sourceLabel || 'B2B 月結',
+        sourceBrand: notesMeta.sourceBrand || 'MOZTECH',
+        collectionType: 'b2b_monthly',
+        collectionTypeLabel: 'B2B 月結應收',
+        paymentMethodGroup: 'bank_transfer',
+        paymentMethodLabel: '銀行匯款 / 月結',
+        settlementPhase: outstandingAmount > 0 ? 'unpaid' : 'cleared',
+        settlementPhaseLabel: outstandingAmount > 0 ? '待收款' : '已收款',
+        receivableGroupKey: `b2b_manual:${invoice.customerId || customerName}`,
+        receivableGroupLabel: `B2B 月結：${customerName}`,
+        collectionOwner: invoice.customer?.collectionOwner || 'accounting',
+        collectionOwnerLabel: invoice.customer?.collectionOwner || '會計追帳',
+        termDays: invoice.customer?.paymentTermDays || 30,
+        settlementDiagnostic: '手動建立的 B2B / 月結應收，直接追蹤收款與銷帳。',
+        grossAmount: amount,
+        revenueAmount: amount,
+        taxAmount: 0,
+        paidAmount: paid,
+        outstandingAmount,
+        gatewayFeeAmount: 0,
+        platformFeeAmount: 0,
+        feeTotal: 0,
+        netAmount: paid,
+        reconciledFlag: outstandingAmount <= 0,
+        payoutCount: paid > 0 ? 1 : 0,
+        feeStatus: 'actual',
+        feeSource: 'manual_ar_no_gateway_fee',
+        feeDiagnostic: '手動 B2B 應收預設無平台 / 金流抽成。',
+        arInvoiceId: invoice.id,
+        arStatus: invoice.status,
+        dueDate: dueDate.toISOString(),
+        invoiceId: null,
+        invoiceNumber: invoice.invoiceNo || null,
+        invoiceStatus,
+        invoiceIssuedAt: invoice.issueDate.toISOString(),
+        journalEntryId: null,
+        journalApprovedAt: null,
+        accountingPosted: false,
+        warningCodes,
+        notes: invoice.notes || null,
+      };
+    });
+
+    const items = [...salesOrderItems, ...standaloneItems]
+      .filter((item) => (status ? item.arStatus === status : true))
+      .sort(
+        (left, right) =>
+          new Date(right.orderDate).getTime() - new Date(left.orderDate).getTime(),
+      );
 
     const summary = items.reduce(
       (acc, item) => {

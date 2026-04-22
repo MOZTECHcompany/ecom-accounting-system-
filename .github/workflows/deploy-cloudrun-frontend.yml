@@ -1,0 +1,103 @@
+name: Deploy Frontend to Cloud Run
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/deploy-cloudrun-frontend.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'moztech-main-db' }}
+  GCP_REGION: ${{ secrets.GCP_REGION || 'asia-east1' }}
+  ARTIFACT_REPOSITORY: ${{ vars.CLOUD_RUN_ARTIFACT_REPOSITORY || 'cloud-run' }}
+  FRONTEND_SERVICE: ${{ secrets.CLOUD_RUN_FRONTEND_SERVICE || 'ecom-accounting-frontend' }}
+  FRONTEND_API_URL: ${{ vars.FRONTEND_API_URL || secrets.FRONTEND_API_URL || '' }}
+  FRONTEND_WS_URL: ${{ vars.FRONTEND_WS_URL || secrets.FRONTEND_WS_URL || '' }}
+  DEFAULT_ENTITY_ID: ${{ vars.DEFAULT_ENTITY_ID || 'tw-entity-001' }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and deploy frontend
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPOSITORY}/${FRONTEND_SERVICE}:${GITHUB_SHA}"
+
+          gcloud artifacts repositories describe "${ARTIFACT_REPOSITORY}" \
+            --project="${GCP_PROJECT_ID}" \
+            --location="${GCP_REGION}" >/dev/null 2>&1 || \
+          gcloud artifacts repositories create "${ARTIFACT_REPOSITORY}" \
+            --project="${GCP_PROJECT_ID}" \
+            --repository-format=docker \
+            --location="${GCP_REGION}" \
+            --description="Cloud Run containers for ecom-accounting-system"
+
+          gcloud builds submit frontend \
+            --project="${GCP_PROJECT_ID}" \
+            --substitutions="_VITE_API_URL=${FRONTEND_API_URL},_VITE_DEFAULT_ENTITY_ID=${DEFAULT_ENTITY_ID}" \
+            --config=- <<EOF
+          steps:
+            - name: gcr.io/cloud-builders/docker
+              args:
+                - build
+                - -t
+                - ${IMAGE}
+                - --build-arg
+                - VITE_API_URL=\${_VITE_API_URL}
+                - --build-arg
+                - VITE_DEFAULT_ENTITY_ID=\${_VITE_DEFAULT_ENTITY_ID}
+                - .
+          images:
+            - ${IMAGE}
+          EOF
+
+          deploy_args=(
+            run deploy "${FRONTEND_SERVICE}"
+            --project="${GCP_PROJECT_ID}"
+            --region="${GCP_REGION}"
+            --image="${IMAGE}"
+            --allow-unauthenticated
+            --port=8080
+          )
+
+          if [[ -n "${FRONTEND_API_URL}" ]]; then
+            runtime_ws_url="${FRONTEND_WS_URL:-${FRONTEND_API_URL%/api/v1}}"
+            deploy_args+=(
+              --update-env-vars="API_URL=${FRONTEND_API_URL},WS_URL=${runtime_ws_url},DEFAULT_ENTITY_ID=${DEFAULT_ENTITY_ID}"
+            )
+          fi
+
+          gcloud "${deploy_args[@]}"
+
+          URL="$(gcloud run services describe "${FRONTEND_SERVICE}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --format='value(status.url)')"
+          echo "url=${URL}" >> "${GITHUB_OUTPUT}"
+
+      - name: Show service URL
+        run: echo "Deployed to ${{ steps.deploy.outputs.url }}"

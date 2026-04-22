@@ -1,9 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
-  Alert,
   Button,
   Card,
+  DatePicker,
+  Form,
   Input,
+  InputNumber,
+  Modal,
+  Popover,
   Space,
   Statistic,
   Table,
@@ -12,9 +16,10 @@ import {
   message,
 } from 'antd'
 import {
-  AuditOutlined,
   DollarCircleOutlined,
   FileTextOutlined,
+  PlusOutlined,
+  QuestionCircleOutlined,
   ReloadOutlined,
   SearchOutlined,
   SyncOutlined,
@@ -88,9 +93,12 @@ const EmptySummary: ReceivableMonitorSummary = {
 const ArInvoicesPage: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [createModalOpen, setCreateModalOpen] = useState(false)
   const [searchText, setSearchText] = useState('')
   const [items, setItems] = useState<ReceivableMonitorItem[]>([])
   const [summary, setSummary] = useState<ReceivableMonitorSummary>(EmptySummary)
+  const [form] = Form.useForm()
 
   const fetchMonitor = async () => {
     setLoading(true)
@@ -119,6 +127,42 @@ const ArInvoicesPage: React.FC = () => {
       message.error('同步銷售入帳失敗')
     } finally {
       setSyncing(false)
+    }
+  }
+
+  const handleCreateManualAr = async () => {
+    try {
+      const values = await form.validateFields()
+      setCreating(true)
+      const entityId = localStorage.getItem('entityId')?.trim() || undefined
+      await arService.createInvoice({
+        entityId: entityId || 'tw-entity-001',
+        invoiceNo: values.invoiceNo || undefined,
+        amountOriginal: Number(values.amountOriginal || 0),
+        amountCurrency: 'TWD',
+        paidAmountOriginal: 0,
+        issueDate: values.issueDate.startOf('day').toISOString(),
+        dueDate: values.dueDate.endOf('day').toISOString(),
+        status: 'unpaid',
+        sourceModule: 'manual_b2b_ar',
+        notes: [
+          `customerName=${values.customerName}`,
+          values.customerEmail ? `customerEmail=${values.customerEmail}` : null,
+          'sourceLabel=B2B 月結',
+          'sourceBrand=MOZTECH',
+        ]
+          .filter(Boolean)
+          .join('; '),
+      })
+      message.success('已建立 B2B 應收')
+      setCreateModalOpen(false)
+      form.resetFields()
+      await fetchMonitor()
+    } catch (error: any) {
+      if (error?.errorFields) return
+      message.error(error?.response?.data?.message || '建立 B2B 應收失敗')
+    } finally {
+      setCreating(false)
     }
   }
 
@@ -311,16 +355,37 @@ const ArInvoicesPage: React.FC = () => {
     >
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <Title level={2} className="!mb-1 !font-light">
-            應收帳款與入帳追蹤
-          </Title>
-          <Text className="text-gray-500">
-            直接檢查每筆訂單的收入、應收、手續費、淨額、發票與會計分錄是否都已落下來。
-          </Text>
+          <div className="flex items-center gap-2">
+            <Title level={2} className="!mb-1 !font-light">
+              應收帳款
+            </Title>
+            <Popover
+              title="這頁怎麼用"
+              content={
+                <div className="max-w-xs text-sm leading-6 text-slate-600">
+                  <div>銷售訂單：按「同步銷售訂單」轉成應收。</div>
+                  <div>B2B 月結：按「新增 B2B 應收」建立追帳項目。</div>
+                  <div>收款後：在入帳追蹤確認已收、未收、發票與分錄。</div>
+                </div>
+              }
+              trigger="click"
+            >
+              <Button
+                type="text"
+                shape="circle"
+                icon={<QuestionCircleOutlined />}
+                className="text-slate-400"
+              />
+            </Popover>
+          </div>
+          <Text className="text-gray-500">建立應收、追蹤收款、確認入帳。</Text>
         </div>
         <Space wrap>
           <Button icon={<ReloadOutlined />} onClick={fetchMonitor}>
             重新整理
+          </Button>
+          <Button icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
+            新增 B2B 應收
           </Button>
           <Button
             type="primary"
@@ -328,26 +393,10 @@ const ArInvoicesPage: React.FC = () => {
             loading={syncing}
             onClick={handleSync}
           >
-            同步銷售入帳
+            同步銷售訂單
           </Button>
         </Space>
       </div>
-
-      <Alert
-        showIcon
-        type="info"
-        icon={<AuditOutlined />}
-        message="這個頁面現在會把銷售訂單、收款、綠界/平台手續費、發票號碼與會計分錄狀態放在同一張表追蹤。"
-      />
-
-      {summary.missingFeeCount > 0 ? (
-        <Alert
-          showIcon
-          type="warning"
-          icon={<WarningOutlined />}
-          message={`目前有 ${summary.missingFeeCount} 筆已收款訂單還沒有實際手續費。這通常表示綠界或平台撥款對帳尚未成功回填，頁面內已會直接標示原因。`}
-        />
-      ) : null}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
         <Card bordered={false} className="glass-card">
@@ -398,42 +447,6 @@ const ArInvoicesPage: React.FC = () => {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
-        <Card bordered={false} className="glass-card">
-          <div className="text-sm text-slate-500">手續費欄待補</div>
-          <div className="mt-2 text-3xl font-semibold text-rose-600">
-            {summary.missingFeeCount}
-          </div>
-        </Card>
-        <Card bordered={false} className="glass-card">
-          <div className="text-sm text-slate-500">尚未建立分錄</div>
-          <div className="mt-2 text-3xl font-semibold text-amber-600">
-            {summary.missingJournalCount}
-          </div>
-        </Card>
-        <Card bordered={false} className="glass-card">
-          <div className="text-sm text-slate-500">待補發票</div>
-          <div className="mt-2 text-3xl font-semibold text-blue-600">
-            {summary.missingInvoiceCount}
-          </div>
-        </Card>
-        <Card bordered={false} className="glass-card">
-          <div className="text-sm text-slate-500">已開票未落帳</div>
-          <div className="mt-2 text-3xl font-semibold text-violet-600">
-            {summary.issuedUnpostedCount}
-          </div>
-        </Card>
-        <Card bordered={false} className="glass-card">
-          <div className="text-sm text-slate-500">逾期應收</div>
-          <div className="mt-2 text-3xl font-semibold text-red-600">
-            {summary.overdueReceivableCount}
-          </div>
-          <div className="mt-1 text-xs text-slate-400">
-            {currency(summary.overdueReceivableAmount)}
-          </div>
-        </Card>
-      </div>
-
       <Card bordered={false} className="glass-card">
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <Input
@@ -444,9 +457,7 @@ const ArInvoicesPage: React.FC = () => {
             placeholder="搜尋訂單編號、顧客、來源、品牌或發票號碼"
             className="max-w-xl"
           />
-          <Text className="text-xs text-slate-400">
-            共 {filteredItems.length} 筆，這裡是你要看的真正入帳追蹤，不是單純資料匯入列表。
-          </Text>
+          <Text className="text-xs text-slate-400">{filteredItems.length} 筆</Text>
         </div>
 
         <Table
@@ -458,6 +469,62 @@ const ArInvoicesPage: React.FC = () => {
           pagination={{ pageSize: 10, showSizeChanger: true }}
         />
       </Card>
+
+      <Modal
+        title="新增 B2B 應收"
+        open={createModalOpen}
+        onCancel={() => setCreateModalOpen(false)}
+        onOk={handleCreateManualAr}
+        confirmLoading={creating}
+        okText="建立應收"
+        cancelText="取消"
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          initialValues={{
+            issueDate: dayjs(),
+            dueDate: dayjs().add(30, 'day'),
+          }}
+        >
+          <Form.Item
+            name="customerName"
+            label="客戶名稱"
+            rules={[{ required: true, message: '請輸入客戶名稱' }]}
+          >
+            <Input placeholder="例如：某某經銷商 / 公司客戶" />
+          </Form.Item>
+          <Form.Item name="customerEmail" label="對帳 Email">
+            <Input placeholder="可留空" />
+          </Form.Item>
+          <Form.Item name="invoiceNo" label="發票 / 對帳單號">
+            <Input placeholder="尚未開票可留空" />
+          </Form.Item>
+          <Form.Item
+            name="amountOriginal"
+            label="應收金額"
+            rules={[{ required: true, message: '請輸入應收金額' }]}
+          >
+            <InputNumber min={0} precision={0} className="w-full" prefix="NT$" />
+          </Form.Item>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <Form.Item
+              name="issueDate"
+              label="建立日期"
+              rules={[{ required: true, message: '請選擇建立日期' }]}
+            >
+              <DatePicker className="w-full" />
+            </Form.Item>
+            <Form.Item
+              name="dueDate"
+              label="收款到期日"
+              rules={[{ required: true, message: '請選擇收款到期日' }]}
+            >
+              <DatePicker className="w-full" />
+            </Form.Item>
+          </div>
+        </Form>
+      </Modal>
     </motion.div>
   )
 }
