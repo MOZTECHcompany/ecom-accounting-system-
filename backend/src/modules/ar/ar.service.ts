@@ -124,6 +124,28 @@ export class ArService {
       }
     }
 
+    const standaloneJournalMap = new Map<string, (typeof journals)[number]>();
+    if (standaloneArInvoices.length) {
+      const standaloneJournals = await this.prisma.journalEntry.findMany({
+        where: {
+          entityId,
+          sourceId: {
+            in: standaloneArInvoices.map((invoice) => invoice.id),
+          },
+          sourceModule: {
+            in: ['ar_payment', 'manual_b2b_ar', 'ar_invoice'],
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      for (const journal of standaloneJournals) {
+        if (journal.sourceId && !standaloneJournalMap.has(journal.sourceId)) {
+          standaloneJournalMap.set(journal.sourceId, journal);
+        }
+      }
+    }
+
     const salesOrderItems = orders
       .map((order) => {
         const arInvoice = arMap.get(order.id) || null;
@@ -267,6 +289,7 @@ export class ArService {
       });
 
     const standaloneItems = standaloneArInvoices.map((invoice) => {
+      const journal = standaloneJournalMap.get(invoice.id) || null;
       const amount = Number(invoice.amountOriginal || 0);
       const paid = Number(invoice.paidAmountOriginal || 0);
       const outstandingAmount = Math.max(amount - paid, 0);
@@ -286,7 +309,9 @@ export class ArService {
       if (!invoice.invoiceNo) {
         warningCodes.push('invoice_pending');
       }
-      warningCodes.push('missing_journal');
+      if (paid > 0 && !journal) {
+        warningCodes.push('missing_journal');
+      }
 
       return {
         orderId: `ar:${invoice.id}`,
@@ -344,9 +369,9 @@ export class ArService {
         invoiceNumber: invoice.invoiceNo || null,
         invoiceStatus,
         invoiceIssuedAt: invoice.issueDate.toISOString(),
-        journalEntryId: null,
-        journalApprovedAt: null,
-        accountingPosted: false,
+        journalEntryId: journal?.id || null,
+        journalApprovedAt: journal?.approvedAt?.toISOString() || null,
+        accountingPosted: Boolean(journal),
         warningCodes,
         notes: invoice.notes || null,
       };

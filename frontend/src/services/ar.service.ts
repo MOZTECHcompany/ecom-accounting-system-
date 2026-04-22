@@ -198,6 +198,13 @@ export interface CreateArInvoicePayload {
   notes?: string | null
 }
 
+export interface RecordArPaymentPayload {
+  amount: number
+  paymentDate?: string
+  paymentMethod?: string
+  note?: string
+}
+
 export const arService = {
   getInvoices: async (page = 1, limit = 20) => {
     const response = await api.get<PaginatedResult<ArInvoice>>('/ar/invoices', {
@@ -218,6 +225,11 @@ export const arService = {
 
   updateInvoice: async (id: string, data: Partial<ArInvoice>) => {
     const response = await api.patch<ArInvoice>(`/ar/invoices/${id}`, data)
+    return response.data
+  },
+
+  recordPayment: async (id: string, data: RecordArPaymentPayload) => {
+    const response = await api.put<ArInvoice>(`/ar/invoices/${id}/receive`, data)
     return response.data
   },
 

@@ -16,6 +16,7 @@ import {
   message,
 } from 'antd'
 import {
+  CheckCircleOutlined,
   DollarCircleOutlined,
   FileTextOutlined,
   PlusOutlined,
@@ -94,11 +95,15 @@ const ArInvoicesPage: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [receiving, setReceiving] = useState(false)
   const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false)
+  const [paymentTarget, setPaymentTarget] = useState<ReceivableMonitorItem | null>(null)
   const [searchText, setSearchText] = useState('')
   const [items, setItems] = useState<ReceivableMonitorItem[]>([])
   const [summary, setSummary] = useState<ReceivableMonitorSummary>(EmptySummary)
   const [form] = Form.useForm()
+  const [paymentForm] = Form.useForm()
 
   const fetchMonitor = async () => {
     setLoading(true)
@@ -163,6 +168,40 @@ const ArInvoicesPage: React.FC = () => {
       message.error(error?.response?.data?.message || '建立 B2B 應收失敗')
     } finally {
       setCreating(false)
+    }
+  }
+
+  const openPaymentModal = (item: ReceivableMonitorItem) => {
+    setPaymentTarget(item)
+    paymentForm.setFieldsValue({
+      amount: item.outstandingAmount,
+      paymentDate: dayjs(),
+      paymentMethod: 'bank_transfer',
+    })
+    setPaymentModalOpen(true)
+  }
+
+  const handleRecordPayment = async () => {
+    if (!paymentTarget?.arInvoiceId) return
+
+    try {
+      const values = await paymentForm.validateFields()
+      setReceiving(true)
+      await arService.recordPayment(paymentTarget.arInvoiceId, {
+        amount: Number(values.amount || 0),
+        paymentDate: values.paymentDate?.toISOString(),
+        paymentMethod: values.paymentMethod || 'bank_transfer',
+      })
+      message.success('已記錄收款並嘗試建立沖銷分錄')
+      setPaymentModalOpen(false)
+      setPaymentTarget(null)
+      paymentForm.resetFields()
+      await fetchMonitor()
+    } catch (error: any) {
+      if (error?.errorFields) return
+      message.error(error?.response?.data?.message || '記錄收款失敗')
+    } finally {
+      setReceiving(false)
     }
   }
 
@@ -344,6 +383,26 @@ const ArInvoicesPage: React.FC = () => {
         </div>
       ),
     },
+    {
+      title: '操作',
+      key: 'actions',
+      fixed: 'right' as const,
+      width: 140,
+      render: (_: unknown, record: ReceivableMonitorItem) => {
+        const canReceive = Boolean(record.arInvoiceId) && Number(record.outstandingAmount || 0) > 0
+
+        return (
+          <Button
+            size="small"
+            icon={<CheckCircleOutlined />}
+            disabled={!canReceive}
+            onClick={() => openPaymentModal(record)}
+          >
+            記錄收款
+          </Button>
+        )
+      },
+    },
   ]
 
   return (
@@ -365,7 +424,7 @@ const ArInvoicesPage: React.FC = () => {
                 <div className="max-w-xs text-sm leading-6 text-slate-600">
                   <div>銷售訂單：按「同步銷售訂單」轉成應收。</div>
                   <div>B2B 月結：按「新增 B2B 應收」建立追帳項目。</div>
-                  <div>收款後：在入帳追蹤確認已收、未收、發票與分錄。</div>
+                  <div>收款後：按「記錄收款」沖銷應收並產生收款分錄。</div>
                 </div>
               }
               trigger="click"
@@ -465,7 +524,7 @@ const ArInvoicesPage: React.FC = () => {
           loading={loading}
           columns={columns}
           dataSource={filteredItems}
-          scroll={{ x: 1960 }}
+          scroll={{ x: 2100 }}
           pagination={{ pageSize: 10, showSizeChanger: true }}
         />
       </Card>
@@ -523,6 +582,54 @@ const ArInvoicesPage: React.FC = () => {
               <DatePicker className="w-full" />
             </Form.Item>
           </div>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="記錄收款"
+        open={paymentModalOpen}
+        onCancel={() => {
+          setPaymentModalOpen(false)
+          setPaymentTarget(null)
+        }}
+        onOk={handleRecordPayment}
+        confirmLoading={receiving}
+        okText="確認收款"
+        cancelText="取消"
+      >
+        <div className="mb-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <div className="font-medium text-slate-900">{paymentTarget?.orderNumber}</div>
+          <div className="mt-1">
+            未收 {currency(paymentTarget?.outstandingAmount || 0)} · 客戶 {paymentTarget?.customerName || '-'}
+          </div>
+        </div>
+        <Form
+          form={paymentForm}
+          layout="vertical"
+        >
+          <Form.Item
+            name="amount"
+            label="本次收款金額"
+            rules={[{ required: true, message: '請輸入收款金額' }]}
+          >
+            <InputNumber
+              min={1}
+              max={paymentTarget?.outstandingAmount || undefined}
+              precision={0}
+              className="w-full"
+              prefix="NT$"
+            />
+          </Form.Item>
+          <Form.Item
+            name="paymentDate"
+            label="收款日期"
+            rules={[{ required: true, message: '請選擇收款日期' }]}
+          >
+            <DatePicker className="w-full" />
+          </Form.Item>
+          <Form.Item name="paymentMethod" label="收款方式">
+            <Input placeholder="bank_transfer / cash / check" />
+          </Form.Item>
         </Form>
       </Modal>
     </motion.div>
