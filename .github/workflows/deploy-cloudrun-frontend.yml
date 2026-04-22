@@ -64,10 +64,7 @@ jobs:
             --location="${GCP_REGION}" \
             --description="Cloud Run containers for ecom-accounting-system"
 
-          gcloud builds submit frontend \
-            --project="${GCP_PROJECT_ID}" \
-            --substitutions="_VITE_API_URL=${FRONTEND_API_URL},_VITE_DEFAULT_ENTITY_ID=${DEFAULT_ENTITY_ID}" \
-            --config=- <<EOF
+          cat > /tmp/cloudbuild.frontend.yaml <<EOF
           steps:
             - name: gcr.io/cloud-builders/docker
               args:
@@ -82,6 +79,11 @@ jobs:
           images:
             - ${IMAGE}
           EOF
+
+          gcloud builds submit frontend \
+            --project="${GCP_PROJECT_ID}" \
+            --substitutions="_VITE_API_URL=${FRONTEND_API_URL},_VITE_DEFAULT_ENTITY_ID=${DEFAULT_ENTITY_ID}" \
+            --config=/tmp/cloudbuild.frontend.yaml
 
           deploy_args=(
             run deploy "${FRONTEND_SERVICE}"
