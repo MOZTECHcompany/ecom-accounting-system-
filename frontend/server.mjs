@@ -21,6 +21,18 @@ const contentTypes = {
   '.woff2': 'font/woff2',
 };
 
+function setCacheHeaders(res, filePath) {
+  const ext = extname(filePath).toLowerCase();
+  if (ext === '.html') {
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
+    return;
+  }
+
+  if (filePath.includes('/assets/')) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  }
+}
+
 function sendFile(res, filePath) {
   const ext = extname(filePath).toLowerCase();
   res.statusCode = 200;
@@ -28,6 +40,7 @@ function sendFile(res, filePath) {
     'Content-Type',
     contentTypes[ext] || 'application/octet-stream',
   );
+  setCacheHeaders(res, filePath);
   createReadStream(filePath).pipe(res);
 }
 
@@ -48,6 +61,7 @@ const server = http.createServer(async (req, res) => {
 
     res.statusCode = 200;
     res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
     res.end(
       `window.__APP_CONFIG__ = ${JSON.stringify({
         apiUrl,
@@ -72,6 +86,7 @@ const server = http.createServer(async (req, res) => {
     const html = await readFile(indexPath, 'utf8');
     res.statusCode = 200;
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
     res.end(html);
   } catch (error) {
     res.statusCode = 500;
