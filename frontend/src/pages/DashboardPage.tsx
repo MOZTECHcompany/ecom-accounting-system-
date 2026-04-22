@@ -199,16 +199,6 @@ function getTaskToneMeta(tone: DashboardExecutiveOverview["tasks"][number]["tone
   }
 }
 
-function getRuleStatusMeta(status: "active" | "monitoring" | "pending") {
-  switch (status) {
-    case "monitoring":
-      return { color: "gold" as const, badge: "持續監控" };
-    case "pending":
-      return { color: "blue" as const, badge: "待補齊" };
-    default:
-      return { color: "green" as const, badge: "已啟用" };
-  }
-}
 
 function getAuditSeverityMeta(
   severity: OrderReconciliationAuditItem["severity"],
@@ -1449,7 +1439,7 @@ const DashboardPage: React.FC = () => {
           { xs: 16, sm: 24 },
         ]}
       >
-        <Col xs={24} lg={12}>
+        <Col xs={24}>
           <div
             className="h-full animate-slide-up"
             style={{ animationDelay: "480ms" }}
