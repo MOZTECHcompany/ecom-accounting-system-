@@ -126,6 +126,49 @@ export interface AttendancePolicy {
   updatedAt?: string;
 }
 
+export type DisasterClosureScopeType =
+  | "ENTITY"
+  | "DEPARTMENT"
+  | "EMPLOYEE"
+  | "LOCATION";
+
+export type DisasterClosurePayPolicy = "NO_DEDUCTION" | "UNPAID" | "PARTIAL";
+
+export interface DisasterClosureEvent {
+  id: string;
+  entityId: string;
+  name: string;
+  closureDate: string;
+  scopeType: DisasterClosureScopeType;
+  scopeIds: string[];
+  payPolicy: DisasterClosurePayPolicy;
+  paidPercentage?: number | null;
+  source?: string | null;
+  announcementRegion?: string | null;
+  notes?: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  creator?: {
+    id: string;
+    name: string;
+    email?: string;
+  };
+}
+
+export interface UpsertDisasterClosureDto {
+  name: string;
+  closureDate: string;
+  scopeType: DisasterClosureScopeType;
+  scopeIds?: string[];
+  payPolicy: DisasterClosurePayPolicy;
+  paidPercentage?: number;
+  source?: string;
+  announcementRegion?: string;
+  notes?: string;
+  isActive?: boolean;
+}
+
 export interface SeniorityTier {
   minYears: number;
   maxYears?: number;

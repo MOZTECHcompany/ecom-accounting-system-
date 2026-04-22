@@ -18,6 +18,8 @@ import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { PolicyService } from '../services/policy.service';
 import { UpsertAttendancePolicyDto } from '../dto/upsert-attendance-policy.dto';
+import { DisasterClosureService } from '../services/disaster-closure.service';
+import { UpsertDisasterClosureDto } from '../dto/upsert-disaster-closure.dto';
 
 @Controller('attendance')
 @UseGuards(JwtAuthGuard)
@@ -25,6 +27,7 @@ export class AttendanceController {
   constructor(
     private readonly attendanceService: AttendanceService,
     private readonly policyService: PolicyService,
+    private readonly disasterClosureService: DisasterClosureService,
   ) {}
 
   @Post('clock-in')
@@ -79,5 +82,47 @@ export class AttendanceController {
   @UseGuards(RolesGuard)
   async deleteAdminPolicy(@Request() req: any, @Param('id') id: string) {
     return this.policyService.deletePolicy(req.user.id, id);
+  }
+
+  @Get('admin/disaster-closures')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT')
+  @UseGuards(RolesGuard)
+  async getDisasterClosures(
+    @Request() req: any,
+    @Query('year') year?: string,
+    @Query('entityId') entityId?: string,
+  ) {
+    return this.disasterClosureService.getAdminClosures(req.user.id, {
+      year: year ? Number(year) : undefined,
+      entityId,
+    });
+  }
+
+  @Post('admin/disaster-closures')
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @UseGuards(RolesGuard)
+  async createDisasterClosure(
+    @Request() req: any,
+    @Body() dto: UpsertDisasterClosureDto,
+  ) {
+    return this.disasterClosureService.createClosure(req.user.id, dto);
+  }
+
+  @Patch('admin/disaster-closures/:id')
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @UseGuards(RolesGuard)
+  async updateDisasterClosure(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() dto: UpsertDisasterClosureDto,
+  ) {
+    return this.disasterClosureService.updateClosure(req.user.id, id, dto);
+  }
+
+  @Delete('admin/disaster-closures/:id')
+  @Roles('SUPER_ADMIN', 'ADMIN')
+  @UseGuards(RolesGuard)
+  async deleteDisasterClosure(@Request() req: any, @Param('id') id: string) {
+    return this.disasterClosureService.deactivateClosure(req.user.id, id);
   }
 }

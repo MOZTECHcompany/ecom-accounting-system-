@@ -59,12 +59,13 @@ model User {
   notifications                 Notification[]
 
   // Attendance Relations
-  employee               Employee?
-  reviewedLeaveRequests  LeaveRequest[]        @relation("LeaveReviewer")
-  uploadedLeaveDocuments LeaveDocument[]       @relation("LeaveDocumentUploader")
-  leaveRequestHistories  LeaveRequestHistory[] @relation("LeaveHistoryActor")
-  resolvedAnomalies      AttendanceAnomaly[]   @relation("AnomalyResolver")
-  createdAssemblyOrders  AssemblyOrder[]
+  employee                Employee?
+  reviewedLeaveRequests   LeaveRequest[]         @relation("LeaveReviewer")
+  uploadedLeaveDocuments  LeaveDocument[]        @relation("LeaveDocumentUploader")
+  leaveRequestHistories   LeaveRequestHistory[]  @relation("LeaveHistoryActor")
+  resolvedAnomalies       AttendanceAnomaly[]    @relation("AnomalyResolver")
+  createdDisasterClosures DisasterClosureEvent[] @relation("DisasterClosureCreator")
+  createdAssemblyOrders   AssemblyOrder[]
 
   @@map("users")
 }
@@ -196,6 +197,7 @@ model Entity {
   attendancePolicies     AttendancePolicy[]
   attendanceRecords      AttendanceRecord[]
   attendanceSummaries    AttendanceDailySummary[]
+  disasterClosureEvents  DisasterClosureEvent[]
   leaveTypes             LeaveType[]
   leaveBalances          LeaveBalance[]
   leaveRequests          LeaveRequest[]
@@ -1839,6 +1841,31 @@ model AttendanceDailySummary {
 
   @@unique([entityId, employeeId, workDate])
   @@map("attendance_daily_summaries")
+}
+
+model DisasterClosureEvent {
+  id                 String   @id @default(uuid())
+  entityId           String   @map("entity_id")
+  name               String
+  closureDate        DateTime @map("closure_date")
+  scopeType          String   @default("ENTITY") @map("scope_type") // ENTITY, DEPARTMENT, EMPLOYEE, LOCATION
+  scopeIds           Json?    @map("scope_ids")
+  payPolicy          String   @default("NO_DEDUCTION") @map("pay_policy") // NO_DEDUCTION, UNPAID, PARTIAL
+  paidPercentage     Decimal? @map("paid_percentage") @db.Decimal(5, 2)
+  source             String? // GOV_ANNOUNCEMENT, COMPANY_DECISION
+  announcementRegion String?  @map("announcement_region")
+  notes              String?
+  isActive           Boolean  @default(true) @map("is_active")
+  createdBy          String   @map("created_by")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  entity  Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  creator User   @relation("DisasterClosureCreator", fields: [createdBy], references: [id])
+
+  @@index([entityId, closureDate])
+  @@index([entityId, isActive])
+  @@map("disaster_closure_events")
 }
 
 model LeaveType {

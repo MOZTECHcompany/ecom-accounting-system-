@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import { DisasterClosureService } from './disaster-closure.service';
 
 @Injectable()
 export class AttendanceIntegrationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly disasterClosureService: DisasterClosureService,
+  ) {}
 
   async getPayrollData(employeeId: string, start: Date, end: Date) {
     // 1. Get Daily Summaries
@@ -28,7 +32,15 @@ export class AttendanceIntegrationService {
       include: { leaveType: true },
     });
 
-    // 3. Calculate Totals
+    // 3. Get company-wide stop-work events that affect payroll.
+    const disasterClosures =
+      await this.disasterClosureService.getEmployeeClosures(
+        employeeId,
+        start,
+        end,
+      );
+
+    // 4. Calculate Totals
     let regularHours = 0;
     let overtimeHours = 0;
     let leaveHours = 0;
@@ -65,9 +77,11 @@ export class AttendanceIntegrationService {
       leaveHours,
       deductibleLeaveHours,
       leaveEntries,
+      disasterClosures,
       details: {
         daysWorked: summaries.length,
         leavesTaken: leaves.length,
+        disasterClosureDays: disasterClosures.length,
       },
     };
   }

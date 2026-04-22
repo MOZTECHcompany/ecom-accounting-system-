@@ -23,6 +23,9 @@ import {
   AdminLeaveBalance,
   AdminLeaveRequest,
   AttendancePolicy,
+  DisasterClosureEvent,
+  DisasterClosurePayPolicy,
+  DisasterClosureScopeType,
   LeaveStatus,
   LeaveType,
   SeniorityTier,
@@ -35,7 +38,13 @@ import { GlassModal } from "../../components/ui/GlassModal";
 import { GlassSelect } from "../../components/ui/GlassSelect";
 import { GlassTextarea } from "../../components/ui/GlassTextarea";
 
-type AdminTab = "attendance" | "requests" | "policies" | "types" | "balances";
+type AdminTab =
+  | "attendance"
+  | "requests"
+  | "policies"
+  | "closures"
+  | "types"
+  | "balances";
 
 const emptyLeaveTypeForm = {
   code: "",
@@ -79,6 +88,18 @@ const emptyPolicyForm = {
   ipAllowList: "",
   geofence: "",
   schedules: [emptyPolicySchedule()],
+};
+
+const emptyClosureForm = {
+  name: "",
+  closureDate: dayjs().format("YYYY-MM-DD"),
+  scopeType: "ENTITY" as DisasterClosureScopeType,
+  scopeIds: [] as string[],
+  payPolicy: "NO_DEDUCTION" as DisasterClosurePayPolicy,
+  paidPercentage: "50",
+  source: "GOV_ANNOUNCEMENT",
+  announcementRegion: "",
+  notes: "",
 };
 
 const weekdayOptions = [
@@ -149,6 +170,25 @@ const formatWeekday = (weekday: number) =>
   weekdayOptions.find((item) => Number(item.value) === weekday)?.label ||
   `週${weekday}`;
 
+const closureScopeLabel = (scopeType: DisasterClosureScopeType) => {
+  const map: Record<DisasterClosureScopeType, string> = {
+    ENTITY: "全公司",
+    DEPARTMENT: "指定部門",
+    EMPLOYEE: "指定員工",
+    LOCATION: "指定地點",
+  };
+  return map[scopeType];
+};
+
+const closurePayPolicyLabel = (
+  payPolicy: DisasterClosurePayPolicy,
+  paidPercentage?: number | null,
+) => {
+  if (payPolicy === "UNPAID") return "不支薪";
+  if (payPolicy === "PARTIAL") return `部分支薪 ${paidPercentage ?? 0}%`;
+  return "不扣薪";
+};
+
 const AttendanceAdminPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AdminTab>("requests");
   const [loading, setLoading] = useState(false);
@@ -159,6 +199,9 @@ const AttendanceAdminPage: React.FC = () => {
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
   const [leaveBalances, setLeaveBalances] = useState<AdminLeaveBalance[]>([]);
   const [policies, setPolicies] = useState<AttendancePolicy[]>([]);
+  const [disasterClosures, setDisasterClosures] = useState<
+    DisasterClosureEvent[]
+  >([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [requestStatusFilter, setRequestStatusFilter] = useState<string>("");
@@ -173,6 +216,10 @@ const AttendanceAdminPage: React.FC = () => {
     null,
   );
   const [policyForm, setPolicyForm] = useState(emptyPolicyForm);
+  const [closureModalOpen, setClosureModalOpen] = useState(false);
+  const [editingClosure, setEditingClosure] =
+    useState<DisasterClosureEvent | null>(null);
+  const [closureForm, setClosureForm] = useState(emptyClosureForm);
   const [balanceModalOpen, setBalanceModalOpen] = useState(false);
   const [editingBalance, setEditingBalance] =
     useState<AdminLeaveBalance | null>(null);
@@ -216,7 +263,8 @@ const AttendanceAdminPage: React.FC = () => {
   const loadManagementData = async () => {
     try {
       setLoading(true);
-      const [requests, types, balances, policies] = await Promise.all([
+      const [requests, types, balances, policies, closures] =
+        await Promise.all([
         attendanceService.getAdminLeaveRequests({
           year: selectedYear,
           status: (requestStatusFilter as LeaveStatus | "") || "",
@@ -228,11 +276,13 @@ const AttendanceAdminPage: React.FC = () => {
           employeeId: employeeFilter || undefined,
         }),
         attendanceService.getAdminPolicies(),
+        attendanceService.getDisasterClosures({ year: selectedYear }),
       ]);
       setLeaveRequests(requests);
       setLeaveTypes(types);
       setLeaveBalances(balances);
       setPolicies(policies);
+      setDisasterClosures(closures);
     } catch (error) {
       console.error(error);
       message.error("無法載入請假與額度管理資料");
@@ -284,9 +334,29 @@ const AttendanceAdminPage: React.FC = () => {
       (type) => (type as any).isActive !== false,
     ).length,
     trackedBalances: leaveBalances.length,
+    disasterClosures: disasterClosures.filter((event) => event.isActive).length,
     remainingAnnualHours: leaveBalances
       .filter((balance) => balance.leaveType.code === "ANNUAL")
       .reduce((sum, balance) => sum + balance.remainingHours, 0),
+  };
+
+  const formatClosureScopeTargets = (closure: DisasterClosureEvent) => {
+    if (closure.scopeType === "ENTITY") {
+      return "全公司適用";
+    }
+
+    const nameMap = new Map<string, string>();
+    if (closure.scopeType === "DEPARTMENT") {
+      departments.forEach((department) => nameMap.set(department.id, department.name));
+    } else if (closure.scopeType === "EMPLOYEE") {
+      employees.forEach((employee) =>
+        nameMap.set(employee.id, `${employee.name} (${employee.employeeNo})`),
+      );
+    }
+
+    return (closure.scopeIds || [])
+      .map((id) => nameMap.get(id) || id)
+      .join("、");
   };
 
   const requestStatusBadge = (status: string) => {
@@ -323,6 +393,10 @@ const AttendanceAdminPage: React.FC = () => {
       },
       leave: { text: "請假", className: "bg-sky-100/70 text-sky-700" },
       late: { text: "遲到", className: "bg-orange-100/70 text-orange-700" },
+      disaster_closure: {
+        text: "災防停班",
+        className: "bg-cyan-100/70 text-cyan-700",
+      },
     };
 
     const badge = config[status] || {
@@ -491,6 +565,108 @@ const AttendanceAdminPage: React.FC = () => {
     }
   };
 
+  const openCreateClosure = () => {
+    setEditingClosure(null);
+    setClosureForm({
+      ...emptyClosureForm,
+      closureDate: selectedDate.format("YYYY-MM-DD"),
+    });
+    setClosureModalOpen(true);
+  };
+
+  const openEditClosure = (closure: DisasterClosureEvent) => {
+    setEditingClosure(closure);
+    setClosureForm({
+      name: closure.name,
+      closureDate: dayjs(closure.closureDate).format("YYYY-MM-DD"),
+      scopeType: closure.scopeType,
+      scopeIds: closure.scopeIds || [],
+      payPolicy: closure.payPolicy,
+      paidPercentage: String(closure.paidPercentage ?? 50),
+      source: closure.source || "GOV_ANNOUNCEMENT",
+      announcementRegion: closure.announcementRegion || "",
+      notes: closure.notes || "",
+    });
+    setClosureModalOpen(true);
+  };
+
+  const toggleClosureScopeId = (id: string) => {
+    setClosureForm((prev) => ({
+      ...prev,
+      scopeIds: prev.scopeIds.includes(id)
+        ? prev.scopeIds.filter((item) => item !== id)
+        : [...prev.scopeIds, id],
+    }));
+  };
+
+  const saveClosure = async () => {
+    try {
+      const scopeIds =
+        closureForm.scopeType === "ENTITY" ? [] : closureForm.scopeIds;
+      const payload = {
+        name: closureForm.name.trim(),
+        closureDate: closureForm.closureDate,
+        scopeType: closureForm.scopeType,
+        scopeIds,
+        payPolicy: closureForm.payPolicy,
+        paidPercentage:
+          closureForm.payPolicy === "PARTIAL"
+            ? Number(closureForm.paidPercentage || 0)
+            : undefined,
+        source: closureForm.source,
+        announcementRegion: closureForm.announcementRegion.trim(),
+        notes: closureForm.notes.trim(),
+      };
+
+      if (!payload.name) {
+        message.error("請先輸入停班事件名稱");
+        return;
+      }
+      if (!payload.closureDate) {
+        message.error("請先選擇停班日期");
+        return;
+      }
+      if (payload.scopeType !== "ENTITY" && scopeIds.length === 0) {
+        message.error("請至少選擇一個適用範圍");
+        return;
+      }
+
+      if (editingClosure) {
+        await attendanceService.updateDisasterClosure(
+          editingClosure.id,
+          payload,
+        );
+        message.success("災防停班事件已更新");
+      } else {
+        await attendanceService.createDisasterClosure(payload);
+        message.success("災防停班事件已建立");
+      }
+
+      setClosureModalOpen(false);
+      setEditingClosure(null);
+      setClosureForm(emptyClosureForm);
+      await Promise.all([loadManagementData(), loadAttendance()]);
+    } catch (error: any) {
+      console.error(error);
+      message.error(error?.response?.data?.message || "儲存災防停班事件失敗");
+    }
+  };
+
+  const deleteClosure = async (closure: DisasterClosureEvent) => {
+    if (!window.confirm(`確認停用「${closure.name}」？已產生的出勤摘要不會自動刪除。`)) {
+      return;
+    }
+
+    try {
+      await attendanceService.deleteDisasterClosure(closure.id);
+      message.success("災防停班事件已停用");
+      await loadManagementData();
+    } catch (error: any) {
+      console.error(error);
+      message.error(error?.response?.data?.message || "停用災防停班事件失敗");
+    }
+  };
+
   const openEditLeaveType = (leaveType: LeaveType) => {
     setEditingLeaveType(leaveType);
     setTypeForm({
@@ -603,6 +779,7 @@ const AttendanceAdminPage: React.FC = () => {
     { key: "attendance", label: "每日出勤", icon: <DashboardOutlined /> },
     { key: "requests", label: "假單審核", icon: <CheckCircleOutlined /> },
     { key: "policies", label: "班表政策", icon: <ClockCircleOutlined /> },
+    { key: "closures", label: "災防停班", icon: <WarningOutlined /> },
     { key: "types", label: "假別規則", icon: <SettingOutlined /> },
     { key: "balances", label: "年度額度", icon: <CalendarOutlined /> },
   ];
@@ -614,6 +791,12 @@ const AttendanceAdminPage: React.FC = () => {
           icon: <ClockCircleOutlined />,
           onClick: openCreatePolicy,
         }
+      : activeTab === "closures"
+        ? {
+            label: "新增停班事件",
+            icon: <WarningOutlined />,
+            onClick: openCreateClosure,
+          }
       : {
           label: "新增假別規則",
           icon: <FileAddOutlined />,
@@ -1028,6 +1211,112 @@ const AttendanceAdminPage: React.FC = () => {
             </div>
           )}
 
+          {activeTab === "closures" && (
+            <div className="space-y-5">
+              <GlassCard className="border border-cyan-100/70 bg-cyan-50/70">
+                <div className="text-sm font-semibold text-cyan-900">
+                  災防停班事件
+                </div>
+                <div className="mt-2 text-sm leading-6 text-cyan-800">
+                  颱風、豪雨或其他天然災害停班不建議做成員工逐一申請的假別。請在這裡建立一次事件，系統會依範圍建立出勤摘要，並在薪資計算時套用不扣薪、不支薪或部分支薪政策。
+                </div>
+              </GlassCard>
+
+              <div className="overflow-x-auto rounded-3xl border border-white/20 bg-white/20">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b border-white/20 text-sm text-slate-500">
+                      <th className="px-5 py-4 font-medium">事件</th>
+                      <th className="px-5 py-4 font-medium">日期</th>
+                      <th className="px-5 py-4 font-medium">範圍</th>
+                      <th className="px-5 py-4 font-medium">薪資政策</th>
+                      <th className="px-5 py-4 font-medium">狀態</th>
+                      <th className="px-5 py-4 font-medium">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {disasterClosures.map((closure) => (
+                      <tr
+                        key={closure.id}
+                        className="border-b border-white/10 text-sm text-slate-700"
+                      >
+                        <td className="px-5 py-4">
+                          <div className="font-medium text-slate-900">
+                            {closure.name}
+                          </div>
+                          <div className="mt-1 text-xs text-slate-400">
+                            {closure.announcementRegion || "未指定公告區域"}
+                            {closure.notes ? ` · ${closure.notes}` : ""}
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 font-mono">
+                          {dayjs(closure.closureDate).format("YYYY/MM/DD")}
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="font-medium">
+                            {closureScopeLabel(closure.scopeType)}
+                          </div>
+                          <div className="mt-1 max-w-[320px] truncate text-xs text-slate-400">
+                            {formatClosureScopeTargets(closure)}
+                          </div>
+                        </td>
+                        <td className="px-5 py-4">
+                          {closurePayPolicyLabel(
+                            closure.payPolicy,
+                            closure.paidPercentage,
+                          )}
+                        </td>
+                        <td className="px-5 py-4">
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                              closure.isActive
+                                ? "bg-emerald-100/70 text-emerald-700"
+                                : "bg-slate-100/70 text-slate-500"
+                            }`}
+                          >
+                            {closure.isActive ? "啟用" : "停用"}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="flex flex-wrap gap-2">
+                            <GlassButton
+                              variant="secondary"
+                              className="gap-2 px-4 py-2 text-sm"
+                              onClick={() => openEditClosure(closure)}
+                            >
+                              <EditOutlined />
+                              編輯
+                            </GlassButton>
+                            {closure.isActive ? (
+                              <GlassButton
+                                variant="danger"
+                                className="gap-2 px-4 py-2 text-sm"
+                                onClick={() => void deleteClosure(closure)}
+                              >
+                                <DeleteOutlined />
+                                停用
+                              </GlassButton>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {disasterClosures.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          className="px-5 py-10 text-center text-sm text-slate-400"
+                        >
+                          目前沒有這個年度的災防停班事件
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {activeTab === "policies" && (
             <div className="space-y-5">
               <GlassCard className="border border-sky-100/70 bg-sky-50/70">
@@ -1197,6 +1486,194 @@ const AttendanceAdminPage: React.FC = () => {
           )}
         </div>
       </GlassCard>
+
+      <GlassModal
+        isOpen={closureModalOpen}
+        onClose={() => {
+          setClosureModalOpen(false);
+          setEditingClosure(null);
+          setClosureForm(emptyClosureForm);
+        }}
+        title={editingClosure ? "編輯災防停班事件" : "新增災防停班事件"}
+        maxWidth="max-w-[920px]"
+        footer={
+          <>
+            <GlassButton
+              variant="secondary"
+              onClick={() => {
+                setClosureModalOpen(false);
+                setEditingClosure(null);
+                setClosureForm(emptyClosureForm);
+              }}
+            >
+              取消
+            </GlassButton>
+            <GlassButton onClick={() => void saveClosure()}>
+              {editingClosure ? "儲存更新" : "建立事件"}
+            </GlassButton>
+          </>
+        }
+      >
+        <div className="space-y-5">
+          <GlassCard className="border border-amber-100/70 bg-amber-50/70">
+            <div className="text-sm font-semibold text-amber-900">
+              建議用法
+            </div>
+            <div className="mt-2 text-sm leading-6 text-amber-800">
+              政府公告某區停班時，在這裡建立一筆事件並選擇適用範圍。員工不用送假單；薪資會依你設定的不扣薪、不支薪或部分支薪規則自動帶入。
+            </div>
+          </GlassCard>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <GlassInput
+              label="事件名稱"
+              value={closureForm.name}
+              onChange={(event) =>
+                setClosureForm((prev) => ({ ...prev, name: event.target.value }))
+              }
+              placeholder="例如：台北市颱風停班"
+            />
+            <GlassInput
+              label="停班日期"
+              type="date"
+              value={closureForm.closureDate}
+              onChange={(event) =>
+                setClosureForm((prev) => ({
+                  ...prev,
+                  closureDate: event.target.value,
+                }))
+              }
+            />
+            <GlassSelect
+              label="適用範圍"
+              value={closureForm.scopeType}
+              onChange={(event) =>
+                setClosureForm((prev) => ({
+                  ...prev,
+                  scopeType: event.target.value as DisasterClosureScopeType,
+                  scopeIds: [],
+                }))
+              }
+              options={[
+                { value: "ENTITY", label: "全公司" },
+                { value: "DEPARTMENT", label: "指定部門" },
+                { value: "EMPLOYEE", label: "指定員工" },
+                { value: "LOCATION", label: "指定地點" },
+              ]}
+            />
+            <GlassSelect
+              label="薪資政策"
+              value={closureForm.payPolicy}
+              onChange={(event) =>
+                setClosureForm((prev) => ({
+                  ...prev,
+                  payPolicy: event.target.value as DisasterClosurePayPolicy,
+                }))
+              }
+              options={[
+                { value: "NO_DEDUCTION", label: "不扣薪" },
+                { value: "UNPAID", label: "不支薪" },
+                { value: "PARTIAL", label: "部分支薪" },
+              ]}
+            />
+            {closureForm.payPolicy === "PARTIAL" ? (
+              <GlassInput
+                label="支薪比例（%）"
+                type="number"
+                value={closureForm.paidPercentage}
+                onChange={(event) =>
+                  setClosureForm((prev) => ({
+                    ...prev,
+                    paidPercentage: event.target.value,
+                  }))
+                }
+              />
+            ) : null}
+            <GlassInput
+              label="公告區域"
+              value={closureForm.announcementRegion}
+              onChange={(event) =>
+                setClosureForm((prev) => ({
+                  ...prev,
+                  announcementRegion: event.target.value,
+                }))
+              }
+              placeholder="例如：台北市、新北市"
+            />
+          </div>
+
+          {closureForm.scopeType !== "ENTITY" ? (
+            <div className="rounded-3xl border border-white/20 bg-white/15 p-4">
+              <div className="mb-3 text-sm font-semibold text-slate-900">
+                選擇適用對象
+              </div>
+              {closureForm.scopeType === "DEPARTMENT" ? (
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                  {departments.map((department) => (
+                    <label
+                      key={department.id}
+                      className="flex items-center gap-3 rounded-2xl border border-white/20 bg-white/25 px-4 py-3 text-sm text-slate-700"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={closureForm.scopeIds.includes(department.id)}
+                        onChange={() => toggleClosureScopeId(department.id)}
+                      />
+                      {department.name}
+                    </label>
+                  ))}
+                </div>
+              ) : null}
+              {closureForm.scopeType === "EMPLOYEE" ? (
+                <div className="grid max-h-72 grid-cols-1 gap-2 overflow-y-auto md:grid-cols-2">
+                  {employees.map((employee) => (
+                    <label
+                      key={employee.id}
+                      className="flex items-center gap-3 rounded-2xl border border-white/20 bg-white/25 px-4 py-3 text-sm text-slate-700"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={closureForm.scopeIds.includes(employee.id)}
+                        onChange={() => toggleClosureScopeId(employee.id)}
+                      />
+                      <span>
+                        {employee.name}
+                        <span className="ml-2 text-xs text-slate-400">
+                          {employee.employeeNo}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              ) : null}
+              {closureForm.scopeType === "LOCATION" ? (
+                <GlassTextarea
+                  value={closureForm.scopeIds.join("\n")}
+                  onChange={(event) =>
+                    setClosureForm((prev) => ({
+                      ...prev,
+                      scopeIds: event.target.value
+                        .split(/\n|,/)
+                        .map((item) => item.trim())
+                        .filter(Boolean),
+                    }))
+                  }
+                  placeholder={"一行一個地點，例如：\n台北\n新北"}
+                />
+              ) : null}
+            </div>
+          ) : null}
+
+          <GlassTextarea
+            label="備註"
+            value={closureForm.notes}
+            onChange={(event) =>
+              setClosureForm((prev) => ({ ...prev, notes: event.target.value }))
+            }
+            placeholder="例如：依人事行政總處公告，當日停班不停課。"
+          />
+        </div>
+      </GlassModal>
 
       <GlassModal
         isOpen={policyModalOpen}

@@ -1954,6 +1954,40 @@ export class PayrollService {
       });
     }
 
+    for (const closure of attendanceData.disasterClosures || []) {
+      const payPolicy = closure.payPolicy;
+      const paidPercentage =
+        payPolicy === 'PARTIAL' ? Number(closure.paidPercentage ?? 0) : 0;
+      const deductionFactor =
+        payPolicy === 'UNPAID'
+          ? 1
+          : payPolicy === 'PARTIAL'
+            ? Math.max(0, (100 - paidPercentage) / 100)
+            : 0;
+
+      if (deductionFactor <= 0) {
+        continue;
+      }
+
+      const deductionAmount = Math.round(8 * hourlyRate * deductionFactor);
+      if (deductionAmount <= 0) {
+        continue;
+      }
+
+      const policyLabel =
+        payPolicy === 'UNPAID'
+          ? '不支薪'
+          : `部分支薪 ${paidPercentage}%`;
+
+      items.push({
+        type: 'DISASTER_CLOSURE_DEDUCTION',
+        amount: -deductionAmount,
+        remark: `災防停班 ${closure.name} ${new Date(
+          closure.closureDate,
+        ).toISOString().slice(0, 10)} (${policyLabel})`,
+      });
+    }
+
     if (
       employee.country === 'TW' &&
       employee.terminateDate &&

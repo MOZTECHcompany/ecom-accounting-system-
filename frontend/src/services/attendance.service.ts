@@ -11,6 +11,8 @@ import {
   AdminLeaveBalance,
   LeaveStatus,
   AttendancePolicy,
+  DisasterClosureEvent,
+  UpsertDisasterClosureDto,
 } from "../types/attendance";
 
 export const attendanceService = {
@@ -78,6 +80,44 @@ export const attendanceService = {
   deleteAdminPolicy: async (id: string): Promise<{ success: boolean }> => {
     const response = await api.delete<{ success: boolean }>(
       `/attendance/admin/policies/${id}`,
+    );
+    return response.data;
+  },
+
+  getDisasterClosures: async (params?: {
+    year?: number;
+  }): Promise<DisasterClosureEvent[]> => {
+    const response = await api.get<DisasterClosureEvent[]>(
+      "/attendance/admin/disaster-closures",
+      { params },
+    );
+    return response.data;
+  },
+
+  createDisasterClosure: async (
+    data: UpsertDisasterClosureDto,
+  ): Promise<DisasterClosureEvent> => {
+    const response = await api.post<DisasterClosureEvent>(
+      "/attendance/admin/disaster-closures",
+      data,
+    );
+    return response.data;
+  },
+
+  updateDisasterClosure: async (
+    id: string,
+    data: UpsertDisasterClosureDto,
+  ): Promise<DisasterClosureEvent> => {
+    const response = await api.patch<DisasterClosureEvent>(
+      `/attendance/admin/disaster-closures/${id}`,
+      data,
+    );
+    return response.data;
+  },
+
+  deleteDisasterClosure: async (id: string): Promise<{ success: boolean }> => {
+    const response = await api.delete<{ success: boolean }>(
+      `/attendance/admin/disaster-closures/${id}`,
     );
     return response.data;
   },
