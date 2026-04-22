@@ -211,6 +211,14 @@ export class BalanceService {
       referenceDate,
     );
 
+    const accruedHours = this.calculateDefaultAccruedHours(
+      leaveType,
+      employee,
+      leaveType.balanceResetPolicy === 'CALENDAR_YEAR'
+        ? period.end
+        : referenceDate,
+    );
+
     const existing = await this.prisma.leaveBalance.findUnique({
       where: {
         entityId_employeeId_leaveTypeId_year: {
@@ -223,6 +231,21 @@ export class BalanceService {
     });
 
     if (existing) {
+      if (
+        existing.periodStart.getTime() !== period.start.getTime() ||
+        existing.periodEnd.getTime() !== period.end.getTime() ||
+        !existing.accruedHours.equals(accruedHours)
+      ) {
+        return this.prisma.leaveBalance.update({
+          where: { id: existing.id },
+          data: {
+            periodStart: period.start,
+            periodEnd: period.end,
+            accruedHours,
+          },
+        });
+      }
+
       return existing;
     }
 
@@ -241,13 +264,7 @@ export class BalanceService {
         year: period.year,
         periodStart: period.start,
         periodEnd: period.end,
-        accruedHours: this.calculateDefaultAccruedHours(
-          leaveType,
-          employee,
-          leaveType.balanceResetPolicy === 'CALENDAR_YEAR'
-            ? period.end
-            : referenceDate,
-        ),
+        accruedHours,
         carryOverHours,
       },
     });
