@@ -447,6 +447,19 @@ export class ReconciliationService {
       },
       {} as Record<string, number>,
     );
+    const reasonSummary = results.reduce(
+      (acc, result) => {
+        if (result.status === 'cleared') return acc;
+        const reason = result.reason || 'unknown';
+        acc[reason] = (acc[reason] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+    const topReasons = Object.entries(reasonSummary)
+      .map(([reason, count]) => ({ reason, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
 
     return {
       entityId,
@@ -456,6 +469,8 @@ export class ReconciliationService {
       skipped: countByStatus.skipped || 0,
       failed: countByStatus.failed || 0,
       ready: countByStatus.dry_run || 0,
+      reasonSummary,
+      topReasons,
       results,
     };
   }

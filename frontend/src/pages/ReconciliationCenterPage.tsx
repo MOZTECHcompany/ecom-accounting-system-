@@ -77,6 +77,34 @@ const severityColor = (severity: ReconciliationCenterItem['severity']) => {
   return 'green'
 }
 
+const clearBlockerLabels: Record<string, string> = {
+  already_has_reconciliation_journal: '已建立核銷分錄',
+  missing_order: '找不到對應訂單',
+  refund_or_cancelled_order_requires_reversal: '退款 / 取消單需人工反向核銷',
+  missing_invoice: '缺發票',
+  partial_payment_waiting_remaining: '部分收款，等尾款',
+  amount_mismatch: '訂單與收款金額不一致',
+  missing_actual_fee: '缺實際手續費',
+  invalid_amount: '金額異常',
+  net_fee_gross_mismatch: '淨額 / 手續費 / 總額不一致',
+  period_closed: '會計期間已關帳',
+  period_locked: '會計期間已鎖帳',
+  ready_to_clear: '可核銷',
+  unknown: '未知原因',
+}
+
+const describeClearBlockers = (
+  topReasons?: Array<{ reason: string; count: number }>,
+) => {
+  const blockers = (topReasons || []).filter((item) => item.reason !== 'ready_to_clear')
+  if (!blockers.length) return ''
+
+  return blockers
+    .slice(0, 3)
+    .map((item) => `${clearBlockerLabels[item.reason] || item.reason} ${item.count} 筆`)
+    .join('、')
+}
+
 const ReconciliationCenterPage: React.FC = () => {
   const navigate = useNavigate()
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>([
@@ -162,9 +190,19 @@ const ReconciliationCenterPage: React.FC = () => {
         limit: 200,
       })
       if (result.failed > 0) {
-        message.warning(`核銷完成：成功 ${result.cleared} 筆，失敗 ${result.failed} 筆，略過 ${result.skipped} 筆`)
+        const blockers = describeClearBlockers(result.topReasons)
+        message.warning(
+          blockers
+            ? `核銷完成：成功 ${result.cleared} 筆；主要卡在 ${blockers}`
+            : `核銷完成：成功 ${result.cleared} 筆，失敗 ${result.failed} 筆，略過 ${result.skipped} 筆`,
+        )
       } else {
-        message.success(`核銷完成：成功 ${result.cleared} 筆，略過 ${result.skipped} 筆`)
+        const blockers = describeClearBlockers(result.topReasons)
+        if (blockers) {
+          message.info(`目前可自動核銷 ${result.cleared} 筆；其餘主要卡在 ${blockers}`)
+        } else {
+          message.success(`核銷完成：成功 ${result.cleared} 筆，略過 ${result.skipped} 筆`)
+        }
       }
       await fetchData()
     } catch (error: any) {

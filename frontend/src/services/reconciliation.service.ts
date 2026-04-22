@@ -117,6 +117,11 @@ export type ClearReadyPaymentsResponse = {
   skipped: number
   failed: number
   ready: number
+  reasonSummary?: Record<string, number>
+  topReasons?: Array<{
+    reason: string
+    count: number
+  }>
   results: Array<{
     paymentId: string
     orderId: string | null
