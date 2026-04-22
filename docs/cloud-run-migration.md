@@ -40,9 +40,9 @@ BACKEND_ENV_VARS_FILE=backend/.env.cloudrun.yaml \
 目前已補上 GitHub Actions 自動部署：
 
 - `.github/workflows/deploy-cloudrun-frontend.yml`
-  - `main` 分支有 `frontend/**` 變更時，自動部署 `ecom-accounting-frontend`。
+  - `main` 分支有任何 push 時，自動部署 `ecom-accounting-frontend`。
 - `.github/workflows/deploy-cloudrun-backend.yml`
-  - `main` 分支有 `backend/**` 變更時，自動部署 `ecom-accounting-backend`。
+  - `main` 分支有任何 push 時，自動部署 `ecom-accounting-backend`。
 
 GitHub repo 需要設定以下 Secrets：
 
