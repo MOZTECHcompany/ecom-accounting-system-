@@ -792,6 +792,157 @@ const DashboardPage: React.FC = () => {
         </div>
       </motion.div>
 
+
+      {/* ══════════════════════════════════════════════════
+          CEO 即時快覽 — 財務核心指標、趨勢、平台貢獻
+      ══════════════════════════════════════════════════ */}
+
+      {/* 4 大 KPI 卡片 */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {[
+          {
+            label: '本期營收',
+            value: overview?.grossAmount ?? 0,
+            sub: `淨額 ${fmtMoney(overview?.netAmount ?? 0)}`,
+            icon: <DollarOutlined className="text-emerald-500 text-xl" />,
+            bg: 'from-emerald-500/10 to-emerald-100/5',
+            color: 'text-emerald-700',
+          },
+          {
+            label: '銀行現金',
+            value: finance.bankBalance,
+            sub: '即時餘額',
+            icon: <BankOutlined className="text-sky-500 text-xl" />,
+            bg: 'from-sky-500/10 to-sky-100/5',
+            color: 'text-sky-700',
+          },
+          {
+            label: '應收帳款',
+            value: finance.arOutstanding,
+            sub: '未收款',
+            icon: <RiseOutlined className="text-blue-500 text-xl" />,
+            bg: 'from-blue-500/10 to-blue-100/5',
+            color: 'text-blue-700',
+          },
+          {
+            label: '在途收款',
+            value: finance.inTransit,
+            sub: '撥款待入帳',
+            icon: <ClockCircleOutlined className="text-amber-500 text-xl" />,
+            bg: 'from-amber-500/10 to-amber-100/5',
+            color: 'text-amber-700',
+          },
+        ].map((item, idx) => (
+          <motion.div key={idx} whileHover={{ y: -3 }} className={`glass-card bg-gradient-to-br ${item.bg} p-5`}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 rounded-2xl bg-white/60 flex items-center justify-center shadow-sm">
+                {item.icon}
+              </div>
+              <span className="text-xs text-slate-400">{item.sub}</span>
+            </div>
+            <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">{item.label}</div>
+            <div className={`text-2xl font-bold ${item.color}`}>
+              {fmtMoney(item.value)}
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* 營收趨勢圖 + 本週損益 */}
+      <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
+        {/* 30 天營收趨勢 */}
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Revenue Trend</div>
+              <div className="mt-1 text-xl font-semibold text-slate-900">30 天營收走勢</div>
+            </div>
+            <Tag color="blue" className="rounded-full">每日（扣費前）</Tag>
+          </div>
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={revenueTrend} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.25} />
+                  <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="profGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" />
+              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} interval={4} />
+              <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v / 10000).toFixed(0)}萬`} />
+              <RechartsTooltip
+                formatter={(value: number, name: string) => [fmtMoney(value), name === 'revenue' ? '營收' : '毛利']}
+                contentStyle={{ borderRadius: '12px', border: '1px solid rgba(0,0,0,0.08)', fontSize: '12px' }}
+              />
+              <Area type="monotone" dataKey="revenue" stroke="#0ea5e9" strokeWidth={2} fill="url(#revGrad)" name="revenue" />
+              <Area type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} fill="url(#profGrad)" name="profit" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </motion.div>
+
+        {/* 本週損益摘要 */}
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6">
+          <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400 mb-2">Weekly P&L</div>
+          <div className="text-xl font-semibold text-slate-900 mb-5">本週損益快覽</div>
+          <div className="space-y-4">
+            {[
+              { label: '本週營收', value: weeklyPnl.revenue, color: 'text-blue-600' },
+              { label: '本週成本', value: weeklyPnl.cost, color: 'text-rose-500' },
+              { label: '本週毛利', value: weeklyPnl.grossProfit, color: 'text-emerald-600' },
+            ].map((row) => (
+              <div key={row.label} className="flex items-center justify-between py-2 border-b border-slate-100">
+                <span className="text-sm text-slate-500">{row.label}</span>
+                <span className={`font-bold ${row.color}`}>{fmtMoney(row.value)}</span>
+              </div>
+            ))}
+            <div className="pt-2">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-slate-500">毛利率</span>
+                <span className="font-bold text-purple-600">{(weeklyPnl.grossMargin * 100).toFixed(1)}%</span>
+              </div>
+              <Progress percent={Math.round(weeklyPnl.grossMargin * 100)} strokeColor="#7c3aed" size="small" showInfo={false} />
+            </div>
+            <div className="pt-3 rounded-2xl bg-slate-50 px-4 py-3">
+              <div className="text-xs text-slate-400 mb-1">本月累計實賺</div>
+              <div className="text-xl font-bold text-slate-900">{fmtMoney(weeklyPnl.monthlyEarned)}</div>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* 各平台貢獻度 */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Platform Revenue</div>
+            <div className="mt-1 text-xl font-semibold text-slate-900">各平台貢獻度</div>
+          </div>
+          <Tag color="blue" className="rounded-full">本月實收（扣費後）</Tag>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+          {(() => {
+            const total = platformContribs.reduce((s, p) => s + p.net, 0)
+            return platformContribs.sort((a, b) => b.net - a.net).map((p) => (
+              <div key={p.platform} className="rounded-3xl border border-white/30 bg-white/45 px-4 py-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full" style={{ background: p.color }} />
+                    <span className="font-semibold text-slate-800 text-sm">{p.platform}</span>
+                  </div>
+                  <span className="text-xs text-slate-400">{total > 0 ? ((p.net / total) * 100).toFixed(1) : '0.0'}%</span>
+                </div>
+                <div className="text-lg font-bold text-slate-900 mb-2">{fmtMoney(p.net)}</div>
+                <Progress percent={total > 0 ? Math.round((p.net / total) * 100) : 0} strokeColor={p.color} showInfo={false} size="small" trailColor="rgba(0,0,0,0.06)" />
+              </div>
+            ))
+          })()}
+        </div>
+      </motion.div>
+
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.9fr)]">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
           {performanceBuckets.map((bucket, index) => {
@@ -1468,172 +1619,6 @@ const DashboardPage: React.FC = () => {
           { xs: 16, sm: 24 },
         ]}
       >
-      {/* ── 財務即時快覽（4 大卡片）── */}
-      <div className="animate-slide-up" style={{ animationDelay: '420ms' }}>
-        <div className="flex items-center gap-3 mb-4">
-          <Title level={4} className="!mb-0 !text-gray-700">財務即時快覽</Title>
-          <div className="h-px flex-1 bg-gradient-to-r from-gray-200 to-transparent" />
-        </div>
-        <Row gutter={[{ xs: 16, sm: 24 }, { xs: 16, sm: 24 }]}>
-          {[
-            {
-              label: '應收帳款',
-              value: finance.arOutstanding,
-              icon: <RiseOutlined className="text-blue-500 text-xl" />,
-              bg: 'bg-blue-500/10',
-              tag: { text: '未收', color: 'blue' },
-            },
-            {
-              label: '應付帳款',
-              value: finance.apOutstanding,
-              icon: <FallOutlined className="text-red-500 text-xl" />,
-              bg: 'bg-red-500/10',
-              tag: { text: '待付', color: 'red' },
-            },
-            {
-              label: '在途收款',
-              value: finance.inTransit,
-              icon: <ClockCircleOutlined className="text-orange-500 text-xl" />,
-              bg: 'bg-orange-500/10',
-              tag: { text: 'Pending', color: 'orange' },
-            },
-            {
-              label: '銀行現金餘額',
-              value: finance.bankBalance,
-              icon: <BankOutlined className="text-green-500 text-xl" />,
-              bg: 'bg-green-500/10',
-              tag: { text: '即時', color: 'green' },
-            },
-          ].map((item, idx) => (
-            <Col xs={24} sm={12} lg={6} key={idx}>
-              <motion.div whileHover={{ y: -4 }}>
-                <GlassCard>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className={`w-12 h-12 rounded-full ${item.bg} flex items-center justify-center`}>
-                      {item.icon}
-                    </div>
-                    <Tag color={item.tag.color} className="rounded-full border-none px-3 py-1">
-                      {item.tag.text}
-                    </Tag>
-                  </div>
-                  <Statistic
-                    title={<span className="label-text font-medium">{item.label}</span>}
-                    value={item.value}
-                    formatter={(v) => fmtMoney(Number(v))}
-                    valueStyle={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '22px' }}
-                  />
-                </GlassCard>
-              </motion.div>
-            </Col>
-          ))}
-        </Row>
-      </div>
-
-      {/* ── 本週損益快覽 + 各平台貢獻度 ── */}
-      <div className="animate-slide-up" style={{ animationDelay: '460ms' }}>
-        <Row gutter={[{ xs: 16, sm: 24 }, { xs: 16, sm: 24 }]}>
-          {/* 本週損益 */}
-          <Col xs={24} lg={12}>
-            <GlassCard className="h-full">
-              <div className="flex items-center gap-3 mb-6">
-                <Title level={5} className="!mb-0">本週損益快覽</Title>
-                <Tag color="purple" className="rounded-full">本週</Tag>
-              </div>
-              <Row gutter={[16, 24]}>
-                <Col span={12}>
-                  <Text className="text-gray-400 text-xs block mb-1">本週營收</Text>
-                  <div className="text-xl font-bold text-blue-600">{fmtMoney(weeklyPnl.revenue)}</div>
-                </Col>
-                <Col span={12}>
-                  <Text className="text-gray-400 text-xs block mb-1">本週成本</Text>
-                  <div className="text-xl font-bold text-red-500">{fmtMoney(weeklyPnl.cost)}</div>
-                </Col>
-                <Col span={12}>
-                  <Text className="text-gray-400 text-xs block mb-1">本週毛利</Text>
-                  <div className="text-xl font-bold text-green-600">{fmtMoney(weeklyPnl.grossProfit)}</div>
-                </Col>
-                <Col span={12}>
-                  <Text className="text-gray-400 text-xs block mb-1">毛利率</Text>
-                  <div className="text-xl font-bold text-purple-600">
-                    {(weeklyPnl.grossMargin * 100).toFixed(1)}%
-                  </div>
-                </Col>
-              </Row>
-              <div className="mt-6 pt-4 border-t border-white/10">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Text className="text-gray-400 text-xs block mb-1">本月累計實賺</Text>
-                    <div className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
-                      {fmtMoney(weeklyPnl.monthlyEarned)}
-                    </div>
-                  </div>
-                  <Tag color="success" className="rounded-full px-3 py-1 text-sm">
-                    <RiseOutlined /> 較上月 +8.2%
-                  </Tag>
-                </div>
-                <Progress
-                  percent={Math.round((weeklyPnl.monthlyEarned / weeklyPnl.revenue) * 100)}
-                  strokeColor={{ from: '#108ee9', to: '#87d068' }}
-                  className="mt-3"
-                  size="small"
-                />
-              </div>
-            </GlassCard>
-          </Col>
-
-          {/* 各平台貢獻度 */}
-          <Col xs={24} lg={12}>
-            <GlassCard className="h-full">
-              <div className="flex items-center gap-3 mb-6">
-                <Title level={5} className="!mb-0">各平台貢獻度</Title>
-                <Tag color="blue" className="rounded-full">本月實收（扣費後）</Tag>
-              </div>
-              <div className="space-y-5">
-                {(() => {
-                  const total = platformContribs.reduce((s, p) => s + p.net, 0)
-                  return platformContribs
-                    .sort((a, b) => b.net - a.net)
-                    .map((p) => (
-                      <div key={p.platform}>
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="w-3 h-3 rounded-full"
-                              style={{ background: p.color }}
-                            />
-                            <Text className="font-medium">{p.platform}</Text>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <Text className="text-gray-400 text-sm">
-                              {total > 0 ? ((p.net / total) * 100).toFixed(1) : '0.0'}%
-                            </Text>
-                            <Text className="font-semibold font-mono">
-                              {fmtMoney(p.net)}
-                            </Text>
-                          </div>
-                        </div>
-                        <Progress
-                          percent={total > 0 ? Math.round((p.net / total) * 100) : 0}
-                          strokeColor={p.color}
-                          showInfo={false}
-                          size="small"
-                          trailColor="rgba(0,0,0,0.06)"
-                        />
-                      </div>
-                    ))
-                })()}
-                <div className="pt-3 border-t border-white/10 flex justify-between items-center">
-                  <Text className="text-gray-400 text-sm">總計</Text>
-                  <Text className="font-bold text-base">
-                    {fmtMoney(platformContribs.reduce((s, p) => s + p.net, 0))}
-                  </Text>
-                </div>
-              </div>
-            </GlassCard>
-          </Col>
-        </Row>
-      </div>
-
         <Col xs={24} lg={12}>
           <div
             className="h-full animate-slide-up"
