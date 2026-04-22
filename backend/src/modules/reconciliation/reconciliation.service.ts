@@ -925,7 +925,6 @@ export class ReconciliationService {
     return { success: true };
   }
 
-<<<<<<< HEAD
   private buildDateFilter(startDate?: Date, endDate?: Date) {
     if (!startDate && !endDate) {
       return null;
@@ -1198,7 +1197,8 @@ export class ReconciliationService {
       .trim();
 
     return preservedNotes ? `${preservedNotes}\n${autoClearNote}` : autoClearNote;
-=======
+  }
+
   // ── 新增 Summary Methods（2026-04）──────────────────────────
 
   /**
@@ -1324,7 +1324,6 @@ export class ReconciliationService {
       completed: { count: completed.length, amount: completedAmount },
       inTransit: pendingAmount,
     };
->>>>>>> a309c4d4 (feat(ai): Claude 自動更新 — 2026-04-22 16:40:40)
   }
 
   /**

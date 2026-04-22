@@ -401,6 +401,7 @@ export class ReconciliationController {
   ) {
     this.ecpayShopifyPayoutService.assertSchedulerToken(syncToken);
     return this.ecpayShopifyPayoutService.backfillHistory(dto);
+  }
 
   // ── 新增 Summary Endpoints（2026-04）──────────────────────────
 
