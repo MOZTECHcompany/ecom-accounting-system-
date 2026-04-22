@@ -66,6 +66,10 @@ export class UpsertLeaveTypeDto {
   allowCarryOver?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   carryOverLimitHours?: number;

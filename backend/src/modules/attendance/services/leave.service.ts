@@ -538,6 +538,7 @@ export class LeaveService {
             : undefined,
         minNoticeHours: dto.minNoticeHours,
         allowCarryOver: dto.allowCarryOver ?? false,
+        isActive: dto.isActive ?? true,
         carryOverLimitHours: new Prisma.Decimal(dto.carryOverLimitHours || 0),
         metadata: metadata ?? undefined,
       },
@@ -602,6 +603,7 @@ export class LeaveService {
             ? dto.minNoticeHours
             : existing.minNoticeHours,
         allowCarryOver: dto.allowCarryOver ?? existing.allowCarryOver,
+        isActive: dto.isActive ?? existing.isActive,
         carryOverLimitHours:
           dto.carryOverLimitHours !== undefined
             ? new Prisma.Decimal(dto.carryOverLimitHours)

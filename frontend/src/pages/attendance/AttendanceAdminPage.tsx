@@ -55,6 +55,7 @@ const emptyLeaveTypeForm = {
   minNoticeHours: "0",
   requiresDocument: "false",
   allowCarryOver: "false",
+  isActive: "true",
   carryOverLimitHours: "0",
   seniorityTiers: [] as SeniorityTier[],
 };
@@ -687,6 +688,7 @@ const AttendanceAdminPage: React.FC = () => {
           : "0",
       requiresDocument: String(Boolean(leaveType.requiresDocument)),
       allowCarryOver: String(Boolean(leaveType.allowCarryOver)),
+      isActive: String(leaveType.isActive !== false),
       carryOverLimitHours:
         leaveType.carryOverLimitHours !== undefined
           ? String(leaveType.carryOverLimitHours)
@@ -719,6 +721,7 @@ const AttendanceAdminPage: React.FC = () => {
             : undefined,
         requiresDocument: typeForm.requiresDocument === "true",
         allowCarryOver: typeForm.allowCarryOver === "true",
+        isActive: typeForm.isActive === "true",
         carryOverLimitHours:
           typeForm.carryOverLimitHours !== ""
             ? Number(typeForm.carryOverLimitHours)
@@ -742,6 +745,38 @@ const AttendanceAdminPage: React.FC = () => {
     } catch (error) {
       console.error(error);
       message.error("儲存假別規則失敗");
+    }
+  };
+
+  const setLeaveTypeActive = async (leaveType: LeaveType, isActive: boolean) => {
+    const actionLabel = isActive ? "啟用" : "停用";
+    if (
+      !window.confirm(
+        `確認${actionLabel}假別「${leaveType.name}（${leaveType.code}）」？`,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await attendanceService.updateLeaveType(leaveType.id, {
+        code: leaveType.code,
+        name: leaveType.name,
+        balanceResetPolicy: leaveType.balanceResetPolicy || "CALENDAR_YEAR",
+        maxDaysPerYear: leaveType.maxDaysPerYear,
+        paidPercentage: leaveType.paidPercentage ?? 100,
+        minNoticeHours: leaveType.minNoticeHours ?? 0,
+        requiresDocument: leaveType.requiresDocument,
+        allowCarryOver: Boolean(leaveType.allowCarryOver),
+        carryOverLimitHours: leaveType.carryOverLimitHours ?? 0,
+        seniorityTiers: getSeniorityTiers(leaveType),
+        isActive,
+      });
+      message.success(`假別已${actionLabel}`);
+      await loadManagementData();
+    } catch (error: any) {
+      console.error(error);
+      message.error(error?.response?.data?.message || `${actionLabel}假別失敗`);
     }
   };
 
@@ -1150,10 +1185,23 @@ const AttendanceAdminPage: React.FC = () => {
               {leaveTypes.map((leaveType) => (
                 <GlassCard
                   key={leaveType.id}
-                  className="relative overflow-hidden"
+                  className={`relative overflow-hidden ${
+                    leaveType.isActive === false ? "opacity-60" : ""
+                  }`}
                 >
-                  <div className="absolute right-4 top-4 rounded-full bg-white/30 px-3 py-1 text-[11px] font-semibold tracking-[0.2em] text-slate-500">
-                    {leaveType.code}
+                  <div className="absolute right-4 top-4 flex flex-col items-end gap-2">
+                    <span className="rounded-full bg-white/30 px-3 py-1 text-[11px] font-semibold tracking-[0.2em] text-slate-500">
+                      {leaveType.code}
+                    </span>
+                    <span
+                      className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
+                        leaveType.isActive === false
+                          ? "bg-slate-100/80 text-slate-500"
+                          : "bg-emerald-100/80 text-emerald-700"
+                      }`}
+                    >
+                      {leaveType.isActive === false ? "已停用" : "啟用中"}
+                    </span>
                   </div>
                   <div className="pr-20">
                     <div className="text-xl font-semibold text-slate-900">
@@ -1196,7 +1244,7 @@ const AttendanceAdminPage: React.FC = () => {
                       </div>
                     ) : null}
                   </div>
-                  <div className="mt-5 flex justify-end">
+                  <div className="mt-5 flex flex-wrap justify-end gap-2">
                     <GlassButton
                       variant="secondary"
                       className="gap-2 px-4 py-2 text-sm"
@@ -1204,6 +1252,20 @@ const AttendanceAdminPage: React.FC = () => {
                     >
                       <EditOutlined />
                       編輯規則
+                    </GlassButton>
+                    <GlassButton
+                      variant={
+                        leaveType.isActive === false ? "secondary" : "danger"
+                      }
+                      className="gap-2 px-4 py-2 text-sm"
+                      onClick={() =>
+                        void setLeaveTypeActive(
+                          leaveType,
+                          leaveType.isActive === false,
+                        )
+                      }
+                    >
+                      {leaveType.isActive === false ? "重新啟用" : "停用"}
                     </GlassButton>
                   </div>
                 </GlassCard>
@@ -2312,6 +2374,20 @@ const AttendanceAdminPage: React.FC = () => {
             options={[
               { value: "false", label: "不可結轉" },
               { value: "true", label: "可結轉" },
+            ]}
+          />
+          <GlassSelect
+            label="假別狀態"
+            value={typeForm.isActive}
+            onChange={(event) =>
+              setTypeForm((prev) => ({
+                ...prev,
+                isActive: event.target.value,
+              }))
+            }
+            options={[
+              { value: "true", label: "啟用中" },
+              { value: "false", label: "停用" },
             ]}
           />
           <div className="md:col-span-2">
