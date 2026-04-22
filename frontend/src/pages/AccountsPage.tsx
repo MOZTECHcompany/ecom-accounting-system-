@@ -117,7 +117,7 @@ const AccountsPage: React.FC = () => {
   ]
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <Title level={2} className="!text-gray-800 font-light tracking-tight !mb-1">

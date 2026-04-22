@@ -130,7 +130,7 @@ const EmployeeDashboardPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 animate-[fadeInUp_0.4s_ease-out]">
+    <div className="space-y-8 animate-[fadeInUp_0.4s_ease-out]">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-4">
         <div>

@@ -265,7 +265,7 @@ const ReconciliationCenterPage: React.FC = () => {
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45 }}
-      className="space-y-7 p-6"
+      className="space-y-10 p-6"
     >
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
@@ -374,18 +374,19 @@ const ReconciliationCenterPage: React.FC = () => {
         </div>
       </Card>
 
-      <div className="grid gap-5 md:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-4">
         {(Object.keys(bucketMeta) as ReconciliationBucketKey[]).map((key) => (
           <Card
             key={key}
-            className={`cursor-pointer rounded-3xl border-0 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+            bodyStyle={{ padding: '24px 24px 20px' }}
+            className={`cursor-pointer rounded-3xl border-0 shadow-sm transition hover:-translate-y-1 hover:shadow-md ${
               activeBucket === key ? 'ring-2 ring-slate-900' : ''
             }`}
             onClick={() => setActiveBucket(key)}
           >
             <Statistic title={bucketMeta[key].title} value={bucketSummary[key].count} />
-            <div className="mt-3 text-xs text-slate-400">未收 {money(bucketSummary[key].outstandingAmount)}</div>
-            <div className="mt-1 text-xs text-slate-400">手續費 {money(bucketSummary[key].feeTotal)}</div>
+            <div className="mt-4 text-xs text-slate-400">未收 {money(bucketSummary[key].outstandingAmount)}</div>
+            <div className="mt-2 text-xs text-slate-400">手續費 {money(bucketSummary[key].feeTotal)}</div>
           </Card>
         ))}
       </div>

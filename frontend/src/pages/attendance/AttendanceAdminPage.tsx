@@ -839,7 +839,7 @@ const AttendanceAdminPage: React.FC = () => {
         };
 
   return (
-    <div className="space-y-6 animate-[fadeInUp_0.4s_ease-out]">
+    <div className="space-y-8 animate-[fadeInUp_0.4s_ease-out]">
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <GlassCard className="relative overflow-hidden border-white/35 bg-white/40">
           <div className="absolute inset-y-0 right-0 w-56 bg-[radial-gradient(circle_at_center,rgba(96,165,250,0.24),transparent_72%)]" />
@@ -998,7 +998,7 @@ const AttendanceAdminPage: React.FC = () => {
           )}
 
           {activeTab === "attendance" && (
-            <div className="space-y-6">
+            <div className="space-y-8">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
                 <GlassCard>
                   <div className="text-sm text-slate-500">應到人數</div>
@@ -2116,7 +2116,7 @@ const AttendanceAdminPage: React.FC = () => {
         }
       >
         {selectedRequest ? (
-          <div className="space-y-6">
+          <div className="space-y-8">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="rounded-2xl border border-white/20 bg-white/20 p-4">
                 <div className="text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">

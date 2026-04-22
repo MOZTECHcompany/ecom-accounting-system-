@@ -62,7 +62,7 @@ const ProfilePage: React.FC = () => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="space-y-6"
+      className="space-y-8"
     >
       <Title level={2} className="!mb-1 !font-light">
         My Profile

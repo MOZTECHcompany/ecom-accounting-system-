@@ -28,6 +28,11 @@ while true; do
 
     echo "[$TIMESTAMP] 偵測到 ${FILES_CHANGED} 個檔案變更，正在提交..."
 
+    # 清除過期 index.lock（VS Code / Codex 常遺留）
+    if [ -f "$REPO_DIR/.git/index.lock" ]; then
+      rm -f "$REPO_DIR/.git/index.lock" 2>/dev/null && echo "[$TIMESTAMP] 🔓 清除過期 index.lock"
+    fi
+
     git add -A
     git commit -m "feat(ai): Claude 自動更新 — $TIMESTAMP
 

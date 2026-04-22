@@ -188,7 +188,7 @@ const VendorsPage: React.FC = () => {
   ]
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex justify-between items-end">
         <div>
           <Title level={2} className="!mb-1 !font-light">供應商管理</Title>

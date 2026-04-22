@@ -294,7 +294,7 @@ const ReportsPage: React.FC = () => {
   ]
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -1280,7 +1280,7 @@ const ReportsPage: React.FC = () => {
              <Text className="mt-4 text-gray-500">正在分析財務數據...</Text>
            </div>
         ) : aiResult ? (
-          <div className="space-y-6">
+          <div className="space-y-8">
              {aiResult.analysis === 'AI service not configured.' && (
                <div className="bg-orange-50 p-4 rounded text-orange-700">
                  請聯繫管理員配置 GEMINI_API_KEY 以啟用 AI 功能。

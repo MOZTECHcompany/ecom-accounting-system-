@@ -588,7 +588,7 @@ const DashboardPage: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       {/* AI Insights Widget */}
       <AIInsightsWidget />
 

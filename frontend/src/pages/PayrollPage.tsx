@@ -556,7 +556,7 @@ const PayrollPage: React.FC = () => {
     : null
 
   const adminPanel = (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <Row gutter={16}>
         <Col span={8}>
           <Card bordered={false} className="glass-card">
@@ -605,7 +605,7 @@ const PayrollPage: React.FC = () => {
   )
 
   const myPanel = (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {myRunsError ? <Alert type="info" showIcon message="個人薪資單尚未啟用" description={myRunsError} /> : null}
 
       <Row gutter={16}>
@@ -671,7 +671,7 @@ const PayrollPage: React.FC = () => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="space-y-6"
+      className="space-y-8"
     >
       <div className="flex justify-between items-end">
         <div>

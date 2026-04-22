@@ -930,7 +930,7 @@ const AccessControlPage: React.FC = () => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="space-y-6"
+      className="space-y-8"
     >
       <div>
         <Title level={2} className="!mb-1 !font-light">帳號與權限管理</Title>

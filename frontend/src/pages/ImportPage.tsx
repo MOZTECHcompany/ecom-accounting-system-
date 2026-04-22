@@ -157,7 +157,7 @@ const ImportPage: React.FC = () => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="space-y-6"
+      className="space-y-8"
     >
       <div className="flex justify-between items-center">
         <div>
@@ -214,7 +214,7 @@ const ImportPage: React.FC = () => {
         )}
 
         {currentStep === 1 && (
-          <div className="space-y-6">
+          <div className="space-y-8">
             <Alert
               message={`準備匯入 ${previewData.length} 筆資料`}
               description="請檢查下方資料是否正確。若有錯誤，請修改 Excel 檔案後重新上傳。"

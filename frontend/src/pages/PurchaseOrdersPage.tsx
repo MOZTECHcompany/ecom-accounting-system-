@@ -146,7 +146,7 @@ const PurchaseOrdersPage: React.FC = () => {
       >
         <Form form={snForm} layout="vertical">
           {selectedOrder?.items.map(item => {
-            if (!item.product.hasSerialNumbers) return null;
+            if (!item.product?.hasSerialNumbers) return null;
             
             return (
               <div key={item.id} className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">

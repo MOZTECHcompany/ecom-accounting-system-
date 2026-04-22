@@ -1309,7 +1309,7 @@ const EmployeesPage: React.FC = () => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="space-y-6"
+      className="space-y-8"
     >
       <GlassCard className="relative overflow-hidden border-white/35 bg-white/40">
         <div className="absolute inset-y-0 right-0 w-56 bg-[radial-gradient(circle_at_center,rgba(255,197,94,0.28),transparent_72%)]" />

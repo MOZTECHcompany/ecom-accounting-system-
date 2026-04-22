@@ -49,7 +49,7 @@ const FulfillOrderModal: React.FC<FulfillOrderModalProps> = ({ open, onClose, on
       const itemSerialNumbers: Record<string, string[]> = {}
       
       order.items?.forEach((item: any) => {
-        if (item.product.hasSerialNumbers) {
+        if (item.product?.hasSerialNumbers) {
           const sns = values[item.id]
           if (sns) {
              itemSerialNumbers[item.id] = sns
@@ -72,7 +72,7 @@ const FulfillOrderModal: React.FC<FulfillOrderModalProps> = ({ open, onClose, on
     }
   }
 
-  const snItems = order.items?.filter((item: any) => item.product.hasSerialNumbers) || []
+  const snItems = order.items?.filter((item: any) => item.product?.hasSerialNumbers) || []
 
   return (
     <Modal
