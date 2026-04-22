@@ -775,6 +775,41 @@ body.dark .glass-input {
   border: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
+/* Banking drawer: make opening balance feel like a real money field. */
+.banking-balance-input.ant-input-number {
+  min-height: 58px;
+  border: 2px solid rgba(17, 24, 39, 0.88) !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.banking-balance-input .ant-input-number-input-wrap {
+  height: 100%;
+}
+
+.banking-balance-input .ant-input-number-input {
+  height: 56px;
+  padding: 0 22px;
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.banking-balance-input .ant-input-number-prefix {
+  margin-inline-start: 20px;
+  margin-inline-end: 2px;
+  font-size: 22px;
+  font-weight: 650;
+  color: #111827;
+}
+
+.banking-balance-input .ant-input-number-input::placeholder {
+  font-size: 17px;
+  font-weight: 500;
+  color: rgba(100, 116, 139, 0.7);
+}
+
 
 
 /* Fix for Ant Design Select Dropdown Text Color on Hover/Active */

@@ -269,7 +269,14 @@ const AccountsTab = () => {
                 <Input placeholder="例如: 1101" />
               </Form.Item>
               <Form.Item name="openingBalance" label="期初資金 / 目前餘額">
-                <InputNumber min={0} precision={0} className="w-full" prefix="NT$" />
+                <InputNumber
+                  min={0}
+                  precision={0}
+                  controls={false}
+                  className="banking-balance-input w-full"
+                  prefix="NT$"
+                  placeholder="例如：300000"
+                />
               </Form.Item>
               <Form.Item name="allowedUserIds" label="允許檢視人員">
                 <Select
