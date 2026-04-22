@@ -12,6 +12,8 @@ permissions:
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'moztech-main-db' }}
   GCP_REGION: ${{ secrets.GCP_REGION || 'asia-east1' }}
+  GCP_WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER || vars.GCP_WIF_PROVIDER }}
+  GCP_WIF_SERVICE_ACCOUNT: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT || vars.GCP_WIF_SERVICE_ACCOUNT }}
   ARTIFACT_REPOSITORY: ${{ vars.CLOUD_RUN_ARTIFACT_REPOSITORY || 'cloud-run' }}
   FRONTEND_SERVICE: ${{ secrets.CLOUD_RUN_FRONTEND_SERVICE || 'ecom-accounting-frontend' }}
   FRONTEND_API_URL: ${{ vars.FRONTEND_API_URL || secrets.FRONTEND_API_URL || '' }}
@@ -26,11 +28,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate Google Cloud auth config
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${GCP_WIF_PROVIDER}" || -z "${GCP_WIF_SERVICE_ACCOUNT}" ]]; then
+            echo "::error::Missing GCP_WIF_PROVIDER or GCP_WIF_SERVICE_ACCOUNT. Add them to GitHub Actions Secrets or Variables."
+            exit 1
+          fi
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-          service_account: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: ${{ env.GCP_WIF_SERVICE_ACCOUNT }}
           project_id: ${{ env.GCP_PROJECT_ID }}
 
       - name: Set up gcloud
