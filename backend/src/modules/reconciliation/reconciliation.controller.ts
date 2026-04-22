@@ -318,7 +318,6 @@ export class ReconciliationController {
     );
   }
 
-<<<<<<< HEAD
   @Post('payouts/import')
   @Roles('ADMIN')
   @ApiOperation({
@@ -402,7 +401,7 @@ export class ReconciliationController {
   ) {
     this.ecpayShopifyPayoutService.assertSchedulerToken(syncToken);
     return this.ecpayShopifyPayoutService.backfillHistory(dto);
-=======
+
   // ── 新增 Summary Endpoints（2026-04）──────────────────────────
 
   /**
@@ -458,6 +457,5 @@ export class ReconciliationController {
   @ApiResponse({ status: 200, description: 'ECPay 撥款狀態' })
   async getEcpayPayoutStatus(@Query('entityId') entityId: string) {
     return this.reconciliationService.getEcpayPayoutStatus(entityId);
->>>>>>> a309c4d4 (feat(ai): Claude 自動更新 — 2026-04-22 16:40:40)
   }
 }
