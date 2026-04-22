@@ -533,58 +533,6 @@ const DashboardPage: React.FC = () => {
   const arSummary = receivableMonitor?.summary;
   const auditSummary = audit?.summary;
   const auditItems = audit?.items || [];
-  const accountingAutomationSteps = [
-    {
-      title: "訂單成立",
-      status: "自動建立應收",
-      detail: "Shopify、1Shop、Shopline 進來後先統一成 SalesOrder，應收帳款留在 1191。",
-      account: "借 1191；貸 4111 / 2194",
-    },
-    {
-      title: "付款完成",
-      status: "等待撥款",
-      detail: "Payment 紀錄付款方式、金額與通路，尚未看到撥款前不直接當成銀行入帳。",
-      account: "仍留 1191",
-    },
-    {
-      title: "綠界撥款",
-      status: "回填實際費用",
-      detail: "用綠界撥款列匹配訂單/交易，回填金流手續費、平台手續費與實收淨額。",
-      account: "借 1113 / 6131 / 6134；貸 1191",
-    },
-    {
-      title: "發票與核銷",
-      status: "自動完成閉環",
-      detail: "客戶發票接 AR，綠界服務費發票接 AP，異常才丟給會計工作台。",
-      account: "AR / AP / 分錄審核",
-    },
-  ];
-  const feeSourcePolicies = [
-    {
-      platform: "Shopify",
-      status: "可自動抓取較完整",
-      detail: "Shopify transaction / payout 可提供平台交易費；綠界信用卡金流費仍以綠界撥款資料回填為準。",
-      tone: "green" as const,
-    },
-    {
-      platform: "1Shop",
-      status: "需用綠界撥款補實際費用",
-      detail: "1Shop API 目前偏訂單/交易匯出，平台抽成若 API 沒提供，就標記待補，改用綠界撥款、服務費發票或匯出檔核對。",
-      tone: "gold" as const,
-    },
-    {
-      platform: "Shopline",
-      status: "先接訂單，再接付款/撥款來源",
-      detail: "Shopline 訂單與顧客可先進系統；平台費與金流費需等付款/撥款報表或 API 欄位確認後納入自動核銷。",
-      tone: "blue" as const,
-    },
-    {
-      platform: "綠界",
-      status: "金流手續費的最終依據",
-      detail: "實際有沒有撥款、扣多少手續費、淨收多少，以綠界撥款/對帳資料和服務費發票做最後閉環。",
-      tone: "purple" as const,
-    },
-  ];
 
   return (
     <div className="space-y-10">
