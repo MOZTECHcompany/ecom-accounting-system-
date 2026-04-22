@@ -18,7 +18,7 @@ export interface SalesOrder {
   sourceLabel?: string
   sourceBrand?: string
   channelCode?: string
-  items?: any[]
+  items?: SalesOrderItem[]
   channelName?: string
   notes?: string
   paidAmountOriginal?: number
@@ -46,6 +46,20 @@ export interface SalesOrder {
     reconciledFlag?: boolean
   }>
   shipments?: Array<{ id: string; status: string; shipDate?: string }>
+}
+
+export interface SalesOrderItem {
+  id?: string
+  productId?: string
+  productName: string
+  sku?: string
+  category?: string | null
+  quantity: number
+  unitPrice: number
+  discount: number
+  taxAmount: number
+  lineTotal: number
+  currency: string
 }
 
 type SalesOrderApiResponse = {
@@ -78,7 +92,21 @@ type SalesOrderApiResponse = {
     code?: string | null
     name?: string | null
   } | null
-  items?: any[]
+  items?: Array<{
+    id?: string
+    productId?: string
+    qty?: number | string
+    unitPriceOriginal?: number | string
+    unitPriceCurrency?: string | null
+    discountOriginal?: number | string
+    taxAmountOriginal?: number | string
+    product?: {
+      id?: string
+      sku?: string | null
+      name?: string | null
+      category?: string | null
+    } | null
+  }>
   payments?: Array<{
     id: string
     status: string
@@ -175,7 +203,26 @@ const mapSalesOrder = (order: SalesOrderApiResponse): SalesOrder => ({
   paymentStatus: resolvePaymentStatus(order),
   fulfillmentStatus: order.shipments?.[0]?.status || 'pending',
   createdAt: order.orderDate,
-  items: order.items || [],
+  items: (order.items || []).map((item) => {
+    const quantity = Number(item.qty || 0)
+    const unitPrice = Number(item.unitPriceOriginal || 0)
+    const discount = Number(item.discountOriginal || 0)
+    const taxAmount = Number(item.taxAmountOriginal || 0)
+
+    return {
+      id: item.id,
+      productId: item.productId || item.product?.id,
+      productName: item.product?.name?.trim() || item.product?.sku?.trim() || '未命名商品',
+      sku: item.product?.sku?.trim() || undefined,
+      category: item.product?.category || undefined,
+      quantity,
+      unitPrice,
+      discount,
+      taxAmount,
+      lineTotal: Math.max(quantity * unitPrice - discount, 0),
+      currency: item.unitPriceCurrency?.trim() || order.totalGrossCurrency?.trim() || 'TWD',
+    }
+  }),
   channelName: order.channel?.name?.trim() || '',
   notes: order.notes || undefined,
   paidAmountOriginal: Number(order.paidAmountOriginal || 0),

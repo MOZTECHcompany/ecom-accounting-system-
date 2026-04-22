@@ -15,6 +15,7 @@ import {
 } from '@ant-design/icons'
 import FulfillOrderModal from './FulfillOrderModal'
 import { salesService } from '../services/sales.service'
+import type { SalesOrderItem } from '../services/sales.service'
 
 const { Title, Text } = Typography
 
@@ -30,6 +31,21 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
   const [syncingInvoice, setSyncingInvoice] = useState(false)
 
   if (!order) return null
+
+  const orderItems: SalesOrderItem[] =
+    order.items?.length
+      ? order.items
+      : [
+          {
+            productName: '訂單項目尚未同步',
+            quantity: 1,
+            unitPrice: Number(order.totalAmount || 0),
+            discount: 0,
+            taxAmount: 0,
+            lineTotal: Number(order.totalAmount || 0),
+            currency: order.currency || 'TWD',
+          },
+        ]
 
   const handleSyncInvoiceStatus = async () => {
     setSyncingInvoice(true)
@@ -177,16 +193,27 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
             <List
               itemLayout="horizontal"
               dataSource={[
-                { title: 'Order Items', price: Number(order.totalAmount || 0), qty: order.items?.length || 1 },
+                ...orderItems,
               ]}
               renderItem={(item) => (
                 <List.Item className="border-b border-slate-100 last:border-0">
                   <List.Item.Meta
                     avatar={<div className="w-12 h-12 bg-white/60 rounded-lg flex items-center justify-center text-xl">📦</div>}
-                    title={item.title}
-                    description={`Quantity: ${item.qty}`}
+                    title={
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span>{item.productName}</span>
+                        {item.sku ? <Tag className="m-0">{item.sku}</Tag> : null}
+                      </div>
+                    }
+                    description={
+                      <div className="mt-1 text-xs text-slate-500">
+                        數量 {item.quantity.toLocaleString()} · 單價 NT$ {item.unitPrice.toLocaleString()}
+                        {item.discount > 0 ? ` · 折扣 NT$ ${item.discount.toLocaleString()}` : ''}
+                        {item.taxAmount > 0 ? ` · 稅額 NT$ ${item.taxAmount.toLocaleString()}` : ''}
+                      </div>
+                    }
                   />
-                  <div className="font-medium">NT$ {item.price.toLocaleString()}</div>
+                  <div className="font-medium">NT$ {item.lineTotal.toLocaleString()}</div>
                 </List.Item>
               )}
             />

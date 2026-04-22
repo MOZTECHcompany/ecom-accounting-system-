@@ -714,6 +714,7 @@ export class OneShopService implements OnModuleInit {
           hasInvoice: existing.hasInvoice,
         },
       });
+      await this.syncSalesOrderItems(updated.id, entityId, order, currency, fxRate);
       caches?.salesOrdersByExternalId.set(order.externalId, updated);
       return 'updated';
     }
@@ -727,9 +728,72 @@ export class OneShopService implements OnModuleInit {
         ...data,
       },
     });
+    await this.syncSalesOrderItems(created.id, entityId, order, currency, fxRate);
     caches?.salesOrdersByExternalId.set(order.externalId, created);
 
     return 'created';
+  }
+
+  private async syncSalesOrderItems(
+    salesOrderId: string,
+    entityId: string,
+    order: UnifiedOrder,
+    currency: string,
+    fxRate: Decimal,
+  ) {
+    await this.prisma.salesOrderItem.deleteMany({ where: { salesOrderId } });
+
+    for (const [index, item] of (order.items || []).entries()) {
+      const sku = this.normalizeLineItemSku(order.externalId, item.sku, index);
+      const product = await this.prisma.product.upsert({
+        where: { entityId_sku: { entityId, sku } },
+        update: {
+          name: item.productName || sku,
+          salesPrice: item.unitPrice || new Decimal(0),
+          isActive: true,
+        },
+        create: {
+          entityId,
+          sku,
+          name: item.productName || sku,
+          salesPrice: item.unitPrice || new Decimal(0),
+          purchaseCost: new Decimal(0),
+        },
+      });
+
+      const quantity = new Decimal(item.quantity || 1);
+      const unitPrice = item.unitPrice || new Decimal(0);
+      const discount = item.discount || new Decimal(0);
+      const tax = item.tax || new Decimal(0);
+
+      await this.prisma.salesOrderItem.create({
+        data: {
+          salesOrderId,
+          productId: product.id,
+          qty: quantity,
+          unitPriceOriginal: unitPrice,
+          unitPriceCurrency: currency,
+          unitPriceFxRate: fxRate,
+          unitPriceBase: unitPrice.mul(fxRate),
+          discountOriginal: discount,
+          discountCurrency: currency,
+          discountFxRate: fxRate,
+          discountBase: discount.mul(fxRate),
+          taxAmountOriginal: tax,
+          taxAmountCurrency: currency,
+          taxAmountFxRate: fxRate,
+          taxAmountBase: tax.mul(fxRate),
+        },
+      });
+    }
+  }
+
+  private normalizeLineItemSku(orderId: string, sku: string | undefined, index: number) {
+    const normalized = (sku || '').trim();
+    if (normalized && normalized !== 'UNKNOWN') {
+      return normalized.slice(0, 120);
+    }
+    return `1SHOP-${orderId}-${index + 1}`.slice(0, 120);
   }
 
   private async upsertPayment(

@@ -87,7 +87,10 @@ export class BankingService {
       accountNo,
       currency: data.currency || 'TWD',
       isVirtualSupport: Boolean(data.isVirtualSupport),
-      metaJson: this.buildBankVisibilityMeta(data.metaJson, allowedUserIds),
+      metaJson: this.buildBankVisibilityMeta(data.metaJson, allowedUserIds, {
+        accountName: data.accountName,
+        accountAlias: data.accountAlias,
+      }),
       isActive: data.isActive ?? true,
     });
 
@@ -847,19 +850,33 @@ export class BankingService {
     return Array.from(ids);
   }
 
-  private buildBankVisibilityMeta(metaJson: unknown, allowedUserIds: string[]) {
+  private buildBankVisibilityMeta(
+    metaJson: unknown,
+    allowedUserIds: string[],
+    extra?: { accountName?: string; accountAlias?: string },
+  ) {
     const meta = this.asPlainObject(metaJson);
-    return {
+    const next = {
       ...meta,
       bankVisibleUserIds: allowedUserIds,
     };
+    if (typeof extra?.accountName !== 'undefined') {
+      next.accountName = String(extra.accountName || '').trim();
+    }
+    if (typeof extra?.accountAlias !== 'undefined') {
+      next.accountAlias = String(extra.accountAlias || '').trim();
+    }
+    return next;
   }
 
   private serializeBankAccount(account: any, balance: number, user?: any) {
+    const meta = this.asPlainObject(account.metaJson);
     return {
       ...account,
       balance,
       allowedUserIds: this.getAllowedUserIds(account),
+      accountName: meta.accountName || '',
+      accountAlias: meta.accountAlias || '',
       accessScope: this.isSuperAdmin(user) ? 'all' : 'restricted',
     };
   }
