@@ -58,6 +58,16 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
     return candidate
   }
 
+  const resolveItemDisplayName = (productName?: string) => {
+    const normalizedName = (productName || '').trim()
+    if (!normalizedName) return '訂單項目'
+    const brand = resolveItemBrand(normalizedName)
+    if (!brand) return normalizedName
+    const parts = normalizedName.split(/[|｜]/)
+    const remaining = parts.slice(1).join(' | ').trim()
+    return remaining || normalizedName
+  }
+
   const handleSyncInvoiceStatus = async () => {
     setSyncingInvoice(true)
     try {
@@ -79,12 +89,12 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
     <>
       <GlassDrawer
         title={
-          <div className="grid w-full min-w-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
-            <div className="flex min-w-0 flex-wrap items-center gap-2 pr-2">
-              <span className="text-lg font-semibold">訂單詳情</span>
+          <div className="flex w-full min-w-0 flex-col gap-3 pr-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className="text-lg font-semibold leading-none">訂單詳情</span>
               <Tag color="blue" className="max-w-full truncate">{order.id}</Tag>
             </div>
-            <div className="flex min-w-0 max-w-full flex-wrap items-center justify-start gap-2 overflow-hidden pr-2 xl:justify-end">
+            <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
               <Button size="small" icon={<PrinterOutlined />} className="rounded-full whitespace-nowrap">列印</Button>
               <Button size="small" icon={<MailOutlined />} className="rounded-full whitespace-nowrap">寄送發票</Button>
               <Button
@@ -213,19 +223,19 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
                     title={
                       <div className="flex flex-wrap items-center gap-2">
                         {resolveItemBrand(item.productName) ? <Tag color="blue" className="m-0">{resolveItemBrand(item.productName)}</Tag> : null}
-                        <span>{item.productName}</span>
+                        <span>{resolveItemDisplayName(item.productName)}</span>
                         {item.sku ? <Tag className="m-0">{item.sku}</Tag> : null}
                       </div>
                     }
                     description={
                       <div className="mt-1 text-xs text-slate-500">
-                        數量 {item.quantity.toLocaleString()} · 單價 NT$ {item.unitPrice.toLocaleString()}
-                        {item.discount > 0 ? ` · 折扣 NT$ ${item.discount.toLocaleString()}` : ''}
-                        {item.taxAmount > 0 ? ` · 稅額 NT$ ${item.taxAmount.toLocaleString()}` : ''}
+                        數量 {Number(item.quantity || 0).toLocaleString()} · 單價 NT$ {Number(item.unitPrice || 0).toLocaleString()}
+                        {Number(item.discount || 0) > 0 ? ` · 折扣 NT$ ${Number(item.discount || 0).toLocaleString()}` : ''}
+                        {Number(item.taxAmount || 0) > 0 ? ` · 稅額 NT$ ${Number(item.taxAmount || 0).toLocaleString()}` : ''}
                       </div>
                     }
                   />
-                  <div className="font-medium">NT$ {item.lineTotal.toLocaleString()}</div>
+                  <div className="font-medium">NT$ {Number(item.lineTotal || 0).toLocaleString()}</div>
                 </List.Item>
               )}
             />
