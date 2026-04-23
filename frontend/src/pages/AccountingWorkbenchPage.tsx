@@ -373,9 +373,33 @@ const AccountingWorkbenchPage: React.FC = () => {
   const completenessBlockers = dataCompleteness?.blockers || []
   const channelCompleteness = dataCompleteness?.channelBreakdown || []
   const completenessCoverage = dataCompleteness?.coverage
-  const automationCompletion = auditSummary?.auditedOrderCount
-    ? Math.round((auditSummary.reconciledOrderCount / auditSummary.auditedOrderCount) * 100)
+  const auditedOrderCount =
+    Number(auditSummary?.auditedOrderCount || 0) ||
+    Number(dataCompleteness?.totals.orders || 0)
+  const reconciledOrderCount =
+    Number(auditSummary?.reconciledOrderCount || 0) ||
+    Number(dataCompleteness?.gaps.reconciledPayments || 0)
+  const feeIssueCount =
+    Number(auditSummary?.feeIssueCount || 0) ||
+    Number(dataCompleteness?.gaps.feeMissingPayments || 0)
+  const invoiceIssueCount =
+    Number(auditSummary?.invoiceIssueCount || 0) ||
+    Number(dataCompleteness?.gaps.missingInvoiceOrders || 0)
+  const automationCompletion = auditedOrderCount
+    ? Math.round((reconciledOrderCount / auditedOrderCount) * 100)
     : 0
+  const openAnomalyCount =
+    Number(executive?.operations.openAnomalyCount || 0) ||
+    Number(auditSummary?.anomalousOrderCount || 0)
+  const feeBackfillCount =
+    Number(executive?.operations.feeBackfillCount || 0) ||
+    Number(dataCompleteness?.gaps.feeMissingPayments || 0)
+  const missingPayoutJournalCount =
+    Number(executive?.operations.missingPayoutJournalCount || 0) ||
+    Number(arSummary?.missingJournalCount || 0)
+  const overdueReceivableCount =
+    Number(arSummary?.overdueReceivableCount || 0) ||
+    Number(b2bSummary?.overdueCustomerCount || 0)
   const salesDataExists =
     Number(dataCompleteness?.totals.orders || 0) > 0 ||
     Number(auditSummary?.auditedOrderCount || 0) > 0 ||
@@ -864,19 +888,19 @@ const AccountingWorkbenchPage: React.FC = () => {
             <div className="mt-6 grid gap-3 sm:grid-cols-4">
               <div className="rounded-3xl border border-white/10 bg-white/10 px-4 py-4">
                 <div className="text-xs text-white/50">開放異常</div>
-                <div className="mt-2 text-2xl font-semibold">{executive?.operations.openAnomalyCount || 0}</div>
+                <div className="mt-2 text-2xl font-semibold">{openAnomalyCount}</div>
               </div>
               <div className="rounded-3xl border border-white/10 bg-white/10 px-4 py-4">
                 <div className="text-xs text-white/50">待補費率</div>
-                <div className="mt-2 text-2xl font-semibold">{executive?.operations.feeBackfillCount || 0}</div>
+                <div className="mt-2 text-2xl font-semibold">{feeBackfillCount}</div>
               </div>
               <div className="rounded-3xl border border-white/10 bg-white/10 px-4 py-4">
                 <div className="text-xs text-white/50">已對帳未落帳</div>
-                <div className="mt-2 text-2xl font-semibold">{executive?.operations.missingPayoutJournalCount || 0}</div>
+                <div className="mt-2 text-2xl font-semibold">{missingPayoutJournalCount}</div>
               </div>
               <div className="rounded-3xl border border-white/10 bg-white/10 px-4 py-4">
                 <div className="text-xs text-white/50">逾期應收</div>
-                <div className="mt-2 text-2xl font-semibold">{arSummary?.overdueReceivableCount || 0}</div>
+                <div className="mt-2 text-2xl font-semibold">{overdueReceivableCount}</div>
               </div>
             </div>
           </div>
@@ -894,10 +918,10 @@ const AccountingWorkbenchPage: React.FC = () => {
               className="mt-6"
             />
             <div className="mt-5 grid grid-cols-2 gap-3">
-              <Statistic title="已稽核" value={auditSummary?.auditedOrderCount || 0} />
-              <Statistic title="已對帳" value={auditSummary?.reconciledOrderCount || 0} />
-              <Statistic title="手續費異常" value={auditSummary?.feeIssueCount || 0} />
-              <Statistic title="發票異常" value={auditSummary?.invoiceIssueCount || 0} />
+              <Statistic title="已稽核" value={auditedOrderCount} />
+              <Statistic title="已對帳" value={reconciledOrderCount} />
+              <Statistic title="手續費異常" value={feeIssueCount} />
+              <Statistic title="發票異常" value={invoiceIssueCount} />
             </div>
           </div>
         </div>
