@@ -206,6 +206,7 @@ const PROVIDER_ALIASES: Record<
       '商家訂單編號',
       '訂單編號',
       '訂單號碼',
+      '商品名稱',
     ],
     providerPaymentId: [
       'transactionId',
@@ -213,18 +214,47 @@ const PROVIDER_ALIASES: Record<
       'LINE Pay 交易序號',
       'LINE Pay 交易編號',
       '交易序號',
+      '交易號碼',
     ],
     providerTradeNo: [
       'transactionId',
       'Transaction ID',
       'LINE Pay 交易序號',
       'LINE Pay 交易編號',
+      '交易號碼',
     ],
-    grossAmount: ['amount', 'paymentAmount', '交易金額', '付款金額'],
+    grossAmount: [
+      'amount',
+      'paymentAmount',
+      '交易金額',
+      '付款金額',
+      '支付總額',
+      '商品金額',
+    ],
+    feeAmount: ['totalFee', 'paymentFeeTotal', '手續費合計'],
     gatewayFeeAmount: ['fee', 'paymentFee', 'LINE Pay 手續費', '手續費'],
-    netAmount: ['settlementAmount', 'depositAmount', '撥款金額', '實收金額'],
-    payoutDate: ['settlementDate', 'depositDate', '撥款日期', '結算日期'],
-    transactionDate: ['transactionDate', 'paidAt', '付款時間', '交易時間'],
+    processingFeeAmount: ['營業稅', 'tax', 'vat'],
+    netAmount: [
+      'settlementAmount',
+      'depositAmount',
+      '撥款金額',
+      '實收金額',
+      '預計撥款金額',
+    ],
+    payoutDate: [
+      'settlementDate',
+      'depositDate',
+      '撥款日期',
+      '結算日期',
+      '預計撥款日',
+    ],
+    transactionDate: [
+      'transactionDate',
+      'paidAt',
+      '付款時間',
+      '交易時間',
+      '交易日期',
+    ],
     payoutStatus: ['settlementStatus', 'paymentStatus', '結算狀態', '付款狀態'],
   },
 };
@@ -489,6 +519,13 @@ export class ProviderPayoutReconciliationService {
       line.providerPaymentId || line.providerTradeNo || line.externalOrderId,
     );
     const hasAmountContext = Boolean(line.grossAmount || line.netAmount);
+
+    if (
+      line.provider === 'linepay' &&
+      (line.grossAmount?.lessThan(0) || line.netAmount?.lessThan(0))
+    ) {
+      return 'LINE Pay 退款 / 負數請款列需走退款、折讓或反向核銷流程，不可用一般撥款自動核銷。';
+    }
 
     if (!line.feeAmount && !(line.grossAmount && line.netAmount)) {
       return '缺少手續費欄位，且無法由交易金額與撥款金額反推。';

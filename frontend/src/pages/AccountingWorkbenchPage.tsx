@@ -19,6 +19,7 @@ import {
   Tabs,
   Tag,
   Typography,
+  Upload,
   message,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -32,9 +33,11 @@ import {
   PlusOutlined,
   ReloadOutlined,
   SafetyCertificateOutlined,
+  UploadOutlined,
 } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import dayjs, { Dayjs } from 'dayjs'
+import * as XLSX from 'xlsx'
 import { useNavigate } from 'react-router-dom'
 import {
   dashboardService,
@@ -59,6 +62,7 @@ import {
 } from '../services/ar.service'
 import { salesService } from '../services/sales.service'
 import { apService } from '../services/ap.service'
+import { reconciliationService } from '../services/reconciliation.service'
 
 const { Title, Text } = Typography
 const { RangePicker } = DatePicker
@@ -123,6 +127,7 @@ const AccountingWorkbenchPage: React.FC = () => {
   const [syncingInvoiceStatus, setSyncingInvoiceStatus] = useState(false)
   const [feeImportOpen, setFeeImportOpen] = useState(false)
   const [importingFeeInvoices, setImportingFeeInvoices] = useState(false)
+  const [importingLinePayCapture, setImportingLinePayCapture] = useState(false)
   const [executive, setExecutive] = useState<DashboardExecutiveOverview | null>(null)
   const [feed, setFeed] = useState<DashboardReconciliationFeed | null>(null)
   const [audit, setAudit] = useState<OrderReconciliationAudit | null>(null)
@@ -246,6 +251,61 @@ const AccountingWorkbenchPage: React.FC = () => {
       message.error(error?.response?.data?.message || '匯入綠界服務費發票失敗')
     } finally {
       setImportingFeeInvoices(false)
+    }
+  }
+
+  const parseSpreadsheetRows = async (file: File) =>
+    new Promise<Record<string, string | number | boolean | null>[]>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        try {
+          const workbook = XLSX.read(reader.result, { type: 'array', cellDates: false })
+          const sheetName =
+            workbook.SheetNames.find((name) => /settlement|capture|撥款|請款/i.test(name)) ||
+            workbook.SheetNames[0]
+          const worksheet = workbook.Sheets[sheetName]
+          if (!worksheet) {
+            resolve([])
+            return
+          }
+          const rows = XLSX.utils.sheet_to_json<Record<string, string | number | boolean | null>>(worksheet, {
+            defval: '',
+          })
+          resolve(rows)
+        } catch (error) {
+          reject(error)
+        }
+      }
+      reader.onerror = () => reject(reader.error)
+      reader.readAsArrayBuffer(file)
+    })
+
+  const handleImportLinePayCapture = async (file: File) => {
+    setImportingLinePayCapture(true)
+    try {
+      const rows = await parseSpreadsheetRows(file)
+      if (!rows.length) {
+        message.warning('這份 LINE Pay CAPTURE 檔沒有可匯入的資料列')
+        return
+      }
+
+      const result = await reconciliationService.importProviderPayouts({
+        entityId,
+        provider: 'linepay',
+        sourceType: 'statement',
+        fileName: file.name,
+        rows,
+        notes: 'LINE Pay CAPTURE 請款/預計撥款報表',
+      })
+
+      message.success(
+        `LINE Pay CAPTURE 匯入完成：${result.recordCount} 筆，已匹配 ${result.matchedCount} 筆，待確認 ${result.unmatchedCount} 筆，無效 ${result.invalidCount} 筆`,
+      )
+      await fetchWorkbench()
+    } catch (error: any) {
+      message.error(error?.response?.data?.message || '匯入 LINE Pay CAPTURE 失敗')
+    } finally {
+      setImportingLinePayCapture(false)
     }
   }
 
@@ -859,6 +919,21 @@ const AccountingWorkbenchPage: React.FC = () => {
             >
               匯入綠界服務費發票
             </Button>
+            <Upload
+              accept=".xlsx,.xls,.csv"
+              showUploadList={false}
+              beforeUpload={(file) => {
+                void handleImportLinePayCapture(file)
+                return false
+              }}
+            >
+              <Button
+                icon={<UploadOutlined />}
+                loading={importingLinePayCapture}
+              >
+                匯入 LINE Pay CAPTURE
+              </Button>
+            </Upload>
             <Button
               icon={<CheckCircleOutlined />}
               onClick={() => navigate('/ap/payable?tab=ecpay-fees')}

@@ -144,6 +144,8 @@ LINE_PAY_ACCOUNTS_JSON: >-
 - 若 LINE Pay 是獨立撥款，才用 `provider=linepay` 匯入 LINE Pay 結算報表。
 - 後端可用 `GET /api/v1/reconciliation/line-pay/config-status` 檢查設定是否載入。
 - 後端可用 `GET /api/v1/reconciliation/line-pay/payments?transactionId=...` 或 `?orderId=...` 測 LINE Pay Get Payment Details API。
+- LINE Pay `TRANSACTION` 檔只用來確認付款/退款狀態；`CAPTURE` 檔才是請款/預計撥款/手續費/淨額的核銷依據。
+- 會計工作台可匯入 `LINE Pay CAPTURE`，系統會以 `訂單號碼` 對銷售訂單，以 `交易號碼` 對 LINE Pay transaction，並回填 `手續費合計`、`預計撥款日`、`預計撥款金額`。
 
 核心對帳排程可用 Cloud Scheduler 呼叫：
 

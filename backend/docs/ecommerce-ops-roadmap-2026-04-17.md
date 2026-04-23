@@ -394,6 +394,12 @@ B2B 月結下一步：
   - `GET /api/v1/reconciliation/line-pay/config-status`。
   - `GET /api/v1/reconciliation/line-pay/payments?transactionId=...` / `?orderId=...`。
   - `POST /api/v1/reconciliation/payouts/import` 可接受 `provider=linepay`。
+- 2026-04-23 已驗證使用者提供的 `TAP-85030997` 報表：
+  - `TRANSACTION` 檔可確認付款 / 退款 / 付款方式，但不是撥款依據。
+  - `CAPTURE` 檔有 `交易號碼`、`訂單號碼`、`請款日期`、`預計撥款日`、`支付總額`、`手續費`、`營業稅`、`手續費合計`、`預計撥款金額`，可作為 LINE Pay 直連核銷依據。
+  - `CAPTURE` 2026-04-01 ~ 2026-04-23：323 筆，支付總額 `463,693`，手續費合計 `10,711.3083`，預計撥款金額 `452,981.6917`。
+  - 系統已補 LINE Pay CAPTURE 中文欄位映射；會計工作台可匯入 CAPTURE 檔，逐列留下 matched / unmatched / invalid 結果。
+  - 若 LINE Pay CAPTURE 出現負數列（退款 / 反向請款），系統會先標為 invalid 並保留待退款 / 折讓流程，不會用一般撥款邏輯自動沖銷。
 
 ### 2026-04-22 正式資料快照
 

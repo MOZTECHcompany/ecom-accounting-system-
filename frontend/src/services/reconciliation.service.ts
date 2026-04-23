@@ -132,6 +132,16 @@ export type ClearReadyPaymentsResponse = {
   }>
 }
 
+export type ImportProviderPayoutsResponse = {
+  success: boolean
+  batchId: string
+  provider: 'ecpay' | 'hitrust' | 'linepay'
+  recordCount: number
+  matchedCount: number
+  unmatchedCount: number
+  invalidCount: number
+}
+
 export const reconciliationService = {
   getCenter: async (params?: {
     entityId?: string
@@ -206,6 +216,36 @@ export const reconciliationService = {
       },
       {
         timeout: 120000,
+      },
+    )
+    return response.data
+  },
+
+  importProviderPayouts: async (params: {
+    entityId?: string
+    provider: 'ecpay' | 'hitrust' | 'linepay'
+    sourceType?: 'statement' | 'reconciliation'
+    fileName?: string
+    rows: Record<string, string | number | boolean | null>[]
+    mapping?: Record<string, string | string[]>
+    notes?: string
+  }) => {
+    const entityId =
+      params.entityId?.trim() || localStorage.getItem('entityId')?.trim() || DEFAULT_ENTITY_ID
+
+    const response = await api.post<ImportProviderPayoutsResponse>(
+      '/reconciliation/payouts/import',
+      {
+        entityId,
+        provider: params.provider,
+        sourceType: params.sourceType || 'statement',
+        fileName: params.fileName,
+        rows: params.rows,
+        mapping: params.mapping,
+        notes: params.notes,
+      },
+      {
+        timeout: 180000,
       },
     )
     return response.data
