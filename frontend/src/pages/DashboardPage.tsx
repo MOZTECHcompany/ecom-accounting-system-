@@ -512,6 +512,7 @@ const DashboardPage: React.FC = () => {
   if (loading) {
     return <PageSkeleton />;
   }
+
   const performanceBuckets = overview?.buckets || [];
   const total = overview?.total;
   const tasks = executive?.tasks || [];
@@ -524,270 +525,201 @@ const DashboardPage: React.FC = () => {
   const auditSummary = audit?.summary;
   const auditItems = audit?.items || [];
 
+  // ─── 品牌業績歸因（從通路 bucket 近似推算）───────────────
+  const sumBuckets = (arr: typeof performanceBuckets) => ({
+    gross: arr.reduce((s, b) => s + (b.gross || 0), 0),
+    orderCount: arr.reduce((s, b) => s + (b.orderCount || 0), 0),
+    payoutNet: arr.reduce((s, b) => s + (b.payoutNet || 0), 0),
+  });
+  const moztechBuckets = performanceBuckets.filter(b =>
+    /shopify/i.test(b.key || '') || /shopify/i.test(b.label || '')
+  );
+  const bonsonBuckets = performanceBuckets.filter(b =>
+    /shopline/i.test(b.key || '') || /shopline/i.test(b.label || '')
+  );
+  const teamBuckets = performanceBuckets.filter(b =>
+    /1shop|oneshop/i.test(b.key || '') || /1shop/i.test(b.label || '')
+  );
+  const mOZtechData = sumBuckets(moztechBuckets);
+  const bonsonData = sumBuckets(bonsonBuckets);
+  const teamData = sumBuckets(teamBuckets);
+
+  // ─── 紅燈警示計數 ──────────────────────────────────────
+  const criticalInventory = inventoryAlerts.filter(a => a.severity === 'critical').length;
+  const criticalAnomalies = anomalies.filter(a => a.tone === 'critical').length;
+  const overdueAR = arSummary?.overdueReceivableCount || 0;
+  const criticalCount = criticalInventory + criticalAnomalies + overdueAR;
+
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       {/* AI Insights Widget */}
       <AIInsightsWidget />
 
-      <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+      {/* ── 頁面標題 + 篩選控制 ── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <Title
-              level={2}
-              className="!text-gray-800 font-light tracking-tight !mb-0"
-            >
-              Dashboard
+            <Title level={2} className="!text-gray-800 font-light tracking-tight !mb-0">
+              CEO 儀表板
             </Title>
             <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse-green"></div>
-              <span className="text-xs font-medium text-green-600 uppercase tracking-wider">
-                Live Updates
-              </span>
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse-green" />
+              <span className="text-xs font-medium text-green-600 uppercase tracking-wider">即時資料</span>
             </div>
           </div>
           <Text className="text-gray-500">
-            歡迎回來，管理員。這是您今天的財務健康概況。
+            Moztech · Bonson · Moritek — 所有品牌、通路、財務一覽
           </Text>
         </div>
         <div className="flex flex-col sm:items-end gap-3 w-full sm:w-auto">
           <div className="flex flex-wrap justify-end gap-2 items-center">
-            <Radio.Group
-              value={rangeMode}
-              onChange={(e) => {
-                const nextMode = e.target.value as RangeMode;
-                setRangeMode(nextMode);
-                if (
-                  nextMode === "custom" &&
-                  (!customRange?.[0] || !customRange?.[1])
-                ) {
-                  message.info("請選擇自訂日期區間");
-                }
-              }}
-              className="shadow-sm"
-            >
+            <Radio.Group value={rangeMode} onChange={(e) => {
+              const nextMode = e.target.value as RangeMode;
+              setRangeMode(nextMode);
+              if (nextMode === "custom" && (!customRange?.[0] || !customRange?.[1])) {
+                message.info("請選擇自訂日期區間");
+              }
+            }}>
               <Radio.Button value="today">今天</Radio.Button>
               <Radio.Button value="yesterday">昨天</Radio.Button>
-              <Radio.Button value="last7d">最近 7 天</Radio.Button>
-              <Radio.Button value="all">全部期間</Radio.Button>
+              <Radio.Button value="last7d">近 7 天</Radio.Button>
+              <Radio.Button value="all">全部</Radio.Button>
               <Radio.Button value="custom">自訂</Radio.Button>
             </Radio.Group>
-
-            <Button
-              type="primary"
-              icon={<SyncOutlined spin={syncing} />}
-              loading={syncing}
-              onClick={handleManualSync}
-              className="bg-black hover:bg-gray-800 border-none shadow-sm"
-            >
+            <Button type="primary" icon={<SyncOutlined spin={syncing} />} loading={syncing}
+              onClick={handleManualSync} className="bg-black hover:bg-gray-800 border-none shadow-sm">
               {syncing ? "同步中..." : "即時同步"}
             </Button>
           </div>
-
           {rangeMode === "custom" && (
-            <motion.div
-              initial={{ opacity: 0, y: -5 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="w-full sm:w-auto"
-            >
-              <RangePicker
-                value={customRange}
-                onChange={handleCustomRangeChange}
-                format="YYYY/MM/DD"
-                allowClear
-                className="w-full shadow-sm"
-                placeholder={["開始日期", "結束日期"]}
-              />
+            <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}>
+              <RangePicker value={customRange} onChange={handleCustomRangeChange}
+                format="YYYY/MM/DD" allowClear className="shadow-sm"
+                placeholder={["開始日期", "結束日期"]} />
             </motion.div>
           )}
-
-          <div className="flex items-center gap-2 text-xs text-gray-400">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
-            System Status: Operational
-          </div>
         </div>
       </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.95fr)]"
-      >
-        <div className="glass-card overflow-hidden p-0">
-          <div className="bg-[linear-gradient(135deg,rgba(15,23,42,0.96),rgba(30,41,59,0.82),rgba(56,189,248,0.18))] px-7 py-7 text-white">
-            <div className="text-xs font-semibold uppercase tracking-[0.28em] text-white/55">
-              CEO Overview
-            </div>
-            <div className="mt-3 text-5xl font-semibold tracking-tight sm:text-6xl xl:text-7xl">
-              ${total?.gross.toFixed(2) || "0.00"}
-            </div>
-            <div className="mt-2 text-sm text-white/72">
-              這是目前選定區間內的總業績，下面同步看已入帳、支出與關鍵待辦。
-            </div>
-
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-3xl border border-white/10 bg-white/8 px-4 py-4">
-                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-white/55">
-                  <DollarOutlined />
-                  已入帳
-                </div>
-                <div className="mt-3 text-2xl font-semibold">
-                  ${total?.payoutNet.toFixed(2) || "0.00"}
-                </div>
-              </div>
-              <div className="rounded-3xl border border-white/10 bg-white/8 px-4 py-4">
-                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-white/55">
-                  <BankOutlined />
-                  經費支出
-                </div>
-                <div className="mt-3 text-2xl font-semibold">
-                  ${executive?.expenses.actualSpend.toFixed(2) || "0.00"}
-                </div>
-              </div>
-              <div className="rounded-3xl border border-white/10 bg-white/8 px-4 py-4">
-                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-white/55">
-                  <ShoppingOutlined />
-                  關鍵待辦
-                </div>
-                <div className="mt-3 text-2xl font-semibold">
-                  {executive?.operations.openAnomalyCount || 0}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-card p-6">
-          <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-            CEO Snapshot
-          </div>
-          <div className="mt-2 text-xl font-semibold text-slate-900">
-            業績、花費與營運風險
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
-              <div className="text-xs text-slate-400">待撥款 / 待對帳</div>
-              <div className="mt-2 text-2xl font-semibold text-amber-600">
-                {executive?.operations.pendingPayoutCount || 0}
-              </div>
-            </div>
-            <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
-              <div className="text-xs text-slate-400">待補實際費率</div>
-              <div className="mt-2 text-2xl font-semibold text-slate-900">
-                {executive?.operations.feeBackfillCount || 0}
-              </div>
-            </div>
-            <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
-              <div className="text-xs text-slate-400">已對帳未落帳</div>
-              <div className="mt-2 text-2xl font-semibold text-sky-600">
-                {executive?.operations.missingPayoutJournalCount || 0}
-              </div>
-            </div>
-            <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
-              <div className="text-xs text-slate-400">綠界服務費發票</div>
-              <div className="mt-2 text-2xl font-semibold text-violet-600">
-                {executive?.operations.ecpayServiceFeeInvoiceCount || 0}
-              </div>
-              <div className="mt-1 text-[11px] text-slate-400">
-                待核對 {executive?.operations.ecpayServiceFeeInvoicePendingCount || 0}
-              </div>
-            </div>
-            <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
-              <div className="text-xs text-slate-400">庫存警示</div>
-              <div className="mt-2 text-2xl font-semibold text-rose-600">
-                {executive?.operations.inventoryAlertCount || 0}
-              </div>
-            </div>
-            <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
-              <div className="text-xs text-slate-400">應收未收</div>
-              <div className="mt-2 text-2xl font-semibold text-red-600">
-                {arSummary?.outstandingOrderCount || 0}
-              </div>
-              <div className="mt-1 text-[11px] text-slate-400">
-                NT$ {(arSummary?.outstandingAmount || 0).toFixed(0)}
-              </div>
-            </div>
-          </div>
-          <div className="mt-4 rounded-3xl border border-white/30 bg-white/45 px-4 py-4 text-sm text-slate-600">
-            本期經費支出
-            <span className="ml-2 font-semibold text-slate-900">
-              ${executive?.expenses.actualSpend.toFixed(2) || "0.00"}
+      {/* ── 🚨 紅燈警示橫幅 ── */}
+      {criticalCount > 0 && (
+        <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}
+          className="rounded-2xl border border-red-200 bg-red-50/80 px-5 py-4 flex items-center gap-4">
+          <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse shrink-0" />
+          <div className="flex-1">
+            <span className="font-semibold text-red-700">需要你立刻處理：</span>
+            <span className="ml-2 text-sm text-red-600">
+              {criticalInventory > 0 && `${criticalInventory} 個商品斷貨　`}
+              {overdueAR > 0 && `${overdueAR} 筆應收逾期　`}
+              {criticalAnomalies > 0 && `${criticalAnomalies} 個財務異常`}
             </span>
-            ，綠界服務費發票差額
-            <span className="ml-2 font-semibold text-slate-900">
-              ${Math.abs(executive?.operations.ecpayServiceFeeInvoiceGapAmount || 0).toFixed(2)}
-            </span>
-            ，待開立發票訂單
-            <span className="ml-2 font-semibold text-slate-900">
-              {executive?.operations.uninvoicedOrdersCount || 0}
-            </span>
-            筆，逾期應收
-            <span className="ml-2 font-semibold text-slate-900">
-              {arSummary?.overdueReceivableCount || 0}
-            </span>
-            筆。
           </div>
-        </div>
-      </motion.div>
+          <Tag color="red" className="shrink-0">共 {criticalCount} 項</Tag>
+        </motion.div>
+      )}
 
-
-      {/* ══════════════════════════════════════════════════
-          CEO 即時快覽 — 財務核心指標、趨勢、平台貢獻
-      ══════════════════════════════════════════════════ */}
-
-      {/* 4 大 KPI 卡片 */}
+      {/* ── 📊 Section 1：今日核心指標 ── */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {[
           {
-            label: '本期營收',
-            value: overview?.grossAmount ?? 0,
-            sub: `淨額 ${fmtMoney(overview?.netAmount ?? 0)}`,
+            label: '本期總業績', value: total?.gross ?? 0,
+            sub: `${total?.orderCount ?? 0} 筆訂單`,
             icon: <DollarOutlined className="text-emerald-500 text-xl" />,
-            bg: 'from-emerald-500/10 to-emerald-100/5',
-            color: 'text-emerald-700',
+            bg: 'from-emerald-500/10 to-emerald-100/5', color: 'text-emerald-700',
+            badge: total?.gross ? null : '無資料',
           },
           {
-            label: '銀行現金',
-            value: finance.bankBalance,
-            sub: '即時餘額',
+            label: '銀行現金水位', value: finance.bankBalance,
+            sub: '帳戶即時餘額',
             icon: <BankOutlined className="text-sky-500 text-xl" />,
-            bg: 'from-sky-500/10 to-sky-100/5',
-            color: 'text-sky-700',
+            bg: 'from-sky-500/10 to-sky-100/5', color: 'text-sky-700',
+            badge: null,
           },
           {
-            label: '應收帳款',
-            value: finance.arOutstanding,
-            sub: '未收款',
-            icon: <RiseOutlined className="text-blue-500 text-xl" />,
-            bg: 'from-blue-500/10 to-blue-100/5',
-            color: 'text-blue-700',
+            label: '逾期應收帳款', value: arSummary?.outstandingAmount ?? finance.arOutstanding,
+            sub: `${overdueAR} 筆逾期`,
+            icon: <FallOutlined className="text-rose-500 text-xl" />,
+            bg: overdueAR > 0 ? 'from-rose-500/15 to-rose-100/5' : 'from-blue-500/10 to-blue-100/5',
+            color: overdueAR > 0 ? 'text-rose-700' : 'text-blue-700',
+            badge: overdueAR > 0 ? '需追蹤' : null,
           },
           {
-            label: '在途收款',
-            value: finance.inTransit,
+            label: '在途收款', value: finance.inTransit,
             sub: '撥款待入帳',
             icon: <ClockCircleOutlined className="text-amber-500 text-xl" />,
-            bg: 'from-amber-500/10 to-amber-100/5',
-            color: 'text-amber-700',
+            bg: 'from-amber-500/10 to-amber-100/5', color: 'text-amber-700',
+            badge: null,
           },
         ].map((item, idx) => (
-          <motion.div key={idx} whileHover={{ y: -3 }} className={`glass-card bg-gradient-to-br ${item.bg} p-5`}>
+          <motion.div key={idx} whileHover={{ y: -3 }}
+            className={`glass-card bg-gradient-to-br ${item.bg} p-5`}>
             <div className="flex items-center justify-between mb-3">
               <div className="w-10 h-10 rounded-2xl bg-white/60 flex items-center justify-center shadow-sm">
                 {item.icon}
               </div>
-              <span className="text-xs text-slate-400">{item.sub}</span>
+              <div className="flex items-center gap-1">
+                {item.badge && <Tag color="red" className="!text-[10px]">{item.badge}</Tag>}
+                <span className="text-xs text-slate-400">{item.sub}</span>
+              </div>
             </div>
             <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">{item.label}</div>
-            <div className={`text-2xl font-bold ${item.color}`}>
-              {fmtMoney(item.value)}
-            </div>
+            <div className={`text-2xl font-bold ${item.color}`}>{fmtMoney(item.value)}</div>
           </motion.div>
         ))}
       </div>
 
-      {/* 營收趨勢圖 + 本週損益 */}
-      <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
-        {/* 30 天營收趨勢 */}
+      {/* ── 🏷️ Section 2：品牌業績 ── */}
+      <div>
+        <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400 mb-3">Brand Performance</div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {[
+            {
+              brand: 'Moztech 墨子科技', tag: '3C 手機配件', tagColor: '#0ea5e9',
+              gross: mOZtechData.gross, orders: mOZtechData.orderCount, net: mOZtechData.payoutNet,
+              channels: 'Shopify 官網', icon: '📱',
+              gradient: 'from-sky-600 to-blue-700',
+            },
+            {
+              brand: 'Bonson 邦生', tag: '居家 / 清潔 / 戶外', tagColor: '#10b981',
+              gross: bonsonData.gross, orders: bonsonData.orderCount, net: bonsonData.payoutNet,
+              channels: 'Shopline 官網', icon: '🏠',
+              gradient: 'from-emerald-600 to-teal-700',
+            },
+            {
+              brand: 'KOL 團購 (1Shop)', tag: 'Moztech + Bonson', tagColor: '#f59e0b',
+              gross: teamData.gross, orders: teamData.orderCount, net: teamData.payoutNet,
+              channels: '網紅 / 團購通路', icon: '🎯',
+              gradient: 'from-amber-500 to-orange-600',
+            },
+          ].map((b) => (
+            <motion.div key={b.brand} whileHover={{ y: -3 }}
+              className="glass-card overflow-hidden p-0">
+              <div className={`bg-gradient-to-r ${b.gradient} px-5 py-4 text-white`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-lg font-semibold">{b.icon} {b.brand}</div>
+                    <div className="text-xs text-white/70 mt-0.5">{b.tag} · {b.channels}</div>
+                  </div>
+                  <div className="text-2xl font-bold">{fmtMoney(b.gross)}</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 p-4">
+                <div className="rounded-2xl bg-slate-50 px-3 py-3">
+                  <div className="text-xs text-slate-400">訂單數</div>
+                  <div className="mt-1 text-xl font-bold text-slate-800">{b.orders}</div>
+                </div>
+                <div className="rounded-2xl bg-slate-50 px-3 py-3">
+                  <div className="text-xs text-slate-400">已入帳淨額</div>
+                  <div className="mt-1 text-xl font-bold text-emerald-700">{fmtMoney(b.net)}</div>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── 📈 Section 3：30 天走勢 + 本週損益 ── */}
+      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6">
           <div className="flex items-center justify-between mb-5">
             <div>
@@ -796,7 +728,7 @@ const DashboardPage: React.FC = () => {
             </div>
             <Tag color="blue" className="rounded-full">每日（扣費前）</Tag>
           </div>
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={revenueTrend} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
@@ -810,22 +742,21 @@ const DashboardPage: React.FC = () => {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" />
               <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} interval={4} />
-              <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v / 10000).toFixed(0)}萬`} />
+              <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false}
+                tickFormatter={(v) => `${(v / 10000).toFixed(0)}萬`} />
               <RechartsTooltip
                 formatter={(value: number, name: string) => [fmtMoney(value), name === 'revenue' ? '營收' : '毛利']}
-                contentStyle={{ borderRadius: '12px', border: '1px solid rgba(0,0,0,0.08)', fontSize: '12px' }}
-              />
+                contentStyle={{ borderRadius: '12px', border: '1px solid rgba(0,0,0,0.08)', fontSize: '12px' }} />
               <Area type="monotone" dataKey="revenue" stroke="#0ea5e9" strokeWidth={2} fill="url(#revGrad)" name="revenue" />
               <Area type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} fill="url(#profGrad)" name="profit" />
             </AreaChart>
           </ResponsiveContainer>
         </motion.div>
 
-        {/* 本週損益摘要 */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6">
-          <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400 mb-2">Weekly P&L</div>
-          <div className="text-xl font-semibold text-slate-900 mb-5">本週損益快覽</div>
-          <div className="space-y-4">
+          <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400 mb-1">Weekly P&L</div>
+          <div className="text-xl font-semibold text-slate-900 mb-4">本週損益</div>
+          <div className="space-y-3">
             {[
               { label: '本週營收', value: weeklyPnl.revenue, color: 'text-blue-600' },
               { label: '本週成本', value: weeklyPnl.cost, color: 'text-rose-500' },
@@ -836,14 +767,14 @@ const DashboardPage: React.FC = () => {
                 <span className={`font-bold ${row.color}`}>{fmtMoney(row.value)}</span>
               </div>
             ))}
-            <div className="pt-2">
-              <div className="flex items-center justify-between mb-2">
+            <div className="pt-1">
+              <div className="flex items-center justify-between mb-1">
                 <span className="text-sm text-slate-500">毛利率</span>
                 <span className="font-bold text-purple-600">{(weeklyPnl.grossMargin * 100).toFixed(1)}%</span>
               </div>
               <Progress percent={Math.round(weeklyPnl.grossMargin * 100)} strokeColor="#7c3aed" size="small" showInfo={false} />
             </div>
-            <div className="pt-3 rounded-2xl bg-slate-50 px-4 py-3">
+            <div className="rounded-2xl bg-slate-50 px-4 py-3 mt-2">
               <div className="text-xs text-slate-400 mb-1">本月累計實賺</div>
               <div className="text-xl font-bold text-slate-900">{fmtMoney(weeklyPnl.monthlyEarned)}</div>
             </div>
@@ -851,18 +782,18 @@ const DashboardPage: React.FC = () => {
         </motion.div>
       </div>
 
-      {/* 各平台貢獻度 */}
+      {/* ── 🛒 Section 4：通路貢獻 ── */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6">
         <div className="flex items-center justify-between mb-5">
           <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Platform Revenue</div>
-            <div className="mt-1 text-xl font-semibold text-slate-900">各平台貢獻度</div>
+            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Channel Revenue</div>
+            <div className="mt-1 text-xl font-semibold text-slate-900">各通路貢獻</div>
           </div>
           <Tag color="blue" className="rounded-full">本月實收（扣費後）</Tag>
         </div>
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           {(() => {
-            const total = platformContribs.reduce((s, p) => s + p.net, 0)
+            const channelTotal = platformContribs.reduce((s, p) => s + p.net, 0);
             return platformContribs.sort((a, b) => b.net - a.net).map((p) => (
               <div key={p.platform} className="rounded-3xl border border-white/30 bg-white/45 px-4 py-4">
                 <div className="flex items-center justify-between mb-3">
@@ -870,190 +801,180 @@ const DashboardPage: React.FC = () => {
                     <div className="w-3 h-3 rounded-full" style={{ background: p.color }} />
                     <span className="font-semibold text-slate-800 text-sm">{p.platform}</span>
                   </div>
-                  <span className="text-xs text-slate-400">{total > 0 ? ((p.net / total) * 100).toFixed(1) : '0.0'}%</span>
+                  <span className="text-xs text-slate-400">
+                    {channelTotal > 0 ? ((p.net / channelTotal) * 100).toFixed(1) : '0.0'}%
+                  </span>
                 </div>
                 <div className="text-lg font-bold text-slate-900 mb-2">{fmtMoney(p.net)}</div>
-                <Progress percent={total > 0 ? Math.round((p.net / total) * 100) : 0} strokeColor={p.color} showInfo={false} size="small" trailColor="rgba(0,0,0,0.06)" />
+                <Progress percent={channelTotal > 0 ? Math.round((p.net / channelTotal) * 100) : 0}
+                  strokeColor={p.color} showInfo={false} size="small" trailColor="rgba(0,0,0,0.06)" />
               </div>
-            ))
+            ));
           })()}
         </div>
       </motion.div>
 
+      {/* ── 📣 Section 5：廣告投放 ROI ── */}
+      <div>
+        <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400 mb-3">Marketing ROI</div>
+        <div className="grid gap-4 md:grid-cols-2">
+          {[
+            { name: 'Facebook Ads', icon: '📘', color: '#1877f2', colorCls: 'from-blue-500/10 to-blue-100/5' },
+            { name: 'Google Ads', icon: '🔍', color: '#ea4335', colorCls: 'from-red-500/10 to-red-100/5' },
+          ].map((ad) => (
+            <div key={ad.name} className={`glass-card bg-gradient-to-br ${ad.colorCls} p-5`}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="text-2xl">{ad.icon}</div>
+                  <div>
+                    <div className="font-semibold text-slate-800">{ad.name}</div>
+                    <div className="text-xs text-slate-400 mt-0.5">廣告投放效益</div>
+                  </div>
+                </div>
+                <Tag color="default" className="rounded-full text-xs">尚未串接</Tag>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: '今日花費', value: '—' },
+                  { label: 'ROAS', value: '—' },
+                  { label: '新客數', value: '—' },
+                ].map((m) => (
+                  <div key={m.label} className="rounded-2xl bg-white/50 px-3 py-3 text-center">
+                    <div className="text-xs text-slate-400">{m.label}</div>
+                    <div className="mt-1 text-lg font-bold text-slate-400">{m.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 text-xs text-slate-400 text-center">
+                連接 Facebook Business / Google Ads API 後自動顯示
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── ⚠️ Section 6：庫存警示 ── */}
+      {inventoryAlerts.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Inventory Alert</div>
+              <div className="mt-1 text-xl font-semibold text-slate-900">
+                庫存警示
+                {criticalInventory > 0 && (
+                  <Tag color="red" className="ml-3 rounded-full">{criticalInventory} 項斷貨</Tag>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+            {inventoryAlerts.map((item) => (
+              <div key={`${item.sku}-${item.name}`}
+                className={`flex items-center justify-between rounded-2xl px-4 py-3 ${
+                  item.severity === 'critical' ? 'bg-red-50 border border-red-200' : 'bg-amber-50 border border-amber-200'
+                }`}>
+                <div>
+                  <div className="font-medium text-slate-900">{item.name}</div>
+                  <div className="text-xs text-slate-400">SKU {item.sku} · 現有 {item.qtyAvailable}</div>
+                </div>
+                <Tag color={item.severity === 'critical' ? 'red' : 'gold'}>
+                  {item.severity === 'critical' ? '🔴 斷貨' : '⚠️ 低庫存'}
+                </Tag>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* ── 💰 Section 7：財務 & 對帳概況 ── */}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.9fr)]">
+        {/* 績效 Bucket */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
           {performanceBuckets.map((bucket, index) => {
             const status = getBucketStatus(bucket);
             const accent = getBucketAccent(index);
-
             return (
-              <motion.div
-                key={bucket.key}
-                whileHover={{ y: -4 }}
-                className="glass-card relative overflow-hidden p-6 transition-all duration-300"
-              >
-                <div
-                  className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${accent.split(" ")[0]} ${accent.split(" ")[1]}`}
-                />
+              <motion.div key={bucket.key} whileHover={{ y: -4 }}
+                className="glass-card relative overflow-hidden p-6">
+                <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${accent.split(' ')[0]} ${accent.split(' ')[1]}`} />
                 <div className="mb-4 flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-sm font-medium text-slate-500">
-                      {bucket.label}
-                    </div>
+                    <div className="text-sm font-medium text-slate-500">{bucket.label}</div>
                     {"account" in bucket && bucket.account ? (
-                      <div className="mt-1 text-xs text-slate-400">
-                        帳號：{bucket.account}
-                      </div>
+                      <div className="mt-1 text-xs text-slate-400">帳號：{bucket.account}</div>
                     ) : null}
                   </div>
-                  <Tag color={status.color} className="rounded-full px-3 py-1">
-                    {status.label}
-                  </Tag>
+                  <Tag color={status.color} className="rounded-full px-3">{status.label}</Tag>
                 </div>
-
-                <Statistic
+                <Statistic value={bucket.gross} precision={2} prefix="$"
                   title={<span className="label-text font-medium">業績總額</span>}
-                  value={bucket.gross}
-                  precision={2}
-                  prefix="$"
-                  valueStyle={{
-                    color: "var(--text-primary)",
-                    fontWeight: 700,
-                    fontSize: "28px",
-                  }}
-                />
-
-                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  <div className="rounded-2xl bg-white/40 px-4 py-3">
+                  valueStyle={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '24px' }} />
+                <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+                  <div className="rounded-2xl bg-white/40 px-3 py-2">
                     <div className="text-xs text-slate-400">訂單數</div>
-                    <div className="mt-1 font-semibold text-slate-800">
-                      {bucket.orderCount}
-                    </div>
+                    <div className="mt-1 font-semibold text-slate-800">{bucket.orderCount}</div>
                   </div>
-                  <div className="rounded-2xl bg-white/40 px-4 py-3">
-                    <div className="text-xs text-slate-400">已入帳 / 收款</div>
-                    <div className="mt-1 font-semibold text-slate-800">
-                      {bucket.payoutNet.toFixed(2)}
-                    </div>
+                  <div className="rounded-2xl bg-white/40 px-3 py-2">
+                    <div className="text-xs text-slate-400">已入帳</div>
+                    <div className="mt-1 font-semibold text-slate-800">{bucket.payoutNet.toFixed(2)}</div>
                   </div>
-                  <div className="rounded-2xl bg-white/40 px-4 py-3">
+                  <div className="rounded-2xl bg-white/40 px-3 py-2">
                     <div className="text-xs text-slate-400">手續費</div>
-                    <div className="mt-1 font-semibold text-slate-800">
-                      {bucket.feeTotal.toFixed(2)}
-                    </div>
+                    <div className="mt-1 font-semibold text-slate-800">{bucket.feeTotal.toFixed(2)}</div>
                   </div>
-                  <div className="rounded-2xl bg-white/40 px-4 py-3">
-                    <div className="text-xs text-slate-400">待撥 / 待對帳</div>
-                    <div className="mt-1 font-semibold text-slate-800">
-                      {bucket.pendingPayoutCount}
-                    </div>
+                  <div className="rounded-2xl bg-white/40 px-3 py-2">
+                    <div className="text-xs text-slate-400">待撥款</div>
+                    <div className="mt-1 font-semibold text-slate-800">{bucket.pendingPayoutCount}</div>
                   </div>
                 </div>
-
-                <div className="mt-4 text-xs leading-5 text-slate-500">
-                  {status.helper}
-                </div>
+                <div className="mt-3 text-xs text-slate-500">{status.helper}</div>
               </motion.div>
             );
           })}
         </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-card overflow-hidden p-0"
-        >
+        {/* Reconciliation Pulse */}
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+          className="glass-card overflow-hidden p-0">
           <div className="border-b border-white/30 bg-[linear-gradient(135deg,rgba(15,23,42,0.9),rgba(30,41,59,0.75))] px-6 py-5 text-white">
-            <div className="text-xs font-semibold uppercase tracking-[0.28em] text-white/60">
-              Reconciliation Pulse
-            </div>
-            <div className="mt-2 text-2xl font-semibold">金流與入帳狀態</div>
-            <div className="mt-2 text-sm leading-6 text-white/75">
-              這裡會把訂單、收款、手續費、待撥款與已對帳的狀態壓成一個管理視圖，方便每天追追帳。
-            </div>
+            <div className="text-xs font-semibold uppercase tracking-[0.28em] text-white/60">Reconciliation Pulse</div>
+            <div className="mt-2 text-2xl font-semibold">金流對帳狀態</div>
           </div>
-
           <div className="space-y-4 p-6">
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-3xl bg-slate-900/5 px-5 py-4">
-                <div className="text-xs text-slate-400">總訂單數</div>
-                <div className="mt-2 text-2xl font-semibold text-slate-900">
-                  {total?.orderCount || 0}
+              {[
+                { label: '總訂單數', value: total?.orderCount || 0, color: 'text-slate-900' },
+                { label: '已建立收款', value: total?.paymentCount || 0, color: 'text-slate-900' },
+                { label: '已完成對帳', value: total?.reconciledCount || 0, color: 'text-emerald-600' },
+                { label: '待撥款 / 待對帳', value: total?.pendingPayoutCount || 0, color: 'text-amber-600' },
+              ].map((m) => (
+                <div key={m.label} className="rounded-3xl bg-slate-900/5 px-5 py-4">
+                  <div className="text-xs text-slate-400">{m.label}</div>
+                  <div className={`mt-2 text-2xl font-semibold ${m.color}`}>{m.value}</div>
                 </div>
-              </div>
-              <div className="rounded-3xl bg-slate-900/5 px-5 py-4">
-                <div className="text-xs text-slate-400">已建立收款</div>
-                <div className="mt-2 text-2xl font-semibold text-slate-900">
-                  {total?.paymentCount || 0}
-                </div>
-              </div>
-              <div className="rounded-3xl bg-slate-900/5 px-5 py-4">
-                <div className="text-xs text-slate-400">已完成對帳</div>
-                <div className="mt-2 text-2xl font-semibold text-emerald-600">
-                  {total?.reconciledCount || 0}
-                </div>
-              </div>
-              <div className="rounded-3xl bg-slate-900/5 px-5 py-4">
-                <div className="text-xs text-slate-400">待撥款 / 待對帳</div>
-                <div className="mt-2 text-2xl font-semibold text-amber-600">
-                  {total?.pendingPayoutCount || 0}
-                </div>
-              </div>
+              ))}
             </div>
-
             <div className="rounded-3xl border border-white/30 bg-white/45 px-5 py-4">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <div className="text-sm font-semibold text-slate-900">
-                    總業績 vs 已入帳
-                  </div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    用來看業績已經進來多少、實際撥款與淨額又落到多少。
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs text-slate-400">總業績</div>
-                  <div className="text-xl font-semibold text-slate-900">
-                    ${total?.gross.toFixed(2) || "0.00"}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 space-y-3">
+              <div className="text-sm font-semibold text-slate-900 mb-3">業績 vs 已入帳比率</div>
+              <div className="space-y-3">
                 <div>
                   <div className="mb-1 flex items-center justify-between text-xs text-slate-500">
                     <span>已入帳淨額</span>
-                    <span>${total?.payoutNet.toFixed(2) || "0.00"}</span>
+                    <span>${total?.payoutNet.toFixed(0) || "0"}</span>
                   </div>
                   <div className="h-2 rounded-full bg-slate-200/70">
-                    <div
-                      className="h-2 rounded-full bg-emerald-500 transition-all"
-                      style={{
-                        width: `${
-                          total?.gross
-                            ? Math.min((total.payoutNet / total.gross) * 100, 100)
-                            : 0
-                        }%`,
-                      }}
-                    />
+                    <div className="h-2 rounded-full bg-emerald-500 transition-all"
+                      style={{ width: `${total?.gross ? Math.min((total.payoutNet / total.gross) * 100, 100) : 0}%` }} />
                   </div>
                 </div>
                 <div>
                   <div className="mb-1 flex items-center justify-between text-xs text-slate-500">
                     <span>手續費</span>
-                    <span>${total?.feeTotal.toFixed(2) || "0.00"}</span>
+                    <span>${total?.feeTotal.toFixed(0) || "0"}</span>
                   </div>
                   <div className="h-2 rounded-full bg-slate-200/70">
-                    <div
-                      className="h-2 rounded-full bg-fuchsia-500 transition-all"
-                      style={{
-                        width: `${
-                          total?.gross
-                            ? Math.min((total.feeTotal / total.gross) * 100, 100)
-                            : 0
-                        }%`,
-                      }}
-                    />
+                    <div className="h-2 rounded-full bg-fuchsia-500 transition-all"
+                      style={{ width: `${total?.gross ? Math.min((total.feeTotal / total.gross) * 100, 100) : 0}%` }} />
                   </div>
                 </div>
               </div>
@@ -1062,539 +983,145 @@ const DashboardPage: React.FC = () => {
         </motion.div>
       </div>
 
-
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="glass-card p-6"
-      >
-        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-              Operations Hub
+      {/* ── 📋 Section 8：發票 + 人事 ── */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* 發票閉環 */}
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Invoice</div>
+              <div className="mt-1 text-xl font-semibold text-slate-900">發票狀態</div>
             </div>
-            <div className="mt-2 text-xl font-semibold text-slate-900">
-              人事、薪資與出勤總覽
-            </div>
-            <div className="mt-1 text-sm text-slate-500">
-              把員工、假單、出勤異常、薪資批次與待審事項集中在同一個營運總控台。
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-3 md:grid-cols-4">
-          <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
-            <div className="text-xs text-slate-400">在職員工</div>
-            <div className="mt-2 text-2xl font-semibold text-slate-900">
-              {operationsHub?.people.activeEmployees || 0}
+            <div className="flex gap-2">
+              <Button size="small" icon={<SyncOutlined />} onClick={handleSyncInvoiceStatuses}
+                loading={syncingInvoiceStatuses}>同步發票</Button>
+              <Button size="small" type="primary" onClick={handleIssueEligibleInvoices}
+                loading={issuingInvoices} className="bg-black hover:bg-gray-800 border-none">
+                批次開票
+              </Button>
             </div>
           </div>
-          <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
-            <div className="text-xs text-slate-400">待審假單</div>
-            <div className="mt-2 text-2xl font-semibold text-amber-600">
-              {operationsHub?.people.pendingLeaveRequests || 0}
-            </div>
-          </div>
-          <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
-            <div className="text-xs text-slate-400">出勤異常</div>
-            <div className="mt-2 text-2xl font-semibold text-rose-600">
-              {operationsHub?.people.openAttendanceAnomalies || 0}
-            </div>
-          </div>
-          <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
-            <div className="text-xs text-slate-400">待審薪資批次</div>
-            <div className="mt-2 text-2xl font-semibold text-sky-600">
-              {operationsHub?.payroll.pendingApprovalRuns || 0}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-3 md:grid-cols-4">
-          {operationsHighlights.map((item) => (
-            <div
-              key={item.key}
-              className="rounded-2xl border border-white/30 bg-white/45 px-4 py-4"
-            >
-              <div className="text-xs text-slate-400">{item.label}</div>
-              <div className="mt-2 text-xl font-semibold text-slate-900">
-                {item.value}
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: '本期已開票', value: invoiceSummary?.issuedCount || 0, color: 'text-emerald-600' },
+              { label: '可批次開票', value: invoiceSummary?.eligibleCount || 0, color: 'text-amber-600' },
+              { label: '待付款後開票', value: invoiceSummary?.waitingPaymentCount || 0, color: 'text-sky-600' },
+              { label: '已作廢', value: invoiceSummary?.voidCount || 0, color: 'text-rose-500' },
+            ].map((m) => (
+              <div key={m.label} className="rounded-2xl bg-slate-50 px-4 py-3">
+                <div className="text-xs text-slate-400">{m.label}</div>
+                <div className={`mt-1 text-2xl font-bold ${m.color}`}>{m.value}</div>
               </div>
-            </div>
-          ))}
-        </div>
-      </motion.div>
+            ))}
+          </div>
+        </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="glass-card p-6"
-      >
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-              Invoice Closure
-            </div>
-            <div className="mt-2 text-xl font-semibold text-slate-900">
-              發票閉環與批次開票
-            </div>
-            <div className="mt-1 text-sm text-slate-500">
-              這裡會把已付款可開票、尚待付款、已開票的訂單放在同一個隊列，讓營運可以直接推進發票流程。
-            </div>
+        {/* 人事 & 薪資 */}
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6">
+          <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400 mb-1">Operations Hub</div>
+          <div className="text-xl font-semibold text-slate-900 mb-4">人事 & 薪資</div>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: '在職員工', value: operationsHub?.people.activeEmployees || 0, color: 'text-slate-800' },
+              { label: '待審假單', value: operationsHub?.people.pendingLeaveRequests || 0, color: 'text-amber-600' },
+              { label: '出勤異常', value: operationsHub?.people.openAttendanceAnomalies || 0, color: 'text-rose-600' },
+              { label: '待審薪資批次', value: operationsHub?.payroll.pendingApprovalRuns || 0, color: 'text-sky-600' },
+            ].map((m) => (
+              <div key={m.label} className="rounded-2xl bg-slate-50 px-4 py-3">
+                <div className="text-xs text-slate-400">{m.label}</div>
+                <div className={`mt-1 text-2xl font-bold ${m.color}`}>{m.value}</div>
+              </div>
+            ))}
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              icon={<SyncOutlined />}
-              onClick={handleSyncInvoiceStatuses}
-              loading={syncingInvoiceStatuses}
-              className="shadow-sm"
-            >
-              {syncingInvoiceStatuses ? "同步中..." : "同步綠界發票狀態"}
-            </Button>
-            <Button
-              type="primary"
-              onClick={handleIssueEligibleInvoices}
-              loading={issuingInvoices}
-              className="bg-black hover:bg-gray-800 border-none shadow-sm"
-            >
-              {issuingInvoices ? "批次開票中..." : "批次開立可開票訂單"}
-            </Button>
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-3 md:grid-cols-4">
-          <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
-            <div className="text-xs text-slate-400">本期已開票</div>
-            <div className="mt-2 text-2xl font-semibold text-emerald-600">
-              {invoiceSummary?.issuedCount || 0}
-            </div>
-            <div className="mt-1 text-[11px] text-slate-400">
-              NT$ {invoiceSummary?.issuedAmount.toFixed(0) || "0"}
-            </div>
-          </div>
-          <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
-            <div className="text-xs text-slate-400">可批次開票</div>
-            <div className="mt-2 text-2xl font-semibold text-amber-600">
-              {invoiceSummary?.eligibleCount || 0}
-            </div>
-          </div>
-          <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
-            <div className="text-xs text-slate-400">待付款後開票</div>
-            <div className="mt-2 text-2xl font-semibold text-sky-600">
-              {invoiceSummary?.waitingPaymentCount || 0}
-            </div>
-          </div>
-          <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
-            <div className="text-xs text-slate-400">已作廢發票</div>
-            <div className="mt-2 text-2xl font-semibold text-rose-600">
-              {invoiceSummary?.voidCount || 0}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-3 md:grid-cols-3">
-          <div className="rounded-2xl border border-white/30 bg-white/45 px-4 py-4">
-            <div className="text-xs text-slate-400">待補發票</div>
-            <div className="mt-2 text-xl font-semibold text-amber-600">
-              {arSummary?.missingInvoiceCount || 0}
-            </div>
-          </div>
-          <div className="rounded-2xl border border-white/30 bg-white/45 px-4 py-4">
-            <div className="text-xs text-slate-400">已開票未落帳</div>
-            <div className="mt-2 text-xl font-semibold text-violet-600">
-              {arSummary?.issuedUnpostedCount || 0}
-            </div>
-          </div>
-          <div className="rounded-2xl border border-white/30 bg-white/45 px-4 py-4">
-            <div className="text-xs text-slate-400">已開票未收款</div>
-            <div className="mt-2 text-xl font-semibold text-sky-600">
-              {arSummary?.issuedUnpaidCount || 0}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-5 space-y-3">
-          {invoiceItems.map((item) => {
-            const meta = getInvoiceQueueMeta(item);
-            return (
-              <div
-                key={item.orderId}
-                className="rounded-3xl border border-white/30 bg-white/45 px-4 py-4"
-              >
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="text-sm font-semibold text-slate-900">
-                        {item.externalOrderId || item.orderId}
-                      </div>
-                      <Tag color={meta.color}>{meta.label}</Tag>
-                      {item.journalLinked ? <Tag color="green">已落帳</Tag> : <Tag color="blue">待落帳檢查</Tag>}
-                    </div>
-                    <div className="mt-2 text-xs leading-5 text-slate-500">
-                      {item.channelName || item.channelCode || "未知通路"} ·
-                      {" "}
-                      {item.customerName} ·
-                      {" "}
-                      下單 {dayjs(item.orderDate).tz(DASHBOARD_TZ).format("YYYY/MM/DD")}
-                      {" "}
-                      · 已過 {item.daysSinceOrder} 天
-                    </div>
-                    <div className="mt-1 text-xs leading-5 text-slate-400">
-                      {item.reason}
-                      {item.invoiceNumber ? ` · 發票 ${item.invoiceNumber}` : ""}
-                    </div>
-                  </div>
-
-                  <div className="grid min-w-[260px] grid-cols-3 gap-3 text-right text-sm">
-                    <div className="rounded-2xl bg-slate-900/5 px-3 py-3">
-                      <div className="text-[11px] text-slate-400">訂單金額</div>
-                      <div className="mt-1 font-semibold text-slate-900">
-                        ${item.totalAmount.toFixed(2)}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl bg-slate-900/5 px-3 py-3">
-                      <div className="text-[11px] text-slate-400">付款狀態</div>
-                      <div className="mt-1 font-semibold text-slate-900">
-                        {item.paymentStatus}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl bg-slate-900/5 px-3 py-3">
-                      <div className="text-[11px] text-slate-400">對帳狀態</div>
-                      <div className="mt-1 font-semibold text-slate-900">
-                        {item.reconciledFlag ? "已對帳" : "待對帳"}
-                      </div>
-                    </div>
-                  </div>
+          {operationsHighlights.length > 0 && (
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {operationsHighlights.map((item) => (
+                <div key={item.key} className="rounded-xl border border-white/30 bg-white/45 px-3 py-2">
+                  <div className="text-xs text-slate-400">{item.label}</div>
+                  <div className="mt-1 text-lg font-semibold text-slate-900">{item.value}</div>
                 </div>
-              </div>
-            );
-          })}
+              ))}
+            </div>
+          )}
+        </motion.div>
+      </div>
 
-          {!invoiceItems.length ? (
-            <div className="rounded-3xl border border-dashed border-slate-200 bg-white/30 px-5 py-6 text-sm text-slate-500">
-              目前沒有待追發票隊列。這裡會集中顯示可批次開票與仍待付款的訂單。
-            </div>
-          ) : null}
-        </div>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="glass-card p-6"
-      >
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-              AI Reconciliation Audit
-            </div>
-            <div className="mt-2 text-xl font-semibold text-slate-900">
-              逐筆對帳稽核與會計提醒
-            </div>
-            <div className="mt-1 text-sm text-slate-500">
-              系統會逐筆檢查手續費、發票、稅額與訂單收款是否一致，方便你像輔助會計一樣從高處看整體營運。
-            </div>
-          </div>
-          <div className="rounded-3xl border border-white/30 bg-white/45 px-4 py-4 text-right">
-            <div className="text-xs text-slate-400">抽成率</div>
-            <div className="mt-1 text-2xl font-semibold text-slate-900">
-              {auditSummary?.feeTakeRatePct.toFixed(2) || "0.00"}%
-            </div>
-            <div className="mt-1 text-[11px] text-slate-400">
-              總手續費 NT$ {auditSummary?.totalFeeAmount.toFixed(0) || "0"}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-3 md:grid-cols-4">
-          <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
-            <div className="text-xs text-slate-400">已稽核訂單</div>
-            <div className="mt-2 text-2xl font-semibold text-slate-900">
-              {auditSummary?.auditedOrderCount || 0}
-            </div>
-          </div>
-          <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
-            <div className="text-xs text-slate-400">手續費 / 發票異常</div>
-            <div className="mt-2 text-2xl font-semibold text-amber-600">
-              {(auditSummary?.feeIssueCount || 0) + (auditSummary?.invoiceIssueCount || 0)}
-            </div>
-          </div>
-          <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
-            <div className="text-xs text-slate-400">稅務異常</div>
-            <div className="mt-2 text-2xl font-semibold text-rose-600">
-              {auditSummary?.taxIssueCount || 0}
-            </div>
-          </div>
-          <div className="rounded-3xl bg-slate-900/5 px-4 py-4">
-            <div className="text-xs text-slate-400">帳款 / 訂單不一致</div>
-            <div className="mt-2 text-2xl font-semibold text-sky-600">
-              {auditSummary?.orderPaymentIssueCount || 0}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-3 md:grid-cols-3">
-          <div className="rounded-2xl border border-white/30 bg-white/45 px-4 py-4">
-            <div className="text-xs text-slate-400">金流手續費</div>
-            <div className="mt-2 text-xl font-semibold text-slate-900">
-              NT$ {auditSummary?.totalGatewayFeeAmount.toFixed(0) || "0"}
-            </div>
-          </div>
-          <div className="rounded-2xl border border-white/30 bg-white/45 px-4 py-4">
-            <div className="text-xs text-slate-400">平台手續費</div>
-            <div className="mt-2 text-xl font-semibold text-slate-900">
-              NT$ {auditSummary?.totalPlatformFeeAmount.toFixed(0) || "0"}
-            </div>
-          </div>
-          <div className="rounded-2xl border border-white/30 bg-white/45 px-4 py-4">
-            <div className="text-xs text-slate-400">異常涉及業績</div>
-            <div className="mt-2 text-xl font-semibold text-slate-900">
-              NT$ {auditSummary?.flaggedGrossAmount.toFixed(0) || "0"}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-5 space-y-3">
-          {auditItems.map((item) => {
-            const severity = getAuditSeverityMeta(item.severity);
-            return (
-              <div
-                key={item.orderId}
-                className="rounded-3xl border border-white/30 bg-white/45 px-4 py-4"
-              >
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="text-sm font-semibold text-slate-900">
-                        {item.externalOrderId || item.orderId}
-                      </div>
-                      <Tag color={severity.color}>{severity.label}</Tag>
-                      <Tag color={item.reconciledFlag ? "green" : "blue"}>
-                        {item.reconciledFlag ? "已對帳" : "待對帳"}
-                      </Tag>
-                      {item.invoiceNumber ? (
-                        <Tag color="purple">發票 {item.invoiceNumber}</Tag>
-                      ) : (
-                        <Tag color="gold">待補發票</Tag>
-                      )}
-                    </div>
-                    <div className="mt-2 text-xs leading-5 text-slate-500">
-                      {item.channelName} · 下單{" "}
-                      {dayjs(item.orderDate).tz(DASHBOARD_TZ).format("YYYY/MM/DD")}
-                      {item.providerTradeNo ? ` · 金流單號 ${item.providerTradeNo}` : ""}
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {item.anomalyMessages.map((messageText, index) => (
-                        <Tag key={`${item.orderId}-${index}`} color="red">
-                          {messageText}
-                        </Tag>
-                      ))}
-                    </div>
-                    <div className="mt-2 text-xs leading-5 text-slate-400">
-                      {item.recommendation}
-                    </div>
-                  </div>
-
-                  <div className="grid min-w-[320px] grid-cols-2 gap-3 text-right text-sm lg:grid-cols-4">
-                    <div className="rounded-2xl bg-slate-900/5 px-3 py-3">
-                      <div className="text-[11px] text-slate-400">訂單 / 收款</div>
-                      <div className="mt-1 font-semibold text-slate-900">
-                        {item.grossAmount.toFixed(0)} / {item.paymentGrossAmount.toFixed(0)}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl bg-slate-900/5 px-3 py-3">
-                      <div className="text-[11px] text-slate-400">手續費</div>
-                      <div className="mt-1 font-semibold text-slate-900">
-                        {item.feeTotalAmount.toFixed(0)}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl bg-slate-900/5 px-3 py-3">
-                      <div className="text-[11px] text-slate-400">稅額</div>
-                      <div className="mt-1 font-semibold text-slate-900">
-                        {item.orderTaxAmount.toFixed(0)} / {item.invoiceTaxAmount.toFixed(0)}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl bg-slate-900/5 px-3 py-3">
-                      <div className="text-[11px] text-slate-400">抽成率</div>
-                      <div className="mt-1 font-semibold text-slate-900">
-                        {item.feeRatePct.toFixed(2)}%
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-
-          {!auditItems.length ? (
-            <div className="rounded-3xl border border-dashed border-slate-200 bg-white/30 px-5 py-6 text-sm text-slate-500">
-              目前這個區間沒有抓到需要優先處理的逐筆對帳異常。系統仍會持續監測手續費、發票與稅務一致性。
-            </div>
-          ) : null}
-        </div>
-      </motion.div>
-
-      <Row
-        gutter={[
-          { xs: 16, sm: 24 },
-          { xs: 16, sm: 24 },
-        ]}
-      >
-        <Col xs={24}>
-          <div
-            className="h-full animate-slide-up"
-            style={{ animationDelay: "480ms" }}
-          >
-            <Card
-              title="異常待辦清單 (Exception Inbox)"
-              className="glass-card !border-0 h-full"
-            >
-              <div className="space-y-4">
-                {anomalies.map((item) => {
-                  const tone = getTaskToneMeta(item.tone);
-                  return (
-                    <div
-                      key={item.key}
-                      className="rounded-2xl bg-slate-50 px-4 py-4 transition-colors hover:bg-slate-100"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <div className="font-medium text-slate-900">
-                              {item.title}
-                            </div>
-                            <Tag color={tone.color}>{item.statusLabel}</Tag>
-                          </div>
-                          <div className="mt-2 text-xs leading-5 text-slate-500">
-                            {item.helper}
-                          </div>
-                          {item.accountCode ? (
-                            <div className="mt-2 text-[11px] text-slate-400">
-                              會計科目：{item.accountCode}
-                              {item.accountName ? ` · ${item.accountName}` : ""}
-                            </div>
-                          ) : null}
+      {/* ── 📌 Section 9：CEO 決策清單 ── */}
+      <Row gutter={[{ xs: 16, sm: 24 }, { xs: 16, sm: 24 }]}>
+        <Col xs={24} lg={12}>
+          <Card title="🚨 異常待辦 (Exception Inbox)" className="glass-card !border-0 h-full">
+            <div className="space-y-3">
+              {anomalies.map((item) => {
+                const tone = getTaskToneMeta(item.tone);
+                return (
+                  <div key={item.key}
+                    className={`rounded-2xl px-4 py-4 transition-colors hover:opacity-90 ${
+                      item.tone === 'critical' ? 'bg-red-50' : item.tone === 'warning' ? 'bg-amber-50' : 'bg-slate-50'
+                    }`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="font-medium text-slate-900">{item.title}</div>
+                          <Tag color={tone.color}>{item.statusLabel}</Tag>
                         </div>
-                        <div className="text-right">
-                          <div className="text-lg font-semibold text-slate-900">
-                            {item.count}
-                          </div>
-                          <div className="text-[11px] text-slate-400">
-                            {item.amount !== null
-                              ? `NT$ ${item.amount.toFixed(0)}`
-                              : "待處理"}
-                          </div>
+                        <div className="mt-1 text-xs text-slate-500">{item.helper}</div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-lg font-bold text-slate-900">{item.count}</div>
+                        <div className="text-[11px] text-slate-400">
+                          {item.amount !== null ? `NT$ ${item.amount.toFixed(0)}` : '待處理'}
                         </div>
                       </div>
                     </div>
-                  );
-                })}
-                {!anomalies.length ? (
-                  <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-500">
-                    目前沒有高風險異常。這裡會集中顯示未撥款、未開票、待補費率與未匹配撥款匯入。
                   </div>
-                ) : null}
-              </div>
-            </Card>
-          </div>
+                );
+              })}
+              {!anomalies.length && (
+                <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-500 text-center">
+                  ✅ 目前沒有異常，一切正常
+                </div>
+              )}
+            </div>
+          </Card>
         </Col>
-      </Row>
 
-      <Row
-        gutter={[
-          { xs: 16, sm: 24 },
-          { xs: 16, sm: 24 },
-        ]}
-      >
         <Col xs={24} lg={12}>
-          <div
-            className="h-full animate-slide-up"
-            style={{ animationDelay: "500ms" }}
-          >
-            <Card
-              title="庫存警示 (Inventory Alerts)"
-              className="glass-card !border-0 h-full"
-            >
-              <div className="space-y-3">
-                {inventoryAlerts.map((item) => (
-                  <div
-                    key={`${item.sku}-${item.name}`}
-                    className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3"
-                  >
-                    <div>
-                      <div className="font-medium text-slate-900">{item.name}</div>
-                      <div className="text-xs text-slate-400">
-                        SKU {item.sku} · 現有 {item.qtyAvailable}
-                      </div>
-                    </div>
-                    <Tag color={item.severity === "critical" ? "red" : "gold"}>
-                      {item.severity === "critical" ? "缺貨" : "低庫存"}
-                    </Tag>
-                  </div>
-                ))}
-                {!inventoryAlerts.length ? (
-                  <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-500">
-                    目前沒有庫存警示，這一區會優先顯示需要補貨的商品。
-                  </div>
-                ) : null}
-              </div>
-            </Card>
-          </div>
-        </Col>
-        <Col xs={24} lg={12}>
-          <div
-            className="h-full animate-slide-up"
-            style={{ animationDelay: "600ms" }}
-          >
-            <Card
-              title="CEO 待辦事項 (Priority Tasks)"
-              className="glass-card !border-0 h-full"
-            >
-              <div className="space-y-4">
-                {tasks.map((task, idx) => {
-                  const tone = getTaskToneMeta(task.tone);
-                  return (
-                  <div
-                    key={task.key}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
-                  >
+          <Card title="📌 CEO 待辦事項 (Priority Tasks)" className="glass-card !border-0 h-full">
+            <div className="space-y-3">
+              {tasks.map((task, idx) => {
+                const tone = getTaskToneMeta(task.tone);
+                return (
+                  <div key={task.key}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer">
                     <div className="flex items-center gap-3">
-                      <div
-                        className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white"
-                        style={{
-                          backgroundColor:
-                            idx % 3 === 0 ? "#f56a00" : idx % 3 === 1 ? "#1677ff" : "#13c2c2",
-                        }}
-                      >
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold text-white"
+                        style={{ backgroundColor: idx % 3 === 0 ? '#f56a00' : idx % 3 === 1 ? '#1677ff' : '#13c2c2' }}>
                         {task.title.slice(0, 1)}
                       </div>
                       <div>
-                        <div className="font-medium text-gray-800">
-                          {task.title}
-                        </div>
+                        <div className="font-medium text-gray-800">{task.title}</div>
                         <div className="text-xs text-gray-400">
-                          {task.helper}
-                          {task.amount ? ` • NT$ ${task.amount.toFixed(0)}` : ""}
+                          {task.helper}{task.amount ? ` • NT$ ${task.amount.toFixed(0)}` : ""}
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
                       <div className="text-sm font-semibold text-slate-900">{task.value}</div>
                       <Tag color={tone.color}>{tone.badge}</Tag>
                     </div>
                   </div>
-                )})}
-                {!tasks.length ? (
-                  <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-500">
-                    目前沒有需要特別追蹤的待辦，這裡會聚焦影響營運的關鍵項目。
-                  </div>
-                ) : null}
-              </div>
-            </Card>
-          </div>
+                );
+              })}
+              {!tasks.length && (
+                <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-500 text-center">
+                  ✅ 目前沒有待辦事項
+                </div>
+              )}
+            </div>
+          </Card>
         </Col>
       </Row>
     </div>
   );
 };
-
 export default DashboardPage;
