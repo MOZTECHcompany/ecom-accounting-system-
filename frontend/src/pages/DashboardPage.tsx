@@ -578,11 +578,15 @@ const DashboardPage: React.FC = () => {
     }
     return '#adb5bd'
   }
-  const platformContribs: PlatformContribution[] = performanceBuckets.map(b => ({
-    platform: b.label,
-    net: b.payoutNet,
-    color: getChannelColor(b.key),
-  }))
+  // 排除金流商（ECPay 是收款工具，不算銷售通路）
+  const PAYMENT_GATEWAY_PATTERN = /ecpay|linepay|jkos|aftee|atome|spgateway|newebpay/i
+  const platformContribs: PlatformContribution[] = performanceBuckets
+    .filter(b => !PAYMENT_GATEWAY_PATTERN.test(b.key || ''))
+    .map(b => ({
+      platform: b.label,
+      net: b.payoutNet,
+      color: getChannelColor(b.key),
+    }))
 
   // ─── 紅燈警示計數 ──────────────────────────────────────
   const criticalInventory = inventoryAlerts.filter(a => a.severity === 'critical').length;
