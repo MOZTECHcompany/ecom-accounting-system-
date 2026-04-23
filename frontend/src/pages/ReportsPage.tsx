@@ -70,6 +70,22 @@ const { TabPane } = Tabs
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d']
 
+const toNumber = (value: unknown, fallback = 0) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+const safeArray = <T,>(value: T[] | null | undefined): T[] => (
+  Array.isArray(value) ? value : []
+)
+
+const formatNumber = (value: unknown, options?: Intl.NumberFormatOptions) =>
+  toNumber(value).toLocaleString('zh-TW', options)
+
+const formatMoney = (value: unknown) => `NT$ ${formatNumber(value, { maximumFractionDigits: 0 })}`
+
+const formatPercent = (value: unknown, digits = 2) => `${toNumber(value).toFixed(digits)}%`
+
 interface ReportRow {
   key: string
   category: string
@@ -188,32 +204,32 @@ const ReportsPage: React.FC = () => {
   // Transform Income Statement Data
   const getPLData = (): ReportRow[] => {
     if (!incomeStatement) return []
-    const totalRev = incomeStatement.totalRevenue || 1 // Avoid division by zero
+    const totalRev = toNumber(incomeStatement.totalRevenue) || 1 // Avoid division by zero
     
-    const revenues: ReportRow[] = incomeStatement.revenues.map(r => ({
+    const revenues: ReportRow[] = safeArray(incomeStatement.revenues).map(r => ({
       key: r.code,
       category: r.name,
-      amount: r.amount,
-      percentage: `${((r.amount / totalRev) * 100).toFixed(1)}%`,
+      amount: toNumber(r.amount),
+      percentage: formatPercent((toNumber(r.amount) / totalRev) * 100, 1),
       type: 'revenue'
     }))
 
-    const expenses: ReportRow[] = incomeStatement.expenses.map(e => ({
+    const expenses: ReportRow[] = safeArray(incomeStatement.expenses).map(e => ({
       key: e.code,
       category: e.name,
-      amount: e.amount, // Keep positive for display, but logic knows it's expense
-      percentage: `${((e.amount / totalRev) * 100).toFixed(1)}%`,
+      amount: toNumber(e.amount), // Keep positive for display, but logic knows it's expense
+      percentage: formatPercent((toNumber(e.amount) / totalRev) * 100, 1),
       type: 'expense'
     }))
 
     return [
       { key: 'header_rev', category: '營業收入 (Revenue)', amount: null, isHeader: true },
       ...revenues,
-      { key: 'total_rev', category: '總收入', amount: incomeStatement.totalRevenue, isTotal: true },
+      { key: 'total_rev', category: '總收入', amount: toNumber(incomeStatement.totalRevenue), isTotal: true },
       { key: 'header_exp', category: '營業費用 (Expenses)', amount: null, isHeader: true },
       ...expenses,
-      { key: 'total_exp', category: '總費用', amount: incomeStatement.totalExpense, isTotal: true },
-      { key: 'net_income', category: '淨利 (Net Income)', amount: incomeStatement.netIncome, isTotal: true, isNet: true }
+      { key: 'total_exp', category: '總費用', amount: toNumber(incomeStatement.totalExpense), isTotal: true },
+      { key: 'net_income', category: '淨利 (Net Income)', amount: toNumber(incomeStatement.netIncome), isTotal: true, isNet: true }
     ]
   }
 
@@ -221,34 +237,37 @@ const ReportsPage: React.FC = () => {
   const getBSData = (): ReportRow[] => {
     if (!balanceSheet) return []
     
-    const assets = balanceSheet.assets.map(a => ({ ...a, type: 'asset' }))
-    const liabilities = balanceSheet.liabilities.map(l => ({ ...l, type: 'liability' }))
-    const equity = balanceSheet.equity.map(e => ({ ...e, type: 'equity' }))
+    const assets = safeArray(balanceSheet.assets).map(a => ({ ...a, type: 'asset' }))
+    const liabilities = safeArray(balanceSheet.liabilities).map(l => ({ ...l, type: 'liability' }))
+    const equity = safeArray(balanceSheet.equity).map(e => ({ ...e, type: 'equity' }))
+    const totalLiabilities = toNumber(balanceSheet.totalLiabilities)
+    const totalEquity = toNumber(balanceSheet.totalEquity)
+    const retainedEarnings = toNumber(balanceSheet.calculatedRetainedEarnings)
 
     return [
       { key: 'header_asset', category: '資產 (Assets)', amount: null, isHeader: true },
-      ...assets.map(a => ({ key: a.code, category: a.name, amount: a.amount })),
-      { key: 'total_asset', category: '資產總計', amount: balanceSheet.totalAssets, isTotal: true },
+      ...assets.map(a => ({ key: a.code, category: a.name, amount: toNumber(a.amount) })),
+      { key: 'total_asset', category: '資產總計', amount: toNumber(balanceSheet.totalAssets), isTotal: true },
       
       { key: 'header_liab', category: '負債 (Liabilities)', amount: null, isHeader: true },
-      ...liabilities.map(l => ({ key: l.code, category: l.name, amount: l.amount })),
-      { key: 'total_liab', category: '負債總計', amount: balanceSheet.totalLiabilities, isTotal: true },
+      ...liabilities.map(l => ({ key: l.code, category: l.name, amount: toNumber(l.amount) })),
+      { key: 'total_liab', category: '負債總計', amount: totalLiabilities, isTotal: true },
       
       { key: 'header_equity', category: '權益 (Equity)', amount: null, isHeader: true },
-      ...equity.map(e => ({ key: e.code, category: e.name, amount: e.amount })),
-      { key: 'retained_earnings', category: '本期損益 (Retained Earnings)', amount: balanceSheet.calculatedRetainedEarnings },
-      { key: 'total_equity', category: '權益總計', amount: balanceSheet.totalEquity + balanceSheet.calculatedRetainedEarnings, isTotal: true },
+      ...equity.map(e => ({ key: e.code, category: e.name, amount: toNumber(e.amount) })),
+      { key: 'retained_earnings', category: '本期損益 (Retained Earnings)', amount: retainedEarnings },
+      { key: 'total_equity', category: '權益總計', amount: totalEquity + retainedEarnings, isTotal: true },
       
-      { key: 'total_liab_equity', category: '負債與權益總計', amount: balanceSheet.totalLiabilities + balanceSheet.totalEquity + balanceSheet.calculatedRetainedEarnings, isTotal: true, isNet: true }
+      { key: 'total_liab_equity', category: '負債與權益總計', amount: totalLiabilities + totalEquity + retainedEarnings, isTotal: true, isNet: true }
     ]
   }
 
   // Expense Analysis Data
   const getExpenseData = () => {
     if (!incomeStatement) return []
-    return incomeStatement.expenses.map(e => ({
+    return safeArray(incomeStatement.expenses).map(e => ({
       name: e.name,
-      value: e.amount
+      value: toNumber(e.amount)
     })).sort((a, b) => b.value - a.value)
   }
 
@@ -273,13 +292,14 @@ const ReportsPage: React.FC = () => {
       key: 'amount',
       align: 'right' as const,
       render: (value: number | null, record: any) => {
-        if (value === null) return null
+        if (value === null || value === undefined) return null
+        const amount = toNumber(value)
         return (
           <span className={`
             ${record.isTotal ? 'font-bold text-gray-900' : 'text-gray-600'}
             ${record.isNet ? 'text-lg text-blue-600' : ''}
           `}>
-            {value < 0 ? `(${Math.abs(value).toLocaleString()})` : value.toLocaleString()}
+            {amount < 0 ? `(${formatNumber(Math.abs(amount))})` : formatNumber(amount)}
           </span>
         )
       },
@@ -347,22 +367,22 @@ const ReportsPage: React.FC = () => {
               <Row gutter={[16, 16]}>
                 <Col xs={24} md={6}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="歷年電商營收" value={ecommerceHistory?.summary.revenue || 0} precision={0} prefix="NT$" />
+                    <Statistic title="歷年電商營收" value={ecommerceHistory?.summary?.revenue || 0} precision={0} prefix="NT$" />
                   </Card>
                 </Col>
                 <Col xs={24} md={6}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="訂單數" value={ecommerceHistory?.summary.orderCount || 0} />
+                    <Statistic title="訂單數" value={ecommerceHistory?.summary?.orderCount || 0} />
                   </Card>
                 </Col>
                 <Col xs={24} md={6}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="客戶數" value={ecommerceHistory?.summary.customerCount || 0} />
+                    <Statistic title="客戶數" value={ecommerceHistory?.summary?.customerCount || 0} />
                   </Card>
                 </Col>
                 <Col xs={24} md={6}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="品牌 / 商品" value={`${ecommerceHistory?.summary.brandCount || 0} / ${ecommerceHistory?.summary.productCount || 0}`} />
+                    <Statistic title="品牌 / 商品" value={`${ecommerceHistory?.summary?.brandCount || 0} / ${ecommerceHistory?.summary?.productCount || 0}`} />
                   </Card>
                 </Col>
               </Row>
@@ -370,14 +390,14 @@ const ReportsPage: React.FC = () => {
               <Row gutter={[16, 16]} className="mt-4">
                 <Col xs={24} lg={10}>
                   <Card title="歷年電商業績趨勢" bordered={false} className="shadow-sm h-full">
-                    {ecommerceHistory?.periods.length ? (
+                    {ecommerceHistory?.periods?.length ? (
                       <div className="h-[300px]">
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={ecommerceHistory.periods}>
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="label" />
                             <YAxis />
-                            <Tooltip formatter={(value: number) => `NT$ ${value.toLocaleString()}`} />
+                            <Tooltip formatter={(value: number) => formatMoney(value)} />
                             <Legend />
                             <Bar dataKey="revenue" name="營收" fill="#2563eb" radius={[6, 6, 0, 0]} />
                           </BarChart>
@@ -412,7 +432,7 @@ const ReportsPage: React.FC = () => {
                           dataIndex: 'revenue',
                           key: 'revenue',
                           align: 'right',
-                          render: (value: number) => value.toLocaleString(),
+                          render: (value: number) => formatNumber(value),
                         },
                         {
                           title: '訂單 / 顧客',
@@ -425,14 +445,14 @@ const ReportsPage: React.FC = () => {
                           dataIndex: 'averageOrderValue',
                           key: 'averageOrderValue',
                           align: 'right',
-                          render: (value: number) => value.toLocaleString(),
+                          render: (value: number) => formatNumber(value),
                         },
                         {
                           title: '熱銷商品',
                           key: 'topProducts',
                           render: (_, record) => (
                             <div className="flex flex-wrap gap-1">
-                              {record.topProducts.map((item) => (
+                              {safeArray(record.topProducts).map((item) => (
                                 <Tag key={`${record.brand}-${item.sku}`} color="blue">
                                   {item.sku} × {item.quantity}
                                 </Tag>
@@ -478,14 +498,14 @@ const ReportsPage: React.FC = () => {
                         dataIndex: 'revenue',
                         key: 'revenue',
                         align: 'right',
-                        render: (value: number) => value.toLocaleString(),
+                        render: (value: number) => formatNumber(value),
                       },
                       {
                         title: '數量',
                         dataIndex: 'quantity',
                         key: 'quantity',
                         align: 'right',
-                        render: (value: number) => value.toLocaleString(),
+                        render: (value: number) => formatNumber(value),
                       },
                       {
                         title: '訂單數',
@@ -534,32 +554,32 @@ const ReportsPage: React.FC = () => {
               <Row gutter={[16, 16]}>
                 <Col xs={24} md={8} xl={4}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="營業額" value={managementSummary?.summary.revenue || 0} precision={0} prefix="NT$" />
+                    <Statistic title="營業額" value={managementSummary?.summary?.revenue || 0} precision={0} prefix="NT$" />
                   </Card>
                 </Col>
                 <Col xs={24} md={8} xl={4}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="毛利" value={managementSummary?.summary.grossProfit || 0} precision={0} prefix="NT$" />
+                    <Statistic title="毛利" value={managementSummary?.summary?.grossProfit || 0} precision={0} prefix="NT$" />
                   </Card>
                 </Col>
                 <Col xs={24} md={8} xl={4}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="毛利率" value={managementSummary?.summary.grossMarginPct || 0} precision={2} suffix="%" />
+                    <Statistic title="毛利率" value={managementSummary?.summary?.grossMarginPct || 0} precision={2} suffix="%" />
                   </Card>
                 </Col>
                 <Col xs={24} md={8} xl={4}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="淨利" value={managementSummary?.summary.netProfit || 0} precision={0} prefix="NT$" />
+                    <Statistic title="淨利" value={managementSummary?.summary?.netProfit || 0} precision={0} prefix="NT$" />
                   </Card>
                 </Col>
                 <Col xs={24} md={8} xl={4}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="手續費" value={managementSummary?.summary.feeTotal || 0} precision={0} prefix="NT$" />
+                    <Statistic title="手續費" value={managementSummary?.summary?.feeTotal || 0} precision={0} prefix="NT$" />
                   </Card>
                 </Col>
                 <Col xs={24} md={8} xl={4}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="應收未收" value={managementSummary?.summary.openArAmount || 0} precision={0} prefix="NT$" />
+                    <Statistic title="應收未收" value={managementSummary?.summary?.openArAmount || 0} precision={0} prefix="NT$" />
                   </Card>
                 </Col>
               </Row>
@@ -567,14 +587,14 @@ const ReportsPage: React.FC = () => {
               <Row gutter={[16, 16]} className="mt-4">
                 <Col xs={24} lg={10}>
                   <Card title="趨勢總覽" bordered={false} className="shadow-sm h-full">
-                    {managementSummary?.periods.length ? (
+                    {managementSummary?.periods?.length ? (
                       <div className="h-[320px]">
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={managementSummary.periods}>
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="label" />
                             <YAxis />
-                            <Tooltip formatter={(value: number) => `NT$ ${value.toLocaleString()}`} />
+                            <Tooltip formatter={(value: number) => formatMoney(value)} />
                             <Legend />
                             <Line type="monotone" dataKey="revenue" name="營業額" stroke="#2563eb" strokeWidth={2} />
                             <Line type="monotone" dataKey="grossProfit" name="毛利" stroke="#16a34a" strokeWidth={2} />
@@ -605,54 +625,54 @@ const ReportsPage: React.FC = () => {
                           dataIndex: 'revenue',
                           key: 'revenue',
                           align: 'right',
-                          render: (value: number) => value.toLocaleString(),
+                          render: (value: number) => formatNumber(value),
                         },
                         {
                           title: '估算成本',
                           dataIndex: 'estimatedCogs',
                           key: 'estimatedCogs',
                           align: 'right',
-                          render: (value: number) => value.toLocaleString(),
+                          render: (value: number) => formatNumber(value),
                         },
                         {
                           title: '毛利 / 毛利率',
                           key: 'grossProfit',
                           align: 'right',
-                          render: (_, record) => `${record.grossProfit.toLocaleString()} / ${record.grossMarginPct.toFixed(2)}%`,
+                          render: (_, record) => `${formatNumber(record.grossProfit)} / ${formatPercent(record.grossMarginPct)}`,
                         },
                         {
                           title: '手續費',
                           dataIndex: 'feeTotal',
                           key: 'feeTotal',
                           align: 'right',
-                          render: (value: number) => value.toLocaleString(),
+                          render: (value: number) => formatNumber(value),
                         },
                         {
                           title: '營運費用',
                           dataIndex: 'operatingExpenses',
                           key: 'operatingExpenses',
                           align: 'right',
-                          render: (value: number) => value.toLocaleString(),
+                          render: (value: number) => formatNumber(value),
                         },
                         {
                           title: '淨利 / 淨利率',
                           key: 'netProfit',
                           align: 'right',
-                          render: (_, record) => `${record.netProfit.toLocaleString()} / ${record.netMarginPct.toFixed(2)}%`,
+                          render: (_, record) => `${formatNumber(record.netProfit)} / ${formatPercent(record.netMarginPct)}`,
                         },
                         {
                           title: '已收率',
                           dataIndex: 'collectedRatePct',
                           key: 'collectedRatePct',
                           align: 'right',
-                          render: (value: number) => `${value.toFixed(2)}%`,
+                          render: (value: number) => formatPercent(value),
                         },
                         {
                           title: '應收未收',
                           dataIndex: 'openArAmount',
                           key: 'openArAmount',
                           align: 'right',
-                          render: (value: number) => value.toLocaleString(),
+                          render: (value: number) => formatNumber(value),
                         },
                       ]}
                       locale={{ emptyText: <Empty description="尚無管理報表資料" /> }}
@@ -720,16 +740,16 @@ const ReportsPage: React.FC = () => {
                   <Card title="發票閉環" bordered={false} className="shadow-sm h-full">
                     <Descriptions column={1} size="small">
                       <Descriptions.Item label="已開票數">
-                        {invoiceQueue?.summary.issuedCount || 0}
+                        {invoiceQueue?.summary?.issuedCount || 0}
                       </Descriptions.Item>
                       <Descriptions.Item label="可批次開票">
-                        {invoiceQueue?.summary.eligibleCount || 0}
+                        {invoiceQueue?.summary?.eligibleCount || 0}
                       </Descriptions.Item>
                       <Descriptions.Item label="待付款後開票">
-                        {invoiceQueue?.summary.waitingPaymentCount || 0}
+                        {invoiceQueue?.summary?.waitingPaymentCount || 0}
                       </Descriptions.Item>
                       <Descriptions.Item label="已作廢發票">
-                        {invoiceQueue?.summary.voidCount || 0}
+                        {invoiceQueue?.summary?.voidCount || 0}
                       </Descriptions.Item>
                     </Descriptions>
                   </Card>
@@ -803,7 +823,7 @@ const ReportsPage: React.FC = () => {
                           </Tag>
                         </div>
                         <Table
-                          dataSource={trialBalance.items}
+                          dataSource={safeArray(trialBalance.items)}
                           rowKey="accountId"
                           size="small"
                           pagination={{ pageSize: 8 }}
@@ -823,21 +843,21 @@ const ReportsPage: React.FC = () => {
                               dataIndex: 'debit',
                               key: 'debit',
                               align: 'right',
-                              render: (value: number) => value.toLocaleString(),
+                              render: (value: number) => formatNumber(value),
                             },
                             {
                               title: '貸方',
                               dataIndex: 'credit',
                               key: 'credit',
                               align: 'right',
-                              render: (value: number) => value.toLocaleString(),
+                              render: (value: number) => formatNumber(value),
                             },
                             {
                               title: '餘額',
                               dataIndex: 'balance',
                               key: 'balance',
                               align: 'right',
-                              render: (value: number) => value.toLocaleString(),
+                              render: (value: number) => formatNumber(value),
                             },
                           ]}
                         />
@@ -853,18 +873,18 @@ const ReportsPage: React.FC = () => {
                           <div className="rounded-xl bg-slate-50 px-4 py-3">
                             <div className="text-xs text-slate-400">總借方</div>
                             <div className="mt-1 text-xl font-semibold text-slate-800">
-                              {generalLedger.totalDebit.toLocaleString()}
+                              {formatNumber(generalLedger.totalDebit)}
                             </div>
                           </div>
                           <div className="rounded-xl bg-slate-50 px-4 py-3">
                             <div className="text-xs text-slate-400">總貸方</div>
                             <div className="mt-1 text-xl font-semibold text-slate-800">
-                              {generalLedger.totalCredit.toLocaleString()}
+                              {formatNumber(generalLedger.totalCredit)}
                             </div>
                           </div>
                         </div>
                         <Table
-                          dataSource={generalLedger.entries}
+                          dataSource={safeArray(generalLedger.entries)}
                           rowKey="id"
                           size="small"
                           scroll={{ x: 980 }}
@@ -898,7 +918,7 @@ const ReportsPage: React.FC = () => {
                               dataIndex: 'debit',
                               key: 'debit',
                               align: 'right',
-                              render: (value: number) => value ? value.toLocaleString() : '—',
+                              render: (value: number) => toNumber(value) ? formatNumber(value) : '—',
                               width: 120,
                             },
                             {
@@ -906,7 +926,7 @@ const ReportsPage: React.FC = () => {
                               dataIndex: 'credit',
                               key: 'credit',
                               align: 'right',
-                              render: (value: number) => value ? value.toLocaleString() : '—',
+                              render: (value: number) => toNumber(value) ? formatNumber(value) : '—',
                               width: 120,
                             },
                             {
@@ -914,7 +934,7 @@ const ReportsPage: React.FC = () => {
                               dataIndex: 'runningBalance',
                               key: 'runningBalance',
                               align: 'right',
-                              render: (value: number) => value.toLocaleString(),
+                              render: (value: number) => formatNumber(value),
                               width: 120,
                             },
                           ]}
@@ -944,7 +964,7 @@ const ReportsPage: React.FC = () => {
                 {monthlyReconciliation ? (
                   <Table
                     rowKey={(record) => `${record.month}-${record.bucketKey}`}
-                    dataSource={monthlyReconciliation.items}
+                    dataSource={safeArray(monthlyReconciliation.items)}
                     size="small"
                     scroll={{ x: 1280 }}
                     pagination={{ pageSize: 12 }}
@@ -973,7 +993,7 @@ const ReportsPage: React.FC = () => {
                         dataIndex: 'salesGross',
                         key: 'salesGross',
                         align: 'right',
-                        render: (value: number) => value.toLocaleString(),
+                        render: (value: number) => formatNumber(value),
                       },
                       {
                         title: '訂單數',
@@ -986,21 +1006,21 @@ const ReportsPage: React.FC = () => {
                         dataIndex: 'payoutGross',
                         key: 'payoutGross',
                         align: 'right',
-                        render: (value: number) => value.toLocaleString(),
+                        render: (value: number) => formatNumber(value),
                       },
                       {
                         title: '淨入帳',
                         dataIndex: 'payoutNet',
                         key: 'payoutNet',
                         align: 'right',
-                        render: (value: number) => value.toLocaleString(),
+                        render: (value: number) => formatNumber(value),
                       },
                       {
                         title: '手續費',
                         dataIndex: 'feeTotal',
                         key: 'feeTotal',
                         align: 'right',
-                        render: (value: number) => value.toLocaleString(),
+                        render: (value: number) => formatNumber(value),
                       },
                       {
                         title: '待撥款',
@@ -1030,7 +1050,7 @@ const ReportsPage: React.FC = () => {
                         align: 'right',
                         render: (value: number) => (
                           <span className={value === 0 ? 'text-slate-500' : 'text-amber-600'}>
-                            {value.toLocaleString()}
+                            {formatNumber(value)}
                           </span>
                         ),
                       },
@@ -1057,22 +1077,22 @@ const ReportsPage: React.FC = () => {
                 <Row gutter={[16, 16]}>
                   <Col xs={24} md={6}>
                     <Card bordered={false} className="bg-slate-50">
-                      <Statistic title="已稽核訂單" value={reconciliationAudit?.summary.auditedOrderCount || 0} />
+                      <Statistic title="已稽核訂單" value={reconciliationAudit?.summary?.auditedOrderCount || 0} />
                     </Card>
                   </Col>
                   <Col xs={24} md={6}>
                     <Card bordered={false} className="bg-slate-50">
-                      <Statistic title="發票異常" value={reconciliationAudit?.summary.invoiceIssueCount || 0} />
+                      <Statistic title="發票異常" value={reconciliationAudit?.summary?.invoiceIssueCount || 0} />
                     </Card>
                   </Col>
                   <Col xs={24} md={6}>
                     <Card bordered={false} className="bg-slate-50">
-                      <Statistic title="稅務異常" value={reconciliationAudit?.summary.taxIssueCount || 0} />
+                      <Statistic title="稅務異常" value={reconciliationAudit?.summary?.taxIssueCount || 0} />
                     </Card>
                   </Col>
                   <Col xs={24} md={6}>
                     <Card bordered={false} className="bg-slate-50">
-                      <Statistic title="帳款不一致" value={reconciliationAudit?.summary.orderPaymentIssueCount || 0} />
+                      <Statistic title="帳款不一致" value={reconciliationAudit?.summary?.orderPaymentIssueCount || 0} />
                     </Card>
                   </Col>
                 </Row>
@@ -1082,7 +1102,7 @@ const ReportsPage: React.FC = () => {
                     <Card bordered={false} className="bg-slate-50">
                       <Statistic
                         title="總手續費"
-                        value={reconciliationAudit?.summary.totalFeeAmount || 0}
+                        value={reconciliationAudit?.summary?.totalFeeAmount || 0}
                         precision={0}
                         prefix="NT$"
                       />
@@ -1092,7 +1112,7 @@ const ReportsPage: React.FC = () => {
                     <Card bordered={false} className="bg-slate-50">
                       <Statistic
                         title="金流手續費"
-                        value={reconciliationAudit?.summary.totalGatewayFeeAmount || 0}
+                        value={reconciliationAudit?.summary?.totalGatewayFeeAmount || 0}
                         precision={0}
                         prefix="NT$"
                       />
@@ -1102,10 +1122,10 @@ const ReportsPage: React.FC = () => {
                     <Card bordered={false} className="bg-slate-50">
                       <Statistic
                         title="平台手續費"
-                        value={reconciliationAudit?.summary.totalPlatformFeeAmount || 0}
+                        value={reconciliationAudit?.summary?.totalPlatformFeeAmount || 0}
                         precision={0}
                         prefix="NT$"
-                        suffix={` / ${reconciliationAudit?.summary.feeTakeRatePct.toFixed(2) || '0.00'}%`}
+                        suffix={` / ${formatPercent(reconciliationAudit?.summary?.feeTakeRatePct)}`}
                       />
                     </Card>
                   </Col>
@@ -1140,7 +1160,7 @@ const ReportsPage: React.FC = () => {
                         width: 320,
                         render: (_, record) => (
                           <div className="flex flex-wrap gap-1">
-                            {record.anomalyMessages.map((item: string) => (
+                            {safeArray<string>(record.anomalyMessages).map((item: string) => (
                               <Tag key={`${record.orderId}-${item}`} color={record.severity === 'critical' ? 'red' : 'gold'}>
                                 {item}
                               </Tag>
@@ -1152,13 +1172,13 @@ const ReportsPage: React.FC = () => {
                         title: '訂單 / 收款',
                         key: 'gross',
                         align: 'right',
-                        render: (_, record) => `${record.grossAmount.toFixed(0)} / ${record.paymentGrossAmount.toFixed(0)}`,
+                        render: (_, record) => `${formatNumber(record.grossAmount, { maximumFractionDigits: 0 })} / ${formatNumber(record.paymentGrossAmount, { maximumFractionDigits: 0 })}`,
                       },
                       {
                         title: '手續費',
                         key: 'fees',
                         align: 'right',
-                        render: (_, record) => `${record.feeTotalAmount.toFixed(0)} (${record.feeRatePct.toFixed(2)}%)`,
+                        render: (_, record) => `${formatNumber(record.feeTotalAmount, { maximumFractionDigits: 0 })} (${formatPercent(record.feeRatePct)})`,
                       },
                       {
                         title: '發票',
@@ -1167,7 +1187,7 @@ const ReportsPage: React.FC = () => {
                           <div>
                             <div>{record.invoiceNumber || '待補發票'}</div>
                             <div className="text-xs text-slate-400">
-                              {record.invoiceGrossAmount.toFixed(0)} / 稅 {record.invoiceTaxAmount.toFixed(0)}
+                              {formatNumber(record.invoiceGrossAmount, { maximumFractionDigits: 0 })} / 稅 {formatNumber(record.invoiceTaxAmount, { maximumFractionDigits: 0 })}
                             </div>
                           </div>
                         ),
@@ -1233,7 +1253,7 @@ const ReportsPage: React.FC = () => {
                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                               ))}
                             </Pie>
-                            <Tooltip formatter={(value: number) => `$${value.toLocaleString()}`} />
+                            <Tooltip formatter={(value: number) => formatMoney(value)} />
                             <Legend />
                           </PieChart>
                         </ResponsiveContainer>
@@ -1247,13 +1267,13 @@ const ReportsPage: React.FC = () => {
                       dataSource={getExpenseData()} 
                       columns={[
                         { title: '類別', dataIndex: 'name', key: 'name' },
-                        { title: '金額', dataIndex: 'value', key: 'value', render: (val) => `$${val.toLocaleString()}` },
+                        { title: '金額', dataIndex: 'value', key: 'value', render: (val) => formatMoney(val) },
                         { 
                           title: '佔比', 
                           key: 'percent', 
                           render: (_, record) => {
-                            const total = incomeStatement?.totalExpense || 1
-                            return `${((record.value / total) * 100).toFixed(1)}%`
+                            const total = toNumber(incomeStatement?.totalExpense) || 1
+                            return formatPercent((toNumber(record.value) / total) * 100, 1)
                           } 
                         }
                       ]}
