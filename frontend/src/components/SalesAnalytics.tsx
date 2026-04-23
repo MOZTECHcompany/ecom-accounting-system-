@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { Card, Statistic, Row, Col, Typography, Space, Empty } from 'antd'
+import { Card, Statistic, Row, Col, Typography, Space, Empty, Segmented, DatePicker } from 'antd'
 import {
   ThunderboltFilled,
   PieChartOutlined,
@@ -21,15 +21,22 @@ import {
 } from 'recharts'
 import { motion } from 'framer-motion'
 import { SalesOrder } from '../services/sales.service'
+import { Dayjs } from 'dayjs'
 
 const { Text, Title } = Typography
+const { RangePicker } = DatePicker
+type AnalyticsRange = 'today' | 'last7Days' | 'lastMonth' | 'lastYear' | 'custom'
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d']
 
 const SalesAnalytics: React.FC<{
   orders: SalesOrder[]
   rangeLabel: string
-}> = ({ orders, rangeLabel }) => {
+  quickRange: AnalyticsRange
+  customRange: [Dayjs | null, Dayjs | null] | null
+  onQuickRangeChange: (value: AnalyticsRange) => void
+  onCustomRangeChange: (value: [Dayjs | null, Dayjs | null] | null) => void
+}> = ({ orders, rangeLabel, quickRange, customRange, onQuickRangeChange, onCustomRangeChange }) => {
   const filteredOrders = orders
   const revenueTotal = filteredOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0)
   const completedOrders = filteredOrders.filter((order) => order.status === 'completed').length
@@ -94,8 +101,28 @@ const SalesAnalytics: React.FC<{
             </Text>
           </div>
         </div>
-        <div className="rounded-full bg-white/70 px-3 py-2 text-xs text-slate-500 shadow-sm">
-          統計區間：{rangeLabel}
+        <div className="flex flex-col items-stretch gap-3 md:items-end">
+          <Segmented
+            options={[
+              { label: '今天', value: 'today' },
+              { label: '過去 7 天', value: 'last7Days' },
+              { label: '過去一個月', value: 'lastMonth' },
+              { label: '過去一年', value: 'lastYear' },
+              { label: '自定義', value: 'custom' },
+            ]}
+            value={quickRange}
+            onChange={(value) => onQuickRangeChange(value as AnalyticsRange)}
+          />
+          {quickRange === 'custom' ? (
+            <RangePicker
+              value={customRange}
+              onChange={(value) => onCustomRangeChange((value || null) as [Dayjs | null, Dayjs | null] | null)}
+            />
+          ) : (
+            <div className="rounded-full bg-white/70 px-3 py-2 text-xs text-slate-500 shadow-sm">
+              統計區間：{rangeLabel}
+            </div>
+          )}
         </div>
       </div>
 

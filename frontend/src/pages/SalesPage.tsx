@@ -390,7 +390,14 @@ const SalesPage: React.FC = () => {
       </div>
 
       {/* Analytics Cards */}
-      <SalesAnalytics orders={filteredOrders} rangeLabel={rangeLabelMap[quickRange]} />
+      <SalesAnalytics
+        orders={filteredOrders}
+        rangeLabel={rangeLabelMap[quickRange]}
+        quickRange={quickRange}
+        customRange={customRange}
+        onQuickRangeChange={setQuickRange}
+        onCustomRangeChange={setCustomRange}
+      />
 
       {/* Filters & Actions */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-5 glass-panel p-5">
