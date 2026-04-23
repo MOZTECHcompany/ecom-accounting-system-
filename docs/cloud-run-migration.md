@@ -106,6 +106,8 @@ DATABASE_URL: postgresql://USER:PASSWORD@HOST:5432/DB?schema=public
 DATABASE_URL="postgresql://erp_user:***@127.0.0.1:5433/erp_db?schema=public"
 ```
 
+注意：如果 DB 密碼包含 `@`、`:`、`/`、`#` 等特殊字元，放進 `DATABASE_URL` 前必須 URL encode，否則 Prisma 會把密碼誤判成 host 或 port，出現 `invalid port number`。
+
 第一次使用先安裝 proxy：
 
 ```bash

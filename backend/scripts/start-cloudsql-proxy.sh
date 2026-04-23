@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_ID="${PROJECT_ID:-moztech-main-db}"
 INSTANCE_CONNECTION_NAME="${CLOUDSQL_INSTANCE:-moztech-main-db:asia-east1:moztech-main-db}"
 LOCAL_PORT="${CLOUDSQL_PROXY_PORT:-5433}"
 
@@ -20,7 +19,7 @@ fi
 
 echo "Starting Cloud SQL Auth Proxy for ${INSTANCE_CONNECTION_NAME} on 127.0.0.1:${LOCAL_PORT}"
 exec cloud-sql-proxy \
-  --project="${PROJECT_ID}" \
+  --gcloud-auth \
   --address=127.0.0.1 \
   --port="${LOCAL_PORT}" \
   "${INSTANCE_CONNECTION_NAME}"
