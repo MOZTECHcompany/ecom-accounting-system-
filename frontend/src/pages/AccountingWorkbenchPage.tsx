@@ -135,6 +135,7 @@ const AccountingWorkbenchPage: React.FC = () => {
   const [receivables, setReceivables] = useState<ReceivableMonitorResponse | null>(null)
   const [b2bStatements, setB2BStatements] = useState<B2BStatementResponse | null>(null)
   const [dataCompleteness, setDataCompleteness] = useState<DataCompletenessAudit | null>(null)
+  const [loadIssues, setLoadIssues] = useState<string[]>([])
 
   const entityId = localStorage.getItem('entityId')?.trim() || DEFAULT_ENTITY_ID
   // null = 不傳日期給 API → 後端回傳所有資料
@@ -144,7 +145,7 @@ const AccountingWorkbenchPage: React.FC = () => {
   const fetchWorkbench = async () => {
     setLoading(true)
     try {
-      const [executiveData, feedData, auditData, receivableData, b2bStatementData, completenessData] = await Promise.all([
+      const sections = await Promise.allSettled([
         dashboardService.getExecutiveOverview({ entityId, startDate, endDate }),
         dashboardService.getReconciliationFeed({ entityId, startDate, endDate, limit: 24 }),
         dashboardService.getOrderReconciliationAudit({ entityId, startDate, endDate, limit: 80 }),
@@ -152,13 +153,60 @@ const AccountingWorkbenchPage: React.FC = () => {
         arService.getB2BStatements({ entityId, asOfDate: endDate }),
         dashboardService.getDataCompletenessAudit({ entityId, startDate, endDate }),
       ])
-      setExecutive(executiveData)
-      setFeed(feedData)
-      setAudit(auditData)
-      setReceivables(receivableData)
-      setB2BStatements(b2bStatementData)
-      setDataCompleteness(completenessData)
+
+      const failedSections: string[] = []
+
+      const [
+        executiveResult,
+        feedResult,
+        auditResult,
+        receivableResult,
+        b2bResult,
+        completenessResult,
+      ] = sections
+
+      if (executiveResult.status === 'fulfilled') {
+        setExecutive(executiveResult.value)
+      } else {
+        failedSections.push('閉環總覽')
+      }
+
+      if (feedResult.status === 'fulfilled') {
+        setFeed(feedResult.value)
+      } else {
+        failedSections.push('對帳動態')
+      }
+
+      if (auditResult.status === 'fulfilled') {
+        setAudit(auditResult.value)
+      } else {
+        failedSections.push('逐筆稽核')
+      }
+
+      if (receivableResult.status === 'fulfilled') {
+        setReceivables(receivableResult.value)
+      } else {
+        failedSections.push('應收追蹤')
+      }
+
+      if (b2bResult.status === 'fulfilled') {
+        setB2BStatements(b2bResult.value)
+      } else {
+        failedSections.push('B2B 月結')
+      }
+
+      if (completenessResult.status === 'fulfilled') {
+        setDataCompleteness(completenessResult.value)
+      } else {
+        failedSections.push('資料完整度')
+      }
+
+      setLoadIssues(failedSections)
+      if (failedSections.length) {
+        message.warning(`部分區塊讀取失敗：${failedSections.join('、')}`)
+      }
     } catch (error: any) {
+      setLoadIssues(['整體讀取'])
       message.error(error?.response?.data?.message || '讀取會計工作台失敗')
     } finally {
       setLoading(false)
@@ -328,6 +376,15 @@ const AccountingWorkbenchPage: React.FC = () => {
   const automationCompletion = auditSummary?.auditedOrderCount
     ? Math.round((auditSummary.reconciledOrderCount / auditSummary.auditedOrderCount) * 100)
     : 0
+  const salesDataExists =
+    Number(dataCompleteness?.totals.orders || 0) > 0 ||
+    Number(auditSummary?.auditedOrderCount || 0) > 0 ||
+    Number(feed?.recentItems?.length || 0) > 0
+  const arNotReady =
+    salesDataExists &&
+    (!receivables ||
+      ((receivables.items?.length || 0) === 0 &&
+        Number(receivables.summary?.grossAmount || 0) === 0))
 
   const anomalyColumns: ColumnsType<DashboardExecutiveAnomaly> = [
     {
@@ -855,6 +912,37 @@ const AccountingWorkbenchPage: React.FC = () => {
           description="平台手續費優先吃平台 API；金流手續費以綠界撥款/對帳資料為最終依據。抓不到時不亂估，而是標記待補並進入會計工作台。"
         />
       </div>
+
+      {loadIssues.length ? (
+        <Alert
+          showIcon
+          type="warning"
+          className="rounded-3xl !px-7 !py-5 shadow-sm"
+          message={<span className="text-base font-semibold">部分區塊這次沒有讀取成功</span>}
+          description={`目前失敗區塊：${loadIssues.join('、')}。頁面其餘區塊仍會先顯示已成功讀到的資料。`}
+        />
+      ) : null}
+
+      {arNotReady ? (
+        <Alert
+          showIcon
+          type="warning"
+          className="rounded-3xl !px-7 !py-5 shadow-sm"
+          message={<span className="text-base font-semibold">銷售資料已進來，但 AR 應收閉環還沒建立</span>}
+          description="目前訂單、付款與撥款資料已存在，但應收帳款 / 入帳追蹤尚未同步成 AR；先執行「同步銷售到 AR」，這頁的應收、逾期、核銷與月結指標才會完整顯示。"
+          action={
+            <Button
+              type="primary"
+              icon={<ClockCircleOutlined />}
+              loading={syncingAr}
+              onClick={handleSyncAr}
+              className="bg-slate-950 hover:!bg-slate-800"
+            >
+              同步銷售到 AR
+            </Button>
+          }
+        />
+      ) : null}
 
       <Card className="rounded-3xl border-0 bg-white/75 shadow-sm" bodyStyle={{ padding: 28 }}>
         <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
