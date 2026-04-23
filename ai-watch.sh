@@ -33,6 +33,14 @@ while true; do
       rm -f "$REPO_DIR/.git/index.lock" 2>/dev/null && echo "[$TIMESTAMP] 🔓 清除過期 index.lock"
     fi
 
+    # 清除卡住的 rebase 狀態
+    if [ -d "$REPO_DIR/.git/rebase-merge" ]; then
+      rm -rf "$REPO_DIR/.git/rebase-merge" 2>/dev/null && echo "[$TIMESTAMP] 🔄 清除卡住的 rebase-merge"
+    fi
+    if [ -d "$REPO_DIR/.git/rebase-apply" ]; then
+      rm -rf "$REPO_DIR/.git/rebase-apply" 2>/dev/null && echo "[$TIMESTAMP] 🔄 清除卡住的 rebase-apply"
+    fi
+
     git add -A
     git commit -m "feat(ai): Claude 自動更新 — $TIMESTAMP
 
