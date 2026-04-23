@@ -272,6 +272,10 @@ const DashboardPage: React.FC = () => {
     const fetchSummary = async () => {
       setLoading(true);
       try {
+        // 30天趨勢 & 損益：固定取最近30天日報，不跟著 rangeMode 走
+        const trend30Start = dayjs().tz(DASHBOARD_TZ).subtract(29, 'day').startOf('day').toISOString()
+        const trend30End = dayjs().tz(DASHBOARD_TZ).endOf('day').toISOString()
+
         const [
           summary,
           executiveOverview,
@@ -279,6 +283,7 @@ const DashboardPage: React.FC = () => {
           invoiceQueueData,
           auditData,
           receivableMonitorData,
+          mgmtSummaryData,
         ] = await Promise.all([
           dashboardService.getSalesOverview({
             entityId: storedEntityId,
@@ -312,6 +317,12 @@ const DashboardPage: React.FC = () => {
             startDate: since,
             endDate: until,
           }),
+          dashboardService.getManagementSummary({
+            entityId: storedEntityId,
+            groupBy: 'day',
+            startDate: trend30Start,
+            endDate: trend30End,
+          }),
         ]);
 
         if (ignore) return;
@@ -322,6 +333,30 @@ const DashboardPage: React.FC = () => {
         setInvoiceQueue(invoiceQueueData);
         setAudit(auditData);
         setReceivableMonitor(receivableMonitorData);
+        setManagementSummary(mgmtSummaryData);
+
+        // 30天走勢圖 — 真實日報資料
+        if (mgmtSummaryData?.periods?.length) {
+          setRevenueTrend(
+            mgmtSummaryData.periods.map((p) => ({
+              date: dayjs(p.startDate).tz(DASHBOARD_TZ).format('MM/DD'),
+              revenue: p.revenue,
+              profit: p.grossProfit,
+            }))
+          )
+        }
+
+        // 本週損益 — 使用本次查詢範圍的彙總
+        if (mgmtSummaryData?.summary) {
+          const s = mgmtSummaryData.summary
+          setWeeklyPnl({
+            revenue: s.revenue,
+            cost: s.estimatedCogs + s.operatingExpenses,
+            grossProfit: s.grossProfit,
+            grossMargin: s.grossMarginPct / 100,
+            monthlyEarned: s.payoutNet,
+          })
+        }
       } catch (error: any) {
         if (!ignore) {
           message.error(error?.response?.data?.message || "讀取儀表板資料失敗");
@@ -359,7 +394,7 @@ const DashboardPage: React.FC = () => {
           bankBalance: bankRes.status === 'fulfilled' ? (bankRes.value?.balance ?? prev.bankBalance) : prev.bankBalance,
         }))
       } catch {
-        // 靜默使用 mock data
+        // API 失敗時靜默保留上一次值（初始為 0）
       }
     }
 
