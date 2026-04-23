@@ -560,6 +560,30 @@ const DashboardPage: React.FC = () => {
   const bonsonData = sumBuckets(bonsonBuckets);
   const teamData = sumBuckets(teamBuckets);
 
+  // ─── 通路貢獻（從真實 performanceBuckets 計算）──────────────
+  const channelColorMap: [RegExp, string][] = [
+    [/shopify/i, '#96bf48'],
+    [/shopline/i, '#e85d04'],
+    [/1shop|oneshop/i, '#4361ee'],
+    [/ecpay/i, '#7209b7'],
+    [/citiesocial/i, '#f72585'],
+    [/pchome/i, '#3a86ff'],
+    [/momo/i, '#ff006e'],
+    [/pinkoi/i, '#fb5607'],
+    [/line/i, '#00b300'],
+  ]
+  const getChannelColor = (key: string): string => {
+    for (const [re, color] of channelColorMap) {
+      if (re.test(key)) return color
+    }
+    return '#adb5bd'
+  }
+  const platformContribs: PlatformContribution[] = performanceBuckets.map(b => ({
+    platform: b.label,
+    net: b.payoutNet,
+    color: getChannelColor(b.key),
+  }))
+
   // ─── 紅燈警示計數 ──────────────────────────────────────
   const criticalInventory = inventoryAlerts.filter(a => a.severity === 'critical').length;
   const criticalAnomalies = anomalies.filter(a => a.tone === 'critical').length;
