@@ -21,6 +21,7 @@ import {
 } from 'recharts'
 import { motion } from 'framer-motion'
 import { SalesOrder } from '../services/sales.service'
+import { EcommerceHistory } from '../services/dashboard.service'
 import { Dayjs } from 'dayjs'
 
 const { Text, Title } = Typography
@@ -31,12 +32,13 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'
 
 const SalesAnalytics: React.FC<{
   orders: SalesOrder[]
+  ecommerceHistory?: EcommerceHistory | null
   rangeLabel: string
   quickRange: AnalyticsRange
   customRange: [Dayjs | null, Dayjs | null] | null
   onQuickRangeChange: (value: AnalyticsRange) => void
   onCustomRangeChange: (value: [Dayjs | null, Dayjs | null] | null) => void
-}> = ({ orders, rangeLabel, quickRange, customRange, onQuickRangeChange, onCustomRangeChange }) => {
+}> = ({ orders, ecommerceHistory, rangeLabel, quickRange, customRange, onQuickRangeChange, onCustomRangeChange }) => {
   const filteredOrders = orders
   const revenueTotal = filteredOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0)
   const completedOrders = filteredOrders.filter((order) => order.status === 'completed').length
@@ -73,19 +75,77 @@ const SalesAnalytics: React.FC<{
     }))
   }, [filteredOrders, rangeLabel])
 
-  const pieData = useMemo(() => {
-    const bucket = new Map<string, number>()
+  const platformMix = useMemo(() => {
+    if (ecommerceHistory?.brands?.length) {
+      const bucket = new Map<string, number>()
+      ecommerceHistory.brands.forEach((brand) => {
+        const key = brand.sourceLabel || brand.channelCode || '其他來源'
+        bucket.set(key, (bucket.get(key) || 0) + Number(brand.revenue || 0))
+      })
+
+      return Array.from(bucket.entries())
+        .map(([name, value]) => ({ name, value }))
+        .sort((left, right) => right.value - left.value)
+    }
+
+    const fallbackBucket = new Map<string, number>()
     filteredOrders.forEach((order) => {
-      const key = order.sourceBrand || order.sourceLabel || order.channelName || '其他來源'
-      bucket.set(key, (bucket.get(key) || 0) + Number(order.totalAmount || 0))
+      const key = order.sourceLabel || order.channelName || '其他來源'
+      fallbackBucket.set(key, (fallbackBucket.get(key) || 0) + Number(order.totalAmount || 0))
     })
-    return Array.from(bucket.entries())
+    return Array.from(fallbackBucket.entries())
       .map(([name, value]) => ({ name, value }))
       .sort((left, right) => right.value - left.value)
-      .slice(0, 6)
-  }, [filteredOrders])
+  }, [ecommerceHistory, filteredOrders])
 
-  const topSource = pieData[0]
+  const brandMix = useMemo(() => {
+    if (ecommerceHistory?.brands?.length) {
+      const bucket = new Map<string, { value: number; orders: number }>()
+      ecommerceHistory.brands.forEach((brand) => {
+        const current = bucket.get(brand.brand) || { value: 0, orders: 0 }
+        current.value += Number(brand.revenue || 0)
+        current.orders += Number(brand.orderCount || 0)
+        bucket.set(brand.brand, current)
+      })
+
+      return Array.from(bucket.entries())
+        .map(([name, value]) => ({ name, value: value.value, orders: value.orders }))
+        .sort((left, right) => right.value - left.value)
+    }
+
+    const fallbackBucket = new Map<string, { value: number; orders: number }>()
+    filteredOrders.forEach((order) => {
+      const key = order.sourceBrand || order.sourceLabel || order.channelName || '其他品牌'
+      const current = fallbackBucket.get(key) || { value: 0, orders: 0 }
+      current.value += Number(order.totalAmount || 0)
+      current.orders += 1
+      fallbackBucket.set(key, current)
+    })
+    return Array.from(fallbackBucket.entries())
+      .map(([name, value]) => ({ name, value: value.value, orders: value.orders }))
+      .sort((left, right) => right.value - left.value)
+  }, [ecommerceHistory, filteredOrders])
+
+  const salesMixSummary = useMemo(() => {
+    const total = platformMix.reduce((sum, item) => sum + item.value, 0)
+    const officialSiteRevenue = platformMix
+      .filter((item) => item.name.includes('官網') || item.name.includes('MOZTECH'))
+      .reduce((sum, item) => sum + item.value, 0)
+    const groupBuyRevenue = platformMix
+      .filter((item) => item.name.includes('團購') || item.name.includes('萬魔'))
+      .reduce((sum, item) => sum + item.value, 0)
+    const otherRevenue = Math.max(total - officialSiteRevenue - groupBuyRevenue, 0)
+
+    return {
+      total,
+      officialSiteRevenue,
+      groupBuyRevenue,
+      otherRevenue,
+    }
+  }, [platformMix])
+
+  const topSource = platformMix[0]
+  const topBrand = brandMix[0]
 
   return (
     <div className="space-y-7">
@@ -205,14 +265,14 @@ const SalesAnalytics: React.FC<{
 
         <Col xs={24} lg={8}>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="h-full">
-            <Card className="glass-card !border-0 h-full" title={<Space><PieChartOutlined /> <span className="text-sm font-medium">來源品牌占比</span></Space>}>
+            <Card className="glass-card !border-0 h-full" title={<Space><PieChartOutlined /> <span className="text-sm font-medium">平台業績占比</span></Space>}>
               <div className="h-[300px] w-full relative">
-                {pieData.length ? (
+                {platformMix.length ? (
                   <>
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                          {pieData.map((entry, index) => (
+                        <Pie data={platformMix} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                          {platformMix.map((entry, index) => (
                             <Cell key={`${entry.name}-${index}`} fill={COLORS[index % COLORS.length]} />
                           ))}
                         </Pie>
@@ -229,7 +289,7 @@ const SalesAnalytics: React.FC<{
                     </div>
                   </>
                 ) : (
-                  <Empty description="來源占比尚無資料" />
+                  <Empty description="平台占比尚無資料" />
                 )}
               </div>
             </Card>
@@ -237,11 +297,77 @@ const SalesAnalytics: React.FC<{
         </Col>
       </Row>
 
+      <Row gutter={[20, 20]}>
+        <Col xs={24} lg={8}>
+          <Card className="glass-card !border-0 h-full" title={<span className="text-sm font-medium">官網 / 團購 / 其他</span>}>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Text className="text-slate-500">官網業績</Text>
+                <Text strong>NT$ {salesMixSummary.officialSiteRevenue.toLocaleString()}</Text>
+              </div>
+              <div className="flex items-center justify-between">
+                <Text className="text-slate-500">團購業績</Text>
+                <Text strong>NT$ {salesMixSummary.groupBuyRevenue.toLocaleString()}</Text>
+              </div>
+              <div className="flex items-center justify-between">
+                <Text className="text-slate-500">其他業績</Text>
+                <Text strong>NT$ {salesMixSummary.otherRevenue.toLocaleString()}</Text>
+              </div>
+              <div className="rounded-2xl bg-slate-50 px-4 py-3 text-xs text-slate-500">
+                官網佔比 {salesMixSummary.total ? ((salesMixSummary.officialSiteRevenue / salesMixSummary.total) * 100).toFixed(1) : '0.0'}%
+                {' · '}
+                團購佔比 {salesMixSummary.total ? ((salesMixSummary.groupBuyRevenue / salesMixSummary.total) * 100).toFixed(1) : '0.0'}%
+              </div>
+            </div>
+          </Card>
+        </Col>
+
+        <Col xs={24} lg={8}>
+          <Card className="glass-card !border-0 h-full" title={<span className="text-sm font-medium">平台業績排行</span>}>
+            <div className="space-y-3">
+              {platformMix.slice(0, 5).map((item, index) => (
+                <div key={item.name} className="flex items-center justify-between gap-4 rounded-2xl bg-white/70 px-4 py-3">
+                  <div>
+                    <div className="text-xs text-slate-400">#{index + 1}</div>
+                    <div className="font-medium text-slate-800">{item.name}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-semibold text-slate-900">NT$ {item.value.toLocaleString()}</div>
+                    <div className="text-xs text-slate-400">
+                      {salesMixSummary.total ? ((item.value / salesMixSummary.total) * 100).toFixed(1) : '0.0'}%
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </Col>
+
+        <Col xs={24} lg={8}>
+          <Card className="glass-card !border-0 h-full" title={<span className="text-sm font-medium">品牌銷售排行</span>}>
+            <div className="space-y-3">
+              {brandMix.slice(0, 5).map((item, index) => (
+                <div key={item.name} className="flex items-center justify-between gap-4 rounded-2xl bg-white/70 px-4 py-3">
+                  <div>
+                    <div className="text-xs text-slate-400">#{index + 1}</div>
+                    <div className="font-medium text-slate-800">{item.name}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-semibold text-slate-900">NT$ {item.value.toLocaleString()}</div>
+                    <div className="text-xs text-slate-400">{item.orders.toLocaleString()} 筆</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </Col>
+      </Row>
+
       <div className="rounded-3xl bg-[linear-gradient(90deg,#1d4ed8,#6d28d9,#7c3aed)] px-6 py-5 text-white shadow-lg">
         <div className="text-sm font-semibold">AI 智慧洞察</div>
         <div className="mt-2 text-sm leading-7 text-white/90">
           {topSource
-            ? `目前 ${topSource.name} 是主要來源，這個區間貢獻 NT$ ${topSource.value.toLocaleString()}。建議搭配訂單列表的來源與客群欄位，優先檢查該來源的高價值客戶與待對帳訂單。`
+            ? `目前 ${topSource.name} 是主要平台來源，貢獻 NT$ ${topSource.value.toLocaleString()}。${topBrand ? `${topBrand.name} 則是目前主要品牌，累積銷售 NT$ ${topBrand.value.toLocaleString()}。` : ''} 建議優先檢查這個平台與品牌的高營收訂單、待對帳款項與客戶回購情況。`
             : '目前還沒有足夠的真實訂單資料可供 AI 洞察，先同步 Shopify / 團購 / Shopline 訂單後，這裡就會開始變成真實營運面板。'}
         </div>
       </div>

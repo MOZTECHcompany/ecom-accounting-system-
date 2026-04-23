@@ -845,7 +845,7 @@ const AccountingWorkbenchPage: React.FC = () => {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <Title level={2} className="!mb-1 !font-light">會計工作台</Title>
-          <Text type="secondary">集中處理待撥款、手續費、發票、應收與分錄核銷。</Text>
+          <Text type="secondary">這裡只處理待補手續費、發票、應收與分錄核銷；原始訂單與品牌銷售請回銷售訂單頁查看。</Text>
         </div>
         <Space wrap>
           <RangePicker

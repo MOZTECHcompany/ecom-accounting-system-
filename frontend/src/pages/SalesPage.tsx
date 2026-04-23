@@ -22,6 +22,7 @@ import OrderDetailsDrawer from '../components/OrderDetailsDrawer'
 import SalesAnalytics from '../components/SalesAnalytics'
 import BulkActionBar from '../components/BulkActionBar'
 import { salesService, SalesOrder } from '../services/sales.service'
+import { dashboardService, EcommerceHistory } from '../services/dashboard.service'
 
 const { Title, Text } = Typography
 const { RangePicker } = DatePicker
@@ -69,6 +70,7 @@ const SalesPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'list' | 'board'>('list')
   const [quickRange, setQuickRange] = useState<QuickRange>('last7Days')
   const [customRange, setCustomRange] = useState<[Dayjs | null, Dayjs | null] | null>(null)
+  const [ecommerceHistory, setEcommerceHistory] = useState<EcommerceHistory | null>(null)
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null)
@@ -78,13 +80,21 @@ const SalesPage: React.FC = () => {
   const fetchOrders = async () => {
     setLoading(true)
     try {
-      const data = await salesService.findAll({
-        ...resolveRangePayload(),
-        limit: 300,
-      })
-      setOrders(data)
+      const rangePayload = resolveRangePayload()
+      const [orderData, historyData] = await Promise.all([
+        salesService.findAll({
+          ...rangePayload,
+          limit: 300,
+        }),
+        dashboardService.getEcommerceHistory({
+          ...rangePayload,
+          groupBy: quickRange === 'lastYear' ? 'month' : 'day',
+        }),
+      ])
+      setOrders(orderData)
+      setEcommerceHistory(historyData)
     } catch (error) {
-      message.error('無法載入訂單')
+      message.error('無法載入銷售分析')
     } finally {
       setLoading(false)
     }
@@ -373,7 +383,7 @@ const SalesPage: React.FC = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <Title level={2} className="!mb-0">銷售訂單</Title>
-          <Text type="secondary">管理所有銷售渠道的訂單與出貨狀態</Text>
+          <Text type="secondary">這裡只看訂單、通路、品牌與銷售表現；對帳與分錄會往對帳中心與會計工作台處理。</Text>
         </div>
         <Space wrap>
           <Button icon={<ReloadOutlined />} onClick={fetchOrders}>重新整理</Button>
@@ -392,6 +402,7 @@ const SalesPage: React.FC = () => {
       {/* Analytics Cards */}
       <SalesAnalytics
         orders={filteredOrders}
+        ecommerceHistory={ecommerceHistory}
         rangeLabel={rangeLabelMap[quickRange]}
         quickRange={quickRange}
         customRange={customRange}

@@ -2766,7 +2766,7 @@ export class ReportsService {
         sourceLabel: string;
         channelCode: string | null;
         revenue: number;
-        orderCount: number;
+        orderIds: Set<string>;
         customerIds: Set<string>;
         productQty: Map<string, number>;
       }
@@ -2815,23 +2815,7 @@ export class ReportsService {
       }
       periodMap.set(periodDescriptor.key, period);
 
-      const brandKey = `${source.brand}::${source.label}::${source.channelCode || 'unknown'}`;
-      const brand =
-        brandMap.get(brandKey) ||
-        {
-          brand: source.brand,
-          sourceLabel: source.label,
-          channelCode: source.channelCode,
-          revenue: 0,
-          orderCount: 0,
-          customerIds: new Set<string>(),
-          productQty: new Map<string, number>(),
-        };
-      brand.revenue += revenue;
-      brand.orderCount += 1;
-      if (order.customerId) {
-        brand.customerIds.add(order.customerId);
-      }
+      let hasLineLevelBrand = false;
 
       for (const item of order.items) {
         const qty = Number(item.qty || 0);
@@ -2844,14 +2828,18 @@ export class ReportsService {
         );
         const productSku = item.product?.sku || 'UNMAPPED';
         const productName = item.product?.name || '未建商品';
-        const productKey = `${source.brand}::${productSku}`;
+        const inferredBrand = this.resolveProductBrand(
+          productName,
+          source.brand,
+        );
+        const productKey = `${inferredBrand}::${productSku}`;
         const product =
           productMap.get(productKey) ||
           {
             sku: productSku,
             name: productName,
             category: item.product?.category || null,
-            brand: source.brand,
+            brand: inferredBrand,
             revenue: 0,
             quantity: 0,
             orderIds: new Set<string>(),
@@ -2862,13 +2850,51 @@ export class ReportsService {
         product.orderIds.add(order.id);
         productMap.set(productKey, product);
 
+        const brandKey = `${inferredBrand}::${source.label}::${source.channelCode || 'unknown'}`;
+        const brand =
+          brandMap.get(brandKey) ||
+          {
+            brand: inferredBrand,
+            sourceLabel: source.label,
+            channelCode: source.channelCode,
+            revenue: 0,
+            orderIds: new Set<string>(),
+            customerIds: new Set<string>(),
+            productQty: new Map<string, number>(),
+          };
+        brand.revenue += itemRevenue;
+        brand.orderIds.add(order.id);
+        if (order.customerId) {
+          brand.customerIds.add(order.customerId);
+        }
         brand.productQty.set(
           productSku,
           (brand.productQty.get(productSku) || 0) + qty,
         );
+        brandMap.set(brandKey, brand);
+        hasLineLevelBrand = true;
       }
 
-      brandMap.set(brandKey, brand);
+      if (!hasLineLevelBrand) {
+        const brandKey = `${source.brand}::${source.label}::${source.channelCode || 'unknown'}`;
+        const brand =
+          brandMap.get(brandKey) ||
+          {
+            brand: source.brand,
+            sourceLabel: source.label,
+            channelCode: source.channelCode,
+            revenue: 0,
+            orderIds: new Set<string>(),
+            customerIds: new Set<string>(),
+            productQty: new Map<string, number>(),
+          };
+        brand.revenue += revenue;
+        brand.orderIds.add(order.id);
+        if (order.customerId) {
+          brand.customerIds.add(order.customerId);
+        }
+        brandMap.set(brandKey, brand);
+      }
     }
 
     const periods = Array.from(periodMap.values())
@@ -2889,10 +2915,10 @@ export class ReportsService {
         sourceLabel: brand.sourceLabel,
         channelCode: brand.channelCode,
         revenue: Number(brand.revenue.toFixed(2)),
-        orderCount: brand.orderCount,
+        orderCount: brand.orderIds.size,
         customerCount: brand.customerIds.size,
-        averageOrderValue: brand.orderCount
-          ? Number((brand.revenue / brand.orderCount).toFixed(2))
+        averageOrderValue: brand.orderIds.size
+          ? Number((brand.revenue / brand.orderIds.size).toFixed(2))
           : 0,
         topProducts: Array.from(brand.productQty.entries())
           .sort((left, right) => right[1] - left[1])
@@ -3453,5 +3479,21 @@ export class ReportsService {
       brand: fallback,
       channelCode: channelCode || null,
     };
+  }
+
+  private resolveProductBrand(productName?: string | null, fallbackBrand?: string) {
+    const normalizedName = (productName || '').trim();
+    if (!normalizedName) {
+      return (fallbackBrand || '未分類品牌').trim();
+    }
+
+    const [prefix] = normalizedName.split(/[|｜]/);
+    const candidate = prefix?.trim();
+
+    if (candidate && candidate.length <= 40) {
+      return candidate;
+    }
+
+    return (fallbackBrand || '未分類品牌').trim();
   }
 }

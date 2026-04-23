@@ -47,6 +47,17 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
           },
         ]
 
+  const resolveItemBrand = (productName?: string) => {
+    const normalizedName = (productName || '').trim()
+    if (!normalizedName) return null
+    const [prefix] = normalizedName.split(/[|｜]/)
+    const candidate = prefix?.trim()
+    if (!candidate || candidate === normalizedName || candidate.length > 40) {
+      return null
+    }
+    return candidate
+  }
+
   const handleSyncInvoiceStatus = async () => {
     setSyncingInvoice(true)
     try {
@@ -137,7 +148,7 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
                 <Descriptions.Item label="Email">{order.customerEmail || '未填寫'}</Descriptions.Item>
                 <Descriptions.Item label="電話">{order.customerPhone || '未填寫'}</Descriptions.Item>
                 <Descriptions.Item label="來源">{order.sourceLabel || order.channelName || '未歸戶來源'}</Descriptions.Item>
-                <Descriptions.Item label="品牌">{order.sourceBrand || '未設定'}</Descriptions.Item>
+                <Descriptions.Item label="通路品牌">{order.sourceBrand || '未設定'}</Descriptions.Item>
                 <Descriptions.Item label="發票號碼">{order.invoiceNumber || '尚未開立'}</Descriptions.Item>
                 <Descriptions.Item label="發票日期">{order.invoiceDate || '待確認'}</Descriptions.Item>
               </Descriptions>
@@ -201,6 +212,7 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
                     avatar={<div className="w-12 h-12 bg-white/60 rounded-lg flex items-center justify-center text-xl">📦</div>}
                     title={
                       <div className="flex flex-wrap items-center gap-2">
+                        {resolveItemBrand(item.productName) ? <Tag color="blue" className="m-0">{resolveItemBrand(item.productName)}</Tag> : null}
                         <span>{item.productName}</span>
                         {item.sku ? <Tag className="m-0">{item.sku}</Tag> : null}
                       </div>
