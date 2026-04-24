@@ -1021,6 +1021,10 @@ export class ReportsService {
           payments,
           reconciled,
           feeMissing,
+          missingPaymentPendingCandidates,
+          missingInvoiceEmbeddedCandidates,
+          missingInvoiceEcpayBackfillCandidates,
+          feeMissingPayoutBackfillCandidates,
         ] = await Promise.all([
           this.prisma.salesOrder.count({ where: channelOrderWhere }),
           this.prisma.salesOrder.count({
@@ -1075,6 +1079,51 @@ export class ReportsService {
               ],
             },
           }),
+          this.prisma.salesOrder.count({
+            where: {
+              ...channelOrderWhere,
+              payments: { none: {} },
+              notes: { contains: 'status=pending' },
+            },
+          }),
+          this.prisma.salesOrder.count({
+            where: {
+              ...channelOrderWhere,
+              hasInvoice: false,
+              invoices: { none: {} },
+              notes: { contains: 'invoiceNumber=' },
+            },
+          }),
+          this.prisma.salesOrder.count({
+            where: {
+              ...channelOrderWhere,
+              hasInvoice: false,
+              invoices: { none: {} },
+              notes: { not: { contains: 'invoiceNumber=' } },
+            },
+          }),
+          this.prisma.payment.count({
+            where: {
+              ...paymentWhere,
+              status: { in: ['completed', 'success'] },
+              AND: [
+                paymentChannelSelector,
+                {
+                  OR: [
+                    { notes: null },
+                    { notes: { not: { contains: 'feeStatus=actual' } } },
+                  ],
+                },
+                {
+                  OR: [
+                    { notes: null },
+                    { notes: { not: { contains: '[provider-payout]' } } },
+                    { notes: { not: { contains: 'feeSource=provider-payout:ecpay' } } },
+                  ],
+                },
+              ],
+            },
+          }),
         ]);
 
         return {
@@ -1089,6 +1138,12 @@ export class ReportsService {
           reconciledPayments: reconciled,
           unreconciledPayments: Math.max(payments - reconciled, 0),
           feeMissingPayments: feeMissing,
+          reasonBreakdown: {
+            missingPaymentPendingCandidates,
+            missingInvoiceEmbeddedCandidates,
+            missingInvoiceEcpayBackfillCandidates,
+            feeMissingPayoutBackfillCandidates,
+          },
           firstOrder: firstOrder
             ? {
                 orderNumber: firstOrder.externalOrderId,

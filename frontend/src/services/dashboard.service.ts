@@ -403,6 +403,12 @@ export type DataCompletenessChannelBreakdown = {
   reconciledPayments: number;
   unreconciledPayments: number;
   feeMissingPayments: number;
+  reasonBreakdown?: {
+    missingPaymentPendingCandidates: number;
+    missingInvoiceEmbeddedCandidates: number;
+    missingInvoiceEcpayBackfillCandidates: number;
+    feeMissingPayoutBackfillCandidates: number;
+  };
   firstOrder: {
     orderNumber: string | null;
     orderDate: string;

@@ -807,15 +807,41 @@ const AccountingWorkbenchPage: React.FC = () => {
       title: '資料缺口',
       width: 260,
       render: (_, record) => (
-        <Space size={[4, 4]} wrap>
-          {record.missingCustomers ? <Tag color="gold">缺顧客 {record.missingCustomers}</Tag> : null}
-          {record.missingPayments ? <Tag color="gold">缺 Payment {record.missingPayments}</Tag> : null}
-          {record.missingInvoices ? <Tag color="blue">缺發票 {record.missingInvoices}</Tag> : null}
-          {record.feeMissingPayments ? <Tag color="red">缺手續費 {record.feeMissingPayments}</Tag> : null}
-          {!record.missingCustomers && !record.missingPayments && !record.missingInvoices && !record.feeMissingPayments ? (
-            <Tag color="green">主資料完整</Tag>
+        <div className="space-y-2">
+          <Space size={[4, 4]} wrap>
+            {record.missingCustomers ? <Tag color="gold">缺顧客 {record.missingCustomers}</Tag> : null}
+            {record.missingPayments ? <Tag color="gold">缺 Payment {record.missingPayments}</Tag> : null}
+            {record.missingInvoices ? <Tag color="blue">缺發票 {record.missingInvoices}</Tag> : null}
+            {record.feeMissingPayments ? <Tag color="red">缺手續費 {record.feeMissingPayments}</Tag> : null}
+            {!record.missingCustomers && !record.missingPayments && !record.missingInvoices && !record.feeMissingPayments ? (
+              <Tag color="green">主資料完整</Tag>
+            ) : null}
+          </Space>
+          {record.reasonBreakdown ? (
+            <div className="space-y-1 text-[11px] leading-5 text-slate-400">
+              {record.reasonBreakdown.missingPaymentPendingCandidates ? (
+                <div>
+                  待付款 / 待代收 {record.reasonBreakdown.missingPaymentPendingCandidates} 筆，會先補 Payment draft。
+                </div>
+              ) : null}
+              {record.reasonBreakdown.missingInvoiceEmbeddedCandidates ? (
+                <div>
+                  訂單已帶發票號碼但尚未落正式 Invoice {record.reasonBreakdown.missingInvoiceEmbeddedCandidates} 筆。
+                </div>
+              ) : null}
+              {record.reasonBreakdown.missingInvoiceEcpayBackfillCandidates ? (
+                <div>
+                  等綠界發票回填 {record.reasonBreakdown.missingInvoiceEcpayBackfillCandidates} 筆。
+                </div>
+              ) : null}
+              {record.reasonBreakdown.feeMissingPayoutBackfillCandidates ? (
+                <div>
+                  等綠界撥款 / 手續費回填 {record.reasonBreakdown.feeMissingPayoutBackfillCandidates} 筆。
+                </div>
+              ) : null}
+            </div>
           ) : null}
-        </Space>
+        </div>
       ),
     },
     {
