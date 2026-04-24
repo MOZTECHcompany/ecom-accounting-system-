@@ -173,6 +173,19 @@ export type BackfillOneShopGroupbuyClosureResponse = {
   }
 }
 
+export type RefreshLinePayStatusesResponse = {
+  success: boolean
+  checkedCount: number
+  successCount: number
+  failedCount: number
+  refundCandidateCount: number
+  failures: Array<{
+    lineId: string
+    transactionId: string
+    error: string
+  }>
+}
+
 export const reconciliationService = {
   getCenter: async (params?: {
     entityId?: string
@@ -308,6 +321,30 @@ export const reconciliationService = {
         maxWindows: params.maxWindows,
         invoiceBatchLimit: params.invoiceBatchLimit,
         autoClear: params.autoClear,
+      },
+      {
+        timeout: 180000,
+      },
+    )
+    return response.data
+  },
+
+  refreshLinePayStatuses: async (params: {
+    entityId?: string
+    startDate?: string
+    endDate?: string
+    limit?: number
+  }) => {
+    const entityId =
+      params.entityId?.trim() || localStorage.getItem('entityId')?.trim() || DEFAULT_ENTITY_ID
+
+    const response = await api.post<RefreshLinePayStatusesResponse>(
+      '/reconciliation/line-pay/refresh-status',
+      {
+        entityId,
+        startDate: params.startDate,
+        endDate: params.endDate,
+        limit: params.limit,
       },
       {
         timeout: 180000,

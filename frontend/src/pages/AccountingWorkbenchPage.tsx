@@ -130,6 +130,7 @@ const AccountingWorkbenchPage: React.FC = () => {
   const [importingFeeInvoices, setImportingFeeInvoices] = useState(false)
   const [importingLinePayCapture, setImportingLinePayCapture] = useState(false)
   const [backfillingOneShopClosure, setBackfillingOneShopClosure] = useState(false)
+  const [refreshingLinePayStatuses, setRefreshingLinePayStatuses] = useState(false)
   const [executive, setExecutive] = useState<DashboardExecutiveOverview | null>(null)
   const [feed, setFeed] = useState<DashboardReconciliationFeed | null>(null)
   const [audit, setAudit] = useState<OrderReconciliationAudit | null>(null)
@@ -402,6 +403,36 @@ const AccountingWorkbenchPage: React.FC = () => {
       message.error(error?.response?.data?.message || '補跑 1Shop 團購閉環失敗')
     } finally {
       setBackfillingOneShopClosure(false)
+    }
+  }
+
+  const handleRefreshLinePayStatuses = async () => {
+    setRefreshingLinePayStatuses(true)
+    try {
+      const result = await reconciliationService.refreshLinePayStatuses({
+        entityId,
+        startDate,
+        endDate,
+        limit: 300,
+      })
+
+      if (result.failedCount > 0) {
+        message.warning(
+          `LINE Pay 狀態刷新完成：成功 ${result.successCount} 筆，失敗 ${result.failedCount} 筆，退款候選 ${result.refundCandidateCount} 筆`,
+          6,
+        )
+      } else {
+        message.success(
+          `LINE Pay 狀態刷新完成：檢查 ${result.checkedCount} 筆，退款候選 ${result.refundCandidateCount} 筆`,
+          6,
+        )
+      }
+
+      await fetchWorkbench()
+    } catch (error: any) {
+      message.error(error?.response?.data?.message || '刷新 LINE Pay 狀態失敗')
+    } finally {
+      setRefreshingLinePayStatuses(false)
     }
   }
 
@@ -1136,6 +1167,13 @@ const AccountingWorkbenchPage: React.FC = () => {
                 匯入 LINE Pay CAPTURE
               </Button>
             </Upload>
+            <Button
+              icon={<ReloadOutlined />}
+              loading={refreshingLinePayStatuses}
+              onClick={handleRefreshLinePayStatuses}
+            >
+              刷新 LINE Pay 狀態
+            </Button>
             <Button
               icon={<CheckCircleOutlined />}
               onClick={() => navigate('/ap/payable?tab=ecpay-fees')}
