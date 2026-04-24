@@ -129,6 +129,8 @@ const AccountingWorkbenchPage: React.FC = () => {
   const [feeImportOpen, setFeeImportOpen] = useState(false)
   const [importingFeeInvoices, setImportingFeeInvoices] = useState(false)
   const [importingLinePayCapture, setImportingLinePayCapture] = useState(false)
+  const [importingEcpayPayout, setImportingEcpayPayout] = useState(false)
+  const [importingEcpayIssuedInvoices, setImportingEcpayIssuedInvoices] = useState(false)
   const [backfillingOneShopClosure, setBackfillingOneShopClosure] = useState(false)
   const [refreshingLinePayStatuses, setRefreshingLinePayStatuses] = useState(false)
   const [processingLinePayRefunds, setProcessingLinePayRefunds] = useState(false)
@@ -360,6 +362,64 @@ const AccountingWorkbenchPage: React.FC = () => {
       message.error(error?.response?.data?.message || '匯入 LINE Pay CAPTURE 失敗')
     } finally {
       setImportingLinePayCapture(false)
+    }
+  }
+
+  const handleImportEcpayPayout = async (file: File) => {
+    setImportingEcpayPayout(true)
+    try {
+      const rows = await parseSpreadsheetRows(file)
+      if (!rows.length) {
+        message.warning('這份綠界撥款報表沒有可匯入的資料列')
+        return
+      }
+
+      const result = await reconciliationService.importProviderPayouts({
+        entityId,
+        provider: 'ecpay',
+        sourceType: 'statement',
+        fileName: file.name,
+        rows,
+        notes: '綠界撥款 / 對帳報表手動匯入',
+      })
+
+      message.success(
+        `綠界撥款匯入完成：${result.recordCount} 筆，已匹配 ${result.matchedCount} 筆，待確認 ${result.unmatchedCount} 筆，無效 ${result.invalidCount} 筆`,
+      )
+      await fetchWorkbench()
+    } catch (error: any) {
+      message.error(error?.response?.data?.message || '匯入綠界撥款報表失敗')
+    } finally {
+      setImportingEcpayPayout(false)
+    }
+  }
+
+  const handleImportEcpayIssuedInvoices = async (file: File) => {
+    setImportingEcpayIssuedInvoices(true)
+    try {
+      const rows = await parseSpreadsheetRows(file)
+      if (!rows.length) {
+        message.warning('這份綠界銷項發票檔沒有可匯入的資料列')
+        return
+      }
+
+      const result = await salesService.importEcpayIssuedInvoices({
+        entityId,
+        merchantKey: 'groupbuy-main',
+        merchantId: '3150241',
+        markIssued: true,
+        rows,
+      })
+
+      message.success(
+        `綠界銷項發票匯入完成：已配對 ${result.matched || 0} 筆，新增 ${result.created || 0} 筆，更新 ${result.updated || 0} 筆，未配對 ${result.unmatched || 0} 筆`,
+        6,
+      )
+      await fetchWorkbench()
+    } catch (error: any) {
+      message.error(error?.response?.data?.message || '匯入綠界銷項發票失敗')
+    } finally {
+      setImportingEcpayIssuedInvoices(false)
     }
   }
 
@@ -1196,6 +1256,36 @@ const AccountingWorkbenchPage: React.FC = () => {
             >
               匯入綠界服務費發票
             </Button>
+            <Upload
+              accept=".xlsx,.xls,.csv"
+              showUploadList={false}
+              beforeUpload={(file) => {
+                void handleImportEcpayPayout(file)
+                return false
+              }}
+            >
+              <Button
+                icon={<UploadOutlined />}
+                loading={importingEcpayPayout}
+              >
+                匯入綠界撥款報表
+              </Button>
+            </Upload>
+            <Upload
+              accept=".xlsx,.xls,.csv"
+              showUploadList={false}
+              beforeUpload={(file) => {
+                void handleImportEcpayIssuedInvoices(file)
+                return false
+              }}
+            >
+              <Button
+                icon={<UploadOutlined />}
+                loading={importingEcpayIssuedInvoices}
+              >
+                匯入綠界銷項發票
+              </Button>
+            </Upload>
             <Upload
               accept=".xlsx,.xls,.csv"
               showUploadList={false}

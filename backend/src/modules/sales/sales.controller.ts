@@ -21,6 +21,7 @@ import { SalesService } from './sales.service';
 import { SalesOrderService } from './services/sales-order.service';
 import { CreateSalesOrderDto } from './dto/create-sales-order.dto';
 import { FulfillSalesOrderDto } from './dto/fulfill-sales-order.dto';
+import { ImportEcpayIssuedInvoicesDto } from './dto/import-ecpay-issued-invoices.dto';
 import { SyncSalesOrderInvoiceStatusDto } from './dto/sync-sales-order-invoice-status.dto';
 /**
  * SalesController 銷售控制器
@@ -155,6 +156,21 @@ export class SalesController {
       startDate: dto.startDate ? new Date(dto.startDate) : undefined,
       endDate: dto.endDate ? new Date(dto.endDate) : undefined,
       limit: dto.limit,
+    });
+  }
+
+  @Post('orders/ecpay-issued-invoices/import')
+  @ApiOperation({ summary: '匯入綠界銷項發票資料並回填 SalesOrder / Invoice' })
+  async importEcpayIssuedInvoices(
+    @Body() dto: ImportEcpayIssuedInvoicesDto,
+  ) {
+    return this.salesOrderService.importEcpayIssuedInvoices({
+      entityId: this.requireEntityId(dto.entityId),
+      merchantKey: dto.merchantKey?.trim() || undefined,
+      merchantId: dto.merchantId?.trim() || undefined,
+      markIssued: dto.markIssued !== false,
+      rows: dto.rows,
+      mapping: dto.mapping,
     });
   }
 

@@ -561,6 +561,137 @@ export class SalesOrderService {
     };
   }
 
+  async importEcpayIssuedInvoices(params: {
+    entityId: string;
+    merchantKey?: string;
+    merchantId?: string;
+    markIssued?: boolean;
+    rows: Record<string, string | number | boolean | null>[];
+    mapping?: Record<string, string | string[]>;
+  }) {
+    const merchantKey =
+      params.merchantKey?.trim() ||
+      (params.merchantId?.trim() === '3150241' ? 'groupbuy-main' : 'shopify-main');
+    const merchantId =
+      params.merchantId?.trim() ||
+      (merchantKey === 'groupbuy-main' ? '3150241' : '3290494');
+    const markIssued = params.markIssued !== false;
+
+    let matched = 0;
+    let created = 0;
+    let updated = 0;
+    let unmatched = 0;
+    let invalid = 0;
+    const results: Array<{
+      invoiceNumber?: string | null;
+      relateNumber?: string | null;
+      orderId?: string | null;
+      orderNumber?: string | null;
+      status: 'created' | 'updated' | 'unmatched' | 'invalid';
+      message: string;
+    }> = [];
+
+    for (const row of params.rows || []) {
+      const normalized = this.normalizeEcpayIssuedInvoiceRow(row, params.mapping);
+      if (!normalized.invoiceNumber || !normalized.invoiceDate) {
+        invalid += 1;
+        results.push({
+          invoiceNumber: normalized.invoiceNumber,
+          relateNumber: normalized.relateNumber,
+          status: 'invalid',
+          message: '缺少發票號碼或發票日期',
+        });
+        continue;
+      }
+
+      const order = await this.findSalesOrderForEcpayInvoiceImport({
+        entityId: params.entityId,
+        merchantKey,
+        merchantId,
+        invoiceNumber: normalized.invoiceNumber,
+        relateNumber: normalized.relateNumber,
+      });
+
+      if (!order) {
+        unmatched += 1;
+        results.push({
+          invoiceNumber: normalized.invoiceNumber,
+          relateNumber: normalized.relateNumber,
+          status: 'unmatched',
+          message: '找不到可回填的訂單',
+        });
+        continue;
+      }
+
+      const existingInvoice = await this.prisma.invoice.findUnique({
+        where: { invoiceNumber: normalized.invoiceNumber },
+        select: { id: true },
+      });
+
+      const invoiceRecord = await this.materializeInvoiceCandidate(
+        order,
+        {
+          invoiceNumber: normalized.invoiceNumber,
+          invoiceDate: normalized.invoiceDate,
+        },
+        {
+          externalPlatform: 'ecpay',
+          externalPayload: row,
+          verificationMessage: normalized.note || 'manual_import',
+          issued: markIssued,
+        },
+      );
+
+      const mergedNotes = this.mergeInvoiceMetadataIntoNotes(order.notes, {
+        invoiceNumber: normalized.invoiceNumber,
+        invoiceDate: normalized.invoiceDate,
+        invoiceStatus: markIssued ? 'issued' : 'draft',
+        merchantKey,
+        merchantId,
+        verificationMessage: normalized.note || 'manual_import',
+        verifiedAt: new Date().toISOString(),
+      });
+
+      await this.prisma.salesOrder.update({
+        where: { id: order.id },
+        data: {
+          hasInvoice: markIssued || order.hasInvoice,
+          invoiceId: invoiceRecord?.id || order.invoiceId || null,
+          notes: mergedNotes,
+        },
+      });
+
+      matched += 1;
+      if (existingInvoice) {
+        updated += 1;
+      } else {
+        created += 1;
+      }
+      results.push({
+        invoiceNumber: normalized.invoiceNumber,
+        relateNumber: normalized.relateNumber,
+        orderId: order.id,
+        orderNumber: order.externalOrderId || order.id,
+        status: existingInvoice ? 'updated' : 'created',
+        message: existingInvoice ? '已更新既有發票並回填訂單' : '已建立發票並回填訂單',
+      });
+    }
+
+    return {
+      success: true,
+      entityId: params.entityId,
+      merchantKey,
+      merchantId,
+      requested: params.rows.length,
+      matched,
+      created,
+      updated,
+      unmatched,
+      invalid,
+      results,
+    };
+  }
+
   /**
    * 處理退款
    * @param orderId - 訂單 ID
@@ -914,6 +1045,104 @@ export class SalesOrderService {
     }
 
     throw new BadRequestException(`Unsupported channel for ECPay invoice sync: ${channelCode}`);
+  }
+
+  private normalizeEcpayIssuedInvoiceRow(
+    row: Record<string, string | number | boolean | null>,
+    mapping?: Record<string, string | string[]>,
+  ) {
+    const pick = (...keys: string[]) => {
+      for (const key of keys) {
+        const value = row[key];
+        if (value === undefined || value === null) {
+          continue;
+        }
+        const normalized = String(value).trim();
+        if (normalized) {
+          return normalized;
+        }
+      }
+      return '';
+    };
+
+    const fromMapping = (target: string, fallbacks: string[]) => {
+      const configured = mapping?.[target];
+      if (Array.isArray(configured)) {
+        const value = pick(...configured, ...fallbacks);
+        return value;
+      }
+      if (typeof configured === 'string') {
+        const value = pick(configured, ...fallbacks);
+        return value;
+      }
+      return pick(...fallbacks);
+    };
+
+    return {
+      invoiceNumber: fromMapping('invoiceNo', [
+        'invoiceNo',
+        'InvoiceNo',
+        '發票號碼',
+        'invoice_number',
+      ]),
+      invoiceDate: fromMapping('invoiceDate', [
+        'invoiceDate',
+        'InvoiceDate',
+        '發票日期',
+        'invoice_date',
+      ]),
+      relateNumber: fromMapping('relateNumber', [
+        'relateNumber',
+        'RelateNumber',
+        '關聯號碼',
+        '關聯號',
+        '訂單編號',
+        'orderNumber',
+        'MerchantTradeNo',
+      ]),
+      note: fromMapping('note', ['note', '備註', 'Remark', '發票備註']),
+    };
+  }
+
+  private async findSalesOrderForEcpayInvoiceImport(params: {
+    entityId: string;
+    merchantKey: string;
+    merchantId: string;
+    invoiceNumber: string;
+    relateNumber?: string;
+  }) {
+    const channelCodes =
+      params.merchantKey === 'groupbuy-main' || params.merchantId === '3150241'
+        ? ['1SHOP', 'SHOPLINE']
+        : ['SHOPIFY'];
+    const relateNumber = params.relateNumber?.trim();
+
+    return this.prisma.salesOrder.findFirst({
+      where: {
+        entityId: params.entityId,
+        channel: {
+          code: {
+            in: channelCodes,
+          },
+        },
+        OR: [
+          { invoices: { some: { invoiceNumber: params.invoiceNumber } } },
+          { notes: { contains: `invoiceNumber=${params.invoiceNumber}` } },
+          ...(relateNumber
+            ? [
+                { externalOrderId: relateNumber },
+                { externalOrderId: { endsWith: `:${relateNumber}` } },
+                { notes: { contains: `originalOrderNumber=${relateNumber}` } },
+                { notes: { contains: `oneShopOrderId=${relateNumber}` } },
+              ]
+            : []),
+        ],
+      },
+      include: {
+        customer: true,
+      },
+      orderBy: { orderDate: 'desc' },
+    });
   }
 
   private async materializeInvoiceCandidate(

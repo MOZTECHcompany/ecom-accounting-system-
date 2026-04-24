@@ -322,6 +322,20 @@ export const salesService = {
     return response.data
   },
 
+  async importEcpayIssuedInvoices(payload: {
+    entityId: string
+    merchantKey?: string
+    merchantId?: string
+    markIssued?: boolean
+    rows: Record<string, string | number | boolean | null>[]
+    mapping?: Record<string, string | string[]>
+  }) {
+    const response = await api.post('/sales/orders/ecpay-issued-invoices/import', payload, {
+      timeout: 180000,
+    })
+    return response.data
+  },
+
   async fulfill(id: string, data: { warehouseId: string; itemSerialNumbers?: Record<string, string[]> }, entityId: string) {
     const response = await api.post(`/sales/orders/${id}/fulfill`, data, {
       params: { entityId }
