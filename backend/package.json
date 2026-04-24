@@ -20,6 +20,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "seed:ai-items": "ts-node src/scripts/seed-ai-reimbursement-items.ts",
     "import:erp-inventory": "ts-node src/scripts/import-legacy-erp-inventory.ts",
+    "reconciliation:closure-pass": "ts-node src/scripts/run-reconciliation-closure-pass.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",

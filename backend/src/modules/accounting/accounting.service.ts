@@ -174,7 +174,7 @@ export class AccountingService {
       date: data.date,
       description: data.description.trim(),
       sourceModule: 'manual',
-      sourceId: null,
+      sourceId: undefined,
       periodId: period?.id,
       createdBy: data.createdBy,
       lines: data.lines.map((line) => {

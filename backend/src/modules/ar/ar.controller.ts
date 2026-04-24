@@ -63,9 +63,16 @@ export class ArController {
   @ApiOperation({ summary: '將銷售訂單同步為應收帳款與收入分錄' })
   async syncSalesOrders(
     @Query('entityId') entityId: string,
+    @Query('startDate') startDate: string | undefined,
+    @Query('endDate') endDate: string | undefined,
+    @Query('limit') limit: string | undefined,
     @CurrentUser('id') userId: string,
   ) {
-    return this.arService.syncSalesReceivables(entityId, userId);
+    return this.arService.syncSalesReceivables(entityId, userId, {
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
   }
 
   @Get('invoices/:id')

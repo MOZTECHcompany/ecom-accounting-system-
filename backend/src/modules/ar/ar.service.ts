@@ -693,13 +693,33 @@ export class ArService {
     };
   }
 
-  async syncSalesReceivables(entityId: string, userId: string) {
+  async syncSalesReceivables(
+    entityId: string,
+    userId: string,
+    options?: {
+      startDate?: Date;
+      endDate?: Date;
+      limit?: number;
+    },
+  ) {
+    const orderDate =
+      options?.startDate || options?.endDate
+        ? {
+            ...(options?.startDate ? { gte: options.startDate } : {}),
+            ...(options?.endDate ? { lte: options.endDate } : {}),
+          }
+        : undefined;
+    const take = options?.limit
+      ? Math.min(Math.max(Number(options.limit || 0), 1), 5000)
+      : undefined;
+
     const orders = await this.prisma.salesOrder.findMany({
       where: {
         entityId,
         status: {
           notIn: ['cancelled', 'refunded'],
         },
+        ...(orderDate ? { orderDate } : {}),
       },
       include: {
         customer: true,
@@ -710,6 +730,7 @@ export class ArService {
         },
       },
       orderBy: { orderDate: 'desc' },
+      ...(take ? { take } : {}),
     });
 
     const orderIds = orders.map((order) => order.id);
@@ -876,6 +897,10 @@ export class ArService {
 
     return {
       entityId,
+      range: {
+        startDate: options?.startDate?.toISOString() || null,
+        endDate: options?.endDate?.toISOString() || null,
+      },
       orderCount: orders.length,
       arUpserted,
       journalsCreated,

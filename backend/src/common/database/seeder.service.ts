@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
-import { Role } from '@prisma/client';
+import { Permission, Role } from '@prisma/client';
 
 @Injectable()
 export class SeederService implements OnModuleInit {
@@ -75,7 +75,7 @@ export class SeederService implements OnModuleInit {
     const resources = ['users', 'accounts', 'journal_entries', 'sales_orders'];
     const actions = ['read', 'create', 'update', 'delete', 'approve'];
 
-    const permissions = [];
+    const permissions: Permission[] = [];
     for (const resource of resources) {
       for (const action of actions) {
         const permission = await this.prisma.permission.upsert({

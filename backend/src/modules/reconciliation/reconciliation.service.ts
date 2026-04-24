@@ -145,7 +145,12 @@ export class ReconciliationService {
       'ar-sync',
       '同步銷售訂單到 AR / 分錄',
       true,
-      () => this.arService.syncSalesReceivables(entityId, params.userId || ''),
+      () =>
+        this.arService.syncSalesReceivables(entityId, params.userId || '', {
+          startDate: params.startDate,
+          endDate: params.endDate,
+          limit: 5000,
+        }),
     );
 
     await runStep(
@@ -357,7 +362,11 @@ export class ReconciliationService {
     });
 
     await runStep('groupbuy-ar-sync', '同步 1Shop 團購應收 / 分錄', () =>
-      this.arService.syncSalesReceivables(entityId, syncUserId),
+      this.arService.syncSalesReceivables(entityId, syncUserId, {
+        startDate: beginDate,
+        endDate,
+        limit: 5000,
+      }),
     );
 
     if (params.autoClear !== false) {
