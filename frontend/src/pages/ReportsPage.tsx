@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { 
   Alert,
   Typography, 
@@ -118,6 +118,68 @@ const ReportsPage: React.FC = () => {
   const [aiModalVisible, setAiModalVisible] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
   const [aiResult, setAiResult] = useState<any>(null)
+
+  const ecommercePeriods = useMemo(() => safeArray(ecommerceHistory?.periods), [ecommerceHistory])
+  const ecommerceBrands = useMemo(() => safeArray(ecommerceHistory?.brands), [ecommerceHistory])
+  const ecommerceProducts = useMemo(() => safeArray(ecommerceHistory?.products), [ecommerceHistory])
+  const managementPeriods = useMemo(() => safeArray(managementSummary?.periods), [managementSummary])
+
+  const ecommercePlatformMix = useMemo(() => {
+    const bucket = new Map<string, number>()
+
+    ecommerceBrands.forEach((item) => {
+      const key = item.sourceLabel || item.channelCode || '其他來源'
+      bucket.set(key, (bucket.get(key) || 0) + toNumber(item.revenue))
+    })
+
+    return Array.from(bucket.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((left, right) => right.value - left.value)
+  }, [ecommerceBrands])
+
+  const ecommerceBrandMix = useMemo(() => {
+    const bucket = new Map<string, { revenue: number; orders: number }>()
+
+    ecommerceBrands.forEach((item) => {
+      const key = item.brand || '未分類品牌'
+      const current = bucket.get(key) || { revenue: 0, orders: 0 }
+      current.revenue += toNumber(item.revenue)
+      current.orders += toNumber(item.orderCount)
+      bucket.set(key, current)
+    })
+
+    return Array.from(bucket.entries())
+      .map(([name, value]) => ({
+        name,
+        revenue: value.revenue,
+        orders: value.orders,
+        sharePct: ecommerceHistory?.summary?.revenue
+          ? (value.revenue / toNumber(ecommerceHistory.summary.revenue || 1)) * 100
+          : 0,
+      }))
+      .sort((left, right) => right.revenue - left.revenue)
+  }, [ecommerceBrands, ecommerceHistory])
+
+  const ecommerceMixSummary = useMemo(() => {
+    const total = ecommercePlatformMix.reduce((sum, item) => sum + item.value, 0)
+    const groupBuyRevenue = ecommercePlatformMix
+      .filter((item) => item.name.includes('團購') || item.name.includes('萬魔') || item.name.includes('1Shop'))
+      .reduce((sum, item) => sum + item.value, 0)
+    const officialSiteRevenue = ecommercePlatformMix
+      .filter((item) => item.name.includes('官網') || item.name.includes('MOZTECH') || item.name.includes('Shopify'))
+      .reduce((sum, item) => sum + item.value, 0)
+    const otherRevenue = Math.max(total - officialSiteRevenue - groupBuyRevenue, 0)
+
+    return {
+      total,
+      officialSiteRevenue,
+      groupBuyRevenue,
+      otherRevenue,
+    }
+  }, [ecommercePlatformMix])
+
+  const topPlatform = ecommercePlatformMix[0]
+  const topBrand = ecommerceBrandMix[0]
 
   const fetchData = async () => {
     if (!dateRange || !dateRange[0] || !dateRange[1]) return
@@ -427,6 +489,13 @@ const ReportsPage: React.FC = () => {
       {/* Main Content */}
       <div className="glass-card p-6 min-h-[600px]">
         <Spin spinning={loading}>
+          <Alert
+            showIcon
+            type="info"
+            className="mb-4 rounded-2xl"
+            message="報表中心只負責看彙總、佔比與期間報表"
+            description="這一頁不處理逐筆核對或會計待辦；銷售訂單看交易明細，對帳中心看是否對上，會計工作台看還缺什麼，報表中心只看營運彙總與佔比。"
+          />
           {loadIssues.length ? (
             <Alert
               showIcon
@@ -472,10 +541,10 @@ const ReportsPage: React.FC = () => {
               <Row gutter={[16, 16]} className="mt-4">
                 <Col xs={24} lg={10}>
                   <Card title="歷年電商業績趨勢" bordered={false} className="shadow-sm h-full">
-                    {safeArray(ecommerceHistory?.periods).length ? (
+                    {ecommercePeriods.length ? (
                       <div className="h-[300px]">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={safeArray(ecommerceHistory?.periods)}>
+                          <BarChart data={ecommercePeriods}>
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="label" />
                             <YAxis />
@@ -492,7 +561,7 @@ const ReportsPage: React.FC = () => {
                   <Card title="品牌 / 來源 / 顧客彙整" bordered={false} className="shadow-sm h-full">
                     <Table
                       rowKey={(record) => `${record.brand}-${record.sourceLabel}`}
-                      dataSource={safeArray(ecommerceHistory?.brands)}
+                      dataSource={ecommerceBrands}
                       size="small"
                       scroll={{ x: 980 }}
                       pagination={{ pageSize: 8 }}
@@ -535,7 +604,7 @@ const ReportsPage: React.FC = () => {
                           render: (_, record) => (
                             <div className="flex flex-wrap gap-1">
                               {safeArray(record.topProducts).map((item) => (
-                                <Tag key={`${record.brand}-${item.sku}`} color="blue">
+                              <Tag key={`${record.brand}-${item.sku}`} color="blue">
                                   {item.sku} × {item.quantity}
                                 </Tag>
                               ))}
@@ -550,10 +619,173 @@ const ReportsPage: React.FC = () => {
               </Row>
 
               <div className="mt-4">
+                <Row gutter={[16, 16]} className="mb-4">
+                  <Col xs={24} lg={9}>
+                    <Card title="平台業績佔比" bordered={false} className="shadow-sm h-full">
+                      {ecommercePlatformMix.length ? (
+                        <div className="h-[260px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={ecommercePlatformMix}
+                                dataKey="value"
+                                nameKey="name"
+                                innerRadius={60}
+                                outerRadius={92}
+                                paddingAngle={3}
+                              >
+                                {ecommercePlatformMix.map((entry, index) => (
+                                  <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
+                                ))}
+                              </Pie>
+                              <Tooltip formatter={(value: number) => formatMoney(value)} />
+                              <Legend />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                      ) : (
+                        <Empty description="尚無平台業績佔比資料" />
+                      )}
+                    </Card>
+                  </Col>
+                  <Col xs={24} lg={15}>
+                    <Card title="平台 / 品牌營收摘要" bordered={false} className="shadow-sm h-full">
+                      <Row gutter={[16, 16]}>
+                        <Col xs={24} md={8}>
+                          <div className="rounded-2xl bg-slate-50 px-4 py-4 h-full">
+                            <div className="text-xs text-slate-400">官網業績</div>
+                            <div className="mt-2 text-2xl font-semibold text-slate-900">
+                              {formatMoney(ecommerceMixSummary.officialSiteRevenue)}
+                            </div>
+                            <div className="mt-1 text-xs text-slate-500">
+                              佔比 {formatPercent(ecommerceMixSummary.total ? (ecommerceMixSummary.officialSiteRevenue / ecommerceMixSummary.total) * 100 : 0, 1)}
+                            </div>
+                          </div>
+                        </Col>
+                        <Col xs={24} md={8}>
+                          <div className="rounded-2xl bg-slate-50 px-4 py-4 h-full">
+                            <div className="text-xs text-slate-400">團購業績</div>
+                            <div className="mt-2 text-2xl font-semibold text-slate-900">
+                              {formatMoney(ecommerceMixSummary.groupBuyRevenue)}
+                            </div>
+                            <div className="mt-1 text-xs text-slate-500">
+                              佔比 {formatPercent(ecommerceMixSummary.total ? (ecommerceMixSummary.groupBuyRevenue / ecommerceMixSummary.total) * 100 : 0, 1)}
+                            </div>
+                          </div>
+                        </Col>
+                        <Col xs={24} md={8}>
+                          <div className="rounded-2xl bg-slate-50 px-4 py-4 h-full">
+                            <div className="text-xs text-slate-400">其他來源</div>
+                            <div className="mt-2 text-2xl font-semibold text-slate-900">
+                              {formatMoney(ecommerceMixSummary.otherRevenue)}
+                            </div>
+                            <div className="mt-1 text-xs text-slate-500">
+                              佔比 {formatPercent(ecommerceMixSummary.total ? (ecommerceMixSummary.otherRevenue / ecommerceMixSummary.total) * 100 : 0, 1)}
+                            </div>
+                          </div>
+                        </Col>
+                      </Row>
+
+                      <Row gutter={[16, 16]} className="mt-4">
+                        <Col xs={24} md={12}>
+                          <div className="rounded-2xl border border-slate-100 px-4 py-4 h-full">
+                            <div className="text-xs tracking-[0.2em] text-slate-400 uppercase">Top Platform</div>
+                            <div className="mt-3 text-lg font-semibold text-slate-900">{topPlatform?.name || '尚無資料'}</div>
+                            <div className="mt-1 text-sm text-slate-500">
+                              {topPlatform ? `${formatMoney(topPlatform.value)} · ${formatPercent(ecommerceMixSummary.total ? (topPlatform.value / ecommerceMixSummary.total) * 100 : 0, 1)}` : '等待資料'}
+                            </div>
+                          </div>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <div className="rounded-2xl border border-slate-100 px-4 py-4 h-full">
+                            <div className="text-xs tracking-[0.2em] text-slate-400 uppercase">Top Brand</div>
+                            <div className="mt-3 text-lg font-semibold text-slate-900">{topBrand?.name || '尚無資料'}</div>
+                            <div className="mt-1 text-sm text-slate-500">
+                              {topBrand ? `${formatMoney(topBrand.revenue)} · ${formatPercent(topBrand.sharePct, 1)}` : '等待資料'}
+                            </div>
+                          </div>
+                        </Col>
+                      </Row>
+                    </Card>
+                  </Col>
+                </Row>
+
+                <Row gutter={[16, 16]} className="mb-4">
+                  <Col xs={24} lg={12}>
+                    <Card title="平台業績排行" bordered={false} className="shadow-sm">
+                      <Table
+                        rowKey="name"
+                        dataSource={ecommercePlatformMix.slice(0, 8)}
+                        size="small"
+                        pagination={false}
+                        columns={[
+                          {
+                            title: '平台 / 來源',
+                            dataIndex: 'name',
+                            key: 'name',
+                          },
+                          {
+                            title: '營收',
+                            dataIndex: 'value',
+                            key: 'value',
+                            align: 'right',
+                            render: (value: number) => formatNumber(value),
+                          },
+                          {
+                            title: '佔比',
+                            key: 'share',
+                            align: 'right',
+                            render: (_, record) => formatPercent(ecommerceMixSummary.total ? (record.value / ecommerceMixSummary.total) * 100 : 0, 1),
+                          },
+                        ]}
+                        locale={{ emptyText: <Empty description="尚無平台排行資料" /> }}
+                      />
+                    </Card>
+                  </Col>
+                  <Col xs={24} lg={12}>
+                    <Card title="品牌銷售排行" bordered={false} className="shadow-sm">
+                      <Table
+                        rowKey="name"
+                        dataSource={ecommerceBrandMix.slice(0, 8)}
+                        size="small"
+                        pagination={false}
+                        columns={[
+                          {
+                            title: '品牌',
+                            dataIndex: 'name',
+                            key: 'name',
+                          },
+                          {
+                            title: '營收',
+                            dataIndex: 'revenue',
+                            key: 'revenue',
+                            align: 'right',
+                            render: (value: number) => formatNumber(value),
+                          },
+                          {
+                            title: '訂單數',
+                            dataIndex: 'orders',
+                            key: 'orders',
+                            align: 'right',
+                          },
+                          {
+                            title: '佔比',
+                            dataIndex: 'sharePct',
+                            key: 'sharePct',
+                            align: 'right',
+                            render: (value: number) => formatPercent(value, 1),
+                          },
+                        ]}
+                        locale={{ emptyText: <Empty description="尚無品牌排行資料" /> }}
+                      />
+                    </Card>
+                  </Col>
+                </Row>
+
                 <Card title="商品與品牌細項" bordered={false} className="shadow-sm">
                   <Table
                     rowKey={(record) => `${record.brand}-${record.sku}`}
-                    dataSource={safeArray(ecommerceHistory?.products)}
+                    dataSource={ecommerceProducts}
                     size="small"
                     scroll={{ x: 980 }}
                     pagination={{ pageSize: 10 }}
@@ -668,11 +900,11 @@ const ReportsPage: React.FC = () => {
 
               <Row gutter={[16, 16]} className="mt-4">
                 <Col xs={24} lg={10}>
-                  <Card title="趨勢總覽" bordered={false} className="shadow-sm h-full">
-                    {safeArray(managementSummary?.periods).length ? (
+                    <Card title="趨勢總覽" bordered={false} className="shadow-sm h-full">
+                    {managementPeriods.length ? (
                       <div className="h-[320px]">
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={safeArray(managementSummary?.periods)}>
+                          <LineChart data={managementPeriods}>
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="label" />
                             <YAxis />
@@ -691,7 +923,7 @@ const ReportsPage: React.FC = () => {
                   <Card title="管理報表明細" bordered={false} className="shadow-sm h-full">
                     <Table
                       rowKey="key"
-                      dataSource={safeArray(managementSummary?.periods)}
+                      dataSource={managementPeriods}
                       size="small"
                       scroll={{ x: 1320 }}
                       pagination={{ pageSize: 8 }}
