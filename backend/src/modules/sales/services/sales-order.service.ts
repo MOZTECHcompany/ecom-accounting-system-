@@ -573,15 +573,280 @@ export class SalesOrderService {
     refundAmount: number,
     reason: string,
     createdBy: string,
+    refundDate = new Date(),
   ) {
-    // TODO: 實作退款邏輯
-    // 1. 更新訂單狀態為 refunded
-    // 2. 產生沖回分錄（紅字分錄）
-    // 3. 記錄退款記錄
-    this.logger.log(
-      `Applying refund for order ${orderId}, amount: ${refundAmount}`,
+    const order = await this.prisma.salesOrder.findUnique({
+      where: { id: orderId },
+      include: {
+        customer: true,
+        payments: {
+          orderBy: { payoutDate: 'desc' },
+        },
+        invoices: {
+          orderBy: [{ issuedAt: 'desc' }, { createdAt: 'desc' }],
+        },
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Sales order ${orderId} not found`);
+    }
+
+    const grossAmount = Number(order.totalGrossOriginal || 0);
+    if (refundAmount <= 0) {
+      throw new BadRequestException('refundAmount 必須大於 0');
+    }
+    if (refundAmount - grossAmount > 0.01) {
+      throw new BadRequestException('refundAmount 不可大於訂單總額');
+    }
+    if ((order.notes || '').includes('[manual-refund]')) {
+      throw new BadRequestException('此訂單已建立退款紀錄，請避免重複退款');
+    }
+
+    const latestInvoice = order.invoices[0] || null;
+    const paidAmount = order.payments.reduce(
+      (sum, payment) => sum + Number(payment.amountGrossOriginal || 0),
+      0,
     );
-    throw new Error('Not implemented: applyRefund');
+    const hadCashReceipt = paidAmount > 0;
+    const fullRefund = refundAmount >= grossAmount - 0.01;
+    const taxRate = 0.05;
+    const refundRevenueAmount = Number(
+      (refundAmount / (1 + taxRate)).toFixed(2),
+    );
+    const refundTaxAmount = Number(
+      (refundAmount - refundRevenueAmount).toFixed(2),
+    );
+    const fxRate = Number(order.totalGrossFxRate || 1);
+    const refundBaseAmount = Number((refundAmount * fxRate).toFixed(2));
+    const refundRevenueBase = Number((refundRevenueAmount * fxRate).toFixed(2));
+    const refundTaxBase = Number((refundTaxAmount * fxRate).toFixed(2));
+    const refundNote = [
+      `[manual-refund] refundAmount=${refundAmount.toFixed(2)}`,
+      `refundDate=${refundDate.toISOString()}`,
+      `reason=${(reason || '售後退款').replace(/;/g, ',')}`,
+    ].join('; ');
+
+    const accounts = await this.prisma.account.findMany({
+      where: {
+        entityId: order.entityId,
+        code: { in: ['1113', '1191', '4111', '2194'] },
+        isActive: true,
+      },
+    });
+    const accountMap = new Map(accounts.map((account) => [account.code, account]));
+    const bankAccount = accountMap.get('1113');
+    const arAccount = accountMap.get('1191');
+    const revenueAccount = accountMap.get('4111');
+    const taxAccount = accountMap.get('2194') || null;
+
+    if (!revenueAccount) {
+      throw new NotFoundException('缺少 4111 銷貨收入科目，無法建立退款分錄');
+    }
+    if (!bankAccount && !arAccount) {
+      throw new NotFoundException('缺少 1113 或 1191 科目，無法建立退款分錄');
+    }
+
+    const period = await this.prisma.period.findFirst({
+      where: {
+        entityId: order.entityId,
+        status: 'open',
+        startDate: { lte: refundDate },
+        endDate: { gte: refundDate },
+      },
+      orderBy: { startDate: 'desc' },
+    });
+
+    const updatedOrder = await this.prisma.$transaction(async (tx) => {
+      const nextOrder = await tx.salesOrder.update({
+        where: { id: order.id },
+        data: {
+          status: fullRefund ? 'refunded' : order.status,
+          notes: [order.notes, refundNote].filter(Boolean).join('\n'),
+        },
+      });
+
+      if (order.payments.length) {
+        await Promise.all(
+          order.payments.map((payment) =>
+            tx.payment.update({
+              where: { id: payment.id },
+              data: {
+                status: fullRefund ? 'refunded' : payment.status,
+                reconciledFlag: false,
+                notes: [payment.notes, refundNote].filter(Boolean).join('\n'),
+              },
+            }),
+          ),
+        );
+      }
+
+      const arInvoice = await tx.arInvoice.findFirst({
+        where: {
+          entityId: order.entityId,
+          sourceId: order.id,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (arInvoice) {
+        const nextAmountOriginal = fullRefund
+          ? 0
+          : Math.max(Number(arInvoice.amountOriginal || 0) - refundAmount, 0);
+        const nextAmountBase = fullRefund
+          ? 0
+          : Math.max(Number(arInvoice.amountBase || 0) - refundBaseAmount, 0);
+        const nextPaidOriginal = fullRefund
+          ? 0
+          : Math.min(
+              Number(arInvoice.paidAmountOriginal || 0),
+              nextAmountOriginal,
+            );
+        const nextPaidBase = fullRefund
+          ? 0
+          : Math.min(Number(arInvoice.paidAmountBase || 0), nextAmountBase);
+        const nextStatus = fullRefund
+          ? 'written_off'
+          : nextPaidOriginal >= nextAmountOriginal - 0.01
+            ? 'paid'
+            : nextPaidOriginal > 0
+              ? 'partial'
+              : 'unpaid';
+
+        await tx.arInvoice.update({
+          where: { id: arInvoice.id },
+          data: {
+            amountOriginal: new Decimal(nextAmountOriginal),
+            amountBase: new Decimal(nextAmountBase),
+            paidAmountOriginal: new Decimal(nextPaidOriginal),
+            paidAmountBase: new Decimal(nextPaidBase),
+            status: nextStatus,
+            notes: [arInvoice.notes, refundNote].filter(Boolean).join('\n'),
+          },
+        });
+      }
+
+      if (latestInvoice) {
+        if (fullRefund) {
+          await tx.invoice.update({
+            where: { id: latestInvoice.id },
+            data: {
+              status: 'void',
+              voidAt: refundDate,
+              voidReason: reason || '售後退款',
+              notes: [latestInvoice.notes, refundNote].filter(Boolean).join('\n'),
+            },
+          });
+          await tx.invoiceLog.create({
+            data: {
+              invoiceId: latestInvoice.id,
+              action: 'void',
+              userId: createdBy,
+              payload: {
+                refundAmount,
+                refundDate: refundDate.toISOString(),
+                reason,
+              },
+            },
+          });
+        } else {
+          await tx.invoice.update({
+            where: { id: latestInvoice.id },
+            data: {
+              notes: [
+                latestInvoice.notes,
+                `${refundNote}; refundType=allowance; 折讓`,
+              ]
+                .filter(Boolean)
+                .join('\n'),
+            },
+          });
+          await tx.invoiceLog.create({
+            data: {
+              invoiceId: latestInvoice.id,
+              action: 'allowance',
+              userId: createdBy,
+              payload: {
+                refundAmount,
+                refundDate: refundDate.toISOString(),
+                reason,
+              },
+            },
+          });
+        }
+      }
+
+      return nextOrder;
+    });
+
+    const creditAccount = hadCashReceipt ? bankAccount : arAccount;
+    if (!creditAccount) {
+      throw new NotFoundException('缺少退款沖銷對應科目');
+    }
+
+    const journalLines = [
+      {
+        accountId: revenueAccount.id,
+        debit: refundRevenueAmount,
+        credit: 0,
+        currency: order.totalGrossCurrency,
+        fxRate,
+        amountBase: refundRevenueBase,
+        memo: fullRefund ? '退款沖回銷貨收入' : '部分退款沖回銷貨收入',
+      },
+      ...(taxAccount && refundTaxAmount > 0
+        ? [
+            {
+              accountId: taxAccount.id,
+              debit: refundTaxAmount,
+              credit: 0,
+              currency: order.totalGrossCurrency,
+              fxRate,
+              amountBase: refundTaxBase,
+              memo: fullRefund ? '退款沖回銷項稅額' : '部分退款沖回銷項稅額',
+            },
+          ]
+        : []),
+      {
+        accountId: creditAccount.id,
+        debit: 0,
+        credit: refundAmount,
+        currency: order.totalGrossCurrency,
+        fxRate,
+        amountBase: refundBaseAmount,
+        memo: hadCashReceipt ? '退款支付 / 平台退刷' : '沖回應收帳款',
+      },
+    ];
+
+    const journal = await this.journalService.createJournalEntry({
+      entityId: order.entityId,
+      date: refundDate,
+      description: `銷售退款 ${order.externalOrderId || order.id}`,
+      sourceModule: 'sales_refund',
+      sourceId: order.id,
+      periodId: period?.id,
+      createdBy,
+      lines: journalLines,
+    });
+
+    this.logger.log(
+      `Applied refund for order ${orderId}, amount: ${refundAmount}, journal=${journal.id}`,
+    );
+
+    return {
+      success: true,
+      orderId: updatedOrder.id,
+      orderStatus: updatedOrder.status,
+      refundAmount,
+      fullRefund,
+      journalEntryId: journal.id,
+      invoiceStatus: fullRefund
+        ? 'void'
+        : latestInvoice
+          ? 'allowance_pending'
+          : 'no_invoice',
+      creditTarget: hadCashReceipt ? 'bank' : 'ar',
+    };
   }
 
   /**

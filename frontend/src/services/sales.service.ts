@@ -298,6 +298,18 @@ export const salesService = {
     return response.data
   },
 
+  async refundOrder(
+    id: string,
+    payload: {
+      refundAmount: number
+      reason?: string
+      refundDate?: string
+    },
+  ) {
+    const response = await api.post(`/sales/orders/${id}/refund`, payload)
+    return response.data
+  },
+
   async syncInvoiceStatusBatch(payload: {
     entityId: string
     channelId?: string

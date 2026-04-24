@@ -127,6 +127,22 @@ export class SalesController {
     return this.salesOrderService.syncOrderInvoiceStatus(orderId);
   }
 
+  @Post('orders/:id/refund')
+  @ApiOperation({ summary: '建立訂單退款 / 售後沖銷' })
+  async refundSalesOrder(
+    @Param('id', ParseUUIDPipe) orderId: string,
+    @Body() body: { refundAmount: number; reason?: string; refundDate?: string },
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.salesOrderService.applyRefund(
+      orderId,
+      Number(body.refundAmount || 0),
+      body.reason || '售後退款',
+      userId,
+      body.refundDate ? new Date(body.refundDate) : undefined,
+    );
+  }
+
   @Post('orders/invoice-status-sync')
   @ApiOperation({ summary: '批次同步銷售訂單的綠界電子發票狀態' })
   async syncSalesOrderInvoiceStatusBatch(

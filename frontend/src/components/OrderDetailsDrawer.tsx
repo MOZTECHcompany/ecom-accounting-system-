@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Descriptions, Steps, Button, Tag, Divider, List, Avatar, Typography, Space, message } from 'antd'
+import { Descriptions, Steps, Button, Tag, Divider, List, Avatar, Typography, Space, message, Modal, Form, Input, InputNumber, DatePicker } from 'antd'
 import { GlassDrawer, GlassDrawerSection } from './ui/GlassDrawer'
 import { 
   PrinterOutlined, 
@@ -29,6 +29,9 @@ interface OrderDetailsDrawerProps {
 const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, order, onUpdate }) => {
   const [fulfillModalOpen, setFulfillModalOpen] = useState(false)
   const [syncingInvoice, setSyncingInvoice] = useState(false)
+  const [refundModalOpen, setRefundModalOpen] = useState(false)
+  const [refunding, setRefunding] = useState(false)
+  const [refundForm] = Form.useForm()
 
   if (!order) return null
 
@@ -85,6 +88,29 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
     }
   }
 
+  const handleRefund = async () => {
+    try {
+      const values = await refundForm.validateFields()
+      setRefunding(true)
+      const result = await salesService.refundOrder(order.id, {
+        refundAmount: Number(values.refundAmount || 0),
+        reason: values.reason || '售後退款',
+        refundDate: values.refundDate?.toISOString(),
+      })
+      message.success(
+        `退款已建立：${result.fullRefund ? '全額退款' : '部分退款'}，分錄 ${result.journalEntryId}`,
+      )
+      setRefundModalOpen(false)
+      refundForm.resetFields()
+      onUpdate?.()
+    } catch (error: any) {
+      if (error?.errorFields) return
+      message.error(error?.response?.data?.message || '建立退款失敗')
+    } finally {
+      setRefunding(false)
+    }
+  }
+
   return (
     <>
       <GlassDrawer
@@ -117,7 +143,20 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
                   出貨
                 </Button>
               )}
-              <Button size="small" type="primary" className="rounded-full bg-blue-600 hover:bg-blue-500 border-none shadow-lg shadow-blue-200 whitespace-nowrap">退款/售後</Button>
+              <Button
+                size="small"
+                type="primary"
+                className="rounded-full bg-blue-600 hover:bg-blue-500 border-none shadow-lg shadow-blue-200 whitespace-nowrap"
+                onClick={() => {
+                  refundForm.setFieldsValue({
+                    refundAmount: Number(order.totalAmount || 0),
+                    reason: '售後退款',
+                  })
+                  setRefundModalOpen(true)
+                }}
+              >
+                退款/售後
+              </Button>
             </div>
           </div>
         }
@@ -274,6 +313,50 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
         }}
         order={order}
       />
+      <Modal
+        open={refundModalOpen}
+        title="建立退款 / 售後沖銷"
+        onCancel={() => {
+          setRefundModalOpen(false)
+          refundForm.resetFields()
+        }}
+        onOk={handleRefund}
+        okText="建立退款"
+        cancelText="取消"
+        confirmLoading={refunding}
+      >
+        <Form form={refundForm} layout="vertical">
+          <Form.Item
+            name="refundAmount"
+            label="退款金額"
+            rules={[
+              { required: true, message: '請輸入退款金額' },
+              {
+                validator: (_, value) => {
+                  const amount = Number(value || 0)
+                  if (amount <= 0) return Promise.reject(new Error('退款金額必須大於 0'))
+                  if (amount - Number(order.totalAmount || 0) > 0.01) {
+                    return Promise.reject(new Error('退款金額不可大於訂單總額'))
+                  }
+                  return Promise.resolve()
+                },
+              },
+            ]}
+          >
+            <InputNumber min={0} precision={0} addonBefore="NT$" className="!w-full" />
+          </Form.Item>
+          <Form.Item name="refundDate" label="退款日期">
+            <DatePicker className="!w-full" showTime />
+          </Form.Item>
+          <Form.Item
+            name="reason"
+            label="退款原因"
+            rules={[{ required: true, message: '請輸入退款原因' }]}
+          >
+            <Input.TextArea rows={3} placeholder="例如：客訴退款、LINE Pay 退刷、團購取消" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </>
   )
 }
