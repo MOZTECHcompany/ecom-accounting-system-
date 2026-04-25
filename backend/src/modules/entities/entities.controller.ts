@@ -35,7 +35,8 @@ export class EntitiesController {
   @ApiOperation({ summary: '查詢所有公司實體' })
   @ApiResponse({ status: 200, description: '成功取得實體列表' })
   async findAll(@Query('isActive') isActive?: string) {
-    return this.entitiesService.findAll(isActive === 'true');
+    const activeFilter = isActive === undefined ? undefined : isActive === 'true';
+    return this.entitiesService.findAll(activeFilter);
   }
 
   @Get(':id')

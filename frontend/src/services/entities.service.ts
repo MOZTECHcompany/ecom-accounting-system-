@@ -26,7 +26,7 @@ let inFlightDefault: Promise<string> | null = null
  * Resolves an entityId using the following precedence:
  * 1) explicit argument
  * 2) localStorage('entityId')
- * 3) VITE_DEFAULT_ENTITY_ID
+ * 3) runtime/default env entity id
  * 4) first active entity from GET /entities
  */
 export async function resolveEntityId(explicitEntityId?: string): Promise<string> {
@@ -36,7 +36,9 @@ export async function resolveEntityId(explicitEntityId?: string): Promise<string
   const stored = localStorage.getItem('entityId')?.trim()
   if (stored) return stored
 
-  const env = import.meta.env.VITE_DEFAULT_ENTITY_ID?.trim()
+  const env =
+    window.__APP_CONFIG__?.defaultEntityId?.trim() ||
+    import.meta.env.VITE_DEFAULT_ENTITY_ID?.trim()
   if (env) return env
 
   if (cachedDefaultEntityId) return cachedDefaultEntityId

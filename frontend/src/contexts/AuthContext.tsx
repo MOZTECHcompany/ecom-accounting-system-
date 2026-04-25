@@ -12,6 +12,17 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+const DEFAULT_ENTITY_ID =
+  window.__APP_CONFIG__?.defaultEntityId?.trim() ||
+  import.meta.env.VITE_DEFAULT_ENTITY_ID?.trim() ||
+  'tw-entity-001'
+
+const ensureDefaultEntityId = () => {
+  if (!localStorage.getItem('entityId')?.trim()) {
+    localStorage.setItem('entityId', DEFAULT_ENTITY_ID)
+  }
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
@@ -22,6 +33,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (token) {
         try {
           const currentUser = await authService.getCurrentUser()
+          ensureDefaultEntityId()
           setUser(currentUser)
           webSocketService.connect()
         } catch (error) {
@@ -35,6 +47,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (data: LoginRequest) => {
     const response = await authService.login(data)
+    ensureDefaultEntityId()
     setUser(response.user)
     webSocketService.connect()
   }
