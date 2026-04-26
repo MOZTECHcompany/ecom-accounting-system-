@@ -423,7 +423,7 @@ const AccountingWorkbenchPage: React.FC = () => {
       payoutWindowDays: 31,
       maxWindows: 18,
       invoiceBatchLimit: 200,
-      autoClear: true,
+      autoClear: false,
     })
 
     const groupbuyChannel = result.postAudit?.groupbuyChannel
@@ -437,7 +437,7 @@ const AccountingWorkbenchPage: React.FC = () => {
 
     if (groupbuyChannel) {
       message.success(
-        `閉環已更新：缺 Payment ${groupbuyChannel.missingPayments || 0}、缺發票 ${groupbuyChannel.missingInvoices || 0}、缺手續費 ${groupbuyChannel.feeMissingPayments || 0}`,
+        `閉環已更新：缺 Payment ${groupbuyChannel.missingPayments || 0}、缺發票 ${groupbuyChannel.missingInvoices || 0}、缺手續費 ${groupbuyChannel.feeMissingPayments || 0}。核銷請到對帳中心預覽確認。`,
         6,
       )
     }
@@ -545,7 +545,7 @@ const AccountingWorkbenchPage: React.FC = () => {
         payoutWindowDays: 31,
         maxWindows: 18,
         invoiceBatchLimit: 200,
-        autoClear: true,
+        autoClear: false,
       })
 
       const groupbuyChannel = result.postAudit?.groupbuyChannel
@@ -556,7 +556,7 @@ const AccountingWorkbenchPage: React.FC = () => {
         )
       } else if (groupbuyChannel) {
         message.success(
-          `1Shop 團購閉環補跑完成：缺 Payment ${groupbuyChannel.missingPayments || 0}、缺發票 ${groupbuyChannel.missingInvoices || 0}、缺手續費 ${groupbuyChannel.feeMissingPayments || 0}`,
+          `1Shop 團購閉環補跑完成：缺 Payment ${groupbuyChannel.missingPayments || 0}、缺發票 ${groupbuyChannel.missingInvoices || 0}、缺手續費 ${groupbuyChannel.feeMissingPayments || 0}。核銷請到對帳中心預覽確認。`,
           6,
         )
       } else {
@@ -640,7 +640,7 @@ const AccountingWorkbenchPage: React.FC = () => {
         endDate,
         limit: 300,
         syncInvoices: true,
-        autoClear: true,
+        autoClear: false,
       })
 
       if (result.failedCount > 0) {
@@ -650,7 +650,7 @@ const AccountingWorkbenchPage: React.FC = () => {
         )
       } else {
         message.success(
-          `LINE Pay 閉環補跑完成：檢查 ${result.linePay.checkedCount} 筆、退款候選 ${result.linePay.refundCandidateCount} 筆、已沖銷 ${result.linePay.reversedCount} 筆`,
+          `LINE Pay 閉環補跑完成：檢查 ${result.linePay.checkedCount} 筆、退款候選 ${result.linePay.refundCandidateCount} 筆、已沖銷 ${result.linePay.reversedCount} 筆。核銷請到對帳中心預覽確認。`,
           6,
         )
       }

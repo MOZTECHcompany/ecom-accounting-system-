@@ -499,6 +499,7 @@ B2B 月結下一步：
   - 對帳中心已新增「核銷可核銷」按鈕。
   - 對帳中心前端已改成「預覽可核銷」兩段式：第一段只呼叫 `dryRun=true` 顯示可核銷筆數、阻擋原因與樣本 Payment；第二段需使用者在確認視窗按下「確認核銷」才寫入真實核銷分錄。
   - 對帳中心手動「跑核心同步」已改為 `autoClear=false`，只同步與重算四隊列；核銷必須另外走預覽與確認視窗，避免同步按鈕順手寫入正式分錄。
+  - 會計工作台的 1Shop 團購閉環與 LINE Pay 閉環補跑也已改為 `autoClear=false`，避免匯入 / 補跑流程順手核銷；核銷入口集中在對帳中心。
   - 核心 Job 已預設帶 `autoClear=true`，同步後會自動嘗試核銷符合條件的款項。
 - 新增 LINE Pay 狀態刷新與退款追蹤
   - `POST /api/v1/reconciliation/line-pay/refresh-status`
