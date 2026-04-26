@@ -67,6 +67,20 @@ export type InvoiceProviderReadiness = {
   accounts: InvoiceMerchantReadiness[];
 };
 
+export type InvoiceProviderStatus = {
+  invoiceId: string;
+  invoiceNumber: string;
+  localStatus: string;
+  localIssuedAt: string | null;
+  providerStatus: "issued" | "void" | "unknown";
+  providerMessage: string | null;
+  provider: "ecpay";
+  merchantKey: string;
+  merchantId: string;
+  invoiceDate: string;
+  raw: Record<string, unknown>;
+};
+
 export const invoicingService = {
   async getQueue(params?: {
     entityId?: string;
@@ -96,6 +110,14 @@ export const invoicingService = {
   async getReadiness(): Promise<InvoiceProviderReadiness> {
     const response = await api.get<InvoiceProviderReadiness>(
       `/invoicing/readiness?_ts=${Date.now()}`,
+    );
+    return response.data;
+  },
+
+  async queryProviderStatus(invoiceId: string): Promise<InvoiceProviderStatus> {
+    const response = await api.get<InvoiceProviderStatus>(
+      `/invoicing/${invoiceId}/provider-status?_ts=${Date.now()}`,
+      { timeout: 30000 },
     );
     return response.data;
   },

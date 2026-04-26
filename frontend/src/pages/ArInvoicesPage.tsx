@@ -34,6 +34,7 @@ import {
   ReceivableMonitorItem,
   ReceivableMonitorSummary,
 } from '../services/ar.service'
+import { invoicingService } from '../services/invoicing.service'
 
 const { Title, Text } = Typography
 
@@ -110,6 +111,7 @@ const ArInvoicesPage: React.FC = () => {
   const [summary, setSummary] = useState<ReceivableMonitorSummary>(EmptySummary)
   const [monitorRange, setMonitorRange] = useState<[Dayjs, Dayjs]>(createDefaultMonitorRange)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [queryingInvoiceId, setQueryingInvoiceId] = useState<string | null>(null)
   const [form] = Form.useForm()
   const [paymentForm] = Form.useForm()
 
@@ -230,6 +232,33 @@ const ArInvoicesPage: React.FC = () => {
       message.error(error?.response?.data?.message || '記錄收款失敗')
     } finally {
       setReceiving(false)
+    }
+  }
+
+  const handleQueryProviderStatus = async (item: ReceivableMonitorItem) => {
+    if (!item.invoiceId) return
+
+    setQueryingInvoiceId(item.invoiceId)
+    try {
+      const result = await invoicingService.queryProviderStatus(item.invoiceId)
+      Modal.info({
+        title: '綠界發票狀態',
+        width: 520,
+        content: (
+          <div className="mt-3 space-y-2 text-sm">
+            <div>發票號碼：{result.invoiceNumber}</div>
+            <div>內部狀態：{result.localStatus}</div>
+            <div>綠界狀態：{result.providerStatus}</div>
+            <div>商店代號：{result.merchantId}</div>
+            <div>發票日期：{result.invoiceDate}</div>
+            {result.providerMessage ? <div>綠界訊息：{result.providerMessage}</div> : null}
+          </div>
+        ),
+      })
+    } catch (error: any) {
+      message.error(error?.response?.data?.message || '查詢綠界發票狀態失敗')
+    } finally {
+      setQueryingInvoiceId(null)
     }
   }
 
@@ -420,14 +449,25 @@ const ArInvoicesPage: React.FC = () => {
         const canReceive = Boolean(record.arInvoiceId) && Number(record.outstandingAmount || 0) > 0
 
         return (
-          <Button
-            size="small"
-            icon={<CheckCircleOutlined />}
-            disabled={!canReceive}
-            onClick={() => openPaymentModal(record)}
-          >
-            記錄收款
-          </Button>
+          <Space direction="vertical" size={6}>
+            <Button
+              size="small"
+              icon={<SyncOutlined />}
+              disabled={!record.invoiceId}
+              loading={queryingInvoiceId === record.invoiceId}
+              onClick={() => handleQueryProviderStatus(record)}
+            >
+              查綠界
+            </Button>
+            <Button
+              size="small"
+              icon={<CheckCircleOutlined />}
+              disabled={!canReceive}
+              onClick={() => openPaymentModal(record)}
+            >
+              記錄收款
+            </Button>
+          </Space>
         )
       },
     },

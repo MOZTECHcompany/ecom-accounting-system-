@@ -101,6 +101,7 @@
 - `POST /invoicing/issue/:orderId` 已可依通路推斷 merchant key，Shopify 走 `shopify-main`，1Shop / Shopline 走 `groupbuy-main`；正式呼叫前會先檢查 profile readiness。
 - `POST /invoicing/:invoiceId/void` 與 `POST /invoicing/:invoiceId/allowance` 已在正式環境擋住本地作廢 / 折讓，避免綠界未同步但內部狀態已變更。
 - `GET /invoicing/:invoiceId/provider-status` 已新增只讀綠界狀態查詢，不會改資料，可用來比對內部 Invoice 與綠界後台狀態。
+- 應收帳款頁已新增「查綠界」操作，讓會計可對單筆已開立發票做只讀狀態確認。
 
 待補：
 
