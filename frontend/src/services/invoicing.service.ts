@@ -69,20 +69,4 @@ export const invoicingService = {
     return response.data;
   },
 
-  async issueEligible(payload?: {
-    entityId?: string;
-    limit?: number;
-    startDate?: string;
-    endDate?: string;
-    invoiceType?: string;
-  }) {
-    const response = await api.post("/invoicing/issue-eligible", {
-      entityId: payload?.entityId?.trim() || DEFAULT_ENTITY_ID,
-      limit: payload?.limit,
-      startDate: payload?.startDate,
-      endDate: payload?.endDate,
-      invoiceType: payload?.invoiceType || "B2C",
-    });
-    return response.data;
-  },
 };

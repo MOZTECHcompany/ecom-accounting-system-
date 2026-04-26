@@ -126,9 +126,9 @@ export class InvoicingController {
   @Roles('ADMIN', 'ACCOUNTANT')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
-    summary: '開立正式發票',
+    summary: '開立正式發票（待綠界 API Adapter 啟用）',
     description:
-      '對指定訂單開立正式電子發票，發票資料將寫入資料庫，並記錄操作日誌',
+      '正式環境目前不允許用本地假字軌開票；需先接上綠界電子發票 API。現階段請改用綠界銷項發票匯入回填訂單。',
   })
   @ApiParam({
     name: 'orderId',
@@ -168,9 +168,9 @@ export class InvoicingController {
   @Roles('ADMIN', 'ACCOUNTANT')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: '批次開立符合條件的訂單發票',
+    summary: '批次開立符合條件的訂單發票（待綠界 API Adapter 啟用）',
     description:
-      '依付款或對帳狀態篩出可開票訂單，並批次建立正式發票。',
+      '正式環境目前不允許批次產生本地假字軌發票；需先接上綠界電子發票 API。現階段請改用綠界銷項發票匯入回填訂單。',
   })
   async issueEligibleInvoices(
     @Body()

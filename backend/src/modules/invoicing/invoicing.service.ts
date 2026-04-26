@@ -123,6 +123,7 @@ export class InvoicingService {
    */
   async issueInvoice(orderId: string, dto: IssueInvoiceDto, userId: string) {
     this.logger.log(`開立發票 - 訂單ID: ${orderId}, 操作人員: ${userId}`);
+    this.assertInvoiceIssuingAvailable();
 
     // 1. 查詢訂單
     const order = await this.prisma.salesOrder.findUnique({
@@ -670,6 +671,8 @@ export class InvoicingService {
       invoiceType?: string;
     },
   ) {
+    this.assertInvoiceIssuingAvailable();
+
     const queue = await this.getInvoiceQueue(entityId, options);
     const targets = queue.items.filter((item) => item.invoiceStatus === 'eligible');
     const issued: Array<{ orderId: string; invoiceId: string; invoiceNumber: string }> =
@@ -721,5 +724,18 @@ export class InvoicingService {
     const prefix = 'AA'; // 字軌（每兩個月更換）
     const sequence = Math.floor(Math.random() * 90000000) + 10000000; // 8位數流水號
     return `${prefix}${sequence}`;
+  }
+
+  private assertInvoiceIssuingAvailable() {
+    if (
+      process.env.NODE_ENV === 'test' ||
+      process.env.ALLOW_LOCAL_INVOICE_STUB === 'true'
+    ) {
+      return;
+    }
+
+    throw new BadRequestException(
+      '正式電子發票開立尚未接上綠界電子發票 API；目前只能匯入綠界已開立銷項發票回填訂單，避免系統產生本地假字軌發票號。',
+    );
   }
 }

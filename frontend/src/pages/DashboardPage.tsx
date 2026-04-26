@@ -232,7 +232,6 @@ const DashboardPage: React.FC = () => {
   const [customRange, setCustomRange] = useState<CustomRange>(null);
   const [refreshToken, setRefreshToken] = useState(0);
   const [syncing, setSyncing] = useState(false);
-  const [issuingInvoices, setIssuingInvoices] = useState(false);
   const [syncingInvoiceStatuses, setSyncingInvoiceStatuses] = useState(false);
   const [overview, setOverview] = useState<DashboardSalesOverview | null>(null);
   const [executive, setExecutive] = useState<DashboardExecutiveOverview | null>(null);
@@ -477,29 +476,6 @@ const DashboardPage: React.FC = () => {
       message.error(error?.response?.data?.message || "同步失敗，請稍後再試");
     } finally {
       setSyncing(false);
-    }
-  };
-
-  const handleIssueEligibleInvoices = async () => {
-    const storedEntityId = localStorage.getItem("entityId")?.trim();
-    const { since, until } = resolveRange(rangeMode, DASHBOARD_TZ, customRange);
-    setIssuingInvoices(true);
-    try {
-      const result = await invoicingService.issueEligible({
-        entityId: storedEntityId,
-        startDate: since,
-        endDate: until,
-        limit: 12,
-        invoiceType: "B2C",
-      });
-      message.success(
-        `批次開票完成：成功 ${result.issuedCount} 筆，失敗 ${result.failedCount} 筆`,
-      );
-      setRefreshToken((prev) => prev + 1);
-    } catch (error: any) {
-      message.error(error?.response?.data?.message || "批次開票失敗");
-    } finally {
-      setIssuingInvoices(false);
     }
   };
 
