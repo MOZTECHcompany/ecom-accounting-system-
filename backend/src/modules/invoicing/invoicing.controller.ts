@@ -130,6 +130,22 @@ export class InvoicingController {
     return this.invoicingService.previewInvoice(orderId);
   }
 
+  @Get(':invoiceId/provider-status')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  @ApiOperation({
+    summary: '向綠界查詢正式發票狀態（只讀）',
+    description:
+      '依內部 Invoice 的發票號碼、發票日期與 merchant profile 查詢綠界狀態；此端點不會開票、作廢、折讓或更新本地資料。',
+  })
+  @ApiParam({
+    name: 'invoiceId',
+    description: '內部 Invoice ID',
+    example: 'invoice-uuid-456',
+  })
+  async queryProviderStatus(@Param('invoiceId') invoiceId: string) {
+    return this.invoicingService.queryProviderStatus(invoiceId);
+  }
+
   /**
    * 開立正式發票
    */

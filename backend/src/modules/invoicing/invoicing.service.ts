@@ -323,6 +323,71 @@ export class InvoicingService {
     };
   }
 
+  async queryProviderStatus(invoiceId: string) {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      include: {
+        salesOrder: {
+          include: {
+            channel: true,
+          },
+        },
+      },
+    });
+
+    if (!invoice) {
+      throw new NotFoundException(`發票不存在: ${invoiceId}`);
+    }
+
+    const invoiceMetadata = this.extractMetadata(invoice.notes);
+    const orderMetadata = this.extractMetadata(invoice.salesOrder?.notes);
+    const externalPayload = (invoice.externalPayload || {}) as any;
+    const merchantKey =
+      this.pickString(
+        externalPayload?.merchantKey,
+        invoiceMetadata.merchantKey,
+        orderMetadata.merchantKey,
+      ) || this.inferEcpayMerchantKey(invoice.salesOrder?.channel?.code);
+    const merchantId = this.pickString(
+      externalPayload?.merchantId,
+      invoiceMetadata.merchantId,
+      orderMetadata.merchantId,
+    );
+    const invoiceDate =
+      this.pickString(
+        externalPayload?.invoiceDate,
+        invoiceMetadata.invoiceDate,
+        orderMetadata.invoiceDate,
+      ) || (invoice.issuedAt ? this.formatInvoiceDate(invoice.issuedAt) : null);
+
+    if (!invoiceDate) {
+      throw new BadRequestException(
+        '找不到可查詢綠界狀態的發票日期；請先匯入或同步發票日期。',
+      );
+    }
+
+    const providerResult = await this.ecpayEinvoiceAdapter.queryInvoiceStatus({
+      merchantKey,
+      merchantId,
+      invoiceNumber: invoice.invoiceNumber,
+      invoiceDate,
+    });
+
+    return {
+      invoiceId: invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      localStatus: invoice.status,
+      localIssuedAt: invoice.issuedAt?.toISOString() || null,
+      providerStatus: providerResult.invoiceIssuedStatus,
+      providerMessage: providerResult.rawMessage,
+      provider: providerResult.provider,
+      merchantKey: providerResult.merchantKey,
+      merchantId: providerResult.merchantId,
+      invoiceDate: providerResult.invoiceDate,
+      raw: providerResult.raw,
+    };
+  }
+
   /**
    * 作廢發票
    *
@@ -846,5 +911,38 @@ export class InvoicingService {
       return 'groupbuy-main';
     }
     return null;
+  }
+
+  private extractMetadata(notes?: string | null) {
+    const metadata: Record<string, string> = {};
+
+    for (const line of (notes || '').split('\n')) {
+      const rawLine = line.replace(/^\[[^\]]+\]\s*/, '').trim();
+      for (const pair of rawLine.split(';')) {
+        const [key, ...rest] = pair.split('=');
+        if (!key || !rest.length) continue;
+        metadata[key.trim()] = rest.join('=').trim();
+      }
+    }
+
+    return metadata;
+  }
+
+  private pickString(...values: unknown[]) {
+    for (const value of values) {
+      if (typeof value === 'string' && value.trim()) {
+        return value.trim();
+      }
+    }
+    return null;
+  }
+
+  private formatInvoiceDate(date: Date) {
+    return new Intl.DateTimeFormat('sv-SE', {
+      timeZone: process.env.TZ || 'Asia/Taipei',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date);
   }
 }

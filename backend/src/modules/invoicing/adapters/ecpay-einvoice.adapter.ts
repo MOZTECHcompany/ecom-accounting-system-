@@ -8,6 +8,8 @@ import {
   InvoiceAdapter,
   IssueInvoicePayload,
   IssueInvoiceResult,
+  QueryInvoiceStatusPayload,
+  QueryInvoiceStatusResult,
 } from '../interfaces/invoice-adapter.interface';
 import {
   EcpayEinvoiceConfigService,
@@ -95,6 +97,46 @@ export class EcpayEinvoiceAdapter implements InvoiceAdapter {
         typeof result?.RandomNumber === 'string' ? result.RandomNumber : null,
       externalInvoiceId:
         typeof result?.InvoiceNo === 'string' ? result.InvoiceNo : null,
+      raw: result as Record<string, unknown>,
+    };
+  }
+
+  async queryInvoiceStatus(
+    payload: QueryInvoiceStatusPayload,
+  ): Promise<QueryInvoiceStatusResult> {
+    const profile = this.configService.resolveProfile(
+      payload.merchantKey,
+      payload.merchantId,
+    );
+    this.assertProfileConfigured(profile, payload.merchantKey);
+
+    const json = await this.postEncrypted(
+      profile.queryUrl,
+      {
+        MerchantID: profile.merchantId,
+        InvoiceNo: payload.invoiceNumber.trim(),
+        InvoiceDate: payload.invoiceDate.trim(),
+      },
+      profile,
+    );
+    const result = this.decryptResponse(json, profile);
+    const rtnCode = Number(result?.RtnCode);
+
+    return {
+      success: rtnCode === 1,
+      provider: 'ecpay',
+      merchantKey: profile.key,
+      merchantId: profile.merchantId,
+      invoiceNumber: payload.invoiceNumber.trim(),
+      invoiceDate: payload.invoiceDate.trim(),
+      invoiceIssuedStatus:
+        rtnCode === 1 ? 'issued' : this.detectVoidStatus(result),
+      rawMessage:
+        typeof result?.RtnMsg === 'string'
+          ? result.RtnMsg
+          : typeof json?.TransMsg === 'string'
+            ? json.TransMsg
+            : null,
       raw: result as Record<string, unknown>,
     };
   }
@@ -209,5 +251,36 @@ export class EcpayEinvoiceAdapter implements InvoiceAdapter {
     decrypted += decipher.final('utf8');
     const decoded = decodeURIComponent(decrypted);
     return decoded.trim() ? JSON.parse(decoded) : {};
+  }
+
+  private assertProfileConfigured(
+    profile: EcpayEinvoiceProfile | undefined,
+    merchantKey?: string | null,
+  ): asserts profile is EcpayEinvoiceProfile {
+    if (!profile) {
+      throw new BadRequestException(
+        merchantKey
+          ? `找不到綠界電子發票帳號設定：${merchantKey}。請檢查 ECPAY_EINVOICE_ACCOUNTS_JSON。`
+          : '請先指定可用的綠界電子發票 merchantKey；目前未能唯一判斷要使用 3290494 或 3150241。',
+      );
+    }
+
+    const missing = this.configService.getProfileMissingFields(profile);
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `綠界電子發票帳號 ${profile.key || profile.merchantId} 尚未可查詢，缺少：${missing.join(
+          ', ',
+        )}。請補 ECPAY_EINVOICE_ACCOUNTS_JSON。`,
+      );
+    }
+  }
+
+  private detectVoidStatus(result: any): 'void' | 'unknown' {
+    const text = JSON.stringify(result || {}).toLowerCase();
+    return text.includes('void') ||
+      text.includes('invalid') ||
+      text.includes('作廢')
+      ? 'void'
+      : 'unknown';
   }
 }

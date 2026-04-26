@@ -58,8 +58,30 @@ export type IssueInvoiceResult = {
   raw: Record<string, unknown>;
 };
 
+export type QueryInvoiceStatusPayload = {
+  merchantKey?: string | null;
+  merchantId?: string | null;
+  invoiceNumber: string;
+  invoiceDate: string;
+};
+
+export type QueryInvoiceStatusResult = {
+  success: boolean;
+  provider: 'ecpay';
+  merchantKey: string;
+  merchantId: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  invoiceIssuedStatus: 'issued' | 'void' | 'unknown';
+  rawMessage: string | null;
+  raw: Record<string, unknown>;
+};
+
 export interface InvoiceAdapter {
   getReadiness(): InvoiceProviderReadiness;
   assertReadyForMerchant(merchantKey?: string | null): void;
   issueInvoice(payload: IssueInvoicePayload): Promise<IssueInvoiceResult>;
+  queryInvoiceStatus(
+    payload: QueryInvoiceStatusPayload,
+  ): Promise<QueryInvoiceStatusResult>;
 }

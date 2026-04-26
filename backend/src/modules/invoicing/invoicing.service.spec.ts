@@ -28,6 +28,12 @@ describe('InvoicingService', () => {
     },
     $transaction: jest.fn((callback) => callback(mockPrismaService)),
   };
+  const mockEcpayEinvoiceAdapter = {
+    getReadiness: jest.fn(),
+    assertReadyForMerchant: jest.fn(),
+    issueInvoice: jest.fn(),
+    queryInvoiceStatus: jest.fn(),
+  };
 
   beforeEach(async () => {
     previousAllowLocalInvoiceStub = process.env.ALLOW_LOCAL_INVOICE_STUB;
@@ -40,11 +46,7 @@ describe('InvoicingService', () => {
         { provide: PrismaService, useValue: mockPrismaService },
         {
           provide: EcpayEinvoiceAdapter,
-          useValue: {
-            getReadiness: jest.fn(),
-            assertReadyForMerchant: jest.fn(),
-            issueInvoice: jest.fn(),
-          },
+          useValue: mockEcpayEinvoiceAdapter,
         },
       ],
     }).compile();
@@ -242,6 +244,46 @@ describe('InvoicingService', () => {
         service.createAllowance('invoice-123', 100, '測試折讓', 'user-1'),
       ).rejects.toThrow('正式電子發票折讓尚未接上綠界電子發票 API');
       expect(mockPrismaService.invoice.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('queryProviderStatus', () => {
+    it('應該用 Invoice / SalesOrder metadata 查詢綠界狀態且不更新本地資料', async () => {
+      mockPrismaService.invoice.findUnique.mockResolvedValue({
+        id: 'invoice-123',
+        invoiceNumber: 'AA12345678',
+        status: 'issued',
+        issuedAt: new Date('2026-04-01T00:00:00+08:00'),
+        notes: null,
+        externalPayload: null,
+        salesOrder: {
+          notes:
+            '[ecpay-invoice-sync] invoiceDate=2026-04-01; merchantKey=groupbuy-main; merchantId=3150241',
+          channel: { code: '1SHOP' },
+        },
+      });
+      mockEcpayEinvoiceAdapter.queryInvoiceStatus.mockResolvedValue({
+        success: true,
+        provider: 'ecpay',
+        merchantKey: 'groupbuy-main',
+        merchantId: '3150241',
+        invoiceNumber: 'AA12345678',
+        invoiceDate: '2026-04-01',
+        invoiceIssuedStatus: 'issued',
+        rawMessage: '成功',
+        raw: { RtnCode: 1, RtnMsg: '成功' },
+      });
+
+      const result = await service.queryProviderStatus('invoice-123');
+
+      expect(mockEcpayEinvoiceAdapter.queryInvoiceStatus).toHaveBeenCalledWith({
+        merchantKey: 'groupbuy-main',
+        merchantId: '3150241',
+        invoiceNumber: 'AA12345678',
+        invoiceDate: '2026-04-01',
+      });
+      expect(result.providerStatus).toBe('issued');
+      expect(mockPrismaService.invoice.update).not.toHaveBeenCalled();
     });
   });
 });
