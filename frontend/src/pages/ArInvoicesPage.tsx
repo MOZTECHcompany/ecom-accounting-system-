@@ -63,6 +63,7 @@ const warningLabelMap: Record<string, string> = {
   invoice_issued_unposted: '已開票未落帳',
   invoice_issued_unpaid: '已開票未收款',
   overdue_receivable: '應收已逾期',
+  overpaid_receivable: '超收/重複收款',
 }
 
 const feeStatusColorMap: Record<string, string> = {
@@ -98,6 +99,8 @@ const EmptySummary: ReceivableMonitorSummary = {
   outstandingOrderCount: 0,
   overdueReceivableCount: 0,
   overdueReceivableAmount: 0,
+  overpaidReceivableCount: 0,
+  overpaidReceivableAmount: 0,
   issuedUnpostedCount: 0,
   issuedUnpaidCount: 0,
 }
@@ -594,6 +597,15 @@ const ArInvoicesPage: React.FC = () => {
               重試
             </Button>
           }
+        />
+      ) : null}
+
+      {Number(summary.overpaidReceivableCount || 0) > 0 ? (
+        <Alert
+          showIcon
+          type="error"
+          message="偵測到超收或重複收款風險"
+          description={`本區間有 ${summary.overpaidReceivableCount} 筆訂單的已收金額高於訂單應收，差額合計 ${currency(summary.overpaidReceivableAmount || 0)}。請優先核對 Payment 是否重複匯入或是否為同客戶合併收款。`}
         />
       ) : null}
 

@@ -166,6 +166,7 @@ export class ArService {
         const taxAmount = this.resolveTaxAmount(order);
         const revenueAmount = Math.max(grossAmount - taxAmount, 0);
         const outstandingAmount = Math.max(grossAmount - paidAmount, 0);
+        const overpaidAmount = Math.max(paidAmount - grossAmount, 0);
         const orderMeta = this.extractMetadata(order.notes);
         const termDays = this.resolvePaymentTermDays(order.customer, orderMeta, outstandingAmount);
         const dueDate =
@@ -224,6 +225,9 @@ export class ArService {
         if (outstandingAmount > 0 && dueDate < new Date()) {
           warningCodes.push('overdue_receivable');
         }
+        if (overpaidAmount > 0.01) {
+          warningCodes.push('overpaid_receivable');
+        }
 
         return {
           orderId: order.id,
@@ -264,6 +268,7 @@ export class ArService {
           taxAmount,
           paidAmount,
           outstandingAmount,
+          overpaidAmount,
           gatewayFeeAmount,
           platformFeeAmount,
           feeTotal: gatewayFeeAmount + platformFeeAmount,
@@ -293,6 +298,7 @@ export class ArService {
       const amount = Number(invoice.amountOriginal || 0);
       const paid = Number(invoice.paidAmountOriginal || 0);
       const outstandingAmount = Math.max(amount - paid, 0);
+      const overpaidAmount = Math.max(paid - amount, 0);
       const notesMeta = this.extractMetadata(invoice.notes);
       const dueDate = invoice.dueDate || this.buildDueDate(invoice.issueDate, outstandingAmount);
       const customerName =
@@ -311,6 +317,9 @@ export class ArService {
       }
       if (paid > 0 && !journal) {
         warningCodes.push('missing_journal');
+      }
+      if (overpaidAmount > 0.01) {
+        warningCodes.push('overpaid_receivable');
       }
 
       return {
@@ -353,6 +362,7 @@ export class ArService {
         taxAmount: 0,
         paidAmount: paid,
         outstandingAmount,
+        overpaidAmount,
         gatewayFeeAmount: 0,
         platformFeeAmount: 0,
         feeTotal: 0,
@@ -408,6 +418,16 @@ export class ArService {
         acc.overdueReceivableAmount += item.warningCodes.includes('overdue_receivable')
           ? item.outstandingAmount
           : 0;
+        acc.overpaidReceivableCount += item.warningCodes.includes(
+          'overpaid_receivable',
+        )
+          ? 1
+          : 0;
+        acc.overpaidReceivableAmount += item.warningCodes.includes(
+          'overpaid_receivable',
+        )
+          ? item.overpaidAmount
+          : 0;
         acc.issuedUnpostedCount += item.warningCodes.includes(
           'invoice_issued_unposted',
         )
@@ -433,6 +453,8 @@ export class ArService {
         outstandingOrderCount: 0,
         overdueReceivableCount: 0,
         overdueReceivableAmount: 0,
+        overpaidReceivableCount: 0,
+        overpaidReceivableAmount: 0,
         issuedUnpostedCount: 0,
         issuedUnpaidCount: 0,
       },
@@ -465,6 +487,8 @@ export class ArService {
               netAmount: 0,
               overdueCount: 0,
               overdueAmount: 0,
+              overpaidCount: 0,
+              overpaidAmount: 0,
               missingFeeCount: 0,
               missingInvoiceCount: 0,
               missingJournalCount: 0,
@@ -483,6 +507,12 @@ export class ArService {
             : 0;
           current.overdueAmount += item.warningCodes.includes('overdue_receivable')
             ? item.outstandingAmount
+            : 0;
+          current.overpaidCount += item.warningCodes.includes('overpaid_receivable')
+            ? 1
+            : 0;
+          current.overpaidAmount += item.warningCodes.includes('overpaid_receivable')
+            ? item.overpaidAmount
             : 0;
           current.missingFeeCount += item.warningCodes.includes('missing_fee') ? 1 : 0;
           current.missingInvoiceCount += item.warningCodes.includes('invoice_pending')

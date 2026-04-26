@@ -41,6 +41,7 @@ export interface ReceivableMonitorItem {
   taxAmount: number
   paidAmount: number
   outstandingAmount: number
+  overpaidAmount?: number
   gatewayFeeAmount: number
   platformFeeAmount: number
   feeTotal: number
@@ -79,6 +80,8 @@ export interface ReceivableMonitorSummary {
   outstandingOrderCount: number
   overdueReceivableCount: number
   overdueReceivableAmount: number
+  overpaidReceivableCount?: number
+  overpaidReceivableAmount?: number
   issuedUnpostedCount: number
   issuedUnpaidCount: number
 }
@@ -104,6 +107,8 @@ export interface ReceivableClassificationGroup {
   netAmount: number
   overdueCount: number
   overdueAmount: number
+  overpaidCount?: number
+  overpaidAmount?: number
   missingFeeCount: number
   missingInvoiceCount: number
   missingJournalCount: number
