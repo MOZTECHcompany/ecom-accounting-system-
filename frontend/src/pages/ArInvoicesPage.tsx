@@ -19,6 +19,7 @@ import {
 } from 'antd'
 import {
   CheckCircleOutlined,
+  DownloadOutlined,
   DollarCircleOutlined,
   FileTextOutlined,
   PlusOutlined,
@@ -45,6 +46,23 @@ import {
 const { Title, Text } = Typography
 
 const currency = (value: number) => `NT$ ${Number(value || 0).toLocaleString()}`
+
+const csvEscape = (value: unknown) => {
+  const text = value === null || value === undefined ? '' : String(value)
+  return `"${text.replace(/"/g, '""')}"`
+}
+
+const downloadCsv = (filename: string, rows: unknown[][]) => {
+  const csv = `\ufeff${rows.map((row) => row.map(csvEscape).join(',')).join('\n')}`
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
 
 const statusColorMap: Record<string, string> = {
   paid: 'green',
@@ -151,6 +169,7 @@ const ArInvoicesPage: React.FC = () => {
   const [overpaidPageSize, setOverpaidPageSize] = useState(50)
   const [overpaidResolutionFilter, setOverpaidResolutionFilter] =
     useState<OverpaidResolutionFilter>('all')
+  const [overpaidExporting, setOverpaidExporting] = useState(false)
   const [autoOpenedOverpaid, setAutoOpenedOverpaid] = useState(false)
   const [form] = Form.useForm()
   const [paymentForm] = Form.useForm()
@@ -369,6 +388,77 @@ const ArInvoicesPage: React.FC = () => {
     setOverpaidResolutionFilter(nextFilter)
     setOverpaidPage(nextPage)
     await fetchOverpaidDetails(nextPage, overpaidPageSize, nextFilter)
+  }
+
+  const handleExportOverpaidReviewCsv = async () => {
+    setOverpaidExporting(true)
+    try {
+      const pageSize = 500
+      let offset = 0
+      let expectedTotal: number | null = null
+      const allRows: NonNullable<OverpaidReceivablesResponse['items']> = []
+
+      while (expectedTotal === null || allRows.length < expectedTotal) {
+        const result = await arService.getOverpaidReceivables({
+          startDate: monitorRange[0].toISOString(),
+          endDate: monitorRange[1].toISOString(),
+          limit: pageSize,
+          offset,
+          resolutionCategory:
+            overpaidResolutionFilter === 'all' ? undefined : overpaidResolutionFilter,
+        })
+        expectedTotal = result.filteredCount ?? result.summary.overpaidOrderCount
+        allRows.push(...(result.items || []))
+        if (!result.items?.length) break
+        offset += pageSize
+      }
+
+      const rows = [
+        [
+          '訂單編號',
+          '訂單日期',
+          '通路',
+          '訂單金額',
+          '已收金額',
+          '超收金額',
+          '付款筆數',
+          '處理分類',
+          '建議動作',
+          '候選重複 Payment ID',
+          '全部 Payment ID',
+          'Payout Batch',
+          'Provider Payment ID',
+          '診斷',
+        ],
+        ...allRows.map((item) => [
+          item.orderNumber,
+          dayjs(item.orderDate).format('YYYY-MM-DD'),
+          item.channelName || item.channelCode || '',
+          item.grossAmount,
+          item.paidAmount,
+          item.overpaidAmount,
+          item.paymentCount,
+          item.resolutionLabel,
+          item.resolutionAction,
+          item.candidateDuplicatePaymentIds.join(' | '),
+          item.payments.map((payment) => payment.paymentId).join(' | '),
+          item.payments.map((payment) => payment.payoutBatchId || '').join(' | '),
+          item.payments.map((payment) => payment.providerPaymentId || '').join(' | '),
+          item.diagnosis,
+        ]),
+      ]
+      const filterLabel =
+        overpaidResolutionFilter === 'all' ? 'all' : overpaidResolutionFilter
+      downloadCsv(
+        `overpaid-review-${filterLabel}-${dayjs().format('YYYYMMDD-HHmmss')}.csv`,
+        rows,
+      )
+      message.success(`已匯出 ${allRows.length} 筆超收審核清單`)
+    } catch (error: any) {
+      message.error(error?.response?.data?.message || '匯出超收審核清單失敗')
+    } finally {
+      setOverpaidExporting(false)
+    }
   }
 
   useEffect(() => {
@@ -920,9 +1010,20 @@ const ArInvoicesPage: React.FC = () => {
               { label: '人工判斷', value: 'manual_review' },
             ]}
           />
-          <Text className="text-xs text-slate-400">
-            第 {overpaidVisibleStart} - {overpaidVisibleEnd} 筆 / 共 {overpaidFilteredTotal} 筆
-          </Text>
+          <Space wrap className="justify-end">
+            <Text className="text-xs text-slate-400">
+              第 {overpaidVisibleStart} - {overpaidVisibleEnd} 筆 / 共 {overpaidFilteredTotal} 筆
+            </Text>
+            <Button
+              size="small"
+              icon={<DownloadOutlined />}
+              loading={overpaidExporting}
+              disabled={!overpaidFilteredTotal}
+              onClick={handleExportOverpaidReviewCsv}
+            >
+              匯出審核清單
+            </Button>
+          </Space>
         </div>
         <Table
           rowKey="orderId"
