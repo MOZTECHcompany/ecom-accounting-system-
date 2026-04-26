@@ -196,7 +196,7 @@ export class ReconciliationService {
     await runStep(
       'auto-clear-ready-payments',
       '自動核銷可核銷款項',
-      params.autoClear !== false,
+      params.autoClear === true,
       () =>
         this.clearReadyPayments({
           entityId,
@@ -369,7 +369,7 @@ export class ReconciliationService {
       }),
     );
 
-    if (params.autoClear !== false) {
+    if (params.autoClear === true) {
       await runStep('groupbuy-auto-clear', '核銷可核銷團購款項', () =>
         this.clearReadyPayments({
           entityId,
@@ -521,7 +521,7 @@ export class ReconciliationService {
     await runStep(
       'linepay-auto-clear',
       '核銷可核銷 LINE Pay 款項',
-      params.autoClear !== false,
+      params.autoClear === true,
       () =>
         this.clearReadyPayments({
           entityId,
