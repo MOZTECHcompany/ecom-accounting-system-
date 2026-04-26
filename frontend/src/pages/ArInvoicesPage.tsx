@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
+  Alert,
   Button,
   Card,
   DatePicker,
@@ -27,7 +28,7 @@ import {
   WarningOutlined,
 } from '@ant-design/icons'
 import { motion } from 'framer-motion'
-import dayjs from 'dayjs'
+import dayjs, { Dayjs } from 'dayjs'
 import {
   arService,
   ReceivableMonitorItem,
@@ -91,6 +92,11 @@ const EmptySummary: ReceivableMonitorSummary = {
   issuedUnpaidCount: 0,
 }
 
+const createDefaultMonitorRange = (): [Dayjs, Dayjs] => [
+  dayjs().subtract(90, 'day').startOf('day'),
+  dayjs().endOf('day'),
+]
+
 const ArInvoicesPage: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -102,22 +108,44 @@ const ArInvoicesPage: React.FC = () => {
   const [searchText, setSearchText] = useState('')
   const [items, setItems] = useState<ReceivableMonitorItem[]>([])
   const [summary, setSummary] = useState<ReceivableMonitorSummary>(EmptySummary)
+  const [monitorRange, setMonitorRange] = useState<[Dayjs, Dayjs]>(createDefaultMonitorRange)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [form] = Form.useForm()
   const [paymentForm] = Form.useForm()
 
-  const fetchMonitor = async () => {
+  const fetchMonitor = async (range: [Dayjs, Dayjs] = monitorRange) => {
     setLoading(true)
     try {
-      const result = await arService.getReceivableMonitor()
+      const result = await arService.getReceivableMonitor({
+        startDate: range[0].toISOString(),
+        endDate: range[1].toISOString(),
+      })
       setItems(result.items || [])
       setSummary(result.summary || EmptySummary)
-    } catch (error) {
-      message.error('載入應收帳款追蹤失敗')
+      setLoadError(null)
+    } catch (error: any) {
+      const errorMessage =
+        error?.code === 'ECONNABORTED'
+          ? '載入應收帳款追蹤逾時，請縮短日期範圍後重試。'
+          : error?.response?.data?.message || '載入應收帳款追蹤失敗，請稍後重試。'
+      message.error(errorMessage)
+      setLoadError(errorMessage)
       setItems([])
       setSummary(EmptySummary)
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleMonitorRangeChange = (dates: null | [Dayjs | null, Dayjs | null]) => {
+    if (!dates?.[0] || !dates[1]) return
+
+    const nextRange: [Dayjs, Dayjs] = [
+      dates[0].startOf('day'),
+      dates[1].endOf('day'),
+    ]
+    setMonitorRange(nextRange)
+    fetchMonitor(nextRange)
   }
 
   const handleSync = async () => {
@@ -440,7 +468,12 @@ const ArInvoicesPage: React.FC = () => {
           <Text className="text-gray-500">建立應收、追蹤收款、確認入帳。</Text>
         </div>
         <Space wrap>
-          <Button icon={<ReloadOutlined />} onClick={fetchMonitor}>
+          <DatePicker.RangePicker
+            allowClear={false}
+            value={monitorRange}
+            onChange={handleMonitorRangeChange}
+          />
+          <Button icon={<ReloadOutlined />} onClick={() => fetchMonitor()}>
             重新整理
           </Button>
           <Button icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
@@ -456,6 +489,20 @@ const ArInvoicesPage: React.FC = () => {
           </Button>
         </Space>
       </div>
+
+      {loadError ? (
+        <Alert
+          showIcon
+          type="warning"
+          message="應收帳款追蹤沒有成功載入"
+          description={`${loadError} 目前查詢區間：${monitorRange[0].format('YYYY-MM-DD')} 至 ${monitorRange[1].format('YYYY-MM-DD')}。`}
+          action={
+            <Button size="small" onClick={() => fetchMonitor()}>
+              重試
+            </Button>
+          }
+        />
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
         <Card bordered={false} className="glass-card">

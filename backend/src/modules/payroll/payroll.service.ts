@@ -1007,7 +1007,17 @@ export class PayrollService {
   }
 
   async getMyPayrollRuns(userId: string) {
-    const employee = await this.getEmployeeForUser(userId);
+    const employee = await this.prisma.employee.findUnique({
+      where: { userId },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!employee) {
+      return [];
+    }
+
     const runs = await this.prisma.payrollRun.findMany({
       where: {
         status: {
