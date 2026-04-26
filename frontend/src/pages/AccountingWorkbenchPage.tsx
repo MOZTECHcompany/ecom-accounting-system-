@@ -119,6 +119,7 @@ const AccountingWorkbenchPage: React.FC = () => {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [feeImportForm] = Form.useForm()
+  const [issuedInvoiceImportForm] = Form.useForm()
   // 預設 90 天，確保能看到歷史資料；null = 全部（不過濾日期）
   const [dateRange, setDateRange] = useState<WorkbenchRange>([
     dayjs().subtract(89, 'day').startOf('day'),
@@ -132,6 +133,8 @@ const AccountingWorkbenchPage: React.FC = () => {
   const [importingLinePayCapture, setImportingLinePayCapture] = useState(false)
   const [importingEcpayPayout, setImportingEcpayPayout] = useState(false)
   const [importingEcpayIssuedInvoices, setImportingEcpayIssuedInvoices] = useState(false)
+  const [issuedInvoiceImportOpen, setIssuedInvoiceImportOpen] = useState(false)
+  const [issuedInvoiceImportFile, setIssuedInvoiceImportFile] = useState<File | null>(null)
   const [backfillingOneShopClosure, setBackfillingOneShopClosure] = useState(false)
   const [refreshingLinePayStatuses, setRefreshingLinePayStatuses] = useState(false)
   const [processingLinePayRefunds, setProcessingLinePayRefunds] = useState(false)
@@ -319,7 +322,7 @@ const AccountingWorkbenchPage: React.FC = () => {
         try {
           const workbook = XLSX.read(reader.result, { type: 'array', cellDates: false })
           const sheetName =
-            workbook.SheetNames.find((name) => /settlement|capture|撥款|請款/i.test(name)) ||
+            workbook.SheetNames.find((name) => /invoice|發票|settlement|capture|撥款|請款/i.test(name)) ||
             workbook.SheetNames[0]
           const worksheet = workbook.Sheets[sheetName]
           if (!worksheet) {
@@ -337,6 +340,15 @@ const AccountingWorkbenchPage: React.FC = () => {
       reader.onerror = () => reject(reader.error)
       reader.readAsArrayBuffer(file)
     })
+
+  const openIssuedInvoiceImportModal = () => {
+    issuedInvoiceImportForm.setFieldsValue({
+      merchantId: '3150241',
+      markIssued: true,
+    })
+    setIssuedInvoiceImportFile(null)
+    setIssuedInvoiceImportOpen(true)
+  }
 
   const handleImportLinePayCapture = async (file: File) => {
     setImportingLinePayCapture(true)
@@ -434,7 +446,11 @@ const AccountingWorkbenchPage: React.FC = () => {
     }
   }
 
-  const handleImportEcpayIssuedInvoices = async (file: File) => {
+  const handleImportEcpayIssuedInvoices = async (
+    file: File,
+    merchantId: string,
+    markIssued = true,
+  ) => {
     setImportingEcpayIssuedInvoices(true)
     try {
       const rows = await parseSpreadsheetRows(file)
@@ -443,11 +459,13 @@ const AccountingWorkbenchPage: React.FC = () => {
         return
       }
 
+      const normalizedMerchantId = merchantId.trim()
+      const merchantKey = normalizedMerchantId === '3290494' ? 'shopify-main' : 'groupbuy-main'
       const result = await salesService.importEcpayIssuedInvoices({
         entityId,
-        merchantKey: 'groupbuy-main',
-        merchantId: '3150241',
-        markIssued: true,
+        merchantKey,
+        merchantId: normalizedMerchantId,
+        markIssued,
         rows,
       })
 
@@ -455,13 +473,31 @@ const AccountingWorkbenchPage: React.FC = () => {
         `綠界銷項發票匯入完成：已配對 ${result.matched || 0} 筆，新增 ${result.created || 0} 筆，更新 ${result.updated || 0} 筆，未配對 ${result.unmatched || 0} 筆`,
         6,
       )
-      await runOneShopClosureAfterImport()
+      if (normalizedMerchantId === '3150241') {
+        await runOneShopClosureAfterImport()
+      }
       await fetchWorkbench()
+      setIssuedInvoiceImportOpen(false)
+      setIssuedInvoiceImportFile(null)
     } catch (error: any) {
       message.error(error?.response?.data?.message || '匯入綠界銷項發票失敗')
     } finally {
       setImportingEcpayIssuedInvoices(false)
     }
+  }
+
+  const handleConfirmIssuedInvoiceImport = async () => {
+    const values = await issuedInvoiceImportForm.validateFields()
+    if (!issuedInvoiceImportFile) {
+      message.warning('請先選擇綠界銷項發票檔案')
+      return
+    }
+
+    await handleImportEcpayIssuedInvoices(
+      issuedInvoiceImportFile,
+      values.merchantId,
+      values.markIssued !== false,
+    )
   }
 
   const handleBackfillOneShopClosure = async () => {
@@ -1219,18 +1255,13 @@ const AccountingWorkbenchPage: React.FC = () => {
           >
             同步發票狀態
           </Button>
-          <Upload
-            accept=".xlsx,.xls,.csv"
-            showUploadList={false}
-            beforeUpload={(file) => {
-              void handleImportEcpayIssuedInvoices(file)
-              return false
-            }}
+          <Button
+            icon={<UploadOutlined />}
+            loading={importingEcpayIssuedInvoices}
+            onClick={openIssuedInvoiceImportModal}
           >
-            <Button icon={<UploadOutlined />} loading={importingEcpayIssuedInvoices}>
-              匯入綠界銷項發票
-            </Button>
-          </Upload>
+            匯入綠界銷項發票
+          </Button>
           <Button
             icon={<ReloadOutlined />}
             loading={backfillingOneShopClosure}
@@ -1437,21 +1468,13 @@ const AccountingWorkbenchPage: React.FC = () => {
                 匯入綠界撥款報表
               </Button>
             </Upload>
-            <Upload
-              accept=".xlsx,.xls,.csv"
-              showUploadList={false}
-              beforeUpload={(file) => {
-                void handleImportEcpayIssuedInvoices(file)
-                return false
-              }}
+            <Button
+              icon={<UploadOutlined />}
+              loading={importingEcpayIssuedInvoices}
+              onClick={openIssuedInvoiceImportModal}
             >
-              <Button
-                icon={<UploadOutlined />}
-                loading={importingEcpayIssuedInvoices}
-              >
-                匯入綠界銷項發票
-              </Button>
-            </Upload>
+              匯入綠界銷項發票
+            </Button>
             <Upload
               accept=".xlsx,.xls,.csv"
               showUploadList={false}
@@ -1735,6 +1758,61 @@ const AccountingWorkbenchPage: React.FC = () => {
           },
         ]}
       />
+
+      <Modal
+        title="匯入綠界銷項發票"
+        open={issuedInvoiceImportOpen}
+        onCancel={() => {
+          setIssuedInvoiceImportOpen(false)
+          setIssuedInvoiceImportFile(null)
+        }}
+        onOk={handleConfirmIssuedInvoiceImport}
+        confirmLoading={importingEcpayIssuedInvoices}
+        okText="匯入並回填訂單"
+        cancelText="取消"
+        width={720}
+      >
+        <Alert
+          showIcon
+          type="warning"
+          className="mb-4"
+          message="這是客戶訂單銷項發票，不是綠界服務費發票"
+          description="匯入前先選正確綠界商店代號：3290494 對應 MOZTECH Shopify 官方站；3150241 對應 1Shop / 團購 / 未來 Shopline。選錯會讓訂單對帳鏈混用。"
+        />
+        <Form
+          form={issuedInvoiceImportForm}
+          layout="vertical"
+          initialValues={{ merchantId: '3150241', markIssued: true }}
+        >
+          <Form.Item
+            name="merchantId"
+            label="綠界商店代號"
+            rules={[{ required: true, message: '請選擇商店代號' }]}
+          >
+            <Select options={ECPAY_MERCHANT_OPTIONS} />
+          </Form.Item>
+          <Form.Item name="markIssued" label="匯入後標記為已開立" valuePropName="checked">
+            <Switch checkedChildren="已開立" unCheckedChildren="僅草稿" />
+          </Form.Item>
+          <Upload.Dragger
+            accept=".xlsx,.xls,.csv"
+            maxCount={1}
+            beforeUpload={(file) => {
+              setIssuedInvoiceImportFile(file)
+              return false
+            }}
+            onRemove={() => {
+              setIssuedInvoiceImportFile(null)
+            }}
+          >
+            <p className="ant-upload-drag-icon"><UploadOutlined /></p>
+            <p className="ant-upload-text">選擇或拖曳綠界銷項發票匯出檔</p>
+            <p className="ant-upload-hint">
+              支援 .xlsx / .xls / .csv；系統會用發票號碼、日期與 RelateNumber 嘗試回填 SalesOrder / Invoice。
+            </p>
+          </Upload.Dragger>
+        </Form>
+      </Modal>
 
       <Modal
         title="匯入綠界服務費發票"
