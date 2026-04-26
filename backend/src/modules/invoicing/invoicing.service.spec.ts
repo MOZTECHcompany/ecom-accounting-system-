@@ -8,6 +8,7 @@ describe('InvoicingService', () => {
   let service: InvoicingService;
   let prismaService: PrismaService;
   let previousAllowLocalInvoiceStub: string | undefined;
+  let previousNodeEnv: string | undefined;
 
   const mockPrismaService = {
     salesOrder: {
@@ -30,6 +31,7 @@ describe('InvoicingService', () => {
 
   beforeEach(async () => {
     previousAllowLocalInvoiceStub = process.env.ALLOW_LOCAL_INVOICE_STUB;
+    previousNodeEnv = process.env.NODE_ENV;
     process.env.ALLOW_LOCAL_INVOICE_STUB = 'true';
 
     const module: TestingModule = await Test.createTestingModule({
@@ -57,6 +59,11 @@ describe('InvoicingService', () => {
       delete process.env.ALLOW_LOCAL_INVOICE_STUB;
     } else {
       process.env.ALLOW_LOCAL_INVOICE_STUB = previousAllowLocalInvoiceStub;
+    }
+    if (previousNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = previousNodeEnv;
     }
   });
 
@@ -192,6 +199,49 @@ describe('InvoicingService', () => {
       await expect(
         service.issueInvoice('order-123', { invoiceType: 'B2C' }, 'user-1'),
       ).rejects.toThrow('訂單已開立發票，不可重複開立');
+    });
+  });
+
+  describe('formal invoice adjustment safeguards', () => {
+    beforeEach(() => {
+      process.env.NODE_ENV = 'development';
+      delete process.env.ALLOW_LOCAL_INVOICE_STUB;
+    });
+
+    it('正式環境不可只在本地作廢發票', async () => {
+      mockPrismaService.invoice.findUnique.mockResolvedValue({
+        id: 'invoice-123',
+        invoiceNumber: 'AA12345678',
+        status: 'issued',
+        orderId: null,
+      });
+
+      await expect(
+        service.voidInvoice('invoice-123', '測試作廢', 'user-1'),
+      ).rejects.toThrow('正式電子發票作廢尚未接上綠界電子發票 API');
+      expect(mockPrismaService.invoice.update).not.toHaveBeenCalled();
+    });
+
+    it('正式環境不可只在本地建立折讓單', async () => {
+      mockPrismaService.invoice.findUnique.mockResolvedValue({
+        id: 'invoice-123',
+        entityId: 'entity-1',
+        orderId: 'order-123',
+        invoiceNumber: 'AA12345678',
+        status: 'issued',
+        invoiceType: 'B2C',
+        buyerName: '測試客戶',
+        buyerTaxId: null,
+        buyerEmail: 'customer@example.com',
+        totalAmountOriginal: '1050.00',
+        currency: 'TWD',
+        fxRate: '1',
+      });
+
+      await expect(
+        service.createAllowance('invoice-123', 100, '測試折讓', 'user-1'),
+      ).rejects.toThrow('正式電子發票折讓尚未接上綠界電子發票 API');
+      expect(mockPrismaService.invoice.create).not.toHaveBeenCalled();
     });
   });
 });

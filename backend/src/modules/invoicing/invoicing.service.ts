@@ -349,6 +349,8 @@ export class InvoicingService {
       throw new BadRequestException(`只能作廢已開立的發票`);
     }
 
+    this.assertInvoiceAdjustmentAvailable('作廢');
+
     await this.prisma.$transaction(async (tx) => {
       // 更新發票狀態
       await tx.invoice.update({
@@ -431,6 +433,8 @@ export class InvoicingService {
     ) {
       throw new BadRequestException(`折讓金額不能大於原發票金額`);
     }
+
+    this.assertInvoiceAdjustmentAvailable('折讓');
 
     // 建立負項發票（折讓單）
     const allowanceInvoiceNumber = `${originalInvoice.invoiceNumber}-AL-${Date.now().toString().slice(-6)}`;
@@ -816,6 +820,16 @@ export class InvoicingService {
     return (
       process.env.NODE_ENV === 'test' ||
       process.env.ALLOW_LOCAL_INVOICE_STUB === 'true'
+    );
+  }
+
+  private assertInvoiceAdjustmentAvailable(operation: string) {
+    if (this.isLocalInvoiceStubAllowed()) {
+      return;
+    }
+
+    throw new BadRequestException(
+      `正式電子發票${operation}尚未接上綠界電子發票 API；目前不可只在系統本地${operation}，避免綠界與內部 Invoice 狀態不一致。`,
     );
   }
 

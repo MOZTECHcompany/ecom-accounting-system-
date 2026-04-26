@@ -217,8 +217,9 @@ export class InvoicingController {
   @Roles('ADMIN', 'ACCOUNTANT')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: '作廢發票',
-    description: '作廢已開立的發票，作廢後將無法恢復，並記錄作廢原因',
+    summary: '作廢發票（待綠界作廢 API Adapter 啟用）',
+    description:
+      '正式環境目前不允許只在本地作廢發票；需先接上綠界電子發票作廢 API，避免系統顯示已作廢但綠界未同步。',
   })
   @ApiParam({
     name: 'invoiceId',
@@ -263,8 +264,9 @@ export class InvoicingController {
   @Roles('ADMIN', 'ACCOUNTANT')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
-    summary: '開立折讓單',
-    description: '對已開立的發票開立折讓單（負項發票），用於部分退款或價格調整',
+    summary: '開立折讓單（待綠界折讓 API Adapter 啟用）',
+    description:
+      '正式環境目前不允許只在本地建立折讓單；需先接上綠界電子發票折讓 API，避免系統顯示已折讓但綠界未同步。',
   })
   @ApiParam({
     name: 'invoiceId',

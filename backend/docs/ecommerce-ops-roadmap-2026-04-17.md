@@ -99,6 +99,7 @@
 - 已新增 `GET /invoicing/readiness`，可在不開立真實發票的情況下檢查每個帳號是否缺 `merchantId`、`hashKey`、`hashIv`、`issueUrl`、`queryUrl`、`invalidUrl`、`allowanceUrl`。
 - 會計工作台會顯示綠界正式開票 readiness；若缺正式密鑰或 `ECPAY_EINVOICE_ISSUING_ENABLED` 尚未啟用，系統仍引導先用「綠界銷項發票匯入」回填訂單，避免本地假字軌或未測試 API 污染正式資料。
 - `POST /invoicing/issue/:orderId` 已可依通路推斷 merchant key，Shopify 走 `shopify-main`，1Shop / Shopline 走 `groupbuy-main`；正式呼叫前會先檢查 profile readiness。
+- `POST /invoicing/:invoiceId/void` 與 `POST /invoicing/:invoiceId/allowance` 已在正式環境擋住本地作廢 / 折讓，避免綠界未同步但內部狀態已變更。
 
 待補：
 
