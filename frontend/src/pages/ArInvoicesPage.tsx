@@ -29,6 +29,7 @@ import {
 } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import dayjs, { Dayjs } from 'dayjs'
+import { useSearchParams } from 'react-router-dom'
 import {
   arService,
   OverpaidReceivablesResponse,
@@ -112,6 +113,7 @@ const createDefaultMonitorRange = (): [Dayjs, Dayjs] => [
 ]
 
 const ArInvoicesPage: React.FC = () => {
+  const [searchParams] = useSearchParams()
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -132,6 +134,7 @@ const ArInvoicesPage: React.FC = () => {
   const [overpaidModalOpen, setOverpaidModalOpen] = useState(false)
   const [overpaidLoading, setOverpaidLoading] = useState(false)
   const [overpaidDetails, setOverpaidDetails] = useState<OverpaidReceivablesResponse | null>(null)
+  const [autoOpenedOverpaid, setAutoOpenedOverpaid] = useState(false)
   const [form] = Form.useForm()
   const [paymentForm] = Form.useForm()
 
@@ -329,6 +332,21 @@ const ArInvoicesPage: React.FC = () => {
   useEffect(() => {
     fetchMonitor()
   }, [])
+
+  useEffect(() => {
+    if (searchParams.get('focus') !== 'overpaid') return
+    if (autoOpenedOverpaid || loading || loadError) return
+    if (Number(summary.overpaidReceivableCount || 0) <= 0) return
+
+    setAutoOpenedOverpaid(true)
+    handleOpenOverpaidDetails()
+  }, [
+    autoOpenedOverpaid,
+    loadError,
+    loading,
+    searchParams,
+    summary.overpaidReceivableCount,
+  ])
 
   const filteredItems = useMemo(() => {
     const keyword = searchText.trim().toLowerCase()

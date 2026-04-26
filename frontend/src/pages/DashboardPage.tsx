@@ -669,7 +669,7 @@ const DashboardPage: React.FC = () => {
                 </div>
               </div>
             </div>
-            <Button danger onClick={() => navigate("/sales/invoices")}>
+            <Button danger onClick={() => navigate("/sales/invoices?focus=overpaid")}>
               查看超收明細
             </Button>
           </div>
