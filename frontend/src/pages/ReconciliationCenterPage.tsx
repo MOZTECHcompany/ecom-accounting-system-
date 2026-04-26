@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   DatePicker,
+  Modal,
   Progress,
   Segmented,
   Space,
@@ -28,6 +29,7 @@ import dayjs, { Dayjs } from 'dayjs'
 import { useNavigate } from 'react-router-dom'
 import {
   reconciliationService,
+  ClearReadyPaymentsResponse,
   ReconciliationBucketKey,
   ReconciliationCenterItem,
   ReconciliationCenterResponse,
@@ -115,6 +117,8 @@ const ReconciliationCenterPage: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [clearing, setClearing] = useState(false)
+  const [clearPreviewOpen, setClearPreviewOpen] = useState(false)
+  const [clearPreview, setClearPreview] = useState<ClearReadyPaymentsResponse | null>(null)
   const [center, setCenter] = useState<ReconciliationCenterResponse | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -188,7 +192,7 @@ const ReconciliationCenterPage: React.FC = () => {
     }
   }
 
-  const handleClearReady = async () => {
+  const handlePreviewClearReady = async () => {
     setClearing(true)
     try {
       const result = await reconciliationService.clearReady({
@@ -196,6 +200,36 @@ const ReconciliationCenterPage: React.FC = () => {
         startDate,
         endDate,
         limit: 200,
+        dryRun: true,
+      })
+      setClearPreview(result)
+      setClearPreviewOpen(true)
+      const blockers = describeClearBlockers(result.topReasons)
+      if (result.ready > 0) {
+        message.info(
+          blockers
+            ? `預覽完成：${result.ready} 筆符合自動核銷；其餘主要卡在 ${blockers}`
+            : `預覽完成：${result.ready} 筆符合自動核銷`,
+        )
+      } else {
+        message.info(blockers ? `目前沒有可自動核銷款項；主要卡在 ${blockers}` : '目前沒有可自動核銷款項')
+      }
+    } catch (error: any) {
+      message.error(error?.response?.data?.message || '預覽可核銷款項失敗')
+    } finally {
+      setClearing(false)
+    }
+  }
+
+  const handleConfirmClearReady = async () => {
+    setClearing(true)
+    try {
+      const result = await reconciliationService.clearReady({
+        entityId,
+        startDate,
+        endDate,
+        limit: 200,
+        dryRun: false,
       })
       if (result.failed > 0) {
         const blockers = describeClearBlockers(result.topReasons)
@@ -212,6 +246,8 @@ const ReconciliationCenterPage: React.FC = () => {
           message.success(`核銷完成：成功 ${result.cleared} 筆，略過 ${result.skipped} 筆`)
         }
       }
+      setClearPreviewOpen(false)
+      setClearPreview(null)
       await fetchData()
     } catch (error: any) {
       message.error(error?.response?.data?.message || '核銷可核銷款項失敗')
@@ -308,9 +344,9 @@ const ReconciliationCenterPage: React.FC = () => {
           <Button
             icon={<CheckCircleOutlined />}
             loading={clearing}
-            onClick={handleClearReady}
+            onClick={handlePreviewClearReady}
           >
-            核銷可核銷
+            預覽可核銷
           </Button>
         </Space>
       </div>
@@ -473,6 +509,96 @@ const ReconciliationCenterPage: React.FC = () => {
         pagination={{ pageSize: 12 }}
         className="rounded-3xl bg-white/60"
       />
+
+      <Modal
+        title="確認自動核銷"
+        open={clearPreviewOpen}
+        onCancel={() => setClearPreviewOpen(false)}
+        onOk={handleConfirmClearReady}
+        okText="確認核銷"
+        cancelText="先不要"
+        okButtonProps={{
+          danger: true,
+          disabled: !clearPreview || clearPreview.ready <= 0,
+          loading: clearing,
+        }}
+        confirmLoading={clearing}
+        width={760}
+      >
+        <Alert
+          showIcon
+          type="warning"
+          className="mb-4"
+          message="這一步會寫入真實核銷分錄"
+          description="目前畫面只完成 dry-run 預覽；按下確認核銷後，系統才會對符合條件的 Payment 建立核銷分錄並更新狀態。"
+        />
+        {clearPreview ? (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-4">
+              <Card size="small">
+                <Statistic title="掃描" value={clearPreview.scanned} />
+              </Card>
+              <Card size="small">
+                <Statistic title="可核銷" value={clearPreview.ready} valueStyle={{ color: '#0f766e' }} />
+              </Card>
+              <Card size="small">
+                <Statistic title="略過" value={clearPreview.skipped} />
+              </Card>
+              <Card size="small">
+                <Statistic title="失敗" value={clearPreview.failed} valueStyle={{ color: '#dc2626' }} />
+              </Card>
+            </div>
+
+            {clearPreview.topReasons?.length ? (
+              <div>
+                <div className="mb-2 text-sm font-medium text-slate-700">主要判斷原因</div>
+                <div className="flex flex-wrap gap-2">
+                  {clearPreview.topReasons.map((item) => (
+                    <Tag key={item.reason} color={item.reason === 'ready_to_clear' ? 'green' : 'gold'}>
+                      {clearBlockerLabels[item.reason] || item.reason} {item.count}
+                    </Tag>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <Table
+              size="small"
+              rowKey={(record) => record.paymentId}
+              dataSource={clearPreview.results.slice(0, 20)}
+              pagination={false}
+              columns={[
+                {
+                  title: 'Payment',
+                  dataIndex: 'paymentId',
+                  render: (value: string) => <Text code>{value.slice(0, 8)}</Text>,
+                },
+                {
+                  title: '訂單',
+                  dataIndex: 'externalOrderId',
+                  render: (value: string | null) => value || '-',
+                },
+                {
+                  title: '狀態',
+                  dataIndex: 'status',
+                  render: (value: string) => (
+                    <Tag color={value === 'dry_run' || value === 'cleared' ? 'green' : 'gold'}>{value}</Tag>
+                  ),
+                },
+                {
+                  title: '原因',
+                  dataIndex: 'reason',
+                  render: (value: string | undefined) =>
+                    value ? clearBlockerLabels[value] || value : '可核銷',
+                },
+              ]}
+            />
+            {clearPreview.results.length > 20 ? (
+              <Text type="secondary">僅顯示前 20 筆預覽；本次最多處理 200 筆。</Text>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
     </motion.div>
   )
 }
