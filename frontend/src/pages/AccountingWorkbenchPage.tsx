@@ -1287,15 +1287,19 @@ const AccountingWorkbenchPage: React.FC = () => {
           <Alert
             showIcon
             className="mt-5 rounded-2xl"
-            type={invoiceReadiness.ready ? 'success' : 'warning'}
+            type={invoiceReadiness.canIssue ? 'success' : 'warning'}
             message={
-              invoiceReadiness.ready
+              invoiceReadiness.canIssue
                 ? `綠界正式開票設定已就緒：${readyInvoiceAccounts.map((account) => account.merchantId).join('、')}`
+                : invoiceReadiness.ready
+                  ? '綠界電子發票 profile 已就緒，但正式開票尚未啟用'
                 : '綠界正式開票尚未就緒'
             }
             description={
-              invoiceReadiness.ready
+              invoiceReadiness.canIssue
                 ? '系統已找到可用的綠界電子發票帳號；正式開票會依訂單通路使用 3290494 或 3150241。'
+                : invoiceReadiness.ready
+                  ? '目前只允許查 readiness 與匯入已開立銷項發票；請先完成 stage / 小額測試，再啟用 ECPAY_EINVOICE_ISSUING_ENABLED。'
                 : `目前缺少 ${missingInvoiceAccounts
                     .map((account) => `${account.merchantId || account.key}: ${account.missing.join('/')}`)
                     .join('；')}。先用銷項發票匯入回填訂單，不要用本地假字軌。`

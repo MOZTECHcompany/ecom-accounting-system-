@@ -97,13 +97,14 @@
   - `shopify-main` / `3290494`：MOZTECH Shopify 官方站
   - `groupbuy-main` / `3150241`：1Shop / 團購 / 未來 Shopline
 - 已新增 `GET /invoicing/readiness`，可在不開立真實發票的情況下檢查每個帳號是否缺 `merchantId`、`hashKey`、`hashIv`、`issueUrl`、`queryUrl`、`invalidUrl`、`allowanceUrl`。
-- 會計工作台會顯示綠界正式開票 readiness；若缺正式密鑰，系統仍引導先用「綠界銷項發票匯入」回填訂單，避免本地假字軌污染正式資料。
+- 會計工作台會顯示綠界正式開票 readiness；若缺正式密鑰或 `ECPAY_EINVOICE_ISSUING_ENABLED` 尚未啟用，系統仍引導先用「綠界銷項發票匯入」回填訂單，避免本地假字軌或未測試 API 污染正式資料。
 - `POST /invoicing/issue/:orderId` 已可依通路推斷 merchant key，Shopify 走 `shopify-main`，1Shop / Shopline 走 `groupbuy-main`；正式呼叫前會先檢查 profile readiness。
 
 待補：
 
 - 將真實 `HashKey` / `HashIV` 放入 Secret Manager / Cloud Run env，不寫入 repo。
 - 用綠界 stage 或正式小額測試單驗證 `B2CInvoice/Issue`、`GetIssue`、`Invalid`、`Allowance`。
+- 測試通過後才設定 `ECPAY_EINVOICE_ISSUING_ENABLED=true`。
 - 補字軌 / 配號查詢與用量警示；目前 readiness 僅確認 API profile，不代表字軌用量充足。
 - 補 B2B 發票專用流程、折讓作廢與 reversing journal。
 

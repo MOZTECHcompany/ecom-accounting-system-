@@ -82,19 +82,24 @@ export class EcpayEinvoiceConfigService {
   getReadiness(): InvoiceProviderReadiness {
     const accounts = this.profiles.map((profile) => this.toReadiness(profile));
     const readyAccounts = accounts.filter((account) => account.ready);
+    const issuingEnabled = this.isIssuingEnabled();
 
     const message =
       readyAccounts.length > 0
-        ? `已設定 ${readyAccounts.length} 個可用綠界電子發票帳號。`
+        ? issuingEnabled
+          ? `已設定 ${readyAccounts.length} 個可用綠界電子發票帳號，且正式開票開關已啟用。`
+          : `已設定 ${readyAccounts.length} 個可用綠界電子發票帳號，但正式開票開關尚未啟用。`
         : '尚未設定可正式開票的綠界電子發票帳號。';
 
     return {
       provider: 'ecpay',
       ready: readyAccounts.length > 0,
-      canIssue: readyAccounts.length > 0,
+      canIssue: readyAccounts.length > 0 && issuingEnabled,
+      issuingEnabled,
       message,
       requiredEnv: [
         'ECPAY_EINVOICE_ACCOUNTS_JSON',
+        'ECPAY_EINVOICE_ISSUING_ENABLED',
         'merchantId',
         'hashKey',
         'hashIv',
@@ -103,6 +108,12 @@ export class EcpayEinvoiceConfigService {
       ],
       accounts,
     };
+  }
+
+  isIssuingEnabled() {
+    return this.isTruthy(
+      this.configService.get<string>('ECPAY_EINVOICE_ISSUING_ENABLED', 'false'),
+    );
   }
 
   getProfileMissingFields(profile: EcpayEinvoiceProfile) {
@@ -262,5 +273,20 @@ export class EcpayEinvoiceConfigService {
       }
     }
     return '';
+  }
+
+  private isTruthy(value: unknown) {
+    if (typeof value === 'boolean') {
+      return value;
+    }
+    if (typeof value === 'number') {
+      return value === 1;
+    }
+    if (typeof value !== 'string') {
+      return false;
+    }
+    return ['1', 'true', 'yes', 'y', 'on', 'enabled'].includes(
+      value.trim().toLowerCase(),
+    );
   }
 }

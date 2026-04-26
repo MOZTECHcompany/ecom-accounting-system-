@@ -18,6 +18,7 @@ export type InvoiceProviderReadiness = {
   provider: 'ecpay';
   ready: boolean;
   canIssue: boolean;
+  issuingEnabled: boolean;
   message: string;
   requiredEnv: string[];
   accounts: InvoiceMerchantReadiness[];

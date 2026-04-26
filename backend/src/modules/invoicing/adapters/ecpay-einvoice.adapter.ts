@@ -23,6 +23,12 @@ export class EcpayEinvoiceAdapter implements InvoiceAdapter {
   }
 
   assertReadyForMerchant(merchantKey?: string | null) {
+    if (!this.configService.isIssuingEnabled()) {
+      throw new BadRequestException(
+        '綠界電子發票 profile 已可檢查，但正式開票開關尚未啟用；請先完成 stage / 小額測試，再設定 ECPAY_EINVOICE_ISSUING_ENABLED=true。',
+      );
+    }
+
     const profile = this.configService.resolveProfile(merchantKey);
     if (!profile) {
       throw new BadRequestException(
