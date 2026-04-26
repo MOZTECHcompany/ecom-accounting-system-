@@ -882,7 +882,9 @@ export class ReconciliationService {
       bucket.netAmount += item.netAmount;
       bucket.outstandingAmount += item.outstandingAmount;
       bucket.feeTotal += item.feeTotal;
-      bucket.items.push(item);
+      if (bucket.items.length < normalizedLimit) {
+        bucket.items.push(item);
+      }
     }
 
     const totalCount = items.length;

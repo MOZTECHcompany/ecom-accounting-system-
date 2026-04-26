@@ -157,7 +157,7 @@ const AccountingWorkbenchPage: React.FC = () => {
         dashboardService.getReconciliationFeed({ entityId, startDate, endDate, limit: 24 }),
         dashboardService.getOrderReconciliationAudit({ entityId, startDate, endDate, limit: 80 }),
         arService.getReceivableMonitor({ entityId, startDate, endDate }),
-        arService.getB2BStatements({ entityId, asOfDate: endDate }),
+        arService.getB2BStatements({ entityId, startDate, asOfDate: endDate }),
         dashboardService.getDataCompletenessAudit({ entityId, startDate, endDate }),
       ])
 

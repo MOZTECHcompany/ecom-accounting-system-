@@ -523,11 +523,15 @@ export class ArService {
     };
   }
 
-  async getB2BStatements(entityId: string, asOfDate = new Date()) {
+  async getB2BStatements(
+    entityId: string,
+    asOfDate = new Date(),
+    startDate?: Date,
+  ) {
     const monitor = await this.getReceivableMonitor(
       entityId,
       undefined,
-      undefined,
+      startDate,
       asOfDate,
     );
     const b2bItems = monitor.items.filter(

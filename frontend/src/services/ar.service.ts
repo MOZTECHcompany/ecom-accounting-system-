@@ -253,6 +253,7 @@ export const arService = {
         startDate: params?.startDate,
         endDate: params?.endDate,
       },
+      timeout: 60000,
     })
     return response.data
   },
@@ -269,15 +270,21 @@ export const arService = {
     return response.data
   },
 
-  getB2BStatements: async (params?: { entityId?: string; asOfDate?: string }) => {
+  getB2BStatements: async (params?: {
+    entityId?: string
+    startDate?: string
+    asOfDate?: string
+  }) => {
     const entityId =
       params?.entityId?.trim() || localStorage.getItem('entityId')?.trim() || DEFAULT_ENTITY_ID
 
     const response = await api.get<B2BStatementResponse>('/ar/b2b-statements', {
       params: {
         entityId,
+        startDate: params?.startDate,
         asOfDate: params?.asOfDate,
       },
+      timeout: 60000,
     })
     return response.data
   },

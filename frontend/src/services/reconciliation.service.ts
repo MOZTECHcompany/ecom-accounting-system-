@@ -244,6 +244,7 @@ export const reconciliationService = {
         endDate: params?.endDate,
         limit: params?.limit,
       },
+      timeout: 60000,
     })
     return response.data
   },

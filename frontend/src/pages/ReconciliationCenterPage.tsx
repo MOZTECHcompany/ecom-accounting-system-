@@ -116,6 +116,7 @@ const ReconciliationCenterPage: React.FC = () => {
   const [syncing, setSyncing] = useState(false)
   const [clearing, setClearing] = useState(false)
   const [center, setCenter] = useState<ReconciliationCenterResponse | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const entityId = localStorage.getItem('entityId')?.trim() || DEFAULT_ENTITY_ID
   const startDate = dateRange[0].startOf('day').toISOString()
@@ -123,6 +124,7 @@ const ReconciliationCenterPage: React.FC = () => {
 
   const fetchData = async () => {
     setLoading(true)
+    setErrorMessage(null)
     try {
       const centerData = await reconciliationService.getCenter({
         entityId,
@@ -132,7 +134,13 @@ const ReconciliationCenterPage: React.FC = () => {
       })
       setCenter(centerData)
     } catch (error: any) {
-      message.error(error?.response?.data?.message || '讀取對帳中心失敗')
+      const fallbackMessage =
+        error?.code === 'ECONNABORTED'
+          ? '讀取對帳中心逾時，請稍後重試或縮短日期範圍。'
+          : '讀取對帳中心失敗'
+      const nextMessage = error?.response?.data?.message || fallbackMessage
+      setErrorMessage(nextMessage)
+      message.error(nextMessage)
     } finally {
       setLoading(false)
     }
@@ -319,6 +327,21 @@ const ReconciliationCenterPage: React.FC = () => {
           </Button>
         }
       />
+
+      {errorMessage && (
+        <Alert
+          showIcon
+          type="error"
+          className="rounded-3xl !px-6 !py-4 shadow-sm"
+          message="對帳中心資料沒有成功載入"
+          description={errorMessage}
+          action={
+            <Button size="small" onClick={fetchData}>
+              重新讀取
+            </Button>
+          }
+        />
+      )}
 
       <Card className="overflow-hidden rounded-[32px] border-0 shadow-sm" bodyStyle={{ padding: 0 }}>
         <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_420px]">

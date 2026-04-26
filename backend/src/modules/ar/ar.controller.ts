@@ -108,11 +108,13 @@ export class ArController {
   @ApiOperation({ summary: '查詢 B2B 月結客戶應收對帳總覽' })
   async getB2BStatements(
     @Query('entityId') entityId: string,
+    @Query('startDate') startDate?: string,
     @Query('asOfDate') asOfDate?: string,
   ) {
     return this.arService.getB2BStatements(
       entityId,
       asOfDate ? new Date(asOfDate) : new Date(),
+      startDate ? new Date(startDate) : undefined,
     );
   }
 
