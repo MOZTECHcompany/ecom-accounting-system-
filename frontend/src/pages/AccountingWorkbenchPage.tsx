@@ -28,7 +28,9 @@ import {
   BankOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
+  CopyOutlined,
   DeleteOutlined,
+  DownloadOutlined,
   ExceptionOutlined,
   PlusOutlined,
   ReloadOutlined,
@@ -122,6 +124,23 @@ const connectorStatusMeta = (status: ConnectorReadinessItem['status']) => {
   if (status === 'ready') return { color: 'green' as const, label: '可啟用' }
   if (status === 'partial') return { color: 'gold' as const, label: '等外部資料' }
   return { color: 'red' as const, label: '缺設定' }
+}
+
+const csvEscape = (value: unknown) => {
+  const text = String(value ?? '')
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+}
+
+const downloadTextFile = (fileName: string, content: string, type = 'text/csv;charset=utf-8') => {
+  const blob = new Blob([content], { type })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
 }
 
 const AccountingWorkbenchPage: React.FC = () => {
@@ -681,6 +700,85 @@ const AccountingWorkbenchPage: React.FC = () => {
   const completenessCoverage = dataCompleteness?.coverage
   const connectorItems = connectorReadiness?.connectors || []
   const connectorSummary = connectorReadiness?.summary
+  const connectorRequirementRows = connectorItems.flatMap((connector) => {
+    const meta = connectorStatusMeta(connector.status)
+    const internalGaps = [
+      ...connector.missingRequired,
+      connector.credentialGroups.length && !connector.credentialGroups.some((group) => group.ready)
+        ? '缺憑證組'
+        : '',
+    ].filter(Boolean)
+    const needs = connector.externalNeeds.length ? connector.externalNeeds : ['目前沒有外部資料 blocker']
+
+    return needs.map((need) => ({
+      status: meta.label,
+      connector: connector.label,
+      category: connector.category,
+      internalGaps: internalGaps.length ? internalGaps.join(' / ') : '內部設定已具備',
+      need,
+      nextAction: connector.nextAction,
+      inputDocument: connectorReadiness?.inputDocument || 'backend/docs/user-input-needed-2026-04-27.md',
+    }))
+  })
+
+  const handleCopyConnectorRequirements = async () => {
+    if (!connectorRequirementRows.length) {
+      message.info('目前沒有可複製的串接待補資料')
+      return
+    }
+
+    const content = [
+      '# 串接待補資料清單',
+      `產生時間：${dayjs(connectorReadiness?.generatedAt || new Date()).format('YYYY/MM/DD HH:mm')}`,
+      `來源文件：${connectorReadiness?.inputDocument || 'backend/docs/user-input-needed-2026-04-27.md'}`,
+      '',
+      ...connectorRequirementRows.flatMap((row, index) => [
+        `${index + 1}. [${row.status}] ${row.connector}`,
+        `   - 類別：${row.category}`,
+        `   - 內部設定：${row.internalGaps}`,
+        `   - 需要補：${row.need}`,
+        `   - 下一步：${row.nextAction}`,
+      ]),
+    ].join('\n')
+
+    try {
+      await navigator.clipboard.writeText(content)
+      message.success('已複製串接待補資料清單')
+    } catch {
+      downloadTextFile(
+        `connector-requirements-${dayjs().format('YYYYMMDD-HHmmss')}.txt`,
+        content,
+        'text/plain;charset=utf-8',
+      )
+      message.warning('瀏覽器不允許直接複製，已改下載文字檔')
+    }
+  }
+
+  const handleExportConnectorRequirements = () => {
+    if (!connectorRequirementRows.length) {
+      message.info('目前沒有可匯出的串接待補資料')
+      return
+    }
+
+    const headers = ['狀態', '串接項目', '類別', '內部設定缺口', '需要補的資料', '下一步', '來源文件']
+    const csv = [
+      headers.map(csvEscape).join(','),
+      ...connectorRequirementRows.map((row) =>
+        [
+          row.status,
+          row.connector,
+          row.category,
+          row.internalGaps,
+          row.need,
+          row.nextAction,
+          row.inputDocument,
+        ].map(csvEscape).join(','),
+      ),
+    ].join('\n')
+
+    downloadTextFile(`connector-requirements-${dayjs().format('YYYYMMDD-HHmmss')}.csv`, `\ufeff${csv}`)
+    message.success('已匯出串接待補資料 CSV')
+  }
   const auditedOrderCount =
     Number(auditSummary?.auditedOrderCount || 0) ||
     Number(dataCompleteness?.totals.orders || 0)
@@ -1715,6 +1813,22 @@ const AccountingWorkbenchPage: React.FC = () => {
                     type={(connectorSummary?.blocked || 0) > 0 ? 'warning' : 'info'}
                     message="外部 API / 報表 / 密鑰缺口集中在這裡"
                     description={`完整補資料清單已寫入 ${connectorReadiness?.inputDocument || 'backend/docs/user-input-needed-2026-04-27.md'}。這裡只顯示設定是否具備與下一步，不會顯示任何密鑰內容。`}
+                    action={
+                      <Space wrap>
+                        <Button
+                          icon={<CopyOutlined />}
+                          onClick={handleCopyConnectorRequirements}
+                        >
+                          複製待補清單
+                        </Button>
+                        <Button
+                          icon={<DownloadOutlined />}
+                          onClick={handleExportConnectorRequirements}
+                        >
+                          匯出 CSV
+                        </Button>
+                      </Space>
+                    }
                   />
                 </Col>
                 <Col span={24}>
