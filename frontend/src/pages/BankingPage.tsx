@@ -462,11 +462,26 @@ const TransactionsTab = () => {
           <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>
             下載匯入範本
           </Button>
-          <Button type="primary" icon={<UploadOutlined />} onClick={handleOpenImport}>
+          <Button
+            type="primary"
+            icon={<UploadOutlined />}
+            onClick={handleOpenImport}
+            disabled={!accounts.length}
+            title={!accounts.length ? '請先建立銀行帳戶' : undefined}
+          >
             匯入對帳單
           </Button>
         </Space>
       </div>
+
+      {!accounts.length && (
+        <Alert
+          type="warning"
+          showIcon
+          message="尚未建立銀行帳戶"
+          description="請先到「銀行帳戶」分頁建立主要收款帳戶，再回到交易明細匯入銀行對帳單。範本仍可先下載給財務或銀行窗口對欄位。"
+        />
+      )}
 
       <Alert
         type="info"
