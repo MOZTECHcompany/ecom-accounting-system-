@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Typography, Table, Button, Tag, Space, Modal, Form, Input, Select, InputNumber, message, Checkbox, Divider, Row, Col, Upload } from 'antd'
-import { PlusOutlined, BarcodeOutlined, ReloadOutlined, MinusCircleOutlined, UploadOutlined } from '@ant-design/icons'
+import { Card, Typography, Table, Button, Tag, Space, Modal, Form, Input, Select, InputNumber, message, Checkbox, Divider, Row, Col, Upload, Alert } from 'antd'
+import { PlusOutlined, BarcodeOutlined, ReloadOutlined, MinusCircleOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import { productService, Product } from '../services/product.service'
 import { inventoryService } from '../services/inventory.service'
@@ -8,11 +8,54 @@ import { inventoryService } from '../services/inventory.service'
 const { Title } = Typography
 const { Option } = Select
 
+interface InventoryImportPreview {
+  dryRun?: boolean
+  file?: string
+  sheet?: string
+  rawRows?: number
+  rows?: number
+  skippedRows?: number
+  createdWarehouses?: number
+  createdProducts?: number
+  updatedProducts?: number
+  inventoryLines?: number
+  serialNumbers?: number
+  message?: string
+}
+
+const inventoryImportTemplateRows = [
+  ['品項編碼', '品項名稱', '倉庫代碼', '倉庫名稱', '庫存數量', '序號'],
+  ['4710000000000', 'MOZTECH 範例商品', 'MAIN', '主要倉庫', '10', ''],
+  ['4710000000001', 'BONSON 序號商品', 'MAIN', '主要倉庫', '1', 'SN-EXAMPLE-001'],
+]
+
+const csvEscape = (value: string | number | null | undefined) => {
+  const text = String(value ?? '')
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+}
+
+const downloadCsv = (filename: string, rows: Array<Array<string | number>>) => {
+  const content = rows.map((row) => row.map(csvEscape).join(',')).join('\n')
+  const blob = new Blob([`\uFEFF${content}`], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 const ProductsPage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(false)
   const [isModalVisible, setIsModalVisible] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [previewingImport, setPreviewingImport] = useState(false)
+  const [pendingImportFile, setPendingImportFile] = useState<File | null>(null)
+  const [importPreview, setImportPreview] = useState<InventoryImportPreview | null>(null)
+  const [importModalOpen, setImportModalOpen] = useState(false)
   const [form] = Form.useForm()
 
   const fetchProducts = async () => {
@@ -49,13 +92,39 @@ const ProductsPage: React.FC = () => {
     }
   }
 
-  const handleImportExcel = async (file: File) => {
+  const handleDownloadTemplate = () => {
+    downloadCsv('inventory-master-import-template.csv', inventoryImportTemplateRows)
+  }
+
+  const handlePreviewImport = async (file: File) => {
+    setPreviewingImport(true)
+    try {
+      const result = await inventoryService.importErpInventory(file, { dryRun: true })
+      setPendingImportFile(file)
+      setImportPreview(result)
+      setImportModalOpen(true)
+      message.success(`已預覽 ${result.rows ?? 0} 筆可匯入資料`)
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || '批次匯入失敗'
+      message.error(Array.isArray(msg) ? msg.join(', ') : msg)
+    } finally {
+      setPreviewingImport(false)
+    }
+  }
+
+  const handleConfirmImport = async () => {
+    if (!pendingImportFile || !importPreview) {
+      message.warning('請先選擇檔案並完成預覽')
+      return
+    }
+
     setImporting(true)
     try {
-      const result = await inventoryService.importErpInventory(file)
+      await inventoryService.importErpInventory(pendingImportFile)
       message.success('批次匯入完成')
-      // eslint-disable-next-line no-console
-      console.log('ERP import result:', result)
+      setImportModalOpen(false)
+      setPendingImportFile(null)
+      setImportPreview(null)
       fetchProducts()
     } catch (error: any) {
       const msg = error?.response?.data?.message || '批次匯入失敗'
@@ -110,6 +179,9 @@ const ProductsPage: React.FC = () => {
         </div>
         <Space>
           <Button icon={<ReloadOutlined />} onClick={fetchProducts}>重新整理</Button>
+          <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>
+            下載匯入範本
+          </Button>
           <Upload
             accept=".xlsx,.xls,.csv"
             showUploadList={false}
@@ -121,15 +193,15 @@ const ProductsPage: React.FC = () => {
             }}
             customRequest={async (options) => {
               try {
-                await handleImportExcel(options.file as File)
+                await handlePreviewImport(options.file as File)
                 options.onSuccess?.({}, new XMLHttpRequest())
               } catch (e) {
                 options.onError?.(e as any)
               }
             }}
           >
-            <Button icon={<UploadOutlined />} loading={importing} disabled={importing}>
-              批次匯入 Excel/CSV
+            <Button icon={<UploadOutlined />} loading={previewingImport} disabled={importing || previewingImport}>
+              預覽匯入 Excel/CSV
             </Button>
           </Upload>
           <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => setIsModalVisible(true)}>
@@ -139,6 +211,15 @@ const ProductsPage: React.FC = () => {
       </div>
 
       <Card className="shadow-sm rounded-xl border-0">
+        {!loading && !products.length && (
+          <Alert
+            className="mb-4"
+            type="warning"
+            showIcon
+            message="尚未建立產品主檔"
+            description="請先新增產品，或下載匯入範本整理 SKU、條碼、倉庫與初始庫存。批次匯入會先預覽，不會在確認前寫入產品或庫存。"
+          />
+        )}
         <Table 
           columns={columns} 
           dataSource={products} 
@@ -146,6 +227,57 @@ const ProductsPage: React.FC = () => {
           loading={loading}
         />
       </Card>
+
+      <Modal
+        title="預覽庫存 / 產品匯入"
+        open={importModalOpen}
+        onCancel={() => setImportModalOpen(false)}
+        onOk={handleConfirmImport}
+        okText="確認匯入"
+        cancelText="取消"
+        okButtonProps={{
+          disabled: !importPreview || !pendingImportFile || importing || previewingImport,
+          loading: importing,
+        }}
+      >
+        <div className="space-y-4">
+          <Alert
+            type={(importPreview?.skippedRows ?? 0) > 0 ? 'warning' : 'success'}
+            showIcon
+            message={`可匯入 ${importPreview?.rows ?? 0} 筆，略過 ${importPreview?.skippedRows ?? 0} 筆`}
+            description="這只是 dry-run 預覽。確認筆數、倉庫與產品建立數量正確後，再按「確認匯入」寫入正式資料。"
+          />
+          <Row gutter={[12, 12]}>
+            <Col span={12}>
+              <Card size="small">
+                <Typography.Text type="secondary">新建倉庫</Typography.Text>
+                <div className="text-xl font-semibold">{importPreview?.createdWarehouses ?? 0}</div>
+              </Card>
+            </Col>
+            <Col span={12}>
+              <Card size="small">
+                <Typography.Text type="secondary">新建產品</Typography.Text>
+                <div className="text-xl font-semibold">{importPreview?.createdProducts ?? 0}</div>
+              </Card>
+            </Col>
+            <Col span={12}>
+              <Card size="small">
+                <Typography.Text type="secondary">更新產品</Typography.Text>
+                <div className="text-xl font-semibold">{importPreview?.updatedProducts ?? 0}</div>
+              </Card>
+            </Col>
+            <Col span={12}>
+              <Card size="small">
+                <Typography.Text type="secondary">庫存行數</Typography.Text>
+                <div className="text-xl font-semibold">{importPreview?.inventoryLines ?? 0}</div>
+              </Card>
+            </Col>
+          </Row>
+          {importPreview?.message && (
+            <Alert type="info" showIcon message={importPreview.message} />
+          )}
+        </div>
+      </Modal>
 
       <Modal
         title="新增產品"
