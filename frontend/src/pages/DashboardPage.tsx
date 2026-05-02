@@ -11,6 +11,7 @@ import {
   message,
   Radio,
   DatePicker,
+  Modal,
   Statistic,
   Tag,
   Typography,
@@ -283,6 +284,7 @@ const DashboardPage: React.FC = () => {
   const [rangeManagementSummary, setRangeManagementSummary] = useState<ManagementSummary | null>(null)
   const [todayManagementSummary, setTodayManagementSummary] = useState<ManagementSummary | null>(null)
   const [connectorReadiness, setConnectorReadiness] = useState<ConnectorReadiness | null>(null)
+  const [financeOptionsOpen, setFinanceOptionsOpen] = useState(false)
 
 
   const [revenueTrend, setRevenueTrend] = useState<RevenueTrendPoint[]>([])
@@ -655,6 +657,55 @@ const DashboardPage: React.FC = () => {
     overpaidAR +
     (adSpendConnectorIncomplete && !adSpendTracked ? 1 : 0);
   const criticalCount = criticalInventory + criticalAnomalies + overdueAR + overpaidAR;
+  const financeOptionRows = [
+    {
+      key: "missing-invoices",
+      title: "缺發票訂單",
+      count: missingInvoiceCount,
+      helper: "已付款或已對帳但尚未完成正式發票流程。",
+      actionLabel: "處理缺發票",
+      path: "/accounting/workbench?focus=missing-invoices",
+      tone: missingInvoiceCount > 0 ? "warning" : "healthy",
+    },
+    {
+      key: "order-audit",
+      title: "訂單對帳稽核異常",
+      count: financialAuditIssueCount,
+      helper: "訂單、付款、發票、稅額或手續費口徑不一致的項目。",
+      actionLabel: "看報表稽核",
+      path: "/reports",
+      tone: financialAuditIssueCount > 0 ? "warning" : "healthy",
+    },
+    {
+      key: "overdue-ar",
+      title: "逾期應收帳款",
+      count: overdueAR,
+      helper: "影響現金流的逾期 AR，需財務或業務追款。",
+      actionLabel: "看應收帳款",
+      path: "/sales/invoices",
+      tone: overdueAR > 0 ? "critical" : "healthy",
+    },
+    {
+      key: "overpaid",
+      title: "超收 / 重複收款",
+      count: overpaidAR,
+      helper: "疑似重複匯入、合併收款未拆帳或退款折讓未反映。",
+      actionLabel: "核對超收",
+      path: "/sales/invoices?focus=overpaid",
+      tone: overpaidAR > 0 ? "critical" : "healthy",
+    },
+    {
+      key: "ad-spend",
+      title: "廣告費串接",
+      count: adSpendConnectorIncomplete && !adSpendTracked ? 1 : 0,
+      helper: adSpendTracked
+        ? "已有內部費用資料，後續可補 Meta / Google / TikTok 自動匯入。"
+        : "尚缺廣告 API、帳戶 mapping、發票 / 收據與扣款來源。",
+      actionLabel: "看串接準備",
+      path: "/accounting/workbench?focus=connector-readiness",
+      tone: adSpendConnectorIncomplete && !adSpendTracked ? "warning" : "healthy",
+    },
+  ];
 
   return (
     <div className="page-section-stack page-section-stack--compact">
@@ -789,7 +840,7 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
-            <Button icon={<AlertOutlined />} onClick={() => navigate("/accounting/workbench?focus=missing-invoices")}>
+            <Button icon={<AlertOutlined />} onClick={() => setFinanceOptionsOpen(true)}>
               財務選項
             </Button>
             <Button icon={<LineChartOutlined />} onClick={() => navigate("/reconciliation/center")}>
@@ -1191,6 +1242,43 @@ const DashboardPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <Modal
+        title="財務追蹤選項"
+        open={financeOptionsOpen}
+        footer={null}
+        onCancel={() => setFinanceOptionsOpen(false)}
+        width={760}
+      >
+        <div className="space-y-3">
+          {financeOptionRows.map((item) => {
+            const color =
+              item.tone === "critical" ? "red" : item.tone === "warning" ? "gold" : "green";
+            return (
+              <div key={item.key} className="rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-slate-900">{item.title}</span>
+                      <Tag color={color}>{item.count} 項</Tag>
+                    </div>
+                    <div className="mt-1 text-sm leading-6 text-slate-500">{item.helper}</div>
+                  </div>
+                  <Button
+                    className="shrink-0"
+                    onClick={() => {
+                      setFinanceOptionsOpen(false);
+                      navigate(item.path);
+                    }}
+                  >
+                    {item.actionLabel}
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Modal>
     </div>
   );
 };
