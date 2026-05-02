@@ -256,6 +256,15 @@ const AccountsTab = () => {
         </div>
       )}
 
+      {!loading && !accounts.length && (
+        <Alert
+          type="warning"
+          showIcon
+          message="尚未建立銀行帳戶"
+          description="請先建立主要收款、廣告扣款與一般費用付款帳戶。後續銀行對帳單匯入、金流撥款 matching、廣告費與 AP 付款核對都會依這裡的帳戶歸屬處理。"
+        />
+      )}
+
       <Table
         rowKey="id"
         loading={loading}
