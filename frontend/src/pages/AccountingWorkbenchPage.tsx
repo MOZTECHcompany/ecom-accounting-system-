@@ -143,9 +143,43 @@ const downloadTextFile = (fileName: string, content: string, type = 'text/csv;ch
   URL.revokeObjectURL(url)
 }
 
+type WorkbenchTabKey =
+  | 'connector-readiness'
+  | 'data-completeness'
+  | 'exceptions'
+  | 'payments'
+  | 'batches'
+  | 'audit'
+  | 'ar'
+  | 'b2b-statements'
+
+const workbenchTabKeys = new Set<WorkbenchTabKey>([
+  'connector-readiness',
+  'data-completeness',
+  'exceptions',
+  'payments',
+  'batches',
+  'audit',
+  'ar',
+  'b2b-statements',
+])
+
+const resolveWorkbenchTabFromFocus = (focus: string | null): WorkbenchTabKey => {
+  if (focus && workbenchTabKeys.has(focus as WorkbenchTabKey)) {
+    return focus as WorkbenchTabKey
+  }
+  if (focus === 'missing-invoices') {
+    return 'data-completeness'
+  }
+  return 'connector-readiness'
+}
+
 const AccountingWorkbenchPage: React.FC = () => {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const [activeWorkbenchTab, setActiveWorkbenchTab] = useState<WorkbenchTabKey>(
+    resolveWorkbenchTabFromFocus(searchParams.get('focus')),
+  )
   const [feeImportForm] = Form.useForm()
   const [issuedInvoiceImportForm] = Form.useForm()
   // 預設 90 天，確保能看到歷史資料；null = 全部（不過濾日期）
@@ -181,6 +215,10 @@ const AccountingWorkbenchPage: React.FC = () => {
   // null = 不傳日期給 API → 後端回傳所有資料
   const startDate = dateRange?.[0]?.startOf('day')?.toISOString()
   const endDate = dateRange?.[1]?.endOf('day')?.toISOString()
+
+  useEffect(() => {
+    setActiveWorkbenchTab(resolveWorkbenchTabFromFocus(searchParams.get('focus')))
+  }, [searchParams])
 
   const fetchWorkbench = async () => {
     setLoading(true)
@@ -1791,6 +1829,8 @@ const AccountingWorkbenchPage: React.FC = () => {
       </Card>
 
       <Tabs
+        activeKey={activeWorkbenchTab}
+        onChange={(key) => setActiveWorkbenchTab(key as WorkbenchTabKey)}
         items={[
           {
             key: 'connector-readiness',

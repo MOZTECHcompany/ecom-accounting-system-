@@ -758,11 +758,11 @@ const DashboardPage: React.FC = () => {
   ];
   const riskPriorityRows = [
     {
-      label: "待撥款 / 對帳",
+      label: "未核銷收款",
       count: Number(executive?.operations.pendingPayoutCount || 0),
       color: "#dc2626",
-      helper: "付款已進來但尚未完成撥款或對帳。",
-      path: "/reconciliation?bucket=pending_payout",
+      helper: "全歷史 Payment 尚未完成核銷，需分批補撥款、發票、手續費或分錄。",
+      path: "/accounting/workbench?focus=data-completeness",
     },
     {
       label: "手續費待補",
