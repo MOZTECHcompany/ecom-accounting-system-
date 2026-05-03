@@ -26,7 +26,7 @@ import {
 } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import dayjs, { Dayjs } from 'dayjs'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   reconciliationService,
   ClearReadyPaymentsResponse,
@@ -109,11 +109,15 @@ const describeClearBlockers = (
 
 const ReconciliationCenterPage: React.FC = () => {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedBucket = searchParams.get('bucket') as ReconciliationBucketKey | null
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>([
     dayjs().subtract(30, 'day').startOf('day'),
     dayjs().endOf('day'),
   ])
-  const [activeBucket, setActiveBucket] = useState<ReconciliationBucketKey>('exceptions')
+  const [activeBucket, setActiveBucket] = useState<ReconciliationBucketKey>(
+    requestedBucket && requestedBucket in bucketMeta ? requestedBucket : 'exceptions',
+  )
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [clearing, setClearing] = useState(false)
@@ -153,6 +157,21 @@ const ReconciliationCenterPage: React.FC = () => {
   useEffect(() => {
     fetchData()
   }, [dateRange[0].valueOf(), dateRange[1].valueOf()])
+
+  useEffect(() => {
+    if (requestedBucket && requestedBucket in bucketMeta && requestedBucket !== activeBucket) {
+      setActiveBucket(requestedBucket)
+    }
+  }, [requestedBucket, activeBucket])
+
+  const selectBucket = (bucket: ReconciliationBucketKey) => {
+    setActiveBucket(bucket)
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current)
+      next.set('bucket', bucket)
+      return next
+    }, { replace: true })
+  }
 
   const bucketSummary = center?.buckets || {
     pending_payout: { count: 0, grossAmount: 0, outstandingAmount: 0, feeTotal: 0, items: [] },
@@ -422,7 +441,7 @@ const ReconciliationCenterPage: React.FC = () => {
                 <button
                   key={key}
                   type="button"
-                  onClick={() => setActiveBucket(key)}
+                  onClick={() => selectBucket(key)}
                   className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition ${
                     activeBucket === key
                       ? 'border-slate-900 bg-slate-950 text-white shadow-lg'
@@ -456,7 +475,7 @@ const ReconciliationCenterPage: React.FC = () => {
             className={`cursor-pointer rounded-3xl border-0 shadow-sm transition hover:-translate-y-1 hover:shadow-md ${
               activeBucket === key ? 'ring-2 ring-slate-900' : ''
             }`}
-            onClick={() => setActiveBucket(key)}
+            onClick={() => selectBucket(key)}
           >
             <Statistic title={bucketMeta[key].title} value={bucketSummary[key].count} />
             <div className="mt-4 text-xs text-slate-400">未收 {money(bucketSummary[key].outstandingAmount)}</div>
@@ -484,7 +503,7 @@ const ReconciliationCenterPage: React.FC = () => {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <Segmented
           value={activeBucket}
-          onChange={(value) => setActiveBucket(value as ReconciliationBucketKey)}
+          onChange={(value) => selectBucket(value as ReconciliationBucketKey)}
           options={(Object.keys(bucketMeta) as ReconciliationBucketKey[]).map((key) => ({
             label: bucketMeta[key].title,
             value: key,

@@ -2,8 +2,10 @@ import api from './api'
 import { BankAccount, BankTransaction, PaginatedResult } from '../types'
 
 export const bankingService = {
-  getAccounts: async () => {
-    const response = await api.get<BankAccount[]>('/banking/accounts')
+  getAccounts: async (entityId?: string) => {
+    const response = await api.get<BankAccount[]>('/banking/accounts', {
+      params: entityId ? { entityId } : undefined,
+    })
     return response.data
   },
 

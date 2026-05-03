@@ -48,6 +48,9 @@ import {
   arService,
   ReceivableMonitorResponse,
 } from "../services/ar.service";
+import api from "../services/api";
+import { apService } from "../services/ap.service";
+import { bankingService } from "../services/banking.service";
 import { salesService } from "../services/sales.service";
 import {
   dashboardService,
@@ -457,16 +460,26 @@ const DashboardPage: React.FC = () => {
     };
   }, [rangeMode, customRange, refreshToken]);
 
-  // 財務快覽資料（API + mock fallback）
+  // 財務快覽資料：使用共用 API baseURL，避免正式站打到 frontend origin 的 /api
   useEffect(() => {
     const entityId = localStorage.getItem('entityId')?.trim() ?? ''
 
     const fetchFinance = async () => {
       try {
         const [arRes, apRes, bankRes] = await Promise.allSettled([
-          fetch(`/api/ar/summary?entityId=${entityId}`).then((r) => r.json()),
-          fetch(`/api/ap/summary?entityId=${entityId}`).then((r) => r.json()),
-          fetch(`/api/banking/balance?entityId=${entityId}`).then((r) => r.json()),
+          api.get('/ar/summary', { params: { entityId } }).then((response) => response.data),
+          apService.getInvoices(entityId).then((invoices) => ({
+            outstanding: invoices
+              .filter((invoice) => !['paid', 'void', 'cancelled'].includes(String(invoice.status || '').toLowerCase()))
+              .reduce(
+                (sum, invoice) =>
+                  sum + Math.max(0, Number(invoice.amountOriginal || 0) - Number(invoice.paidAmountOriginal || 0)),
+                0,
+              ),
+          })),
+          bankingService.getAccounts(entityId).then((accounts) => ({
+            balance: accounts.reduce((sum, account) => sum + Number(account.balance || 0), 0),
+          })),
         ])
 
         setFinance((prev) => ({
@@ -749,7 +762,7 @@ const DashboardPage: React.FC = () => {
       count: Number(executive?.operations.pendingPayoutCount || 0),
       color: "#dc2626",
       helper: "付款已進來但尚未完成撥款或對帳。",
-      path: "/reconciliation/center",
+      path: "/reconciliation?bucket=pending_payout",
     },
     {
       label: "手續費待補",
@@ -953,7 +966,7 @@ const DashboardPage: React.FC = () => {
             <Button icon={<AlertOutlined />} onClick={() => setFinanceOptionsOpen(true)}>
               財務選項
             </Button>
-            <Button icon={<LineChartOutlined />} onClick={() => navigate("/reconciliation/center")}>
+            <Button icon={<LineChartOutlined />} onClick={() => navigate("/reconciliation")}>
               對帳中心
             </Button>
           </div>
