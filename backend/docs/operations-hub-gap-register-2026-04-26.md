@@ -37,15 +37,21 @@
 
 目前內部 `Invoice` 模組已存在，但仍不是完整綠界電子發票串接。
 
+2026-05-04 更新：
+
+- `3150241` / `groupbuy-main` 的綠界電子發票金鑰已放入 GCP Secret Manager，並掛到 Cloud Run backend；readiness 已可讓 1Shop / 團購發票 profile 進入 ready 狀態。
+- 正式開票開關仍維持關閉，避免未完成小額測試前發生真實開票。
+- 後端已新增只讀綠界查詢 API：多筆發票清單 `B2CInvoice/GetIssueList` 與財政部字軌配號 `B2CInvoice/GetGovInvoiceWordSetting`。
+- `3290494` / `shopify-main` 的電子發票金鑰仍需補入 Secret Manager。
+
 必補能力：
 
-- 綠界電子發票 Adapter
-- B2C / B2B 開立
-- 發票狀態查詢
+- B2C / B2B 開立的小額測試與正式啟用流程
+- 發票狀態查詢結果回寫與異常隊列
 - 作廢
 - 折讓
 - 折讓作廢
-- 字軌 / 配號查詢與用量警示
+- 字軌 / 配號查詢結果的前端呈現與用量警示
 - 綠界正式發票號碼、日期、隨機碼、外部 ID 回寫 `Invoice` 與 `SalesOrder`
 - 發票狀態要同步顯示在銷售訂單、AR、Dashboard、會計工作台
 

@@ -15,6 +15,8 @@ export type EcpayEinvoiceProfile = {
   env: InvoiceMerchantEnvironment;
   issueUrl: string;
   queryUrl: string;
+  issueListUrl: string;
+  wordSettingUrl: string;
   invalidUrl: string;
   allowanceUrl: string;
   allowanceInvalidUrl: string;
@@ -105,6 +107,8 @@ export class EcpayEinvoiceConfigService {
         'hashIv',
         'issueUrl',
         'queryUrl',
+        'issueListUrl',
+        'wordSettingUrl',
       ],
       accounts,
     };
@@ -123,6 +127,8 @@ export class EcpayEinvoiceConfigService {
     if (!profile.hashIv) missing.push('hashIv');
     if (!profile.issueUrl) missing.push('issueUrl');
     if (!profile.queryUrl) missing.push('queryUrl');
+    if (!profile.issueListUrl) missing.push('issueListUrl');
+    if (!profile.wordSettingUrl) missing.push('wordSettingUrl');
     if (!profile.invalidUrl) missing.push('invalidUrl');
     if (!profile.allowanceUrl) missing.push('allowanceUrl');
     return missing;
@@ -138,6 +144,8 @@ export class EcpayEinvoiceConfigService {
       env: profile.env,
       issueUrl: profile.issueUrl || null,
       queryUrl: profile.queryUrl || null,
+      issueListUrl: profile.issueListUrl || null,
+      wordSettingUrl: profile.wordSettingUrl || null,
       invalidUrl: profile.invalidUrl || null,
       allowanceUrl: profile.allowanceUrl || null,
       ready: missing.length === 0,
@@ -237,6 +245,16 @@ export class EcpayEinvoiceConfigService {
         item?.invoiceApiUrl,
         item?.apiUrl,
         `${baseUrl}/B2CInvoice/GetIssue`,
+      ),
+      issueListUrl: this.pickTrimmed(
+        item?.issueListUrl,
+        item?.getIssueListUrl,
+        `${baseUrl}/B2CInvoice/GetIssueList`,
+      ),
+      wordSettingUrl: this.pickTrimmed(
+        item?.wordSettingUrl,
+        item?.getGovInvoiceWordSettingUrl,
+        `${baseUrl}/B2CInvoice/GetGovInvoiceWordSetting`,
       ),
       invalidUrl: this.pickTrimmed(
         item?.invalidUrl,

@@ -121,10 +121,12 @@
 
 待補：
 
-- 將真實 `HashKey` / `HashIV` 放入 Secret Manager / Cloud Run env，不寫入 repo。
+- `3150241` / `groupbuy-main` 的綠界電子發票 `HashKey` / `HashIV` 已放入 Secret Manager / Cloud Run env，不寫入 repo；readiness 已可辨識該帳號 ready，但 `ECPAY_EINVOICE_ISSUING_ENABLED=false` 仍會阻擋正式開票。
+- `3290494` / `shopify-main` 的綠界電子發票 `HashKey` / `HashIV` 仍需補入 Secret Manager。
+- 已補綠界只讀查詢 API：`GET /invoicing/ecpay/invoices` 對應 `B2CInvoice/GetIssueList`，`GET /invoicing/ecpay/word-settings` 對應 `B2CInvoice/GetGovInvoiceWordSetting`。
 - 用綠界 stage 或正式小額測試單驗證 `B2CInvoice/Issue`、`GetIssue`、`Invalid`、`Allowance`。
 - 測試通過後才設定 `ECPAY_EINVOICE_ISSUING_ENABLED=true`。
-- 補字軌 / 配號查詢與用量警示；目前 readiness 僅確認 API profile，不代表字軌用量充足。
+- 將字軌 / 配號查詢結果串到會計工作台與 Dashboard 用量警示；目前 API 已可查，但尚未做 UI 風險提示。
 - 補 B2B 發票專用流程、折讓作廢與 reversing journal。
 
 ### 手續費來源與自動對帳判斷

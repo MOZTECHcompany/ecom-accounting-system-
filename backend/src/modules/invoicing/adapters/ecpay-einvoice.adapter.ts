@@ -141,6 +141,112 @@ export class EcpayEinvoiceAdapter implements InvoiceAdapter {
     };
   }
 
+  async queryInvoiceList(payload: {
+    merchantKey?: string | null;
+    merchantId?: string | null;
+    beginDate: string;
+    endDate: string;
+    page?: number | null;
+    pageSize?: number | null;
+    dataType?: 1 | 2;
+    queryInvalid?: string | null;
+    queryUpload?: string | null;
+    queryIdentifier?: string | null;
+    queryCategory?: string | null;
+  }) {
+    const profile = this.configService.resolveProfile(
+      payload.merchantKey,
+      payload.merchantId,
+    );
+    this.assertProfileConfigured(profile, payload.merchantKey);
+
+    const page = Math.max(Math.floor(Number(payload.page || 1)), 1);
+    const pageSize = Math.min(
+      Math.max(Math.floor(Number(payload.pageSize || 30)), 1),
+      200,
+    );
+
+    const json = await this.postEncrypted(
+      profile.issueListUrl,
+      {
+        MerchantID: profile.merchantId,
+        BeginDate: payload.beginDate,
+        EndDate: payload.endDate,
+        NumPerPage: pageSize,
+        ShowingPage: page,
+        DataType: payload.dataType || 1,
+        Query_Invalid: payload.queryInvalid || '0',
+        Query_Upload: payload.queryUpload || '0',
+        Query_Identifier: payload.queryIdentifier || '0',
+        Query_Category: payload.queryCategory || '0',
+      },
+      profile,
+    );
+    const result = this.decryptResponse(json, profile);
+
+    return {
+      success: Number(result?.RtnCode) === 1,
+      provider: 'ecpay',
+      merchantKey: profile.key,
+      merchantId: profile.merchantId,
+      beginDate: payload.beginDate,
+      endDate: payload.endDate,
+      page,
+      pageSize,
+      totalCount: Number(result?.TotalCount || 0),
+      rawMessage:
+        typeof result?.RtnMsg === 'string'
+          ? result.RtnMsg
+          : typeof json?.TransMsg === 'string'
+            ? json.TransMsg
+            : null,
+      invoiceData: Array.isArray(result?.InvoiceData)
+        ? result.InvoiceData
+        : [],
+      raw: result as Record<string, unknown>,
+    };
+  }
+
+  async queryGovInvoiceWordSettings(payload: {
+    merchantKey?: string | null;
+    merchantId?: string | null;
+    invoiceYear: string;
+  }) {
+    const profile = this.configService.resolveProfile(
+      payload.merchantKey,
+      payload.merchantId,
+    );
+    this.assertProfileConfigured(profile, payload.merchantKey);
+
+    const json = await this.postEncrypted(
+      profile.wordSettingUrl,
+      {
+        MerchantID: profile.merchantId,
+        InvoiceYear: payload.invoiceYear,
+      },
+      profile,
+    );
+    const result = this.decryptResponse(json, profile);
+
+    return {
+      success: Number(result?.RtnCode) === 1,
+      provider: 'ecpay',
+      merchantKey: profile.key,
+      merchantId: profile.merchantId,
+      invoiceYear: payload.invoiceYear,
+      rawMessage:
+        typeof result?.RtnMsg === 'string'
+          ? result.RtnMsg
+          : typeof json?.TransMsg === 'string'
+            ? json.TransMsg
+            : null,
+      invoiceInfo: Array.isArray(result?.InvoiceInfo)
+        ? result.InvoiceInfo
+        : [],
+      raw: result as Record<string, unknown>,
+    };
+  }
+
   private toEcpayB2cIssuePayload(
     payload: IssueInvoicePayload,
     profile: EcpayEinvoiceProfile,
@@ -242,6 +348,17 @@ export class EcpayEinvoiceAdapter implements InvoiceAdapter {
   }
 
   private decryptResponse(json: any, profile: EcpayEinvoiceProfile) {
+    if (json?.Data && typeof json.Data === 'object') {
+      return json.Data;
+    }
+
+    if (typeof json?.Data === 'string') {
+      const rawData = json.Data.trim();
+      if (rawData.startsWith('{') || rawData.startsWith('[')) {
+        return JSON.parse(rawData);
+      }
+    }
+
     const decipher = createDecipheriv(
       'aes-128-cbc',
       Buffer.from(profile.hashKey, 'utf8'),

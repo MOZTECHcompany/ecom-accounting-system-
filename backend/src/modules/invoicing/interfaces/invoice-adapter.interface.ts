@@ -8,6 +8,8 @@ export type InvoiceMerchantReadiness = {
   env: InvoiceMerchantEnvironment;
   issueUrl: string | null;
   queryUrl: string | null;
+  issueListUrl: string | null;
+  wordSettingUrl: string | null;
   invalidUrl: string | null;
   allowanceUrl: string | null;
   ready: boolean;

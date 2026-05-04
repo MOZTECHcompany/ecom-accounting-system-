@@ -116,6 +116,58 @@ export class InvoicingController {
     });
   }
 
+  @Get('ecpay/invoices')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  @ApiOperation({
+    summary: '向綠界查詢多筆電子發票（只讀）',
+    description:
+      '呼叫綠界 B2CInvoice/GetIssueList，依日期區間讀取正式發票清單；不會開票、作廢、折讓或寫入本地資料。',
+  })
+  async queryEcpayInvoiceList(
+    @Query('merchantKey') merchantKey?: string,
+    @Query('merchantId') merchantId?: string,
+    @Query('beginDate') beginDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('queryInvalid') queryInvalid?: string,
+    @Query('queryUpload') queryUpload?: string,
+    @Query('queryIdentifier') queryIdentifier?: string,
+    @Query('queryCategory') queryCategory?: string,
+  ) {
+    return this.invoicingService.queryEcpayInvoiceList({
+      merchantKey,
+      merchantId,
+      beginDate,
+      endDate,
+      page: page ? Number(page) : undefined,
+      pageSize: pageSize ? Number(pageSize) : undefined,
+      queryInvalid,
+      queryUpload,
+      queryIdentifier,
+      queryCategory,
+    });
+  }
+
+  @Get('ecpay/word-settings')
+  @Roles('ADMIN', 'ACCOUNTANT')
+  @ApiOperation({
+    summary: '查詢綠界財政部配號結果（只讀）',
+    description:
+      '呼叫綠界 B2CInvoice/GetGovInvoiceWordSetting，查詢特店授權於綠界的字軌 / 配號結果；不會取號或變更字軌狀態。',
+  })
+  async queryEcpayGovInvoiceWordSettings(
+    @Query('merchantKey') merchantKey?: string,
+    @Query('merchantId') merchantId?: string,
+    @Query('invoiceYear') invoiceYear?: string,
+  ) {
+    return this.invoicingService.queryEcpayGovInvoiceWordSettings({
+      merchantKey,
+      merchantId,
+      invoiceYear,
+    });
+  }
+
   /**
    * 預覽發票內容
    */

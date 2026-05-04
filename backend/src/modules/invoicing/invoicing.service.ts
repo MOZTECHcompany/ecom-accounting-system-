@@ -38,6 +38,51 @@ export class InvoicingService {
     return this.ecpayEinvoiceAdapter.getReadiness();
   }
 
+  async queryEcpayInvoiceList(options: {
+    merchantKey?: string;
+    merchantId?: string;
+    beginDate?: string;
+    endDate?: string;
+    page?: number;
+    pageSize?: number;
+    queryInvalid?: string;
+    queryUpload?: string;
+    queryIdentifier?: string;
+    queryCategory?: string;
+  }) {
+    const beginDate = this.normalizeQueryDate(options.beginDate, 'beginDate');
+    const endDate = this.normalizeQueryDate(options.endDate, 'endDate');
+    this.assertDateRangeWithinDays(beginDate, endDate, 62);
+
+    return this.ecpayEinvoiceAdapter.queryInvoiceList({
+      merchantKey: options.merchantKey,
+      merchantId: options.merchantId,
+      beginDate,
+      endDate,
+      page: options.page,
+      pageSize: options.pageSize,
+      dataType: 1,
+      queryInvalid: options.queryInvalid,
+      queryUpload: options.queryUpload,
+      queryIdentifier: options.queryIdentifier,
+      queryCategory: options.queryCategory,
+    });
+  }
+
+  async queryEcpayGovInvoiceWordSettings(options: {
+    merchantKey?: string;
+    merchantId?: string;
+    invoiceYear?: string;
+  }) {
+    const invoiceYear = this.normalizeRocInvoiceYear(options.invoiceYear);
+
+    return this.ecpayEinvoiceAdapter.queryGovInvoiceWordSettings({
+      merchantKey: options.merchantKey,
+      merchantId: options.merchantId,
+      invoiceYear,
+    });
+  }
+
   /**
    * 預覽某訂單的發票內容
    *
@@ -1006,6 +1051,54 @@ export class InvoicingService {
       return 'groupbuy-main';
     }
     return null;
+  }
+
+  private normalizeQueryDate(value: string | undefined, fieldName: string) {
+    if (!value || !value.trim()) {
+      throw new BadRequestException(`${fieldName} 為必填，格式需為 YYYY-MM-DD。`);
+    }
+
+    const normalized = value.trim().replace(/\//g, '-');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+      throw new BadRequestException(`${fieldName} 格式需為 YYYY-MM-DD。`);
+    }
+
+    const date = new Date(`${normalized}T00:00:00+08:00`);
+    if (Number.isNaN(date.getTime())) {
+      throw new BadRequestException(`${fieldName} 不是有效日期。`);
+    }
+
+    return normalized;
+  }
+
+  private assertDateRangeWithinDays(
+    beginDate: string,
+    endDate: string,
+    maxDays: number,
+  ) {
+    const begin = new Date(`${beginDate}T00:00:00+08:00`);
+    const end = new Date(`${endDate}T00:00:00+08:00`);
+    if (begin > end) {
+      throw new BadRequestException('beginDate 不可晚於 endDate。');
+    }
+
+    const diffDays =
+      Math.floor((end.getTime() - begin.getTime()) / 86_400_000) + 1;
+    if (diffDays > maxDays) {
+      throw new BadRequestException(
+        `綠界多筆發票查詢一次最多 ${maxDays} 天，請縮小日期區間分批查詢。`,
+      );
+    }
+  }
+
+  private normalizeRocInvoiceYear(value?: string) {
+    const raw = value?.trim() || String(new Date().getFullYear() - 1911);
+    if (!/^\d{3}$/.test(raw)) {
+      throw new BadRequestException(
+        'invoiceYear 需為民國年三碼，例如 115。',
+      );
+    }
+    return raw;
   }
 
   private resolveProviderQueryContext(invoice: any) {
