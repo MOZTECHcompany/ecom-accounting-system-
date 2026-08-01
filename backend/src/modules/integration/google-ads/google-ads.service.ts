@@ -28,8 +28,11 @@ export class GoogleAdsService {
       missing.push('GOOGLE_ADS_DEVELOPER_TOKEN');
     }
     if (!info.oauthConfigured) {
+      const missingCredentials = info.missingRefreshTokenEnvs.length
+        ? ` (${info.missingRefreshTokenEnvs.join(', ')})`
+        : '';
       missing.push(
-        'GOOGLE_ADS_CLIENT_ID / GOOGLE_ADS_CLIENT_SECRET / GOOGLE_ADS_REFRESH_TOKEN',
+        `GOOGLE_ADS_CLIENT_ID / GOOGLE_ADS_CLIENT_SECRET / Google Ads refresh token${missingCredentials}`,
       );
     }
     if (!info.configuredAccounts.length) {
@@ -45,12 +48,31 @@ export class GoogleAdsService {
     let accessibleCustomers: string[] = [];
     let accessibleCustomersError: string | null = null;
     if (!missing.length) {
-      try {
-        accessibleCustomers = await this.adapter.listAccessibleCustomers();
-      } catch (error: any) {
-        accessibleCustomersError =
-          error?.message || 'Google Ads accessible customers probe failed';
+      const errors: string[] = [];
+      const refreshTokenEnvs = [
+        ...new Set(
+          info.configuredAccounts.map(
+            (account) => account.refreshTokenEnv || 'GOOGLE_ADS_REFRESH_TOKEN',
+          ),
+        ),
+      ];
+      for (const refreshTokenEnv of refreshTokenEnvs) {
+        try {
+          accessibleCustomers.push(
+            ...(await this.adapter.listAccessibleCustomers(refreshTokenEnv)),
+          );
+        } catch (error: unknown) {
+          errors.push(
+            `${refreshTokenEnv}: ${
+              error instanceof Error
+                ? error.message
+                : 'Google Ads accessible customers probe failed'
+            }`,
+          );
+        }
       }
+      accessibleCustomers = [...new Set(accessibleCustomers)];
+      accessibleCustomersError = errors.length ? errors.join('; ') : null;
       try {
         const { since, until } = this.resolveRange(undefined, undefined);
         const rows = await this.adapter.fetchInsights({ since, until });
@@ -62,12 +84,15 @@ export class GoogleAdsService {
             0,
           ),
         };
-      } catch (error: any) {
+      } catch (error: unknown) {
         insightProbe = {
           success: false,
           count: 0,
           spendTotal: 0,
-          message: error?.message || 'Google Ads insight probe failed',
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Google Ads insight probe failed',
         };
       }
     }
