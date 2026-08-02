@@ -41,6 +41,7 @@ type GoogleAdsSearchResponse = {
     customer?: {
       id?: string;
       descriptiveName?: string;
+      currencyCode?: string;
     };
     campaign?: {
       id?: string;
@@ -237,7 +238,12 @@ export class GoogleAdsAdapter {
             clicks: row.metrics?.clicks || 0,
             conversions: row.metrics?.conversions || 0,
             conversionsValue: row.metrics?.conversionsValue || 0,
-            rawAccount: account,
+            rawAccount: {
+              ...account,
+              currency:
+                row.customer?.currencyCode
+                || account.currency,
+            },
           })),
         );
         page += 1;
@@ -536,6 +542,7 @@ export class GoogleAdsAdapter {
     const fields = [
       'customer.id',
       'customer.descriptive_name',
+      'customer.currency_code',
       level === 'campaign' ? 'campaign.id' : null,
       level === 'campaign' ? 'campaign.name' : null,
       'segments.date',
