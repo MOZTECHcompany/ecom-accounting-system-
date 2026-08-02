@@ -5,6 +5,11 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import {
+  AdsCurrencySource,
+  normalizeConfiguredAdsCurrency,
+  resolveAdsCurrency,
+} from '../ads-currency';
 
 export type GoogleAdsAccountConfig = {
   customerId: string;
@@ -16,6 +21,7 @@ export type GoogleAdsAccountConfig = {
   businessUnit?: string;
   channelCode?: string;
   currency?: string;
+  currencySource?: AdsCurrencySource;
   entityId?: string;
   managerCustomerId?: string;
   loginCustomerId?: string;
@@ -23,6 +29,8 @@ export type GoogleAdsAccountConfig = {
 };
 
 export type GoogleAdsInsight = {
+  currency: string;
+  currencySource: AdsCurrencySource;
   customerId: string;
   customerName?: string | null;
   campaignId?: string | null;
@@ -225,26 +233,38 @@ export class GoogleAdsAdapter {
           ? response.results
           : [];
         rows.push(
-          ...pageRows.map((row) => ({
-            customerId: this.normalizeCustomerId(
+          ...pageRows.map((row) => {
+            const customerId = this.normalizeCustomerId(
               row.customer?.id || account.customerId,
-            ),
-            customerName: row.customer?.descriptiveName || account.name || null,
-            campaignId: row.campaign?.id || null,
-            campaignName: row.campaign?.name || null,
-            date: row.segments?.date || this.formatDate(params.since),
-            costMicros: row.metrics?.costMicros || 0,
-            impressions: row.metrics?.impressions || 0,
-            clicks: row.metrics?.clicks || 0,
-            conversions: row.metrics?.conversions || 0,
-            conversionsValue: row.metrics?.conversionsValue || 0,
-            rawAccount: {
-              ...account,
-              currency:
-                row.customer?.currencyCode
-                || account.currency,
-            },
-          })),
+            );
+            const currency = resolveAdsCurrency({
+              provider: 'Google',
+              accountRef: customerId,
+              platformCurrency: row.customer?.currencyCode,
+              configuredCurrency: account.currency,
+              configuredCurrencySource: account.currencySource,
+            });
+            return {
+              currency: currency.currency,
+              currencySource: currency.currencySource,
+              customerId,
+              customerName:
+                row.customer?.descriptiveName || account.name || null,
+              campaignId: row.campaign?.id || null,
+              campaignName: row.campaign?.name || null,
+              date: row.segments?.date || this.formatDate(params.since),
+              costMicros: row.metrics?.costMicros || 0,
+              impressions: row.metrics?.impressions || 0,
+              clicks: row.metrics?.clicks || 0,
+              conversions: row.metrics?.conversions || 0,
+              conversionsValue: row.metrics?.conversionsValue || 0,
+              rawAccount: {
+                ...account,
+                currency: currency.currency,
+                currencySource: currency.currencySource,
+              },
+            };
+          }),
         );
         page += 1;
         pageToken = response.nextPageToken || '';
@@ -480,6 +500,9 @@ export class GoogleAdsAdapter {
             customerId: child.customerId,
             name: child.name || normalizedAccount.name,
             currency: child.currency || normalizedAccount.currency,
+            currencySource: child.currency
+              ? 'platform'
+              : normalizedAccount.currencySource,
             managerCustomerId: normalizedAccount.customerId,
             loginCustomerId:
               normalizedAccount.loginCustomerId || normalizedAccount.customerId,
@@ -494,6 +517,9 @@ export class GoogleAdsAdapter {
           ...normalizedAccount,
           name: self?.name || normalizedAccount.name,
           currency: self?.currency || normalizedAccount.currency,
+          currencySource: self?.currency
+            ? 'platform'
+            : normalizedAccount.currencySource,
         });
       }
     }
@@ -656,7 +682,11 @@ export class GoogleAdsAdapter {
         item.businessUnit || item.business_unit,
       ),
       channelCode: this.optionalString(item.channelCode || item.channel_code),
-      currency: this.optionalString(item.currency),
+      currency: normalizeConfiguredAdsCurrency(
+        item.currency,
+        'GOOGLE_ADS_ACCOUNTS_JSON currency',
+      ),
+      currencySource: item.currency ? 'account_config' : undefined,
       entityId: this.optionalString(item.entityId || item.entity_id),
       managerCustomerId: this.optionalString(
         item.managerCustomerId || item.manager_customer_id,

@@ -5,6 +5,11 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import {
+  AdsCurrencySource,
+  normalizeConfiguredAdsCurrency,
+  resolveAdsCurrency,
+} from '../ads-currency';
 
 export type MetaAdsAccountConfig = {
   accountId: string;
@@ -16,6 +21,7 @@ export type MetaAdsAccountConfig = {
   businessUnit?: string;
   channelCode?: string;
   currency?: string;
+  currencySource?: AdsCurrencySource;
   entityId?: string;
 };
 
@@ -32,6 +38,8 @@ export type MetaAdsAdAccount = {
 };
 
 export type MetaAdsInsight = {
+  currency: string;
+  currencySource: AdsCurrencySource;
   account_id?: string;
   account_name?: string;
   campaign_id?: string;
@@ -50,6 +58,11 @@ export type MetaAdsInsight = {
   action_values?: unknown;
   rawAccount?: MetaAdsAccountConfig | null;
 };
+
+type MetaAdsInsightApiRow = Omit<
+  MetaAdsInsight,
+  'currency' | 'currencySource' | 'rawAccount'
+>;
 
 type MetaListResponse<T> = {
   data?: T[];
@@ -199,28 +212,41 @@ export class MetaAdsAdapter {
       let after = '';
       let page = 0;
       do {
-        const response = await this.request<MetaListResponse<MetaAdsInsight>>(
-          `/${this.normalizeAccountId(account.accountId)}/insights`,
-          {
-            fields,
-            level,
-            time_increment: '1',
-            time_range: JSON.stringify(range),
-            limit: String(limit),
-            ...(after ? { after } : {}),
-          },
-        );
+        const response = await this.request<
+          MetaListResponse<MetaAdsInsightApiRow>
+        >(`/${this.normalizeAccountId(account.accountId)}/insights`, {
+          fields,
+          level,
+          time_increment: '1',
+          time_range: JSON.stringify(range),
+          limit: String(limit),
+          ...(after ? { after } : {}),
+        });
         const pageRows = Array.isArray(response.data) ? response.data : [];
         rows.push(
-          ...pageRows.map((row) => ({
-            ...row,
-            rawAccount: {
-              ...account,
-              currency:
-                this.optionalString(row.account_currency)
-                || account.currency,
-            },
-          })),
+          ...pageRows.map((row) => {
+            const accountRef = this.normalizeAccountId(
+              row.account_id || account.accountId,
+            );
+            const currency = resolveAdsCurrency({
+              provider: 'Meta',
+              accountRef,
+              platformCurrency: row.account_currency,
+              configuredCurrency: account.currency,
+              configuredCurrencySource: account.currencySource,
+            });
+            return {
+              ...row,
+              account_currency: currency.currency,
+              currency: currency.currency,
+              currencySource: currency.currencySource,
+              rawAccount: {
+                ...account,
+                currency: currency.currency,
+                currencySource: currency.currencySource,
+              },
+            };
+          }),
         );
         page += 1;
         after = response.paging?.cursors?.after || '';
@@ -238,7 +264,9 @@ export class MetaAdsAdapter {
     return trimmed.startsWith('act_') ? trimmed : `act_${trimmed}`;
   }
 
-  private async resolveAccounts(accountIds?: string[]) {
+  private async resolveAccounts(
+    accountIds?: string[],
+  ): Promise<MetaAdsAccountConfig[]> {
     const configured = this.getConfiguredAccounts();
     const configuredById = new Map(
       configured.map((account) => [
@@ -270,11 +298,14 @@ export class MetaAdsAdapter {
     const accounts = apiAccounts.flatMap((account) => {
       const accountId = account.id || account.account_id || '';
       if (!accountId) return [];
-      return [{
-        accountId: this.normalizeAccountId(accountId),
-        name: this.optionalString(account.name),
-        currency: this.optionalString(account.currency),
-      }];
+      return [
+        {
+          accountId: this.normalizeAccountId(accountId),
+          name: this.optionalString(account.name),
+          currency: this.optionalString(account.currency),
+          currencySource: account.currency ? ('platform' as const) : undefined,
+        },
+      ];
     });
 
     if (!accounts.length) {
@@ -364,7 +395,11 @@ export class MetaAdsAdapter {
         item.businessUnit || item.business_unit,
       ),
       channelCode: this.optionalString(item.channelCode || item.channel_code),
-      currency: this.optionalString(item.currency),
+      currency: normalizeConfiguredAdsCurrency(
+        item.currency,
+        'META_ADS_ACCOUNTS_JSON currency',
+      ),
+      currencySource: item.currency ? 'account_config' : undefined,
       entityId: this.optionalString(item.entityId || item.entity_id),
     };
   }

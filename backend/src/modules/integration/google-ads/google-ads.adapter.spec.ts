@@ -91,7 +91,7 @@ describe('GoogleAdsAdapter credential routing', () => {
                 {
                   customer: {
                     id: customerId,
-                    currencyCode: 'TWD',
+                    currencyCode: customerId === '1111111111' ? 'TWD' : 'USD',
                   },
                   segments: { date: '2026-07-31' },
                   metrics: {
@@ -117,6 +117,11 @@ describe('GoogleAdsAdapter credential routing', () => {
     expect(rows.map((row) => row.conversionsValue)).toEqual([
       '3456.78',
       '3456.78',
+    ]);
+    expect(rows.map((row) => row.currency)).toEqual(['TWD', 'USD']);
+    expect(rows.map((row) => row.currencySource)).toEqual([
+      'platform',
+      'platform',
     ]);
     expect(searchAuthorization.get('1111111111')).toEqual([
       'Bearer access-moztech',
@@ -242,15 +247,17 @@ describe('GoogleAdsAdapter credential routing', () => {
           return Promise.resolve(
             new Response(
               JSON.stringify({
-                results: [{
-                  customerClient: {
-                    id: '3333333333',
-                    descriptiveName: 'MOZTECH Global',
-                    manager: false,
-                    status: 'ENABLED',
-                    currencyCode: 'USD',
+                results: [
+                  {
+                    customerClient: {
+                      id: '3333333333',
+                      descriptiveName: 'MOZTECH Global',
+                      manager: false,
+                      status: 'ENABLED',
+                      currencyCode: 'USD',
+                    },
                   },
-                }],
+                ],
               }),
               { status: 200 },
             ),
@@ -259,11 +266,13 @@ describe('GoogleAdsAdapter credential routing', () => {
         return Promise.resolve(
           new Response(
             JSON.stringify({
-              results: [{
-                customer: { id: '3333333333' },
-                segments: { date: '2026-08-01' },
-                metrics: { costMicros: '1000000' },
-              }],
+              results: [
+                {
+                  customer: { id: '3333333333' },
+                  segments: { date: '2026-08-01' },
+                  metrics: { costMicros: '1000000' },
+                },
+              ],
             }),
             { status: 200 },
           ),
@@ -278,11 +287,153 @@ describe('GoogleAdsAdapter credential routing', () => {
     });
 
     expect(rows).toHaveLength(1);
+    expect(rows[0].currency).toBe('USD');
+    expect(rows[0].currencySource).toBe('platform');
     expect(rows[0].rawAccount).toMatchObject({
       customerId: '3333333333',
       reportBrand: 'MOZTECH',
       name: 'MOZTECH Global',
       currency: 'USD',
     });
+  });
+
+  it('uses and normalizes an explicit per-account currency when Google omits the field', async () => {
+    const values: Record<string, string> = {
+      GOOGLE_ADS_CLIENT_ID: 'client-id',
+      GOOGLE_ADS_CLIENT_SECRET: 'client-secret',
+      GOOGLE_ADS_DEVELOPER_TOKEN: 'developer-token',
+      GOOGLE_ADS_REFRESH_TOKEN: 'refresh-token',
+      GOOGLE_ADS_ACCOUNTS_JSON: JSON.stringify([
+        {
+          customerId: '4444444444',
+          currency: 'usd',
+        },
+      ]),
+    };
+    const adapter = new GoogleAdsAdapter({
+      get: (key: string, fallback = '') => values[key] ?? fallback,
+    } as ConfigService);
+
+    global.fetch = jest.fn(
+      (input: string | URL | Request, init?: RequestInit) => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
+        if (url === 'https://oauth2.googleapis.com/token') {
+          return Promise.resolve(
+            new Response(JSON.stringify({ access_token: 'access-token' }), {
+              status: 200,
+            }),
+          );
+        }
+        const request = JSON.parse(
+          typeof init?.body === 'string' ? init.body : '{}',
+        ) as { query?: string };
+        if (request.query?.includes('FROM customer_client')) {
+          return Promise.resolve(
+            new Response(JSON.stringify({ results: [] }), { status: 200 }),
+          );
+        }
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              results: [
+                {
+                  customer: { id: '4444444444' },
+                  segments: { date: '2026-08-01' },
+                  metrics: { costMicros: '1000000' },
+                },
+              ],
+            }),
+            { status: 200 },
+          ),
+        );
+      },
+    ) as typeof fetch;
+
+    const rows = await adapter.fetchInsights({
+      since: new Date('2026-08-01T00:00:00.000Z'),
+      until: new Date('2026-08-01T00:00:00.000Z'),
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      currency: 'USD',
+      currencySource: 'account_config',
+      rawAccount: {
+        customerId: '4444444444',
+        currency: 'USD',
+        currencySource: 'account_config',
+      },
+    });
+  });
+
+  it('fails the affected account when all Google currency sources are missing', async () => {
+    const values: Record<string, string> = {
+      GOOGLE_ADS_CLIENT_ID: 'client-id',
+      GOOGLE_ADS_CLIENT_SECRET: 'client-secret',
+      GOOGLE_ADS_DEVELOPER_TOKEN: 'developer-token',
+      GOOGLE_ADS_REFRESH_TOKEN: 'refresh-token',
+      GOOGLE_ADS_ACCOUNTS_JSON: JSON.stringify([
+        {
+          customerId: '5555555555',
+        },
+      ]),
+    };
+    const adapter = new GoogleAdsAdapter({
+      get: (key: string, fallback = '') => values[key] ?? fallback,
+    } as ConfigService);
+
+    global.fetch = jest.fn(
+      (input: string | URL | Request, init?: RequestInit) => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
+        if (url === 'https://oauth2.googleapis.com/token') {
+          return Promise.resolve(
+            new Response(JSON.stringify({ access_token: 'access-token' }), {
+              status: 200,
+            }),
+          );
+        }
+        const request = JSON.parse(
+          typeof init?.body === 'string' ? init.body : '{}',
+        ) as { query?: string };
+        if (request.query?.includes('FROM customer_client')) {
+          return Promise.resolve(
+            new Response(JSON.stringify({ results: [] }), { status: 200 }),
+          );
+        }
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              results: [
+                {
+                  customer: { id: '5555555555' },
+                  segments: { date: '2026-08-01' },
+                  metrics: { costMicros: '1000000' },
+                },
+              ],
+            }),
+            { status: 200 },
+          ),
+        );
+      },
+    ) as typeof fetch;
+
+    await expect(
+      adapter.fetchInsights({
+        since: new Date('2026-08-01T00:00:00.000Z'),
+        until: new Date('2026-08-01T00:00:00.000Z'),
+      }),
+    ).rejects.toThrow(
+      'Google Ads account 5555555555 returned monetary metrics without a source currency',
+    );
   });
 });
