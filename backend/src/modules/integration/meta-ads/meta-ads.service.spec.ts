@@ -50,4 +50,42 @@ describe('MetaAdsService reporting preview', () => {
       purchaseRoas: [{ action_type: 'purchase', value: 4.3215 }],
     });
   });
+
+  it('returns the requested managed-report rows beyond the old 50-row preview cap', async () => {
+    const rows = Array.from({ length: 75 }, (_, index) => ({
+      campaign_id: `campaign-${index + 1}`,
+      campaign_name: `Campaign ${index + 1}`,
+      date_start: '2026-08-01',
+      date_stop: '2026-08-01',
+      spend: '10',
+      impressions: '100',
+      clicks: '5',
+      actions: [],
+      action_values: [],
+      purchase_roas: [],
+      rawAccount: {
+        accountId: 'act_123',
+        reportBrand: 'MOZTECH',
+        platform: 'Meta',
+        currency: 'TWD',
+      },
+    }));
+    const adapter = {
+      fetchInsights: jest.fn().mockResolvedValue(rows),
+      normalizeAccountId: (value: string) => value,
+    } as unknown as MetaAdsAdapter;
+    const service = new MetaAdsService({} as PrismaService, adapter, {
+      get: (_key: string, fallback = '') => fallback,
+    } as ConfigService);
+
+    const result = await service.previewInsights({
+      since: new Date('2026-08-01T00:00:00.000Z'),
+      until: new Date('2026-08-01T00:00:00.000Z'),
+      level: 'campaign',
+      limit: 75,
+    });
+
+    expect(result.count).toBe(75);
+    expect(result.sample).toHaveLength(75);
+  });
 });

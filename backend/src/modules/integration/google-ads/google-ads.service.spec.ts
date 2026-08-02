@@ -43,4 +43,40 @@ describe('GoogleAdsService reporting preview', () => {
       conversionsValue: 9876.5,
     });
   });
+
+  it('returns the requested managed-report rows beyond the old 50-row preview cap', async () => {
+    const rows = Array.from({ length: 75 }, (_, index) => ({
+      customerId: '1234567890',
+      campaignId: `campaign-${index + 1}`,
+      campaignName: `Campaign ${index + 1}`,
+      date: '2026-08-01',
+      costMicros: '10000000',
+      impressions: '100',
+      clicks: '5',
+      conversions: '1',
+      conversionsValue: '20',
+      rawAccount: {
+        customerId: '1234567890',
+        reportBrand: 'MOZTECH',
+        platform: 'Google Ads',
+        currency: 'TWD',
+      },
+    }));
+    const adapter = {
+      fetchInsights: jest.fn().mockResolvedValue(rows),
+    } as unknown as GoogleAdsAdapter;
+    const service = new GoogleAdsService({} as PrismaService, adapter, {
+      get: (_key: string, fallback = '') => fallback,
+    } as ConfigService);
+
+    const result = await service.previewInsights({
+      since: new Date('2026-08-01T00:00:00.000Z'),
+      until: new Date('2026-08-01T00:00:00.000Z'),
+      level: 'campaign',
+      pageSize: 75,
+    });
+
+    expect(result.count).toBe(75);
+    expect(result.sample).toHaveLength(75);
+  });
 });
