@@ -162,7 +162,7 @@ export class GoogleAdsService {
       count: rows.length,
       spendTotal,
       sample: rows
-        .slice(0, Math.min(Number(params.pageSize || 20), 50))
+        .slice(0, Math.min(Number(params.pageSize || 20), 500))
         .map((row) => this.mapInsightPreview(row)),
     };
   }
