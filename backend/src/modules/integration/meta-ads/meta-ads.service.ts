@@ -3,6 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import {
+  requireCanonicalAdsCurrency,
+  summarizeAdsSpend,
+} from '../ads-currency';
 import { MetaAdsAdapter, MetaAdsInsight } from './meta-ads.adapter';
 
 const META_ADS_SOURCE_MODULE = 'meta_ads';
@@ -102,9 +106,11 @@ export class MetaAdsService {
       limit: params.limit,
       maxPages: params.maxPages,
     });
-    const spendTotal = rows.reduce(
-      (sum, row) => sum + this.toNumber(row.spend),
-      0,
+    const spendSummary = summarizeAdsSpend(
+      rows,
+      (row) => row.currency,
+      (row) => this.toNumber(row.spend),
+      'Meta Ads preview',
     );
 
     return {
@@ -115,7 +121,7 @@ export class MetaAdsService {
       },
       level: params.level || 'account',
       count: rows.length,
-      spendTotal,
+      ...spendSummary,
       sample: rows
         .slice(0, Math.min(Number(params.limit || 20), 500))
         .map((row) => this.mapInsightPreview(row)),
@@ -214,10 +220,10 @@ export class MetaAdsService {
     }
 
     const amount = new Decimal(this.toNumber(row.spend));
-    const currency =
-      row.rawAccount?.currency ||
-      this.config.get<string>('META_ADS_DEFAULT_CURRENCY', '') ||
-      'TWD';
+    const currency = requireCanonicalAdsCurrency(
+      row.currency,
+      `Meta Ads sync account ${accountId}`,
+    );
     const sourceId = `${accountId}:${date}`;
     const description = this.buildExpenseDescription(row, accountId, date);
     const itemDescription = this.buildExpenseItemDescription(row, accountId);
@@ -300,6 +306,10 @@ export class MetaAdsService {
   }
 
   private mapInsightPreview(row: MetaAdsInsight) {
+    const currency = requireCanonicalAdsCurrency(
+      row.currency,
+      'Meta Ads preview row',
+    );
     return {
       accountId: this.adapter.normalizeAccountId(
         row.rawAccount?.accountId || row.account_id || '',
@@ -313,7 +323,8 @@ export class MetaAdsService {
       market: row.rawAccount?.market || null,
       businessUnit: row.rawAccount?.businessUnit || null,
       channelCode: row.rawAccount?.channelCode || null,
-      currency: row.rawAccount?.currency || null,
+      currency,
+      currencySource: row.currencySource || null,
       dateStart: row.date_start || null,
       dateStop: row.date_stop || null,
       spend: this.toNumber(row.spend),

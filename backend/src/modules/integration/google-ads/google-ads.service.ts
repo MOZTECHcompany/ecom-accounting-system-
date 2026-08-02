@@ -3,6 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma/prisma.service';
+import {
+  requireCanonicalAdsCurrency,
+  summarizeAdsSpend,
+} from '../ads-currency';
 import { GoogleAdsAdapter, GoogleAdsInsight } from './google-ads.adapter';
 
 const GOOGLE_ADS_SOURCE_MODULE = 'google_ads';
@@ -42,7 +46,9 @@ export class GoogleAdsService {
     let insightProbe: {
       success: boolean;
       count: number;
-      spendTotal: number;
+      spendTotalsByCurrency: Record<string, number>;
+      spendTotal: number | null;
+      spendTotalCurrency: string | null;
       message?: string;
     } | null = null;
     let accessibleCustomers: string[] = [];
@@ -76,19 +82,24 @@ export class GoogleAdsService {
       try {
         const { since, until } = this.resolveRange(undefined, undefined);
         const rows = await this.adapter.fetchInsights({ since, until });
+        const spendSummary = summarizeAdsSpend(
+          rows,
+          (row) => row.currency,
+          (row) => this.costMicrosToAmount(row.costMicros),
+          'Google Ads readiness probe',
+        );
         insightProbe = {
           success: true,
           count: rows.length,
-          spendTotal: rows.reduce(
-            (sum, row) => sum + this.costMicrosToAmount(row.costMicros),
-            0,
-          ),
+          ...spendSummary,
         };
       } catch (error: unknown) {
         insightProbe = {
           success: false,
           count: 0,
-          spendTotal: 0,
+          spendTotalsByCurrency: {},
+          spendTotal: null,
+          spendTotalCurrency: null,
           message:
             error instanceof Error
               ? error.message
@@ -147,9 +158,11 @@ export class GoogleAdsService {
       pageSize: params.pageSize,
       maxPages: params.maxPages,
     });
-    const spendTotal = rows.reduce(
-      (sum, row) => sum + this.costMicrosToAmount(row.costMicros),
-      0,
+    const spendSummary = summarizeAdsSpend(
+      rows,
+      (row) => row.currency,
+      (row) => this.costMicrosToAmount(row.costMicros),
+      'Google Ads preview',
     );
 
     return {
@@ -160,7 +173,7 @@ export class GoogleAdsService {
       },
       level: params.level || 'account',
       count: rows.length,
-      spendTotal,
+      ...spendSummary,
       sample: rows
         .slice(0, Math.min(Number(params.pageSize || 20), 500))
         .map((row) => this.mapInsightPreview(row)),
@@ -253,10 +266,10 @@ export class GoogleAdsService {
     }
 
     const amount = new Decimal(this.costMicrosToAmount(row.costMicros));
-    const currency =
-      row.rawAccount?.currency ||
-      this.config.get<string>('GOOGLE_ADS_DEFAULT_CURRENCY', '') ||
-      'TWD';
+    const currency = requireCanonicalAdsCurrency(
+      row.currency,
+      `Google Ads sync account ${row.customerId}`,
+    );
     const sourceId = `${row.customerId}:${row.date}`;
     const description = this.buildExpenseDescription(row);
     const itemDescription = this.buildExpenseItemDescription(row);
@@ -339,6 +352,10 @@ export class GoogleAdsService {
   }
 
   private mapInsightPreview(row: GoogleAdsInsight) {
+    const currency = requireCanonicalAdsCurrency(
+      row.currency,
+      'Google Ads preview row',
+    );
     return {
       customerId: row.customerId,
       customerName: row.customerName || row.rawAccount?.name || null,
@@ -350,7 +367,8 @@ export class GoogleAdsService {
       market: row.rawAccount?.market || null,
       businessUnit: row.rawAccount?.businessUnit || null,
       channelCode: row.rawAccount?.channelCode || null,
-      currency: row.rawAccount?.currency || null,
+      currency,
+      currencySource: row.currencySource || null,
       date: row.date,
       spend: this.costMicrosToAmount(row.costMicros),
       impressions: this.toNumber(row.impressions),
