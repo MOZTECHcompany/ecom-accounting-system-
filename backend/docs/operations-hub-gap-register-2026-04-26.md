@@ -737,6 +737,17 @@ Cloud Run 正式資料目前已經不是空系統，但核心治理缺口很大�
 - 後端 build 通過，並已部署 Cloud Run backend revision `ecom-accounting-backend-00390-7jp`，100% 流量。
 - 正式報表 API 需要登入權限，終端機未帶瀏覽器登入 token 時會回 `401 Unauthorized`；畫面端重新整理後應使用新版後端計算。
 
+### 2026-08-02 至 2026-08-03：廣告資料與 LUNA Dashboard 根因修復
+
+- 使用者看到 LUNA 漏列 Google Ads、也沒有附上原本可預覽的 HTML Dashboard；根因不是廣告 OAuth 或資料來源全面失效，而是 Cloud Run 已建立較新的健康 revision，正式流量卻仍被舊 tag 以 100% 固定在舊 revision，導致 LUNA 讀到舊版廣告資料 contract。
+- 已清除 Cloud Run traffic tags 並把流量切回 `LATEST`。正式狀態已驗證 `latestCreatedRevisionName` 與 `latestReadyRevisionName` 都是 `ecom-accounting-backend-00448-gx6`，且唯一 traffic entry 為該最新版、100% serving、沒有殘留 tag。
+- GitHub Actions backend deploy workflow 已加入永久防呆：每次部署後執行 `--clear-tags --to-latest`，並強制驗證「最新建立 revision = 最新 ready revision」、「僅一筆 100% latest traffic、無 tag」及「實際 serving image digest = 本次建置 image digest」；任一條件不符就讓部署失敗，避免再次出現「新版本建好了但正式環境仍跑舊版」。
+- 流量修復後的安全即時驗證結果為 `sourceStatus=complete`：Meta `ready`、7 rows；Google Ads `ready`、5 rows；兩個來源均為 `TWD` 且各自為 `single_currency`。這份證據只保留來源狀態、筆數與幣別，不記錄帳號、活動、素材、token 或原始廣告列。
+- 後端廣告 contract 現在要求每列帶有效的 canonical ISO currency，優先採用平台回傳幣別，再使用明確的逐帳號設定；缺少或無效幣別時必須失敗，不得猜測。總額按幣別分組；只有單一幣別時才可提供 scalar total，**禁止把不同幣別直接相加後輸出 spend、CPA、ROAS 或其他衍生指標**。
+- LUNA 廣告報告流程已改為平衡選取 Meta 與 Google Ads，確保兩個來源都能進入同一份新快照與 self-contained HTML Dashboard，而不是先取滿單一平台後截斷另一平台；發布流程會附加 HTML 檔案，並校驗來源摘要與附件 digest 一致。
+- 正式維護前會先由 candidate Cloud Job 只讀抓取 Meta 與 Google Ads，驗證雙平台資料與幣別 contract 後才允許進入維護；此次 preflight 已通過雙平台 `complete` / `ready` 檢查。流程不會修改廣告預算、活動、受眾、素材或追蹤設定。
+- 剩餘發佈驗收是用全新的 Discord 任務確認同一則回覆同時包含 Meta、Google Ads 摘要與 HTML 附件 receipt；不得重試或沿用舊 task，也不得把舊 Dashboard 當作本次成功證據。
+
 ## 待使用者協助確認
 
 完整清單另存於 `backend/docs/user-input-needed-2026-04-27.md`，後續凡是缺外部 API 權限、正式報表、密鑰或高風險資料修正規則，都集中更新那份文件。
