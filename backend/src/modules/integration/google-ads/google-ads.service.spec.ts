@@ -21,6 +21,7 @@ describe('GoogleAdsService reporting preview', () => {
             customerId: '1234567890',
             reportBrand: 'MOZTECH',
             platform: 'Google Ads',
+            currency: 'TWD',
           },
         },
       ]),
@@ -36,6 +37,7 @@ describe('GoogleAdsService reporting preview', () => {
     });
 
     expect(result.sample[0]).toMatchObject({
+      currency: 'TWD',
       spend: 250,
       conversions: 12,
       conversionsValue: 9876.5,

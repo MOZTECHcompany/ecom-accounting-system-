@@ -350,6 +350,7 @@ export class GoogleAdsService {
       market: row.rawAccount?.market || null,
       businessUnit: row.rawAccount?.businessUnit || null,
       channelCode: row.rawAccount?.channelCode || null,
+      currency: row.rawAccount?.currency || null,
       date: row.date,
       spend: this.costMicrosToAmount(row.costMicros),
       impressions: this.toNumber(row.impressions),

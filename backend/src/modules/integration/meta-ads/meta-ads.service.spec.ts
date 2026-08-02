@@ -26,6 +26,7 @@ describe('MetaAdsService reporting preview', () => {
             accountId: 'act_123',
             reportBrand: 'MOZTECH',
             platform: 'Meta',
+            currency: 'TWD',
           },
         },
       ]),
@@ -42,6 +43,7 @@ describe('MetaAdsService reporting preview', () => {
     });
 
     expect(result.sample[0]).toMatchObject({
+      currency: 'TWD',
       spend: 1000,
       actions: [{ action_type: 'purchase', value: 3 }],
       actionValues: [{ action_type: 'purchase', value: 4321.5 }],

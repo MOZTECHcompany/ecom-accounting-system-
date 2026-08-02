@@ -313,6 +313,7 @@ export class MetaAdsService {
       market: row.rawAccount?.market || null,
       businessUnit: row.rawAccount?.businessUnit || null,
       channelCode: row.rawAccount?.channelCode || null,
+      currency: row.rawAccount?.currency || null,
       dateStart: row.date_start || null,
       dateStop: row.date_stop || null,
       spend: this.toNumber(row.spend),
