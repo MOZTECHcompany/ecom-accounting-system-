@@ -232,27 +232,58 @@ export class MetaAdsAdapter {
   }
 
   private async resolveAccounts(accountIds?: string[]) {
+    const configured = this.getConfiguredAccounts();
+    const configuredById = new Map(
+      configured.map((account) => [
+        this.normalizeAccountId(account.accountId),
+        account,
+      ]),
+    );
     const requested = (accountIds || [])
       .map((value) => value.trim())
       .filter(Boolean)
-      .map((accountId) => ({ accountId: this.normalizeAccountId(accountId) }));
-    if (requested.length) {
-      return requested;
-    }
-
-    const configured = this.getConfiguredAccounts();
-    if (configured.length) {
-      return configured.map((item) => ({
+      .map((accountId) => {
+        const normalized = this.normalizeAccountId(accountId);
+        return {
+          ...(configuredById.get(normalized) || {}),
+          accountId: normalized,
+        };
+      });
+    const selected = requested.length
+      ? requested
+      : configured.map((item) => ({
         ...item,
         accountId: this.normalizeAccountId(item.accountId),
       }));
+    if (selected.length) {
+      const apiAccounts = await this.fetchAdAccounts();
+      const apiById = new Map(
+        apiAccounts.map((account) => [
+          this.normalizeAccountId(account.id || account.account_id || ''),
+          account,
+        ]),
+      );
+      return selected.map((item) => {
+        const discovered = apiById.get(item.accountId);
+        return {
+          ...item,
+          name: item.name || this.optionalString(discovered?.name),
+          currency:
+            item.currency || this.optionalString(discovered?.currency),
+        };
+      });
     }
 
     const apiAccounts = await this.fetchAdAccounts();
-    const accounts = apiAccounts
-      .map((account) => account.id || account.account_id || '')
-      .filter(Boolean)
-      .map((accountId) => ({ accountId: this.normalizeAccountId(accountId) }));
+    const accounts = apiAccounts.flatMap((account) => {
+      const accountId = account.id || account.account_id || '';
+      if (!accountId) return [];
+      return [{
+        accountId: this.normalizeAccountId(accountId),
+        name: this.optionalString(account.name),
+        currency: this.optionalString(account.currency),
+      }];
+    });
 
     if (!accounts.length) {
       throw new BadRequestException(
