@@ -73,6 +73,51 @@ jobs:
             --allow-unauthenticated \
             --port=3000
 
+          # A prior tagged rollout left production traffic pinned to an old
+          # revision even though newer revisions were healthy. Clear every
+          # tag and make future deployments follow LATEST explicitly.
+          gcloud run services update-traffic "${BACKEND_SERVICE}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --clear-tags \
+            --to-latest \
+            --quiet
+
+          SERVICE_STATE="$(gcloud run services describe "${BACKEND_SERVICE}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --format='json(status.latestCreatedRevisionName,status.latestReadyRevisionName,status.traffic)')"
+          LATEST_READY="$(
+            SERVICE_STATE="${SERVICE_STATE}" node <<'NODE'
+          const state = JSON.parse(process.env.SERVICE_STATE || "{}");
+          const status = state.status || {};
+          const traffic = Array.isArray(status.traffic) ? status.traffic : [];
+          if (
+            !status.latestCreatedRevisionName
+            || status.latestReadyRevisionName !== status.latestCreatedRevisionName
+            || traffic.length !== 1
+            || traffic[0]?.revisionName !== status.latestReadyRevisionName
+            || traffic[0]?.latestRevision !== true
+            || Number(traffic[0]?.percent) !== 100
+            || traffic[0]?.tag
+          ) {
+            process.exit(2);
+          }
+          process.stdout.write(status.latestReadyRevisionName);
+          NODE
+          )"
+          EXPECTED_IMAGE="$(gcloud artifacts docker images describe "${IMAGE}" \
+            --project="${GCP_PROJECT_ID}" \
+            --format='value(image_summary.fully_qualified_digest)')"
+          DEPLOYED_IMAGE="$(gcloud run revisions describe "${LATEST_READY}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --format='value(spec.containers[0].image)')"
+          if [[ -z "${EXPECTED_IMAGE}" || "${DEPLOYED_IMAGE}" != "${EXPECTED_IMAGE}" ]]; then
+            echo "::error::Cloud Run serving revision does not match the image built by this run."
+            exit 1
+          fi
+
           URL="$(gcloud run services describe "${BACKEND_SERVICE}" \
             --project="${GCP_PROJECT_ID}" \
             --region="${GCP_REGION}" \
