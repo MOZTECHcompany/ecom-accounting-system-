@@ -91,7 +91,11 @@ describe('GoogleAdsAdapter credential routing', () => {
                 {
                   customer: { id: customerId },
                   segments: { date: '2026-07-31' },
-                  metrics: { costMicros: '1000000' },
+                  metrics: {
+                    costMicros: '1000000',
+                    conversions: '2',
+                    conversionsValue: '3456.78',
+                  },
                 },
               ],
             }),
@@ -107,6 +111,10 @@ describe('GoogleAdsAdapter credential routing', () => {
     });
 
     expect(rows).toHaveLength(2);
+    expect(rows.map((row) => row.conversionsValue)).toEqual([
+      '3456.78',
+      '3456.78',
+    ]);
     expect(searchAuthorization.get('1111111111')).toEqual([
       'Bearer access-moztech',
       'Bearer access-moztech',
@@ -120,6 +128,16 @@ describe('GoogleAdsAdapter credential routing', () => {
       '9999999999',
     ]);
     expect(searchLoginCustomerIds.get('2222222222')).toEqual([null, null]);
+    const searchBodies = (global.fetch as jest.Mock).mock.calls
+      .map((call) =>
+        JSON.parse(typeof call[1]?.body === 'string' ? call[1].body : '{}'),
+      )
+      .filter((body) => typeof body.query === 'string');
+    expect(
+      searchBodies.some((body) =>
+        body.query.includes('metrics.conversions_value'),
+      ),
+    ).toBe(true);
   });
 
   it('keeps configured credential routing for explicitly requested IDs', async () => {

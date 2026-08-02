@@ -46,6 +46,7 @@ export type MetaAdsInsight = {
   date_stop?: string;
   purchase_roas?: unknown;
   actions?: unknown;
+  action_values?: unknown;
   rawAccount?: MetaAdsAccountConfig | null;
 };
 
@@ -180,6 +181,7 @@ export class MetaAdsAdapter {
       'cpm',
       'purchase_roas',
       'actions',
+      'action_values',
       'date_start',
       'date_stop',
     ]
