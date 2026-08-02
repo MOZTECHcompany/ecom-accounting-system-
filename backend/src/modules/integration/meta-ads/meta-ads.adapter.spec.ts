@@ -9,7 +9,7 @@ describe('MetaAdsAdapter account metadata', () => {
     jest.restoreAllMocks();
   });
 
-  it('enriches configured accounts with the currency reported by Meta', async () => {
+  it('preserves the account currency reported by Meta insights', async () => {
     const values: Record<string, string> = {
       META_ADS_ACCESS_TOKEN: 'test-token',
       META_ADS_ACCOUNTS_JSON: JSON.stringify([
@@ -31,21 +31,6 @@ describe('MetaAdsAdapter account metadata', () => {
             ? input.toString()
             : input.url,
       );
-      if (url.pathname.endsWith('/me/adaccounts')) {
-        return Promise.resolve(
-          new Response(
-            JSON.stringify({
-              data: [{
-                id: 'act_123',
-                account_id: '123',
-                name: 'MOZTECH US',
-                currency: 'USD',
-              }],
-            }),
-            { status: 200 },
-          ),
-        );
-      }
       return Promise.resolve(
         new Response(
           JSON.stringify({
@@ -53,6 +38,7 @@ describe('MetaAdsAdapter account metadata', () => {
               account_id: '123',
               campaign_id: 'campaign-1',
               campaign_name: 'Revenue campaign',
+              account_currency: 'USD',
               spend: '100',
               date_start: '2026-08-01',
               date_stop: '2026-08-01',
@@ -73,7 +59,6 @@ describe('MetaAdsAdapter account metadata', () => {
     expect(rows[0].rawAccount).toMatchObject({
       accountId: 'act_123',
       reportBrand: 'MOZTECH',
-      name: 'MOZTECH US',
       currency: 'USD',
     });
   });

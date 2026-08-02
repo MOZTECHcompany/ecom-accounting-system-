@@ -89,7 +89,10 @@ describe('GoogleAdsAdapter credential routing', () => {
             JSON.stringify({
               results: [
                 {
-                  customer: { id: customerId },
+                  customer: {
+                    id: customerId,
+                    currencyCode: 'TWD',
+                  },
                   segments: { date: '2026-07-31' },
                   metrics: {
                     costMicros: '1000000',
@@ -136,6 +139,11 @@ describe('GoogleAdsAdapter credential routing', () => {
     expect(
       searchBodies.some((body) =>
         body.query.includes('metrics.conversions_value'),
+      ),
+    ).toBe(true);
+    expect(
+      searchBodies.some((body) =>
+        body.query.includes('customer.currency_code'),
       ),
     ).toBe(true);
   });

@@ -42,6 +42,7 @@ export type MetaAdsInsight = {
   ctr?: string;
   cpc?: string;
   cpm?: string;
+  account_currency?: string;
   date_start?: string;
   date_stop?: string;
   purchase_roas?: unknown;
@@ -179,6 +180,7 @@ export class MetaAdsAdapter {
       'ctr',
       'cpc',
       'cpm',
+      'account_currency',
       'purchase_roas',
       'actions',
       'action_values',
@@ -212,7 +214,12 @@ export class MetaAdsAdapter {
         rows.push(
           ...pageRows.map((row) => ({
             ...row,
-            rawAccount: account,
+            rawAccount: {
+              ...account,
+              currency:
+                this.optionalString(row.account_currency)
+                || account.currency,
+            },
           })),
         );
         page += 1;
@@ -249,29 +256,14 @@ export class MetaAdsAdapter {
           accountId: normalized,
         };
       });
-    const selected = requested.length
-      ? requested
-      : configured.map((item) => ({
+    if (requested.length) {
+      return requested;
+    }
+    if (configured.length) {
+      return configured.map((item) => ({
         ...item,
         accountId: this.normalizeAccountId(item.accountId),
       }));
-    if (selected.length) {
-      const apiAccounts = await this.fetchAdAccounts();
-      const apiById = new Map(
-        apiAccounts.map((account) => [
-          this.normalizeAccountId(account.id || account.account_id || ''),
-          account,
-        ]),
-      );
-      return selected.map((item) => {
-        const discovered = apiById.get(item.accountId);
-        return {
-          ...item,
-          name: item.name || this.optionalString(discovered?.name),
-          currency:
-            item.currency || this.optionalString(discovered?.currency),
-        };
-      });
     }
 
     const apiAccounts = await this.fetchAdAccounts();
