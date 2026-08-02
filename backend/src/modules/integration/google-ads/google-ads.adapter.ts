@@ -484,7 +484,11 @@ export class GoogleAdsAdapter {
 
       if (!seen.has(normalizedAccount.customerId)) {
         seen.add(normalizedAccount.customerId);
-        expanded.push(normalizedAccount);
+        expanded.push({
+          ...normalizedAccount,
+          name: self?.name || normalizedAccount.name,
+          currency: self?.currency || normalizedAccount.currency,
+        });
       }
     }
 

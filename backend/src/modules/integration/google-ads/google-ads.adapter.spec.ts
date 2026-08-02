@@ -194,4 +194,87 @@ describe('GoogleAdsAdapter credential routing', () => {
       'Bearer access-bonson',
     ]);
   });
+
+  it('enriches a non-manager account with its Google-reported currency', async () => {
+    const values: Record<string, string> = {
+      GOOGLE_ADS_CLIENT_ID: 'client-id',
+      GOOGLE_ADS_CLIENT_SECRET: 'client-secret',
+      GOOGLE_ADS_DEVELOPER_TOKEN: 'developer-token',
+      GOOGLE_ADS_REFRESH_TOKEN: 'refresh-token',
+      GOOGLE_ADS_ACCOUNTS_JSON: JSON.stringify([
+        {
+          customerId: '3333333333',
+          reportBrand: 'MOZTECH',
+        },
+      ]),
+    };
+    const adapter = new GoogleAdsAdapter({
+      get: (key: string, fallback = '') => values[key] ?? fallback,
+    } as ConfigService);
+
+    global.fetch = jest.fn(
+      (input: string | URL | Request, init?: RequestInit) => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
+        if (url === 'https://oauth2.googleapis.com/token') {
+          return Promise.resolve(
+            new Response(JSON.stringify({ access_token: 'access-token' }), {
+              status: 200,
+            }),
+          );
+        }
+        const request = JSON.parse(
+          typeof init?.body === 'string' ? init.body : '{}',
+        ) as { query?: string };
+        if (request.query?.includes('FROM customer_client')) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                results: [{
+                  customerClient: {
+                    id: '3333333333',
+                    descriptiveName: 'MOZTECH Global',
+                    manager: false,
+                    status: 'ENABLED',
+                    currencyCode: 'USD',
+                  },
+                }],
+              }),
+              { status: 200 },
+            ),
+          );
+        }
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              results: [{
+                customer: { id: '3333333333' },
+                segments: { date: '2026-08-01' },
+                metrics: { costMicros: '1000000' },
+              }],
+            }),
+            { status: 200 },
+          ),
+        );
+      },
+    ) as typeof fetch;
+
+    const rows = await adapter.fetchInsights({
+      since: new Date('2026-08-01T00:00:00.000Z'),
+      until: new Date('2026-08-01T00:00:00.000Z'),
+      level: 'account',
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].rawAccount).toMatchObject({
+      customerId: '3333333333',
+      reportBrand: 'MOZTECH',
+      name: 'MOZTECH Global',
+      currency: 'USD',
+    });
+  });
 });
