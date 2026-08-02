@@ -321,7 +321,37 @@ export class MetaAdsService {
       ctr: this.toNumber(row.ctr),
       cpc: this.toNumber(row.cpc),
       cpm: this.toNumber(row.cpm),
+      actions: this.mapActionBreakdown(row.actions),
+      actionValues: this.mapActionBreakdown(row.action_values),
+      purchaseRoas: this.mapActionBreakdown(row.purchase_roas),
     };
+  }
+
+  private mapActionBreakdown(value: unknown) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.slice(0, 100).flatMap((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        return [];
+      }
+      const record = item as Record<string, unknown>;
+      const actionType = String(record.action_type ?? record.actionType ?? '')
+        .normalize('NFKC')
+        .replace(/[\u0000-\u001f\u007f]/g, '')
+        .trim()
+        .slice(0, 100);
+      const numericValue = Number(record.value);
+      if (!actionType || !Number.isFinite(numericValue) || numericValue < 0) {
+        return [];
+      }
+      return [
+        {
+          action_type: actionType,
+          value: numericValue,
+        },
+      ];
+    });
   }
 
   private buildExpenseDescription(

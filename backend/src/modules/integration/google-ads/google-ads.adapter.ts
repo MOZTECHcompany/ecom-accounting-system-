@@ -32,6 +32,7 @@ export type GoogleAdsInsight = {
   impressions?: string | number | null;
   clicks?: string | number | null;
   conversions?: string | number | null;
+  conversionsValue?: string | number | null;
   rawAccount?: GoogleAdsAccountConfig | null;
 };
 
@@ -61,6 +62,7 @@ type GoogleAdsSearchResponse = {
       impressions?: string | number;
       clicks?: string | number;
       conversions?: string | number;
+      conversionsValue?: string | number;
     };
   }>;
   nextPageToken?: string;
@@ -234,6 +236,7 @@ export class GoogleAdsAdapter {
             impressions: row.metrics?.impressions || 0,
             clicks: row.metrics?.clicks || 0,
             conversions: row.metrics?.conversions || 0,
+            conversionsValue: row.metrics?.conversionsValue || 0,
             rawAccount: account,
           })),
         );
@@ -536,6 +539,7 @@ export class GoogleAdsAdapter {
       'metrics.impressions',
       'metrics.clicks',
       'metrics.conversions',
+      'metrics.conversions_value',
     ]
       .filter(Boolean)
       .join(', ');

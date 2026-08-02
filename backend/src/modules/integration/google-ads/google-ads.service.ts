@@ -355,6 +355,7 @@ export class GoogleAdsService {
       impressions: this.toNumber(row.impressions),
       clicks: this.toNumber(row.clicks),
       conversions: this.toNumber(row.conversions),
+      conversionsValue: this.toNumber(row.conversionsValue),
     };
   }
 
