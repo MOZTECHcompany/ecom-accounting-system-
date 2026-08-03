@@ -10,12 +10,23 @@ import {
   normalizeConfiguredAdsCurrency,
   resolveAdsCurrency,
 } from '../ads-currency';
+import {
+  AdsBrandMappingResolution,
+  resolveConfiguredAdsBrandMapping,
+  summarizeAdsBrandMappingCoverage,
+} from '../ads-brand-mapping';
 
 export type GoogleAdsAccountConfig = {
   customerId: string;
   name?: string;
   brand?: string;
   reportBrand?: string;
+  brandMode?: 'single' | 'portfolio';
+  allowedBrands?: string[];
+  campaignBrandMappings?: Array<{
+    campaignId: string;
+    brand: string;
+  }>;
   platform?: string;
   market?: string;
   businessUnit?: string;
@@ -42,6 +53,7 @@ export type GoogleAdsInsight = {
   conversions?: string | number | null;
   conversionsValue?: string | number | null;
   rawAccount?: GoogleAdsAccountConfig | null;
+  brandMapping?: AdsBrandMappingResolution;
 };
 
 type GoogleAdsSearchResponse = {
@@ -117,6 +129,7 @@ export class GoogleAdsAdapter {
 
   getConnectionInfo() {
     const configuredAccounts = this.getConfiguredAccounts();
+    const campaignBrandRegistry = this.getCampaignBrandRegistry();
     const refreshTokenEnvs = [
       ...new Set(
         configuredAccounts.map(
@@ -126,6 +139,27 @@ export class GoogleAdsAdapter {
     ];
     const missingRefreshTokenEnvs = refreshTokenEnvs.filter(
       (refreshTokenEnv) => !this.getRefreshToken(refreshTokenEnv),
+    );
+    const brandMappingCoverage = summarizeAdsBrandMappingCoverage(
+      configuredAccounts.flatMap((account) =>
+        account.brandMode === 'portfolio' &&
+        account.campaignBrandMappings?.length
+          ? account.campaignBrandMappings.map((campaign) =>
+              resolveConfiguredAdsBrandMapping(
+                'google',
+                this.normalizeCustomerId(account.customerId),
+                account,
+                campaign.campaignId,
+              ),
+            )
+          : [
+              resolveConfiguredAdsBrandMapping(
+                'google',
+                this.normalizeCustomerId(account.customerId),
+                account,
+              ),
+            ],
+      ),
     );
 
     return {
@@ -143,6 +177,9 @@ export class GoogleAdsAdapter {
         name: account.name || null,
         brand: account.brand || null,
         reportBrand: account.reportBrand || null,
+        brandMode: account.brandMode || 'single',
+        allowedBrands: account.allowedBrands || [],
+        campaignBrandMappings: account.campaignBrandMappings || [],
         platform: account.platform || null,
         market: account.market || null,
         businessUnit: account.businessUnit || null,
@@ -155,6 +192,9 @@ export class GoogleAdsAdapter {
           this.normalizeCustomerId(account.loginCustomerId || '') || null,
         refreshTokenEnv: account.refreshTokenEnv || 'GOOGLE_ADS_REFRESH_TOKEN',
       })),
+      brandMappingCoverage,
+      campaignBrandRegistryConfigured: campaignBrandRegistry.length > 0,
+      campaignBrandRegistryCount: campaignBrandRegistry.length,
       loginCustomerId: this.normalizeCustomerId(
         this.config.get<string>('GOOGLE_ADS_LOGIN_CUSTOMER_ID', '') || '',
       ),
@@ -180,28 +220,35 @@ export class GoogleAdsAdapter {
             : null;
         const items = Array.isArray(parsed) ? parsed : parsedRecord?.accounts;
         if (Array.isArray(items)) {
-          return items
-            .map((item) => this.normalizeAccountConfig(item))
-            .filter((item): item is GoogleAdsAccountConfig => Boolean(item));
+          return this.applyCampaignBrandRegistry(
+            items
+              .map((item) => this.normalizeAccountConfig(item))
+              .filter((item): item is GoogleAdsAccountConfig => Boolean(item)),
+          );
         }
-      } catch {
+      } catch (error: unknown) {
+        if (error instanceof BadRequestException) {
+          throw error;
+        }
         throw new BadRequestException(
           'GOOGLE_ADS_ACCOUNTS_JSON is not valid JSON',
         );
       }
     }
 
-    return (
-      this.config.get<string>('GOOGLE_ADS_CUSTOMER_IDS', '') ||
-      this.config.get<string>('GOOGLE_ADS_CUSTOMER_ID', '') ||
-      ''
-    )
-      .split(',')
-      .map((value) => value.trim())
-      .filter(Boolean)
-      .map((customerId) => ({
-        customerId: this.normalizeCustomerId(customerId),
-      }));
+    return this.applyCampaignBrandRegistry(
+      (
+        this.config.get<string>('GOOGLE_ADS_CUSTOMER_IDS', '') ||
+        this.config.get<string>('GOOGLE_ADS_CUSTOMER_ID', '') ||
+        ''
+      )
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .map((customerId) => ({
+          customerId: this.normalizeCustomerId(customerId),
+        })),
+    );
   }
 
   async fetchInsights(params: {
@@ -212,6 +259,13 @@ export class GoogleAdsAdapter {
     pageSize?: string | number;
     maxPages?: string | number;
   }) {
+    const configuredAccounts = this.getConfiguredAccounts();
+    const configuredById = new Map(
+      configuredAccounts.map((account) => [
+        this.normalizeCustomerId(account.customerId),
+        account,
+      ]),
+    );
     const accounts = await this.expandManagerAccounts(
       this.resolveAccounts(params.customerIds),
     );
@@ -244,6 +298,27 @@ export class GoogleAdsAdapter {
               configuredCurrency: account.currency,
               configuredCurrencySource: account.currencySource,
             });
+            const configuredAccount = configuredById.get(customerId);
+            const rawAccount: GoogleAdsAccountConfig = {
+              ...account,
+              customerId,
+              name:
+                configuredAccount?.name ||
+                row.customer?.descriptiveName ||
+                account.name,
+              brand: configuredAccount?.brand,
+              reportBrand: configuredAccount?.reportBrand,
+              brandMode: configuredAccount?.brandMode,
+              allowedBrands: configuredAccount?.allowedBrands,
+              campaignBrandMappings: configuredAccount?.campaignBrandMappings,
+              platform: configuredAccount?.platform,
+              market: configuredAccount?.market,
+              businessUnit: configuredAccount?.businessUnit,
+              channelCode: configuredAccount?.channelCode,
+              entityId: configuredAccount?.entityId,
+              currency: currency.currency,
+              currencySource: currency.currencySource,
+            };
             return {
               currency: currency.currency,
               currencySource: currency.currencySource,
@@ -258,11 +333,13 @@ export class GoogleAdsAdapter {
               clicks: row.metrics?.clicks || 0,
               conversions: row.metrics?.conversions || 0,
               conversionsValue: row.metrics?.conversionsValue || 0,
-              rawAccount: {
-                ...account,
-                currency: currency.currency,
-                currencySource: currency.currencySource,
-              },
+              rawAccount,
+              brandMapping: resolveConfiguredAdsBrandMapping(
+                'google',
+                customerId,
+                configuredAccount,
+                row.campaign?.id,
+              ),
             };
           }),
         );
@@ -676,6 +753,15 @@ export class GoogleAdsAdapter {
       reportBrand: this.optionalString(
         item.reportBrand || item.report_brand || item.reportingBrand,
       ),
+      brandMode: this.normalizeBrandMode(item.brandMode || item.brand_mode),
+      allowedBrands: this.normalizeStringList(
+        item.allowedBrands || item.allowed_brands,
+      ),
+      campaignBrandMappings: this.normalizeCampaignBrandMappings(
+        item.campaignBrandMappings ||
+          item.campaign_brand_mappings ||
+          item.campaigns,
+      ),
       platform: this.optionalString(item.platform),
       market: this.optionalString(item.market || item.country),
       businessUnit: this.optionalString(
@@ -713,6 +799,170 @@ export class GoogleAdsAdapter {
 
   private optionalString(value: unknown) {
     return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+  }
+
+  private normalizeBrandMode(value: unknown): 'single' | 'portfolio' {
+    const normalized = this.optionalString(value)?.toLowerCase() || 'single';
+    if (
+      normalized === 'single' ||
+      normalized === 'single_brand' ||
+      normalized === 'single-brand'
+    ) {
+      return 'single';
+    }
+    if (normalized === 'portfolio') {
+      return 'portfolio';
+    }
+    throw new BadRequestException(
+      'GOOGLE_ADS_ACCOUNTS_JSON brandMode must be single (single_brand alias accepted) or portfolio',
+    );
+  }
+
+  private normalizeStringList(value: unknown): string[] | undefined {
+    if (!Array.isArray(value)) {
+      return undefined;
+    }
+    const values = [
+      ...new Set(
+        value
+          .map((item) => this.optionalString(item))
+          .filter((item): item is string => Boolean(item)),
+      ),
+    ];
+    return values.length ? values : undefined;
+  }
+
+  private normalizeCampaignBrandMappings(
+    value: unknown,
+  ): Array<{ campaignId: string; brand: string }> | undefined {
+    if (!Array.isArray(value)) {
+      return undefined;
+    }
+    const mappings = value.flatMap((item) => {
+      if (!item || typeof item !== 'object') {
+        return [];
+      }
+      const record = item as Record<string, unknown>;
+      const campaignId = this.optionalString(
+        record.campaignId || record.campaign_id || record.id,
+      );
+      const brand = this.optionalString(
+        record.reportBrand || record.report_brand || record.brand,
+      );
+      return campaignId && brand ? [{ campaignId, brand }] : [];
+    });
+    const uniqueMappings = new Map<string, string>();
+    for (const mapping of mappings) {
+      const existing = uniqueMappings.get(mapping.campaignId);
+      if (existing && existing !== mapping.brand) {
+        throw new BadRequestException(
+          `GOOGLE_ADS_ACCOUNTS_JSON has conflicting brands for campaign ${mapping.campaignId}`,
+        );
+      }
+      uniqueMappings.set(mapping.campaignId, mapping.brand);
+    }
+    return uniqueMappings.size
+      ? [...uniqueMappings].map(([campaignId, brand]) => ({
+          campaignId,
+          brand,
+        }))
+      : undefined;
+  }
+
+  private applyCampaignBrandRegistry(
+    accounts: GoogleAdsAccountConfig[],
+  ): GoogleAdsAccountConfig[] {
+    const registry = this.getCampaignBrandRegistry();
+    if (!registry.length) {
+      return accounts;
+    }
+    return accounts.map((account) => {
+      const customerId = this.normalizeCustomerId(account.customerId);
+      const registryMappings = registry
+        .filter((item) => item.customerId === customerId)
+        .map(({ campaignId, brand }) => ({ campaignId, brand }));
+      if (!registryMappings.length) {
+        return account;
+      }
+      const mappings = new Map(
+        (account.campaignBrandMappings || []).map((item) => [
+          item.campaignId,
+          item,
+        ]),
+      );
+      for (const mapping of registryMappings) {
+        const existing = mappings.get(mapping.campaignId);
+        if (existing && existing.brand !== mapping.brand) {
+          throw new BadRequestException(
+            `Google Ads campaign brand mapping conflict for ${customerId}:${mapping.campaignId}: ${existing.brand} / ${mapping.brand}`,
+          );
+        }
+        mappings.set(mapping.campaignId, mapping);
+      }
+      return {
+        ...account,
+        campaignBrandMappings: [...mappings.values()],
+      };
+    });
+  }
+
+  private getCampaignBrandRegistry() {
+    const raw = (
+      this.config.get<string>('GOOGLE_ADS_CAMPAIGN_BRANDS_JSON', '') || ''
+    ).trim();
+    if (!raw) {
+      return [] as Array<{
+        customerId: string;
+        campaignId: string;
+        brand: string;
+      }>;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      const items = Array.isArray(parsed) ? parsed : parsed?.campaigns;
+      if (!Array.isArray(items)) {
+        throw new Error('expected an array or campaigns array');
+      }
+      const entries = items.flatMap((item) => {
+        if (!item || typeof item !== 'object') {
+          return [];
+        }
+        const record = item as Record<string, unknown>;
+        const customerId = this.normalizeCustomerId(
+          this.optionalString(
+            record.customerId || record.customer_id || record.accountId,
+          ) || '',
+        );
+        const campaignId = this.optionalString(
+          record.campaignId || record.campaign_id || record.id,
+        );
+        const brand = this.optionalString(
+          record.reportBrand || record.report_brand || record.brand,
+        );
+        return customerId && campaignId && brand
+          ? [{ customerId, campaignId, brand }]
+          : [];
+      });
+      const uniqueEntries = new Map<string, (typeof entries)[number]>();
+      for (const entry of entries) {
+        const key = `${entry.customerId}:${entry.campaignId}`;
+        const existing = uniqueEntries.get(key);
+        if (existing && existing.brand !== entry.brand) {
+          throw new BadRequestException(
+            `GOOGLE_ADS_CAMPAIGN_BRANDS_JSON has conflicting brands for ${key}`,
+          );
+        }
+        uniqueEntries.set(key, entry);
+      }
+      return [...uniqueEntries.values()];
+    } catch (error: unknown) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException(
+        'GOOGLE_ADS_CAMPAIGN_BRANDS_JSON is not valid JSON',
+      );
+    }
   }
 
   private formatDate(date: Date) {

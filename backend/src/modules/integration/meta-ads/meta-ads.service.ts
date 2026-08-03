@@ -7,7 +7,18 @@ import {
   requireCanonicalAdsCurrency,
   summarizeAdsSpend,
 } from '../ads-currency';
-import { MetaAdsAdapter, MetaAdsInsight } from './meta-ads.adapter';
+import {
+  AdsBrandMappingResolution,
+  resolveConfiguredAdsBrandMapping,
+  summarizeAdsBrandMappingCoverage,
+} from '../ads-brand-mapping';
+import {
+  MetaAdsAccountConfig,
+  MetaAdsAdAccount,
+  MetaAdsAdapter,
+  MetaAdsBusinessMetadataAccess,
+  MetaAdsInsight,
+} from './meta-ads.adapter';
 
 const META_ADS_SOURCE_MODULE = 'meta_ads';
 const DEFAULT_ENTITY_ID = 'tw-entity-001';
@@ -29,18 +40,33 @@ export class MetaAdsService {
     const info = this.adapter.getConnectionInfo();
     const missing: string[] = [];
     if (!info.tokenConfigured) missing.push('META_ADS_ACCESS_TOKEN');
+    if (!info.configuredAccounts.length) {
+      missing.push('META_ADS_ACCOUNTS_JSON');
+    }
 
     let accountProbe: {
       success: boolean;
       count: number;
       message?: string;
+      businessMetadataAccess?: MetaAdsBusinessMetadataAccess;
     } | null = null;
+    let insightProbe: {
+      success: boolean;
+      count: number;
+      message?: string;
+    } | null = null;
+    let accessibleAccountRows: MetaAdsAdAccount[] = [];
+    let insightRows: MetaAdsInsight[] = [];
     if (info.tokenConfigured) {
       try {
-        const accounts = await this.adapter.fetchAdAccounts({ limit: 25 });
+        const result = await this.adapter.fetchAdAccountsWithDiagnostics({
+          limit: 25,
+        });
+        accessibleAccountRows = result.accounts;
         accountProbe = {
           success: true,
-          count: accounts.length,
+          count: result.accounts.length,
+          businessMetadataAccess: result.businessMetadataAccess,
         };
       } catch (error: any) {
         accountProbe = {
@@ -49,26 +75,94 @@ export class MetaAdsService {
           message: error?.message || 'Meta ad account probe failed',
         };
       }
+      try {
+        const { since, until } = this.resolveRange(undefined, undefined);
+        insightRows = await this.adapter.fetchInsights({
+          since,
+          until,
+          level: 'campaign',
+        });
+        insightProbe = {
+          success: true,
+          count: insightRows.length,
+        };
+      } catch (error: unknown) {
+        insightProbe = {
+          success: false,
+          count: 0,
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Meta campaign insight probe failed',
+        };
+      }
     }
 
     const configuredAccountCount = info.configuredAccounts.length;
     const readableAccountCount = accountProbe?.success ? accountProbe.count : 0;
-    const readyForInsights =
-      missing.length === 0 &&
-      (configuredAccountCount > 0 || readableAccountCount > 0);
+    const probeSucceeded = insightProbe?.success === true;
+    const configuredAccountChecks = this.buildConfiguredAccountChecks(
+      info.configuredAccounts,
+      insightRows,
+      probeSucceeded,
+    );
+    const allConfiguredAccountsChecked =
+      probeSucceeded &&
+      configuredAccountChecks.length === configuredAccountCount &&
+      configuredAccountCount > 0 &&
+      configuredAccountChecks.every(
+        (account) => account.status !== 'unchecked',
+      );
+    const unexpectedAccountRefs = this.unexpectedInsightAccountRefs(
+      info.configuredAccounts,
+      insightRows,
+    );
+    const unconfiguredAccessibleAccounts =
+      this.buildUnconfiguredAccessibleAccounts(
+        info.configuredAccounts,
+        accessibleAccountRows,
+      );
+    const brandMappingCoverage = this.buildReadinessBrandMappingCoverage(
+      info.configuredAccounts,
+      insightRows,
+      probeSucceeded,
+    );
+    const transportReady = missing.length === 0 && allConfiguredAccountsChecked;
+    const readyForAnalysis =
+      transportReady &&
+      unexpectedAccountRefs.length === 0 &&
+      brandMappingCoverage.complete;
+    const degradedDiagnostics = [
+      accountProbe?.businessMetadataAccess?.status === 'degraded'
+        ? accountProbe.businessMetadataAccess.diagnostic
+        : null,
+    ].filter((value): value is string => Boolean(value));
 
     return {
-      ready: readyForInsights,
+      ready: readyForAnalysis,
+      transportReady,
+      readyForAnalysis,
+      releaseReady: readyForAnalysis,
       tokenConfigured: info.tokenConfigured,
       missing,
       apiVersion: info.apiVersion,
       configuredAccountCount,
       readableAccountCount,
       accountProbe,
+      insightProbe,
+      configuredAccountChecks,
+      allConfiguredAccountsChecked,
+      unexpectedAccountRefs,
+      unconfiguredAccessibleAccounts,
       configuredAccounts: info.configuredAccounts,
-      nextAction: readyForInsights
+      brandMappingCoverage,
+      degraded: degradedDiagnostics.length > 0,
+      degradedDiagnostics,
+      nextAction: readyForAnalysis
         ? '可先用 /integrations/meta-ads/insights 預覽 spend，再用 /integrations/meta-ads/sync 寫入 Expense。'
-        : '請確認 Meta token 具備 ads_read，並提供 META_ADS_ACCOUNT_IDS 或 META_ADS_ACCOUNTS_JSON 帳戶 mapping。',
+        : transportReady
+          ? '連線可用，但必須在 META_ADS_ACCOUNTS_JSON 為每個分析帳號設定明確的 reportBrand 或 brand；未完成前只會列入「待對應」。'
+          : '請確認 Meta token 具備 ads_read，並提供 META_ADS_ACCOUNT_IDS 或 META_ADS_ACCOUNTS_JSON 帳戶 mapping。',
     };
   }
 
@@ -112,6 +206,9 @@ export class MetaAdsService {
       (row) => this.toNumber(row.spend),
       'Meta Ads preview',
     );
+    const brandMappingCoverage = summarizeAdsBrandMappingCoverage(
+      rows.map((row) => this.resolveRowBrandMapping(row)),
+    );
 
     return {
       success: true,
@@ -122,6 +219,8 @@ export class MetaAdsService {
       level: params.level || 'account',
       count: rows.length,
       ...spendSummary,
+      brandMappingCoverage,
+      releaseReady: brandMappingCoverage.complete,
       sample: rows
         .slice(0, Math.min(Number(params.limit || 20), 500))
         .map((row) => this.mapInsightPreview(row)),
@@ -145,7 +244,7 @@ export class MetaAdsService {
       since,
       until,
       accountIds: params.accountIds,
-      level: 'account',
+      level: 'campaign',
       maxPages: params.maxPages,
     });
     const syncableRows = rows.filter(
@@ -153,12 +252,37 @@ export class MetaAdsService {
     );
     let created = 0;
     let updated = 0;
+    const brandMappingCoverage = summarizeAdsBrandMappingCoverage(
+      syncableRows.map((row) => this.resolveRowBrandMapping(row)),
+    );
 
     for (const row of syncableRows) {
       const result = await this.upsertExpense(entityId, row);
       if (result === 'created') created += 1;
       if (result === 'updated') updated += 1;
     }
+    const legacySourceIds = [
+      ...new Set(
+        syncableRows.flatMap((row) => {
+          const date = row.date_start || row.date_stop;
+          const accountId = this.adapter.normalizeAccountId(
+            row.rawAccount?.accountId || row.account_id || '',
+          );
+          return accountId && date ? [`${accountId}:${date}`] : [];
+        }),
+      ),
+    ];
+    const legacyCleanup = legacySourceIds.length
+      ? await this.prisma.expense.deleteMany({
+          where: {
+            entityId,
+            sourceModule: META_ADS_SOURCE_MODULE,
+            sourceId: {
+              in: legacySourceIds,
+            },
+          },
+        })
+      : { count: 0 };
 
     return {
       success: true,
@@ -171,7 +295,10 @@ export class MetaAdsService {
       synced: syncableRows.length,
       created,
       updated,
+      deletedLegacyAggregates: legacyCleanup.count,
       skippedZeroSpend: rows.length - syncableRows.length,
+      brandMappingCoverage,
+      releaseReady: brandMappingCoverage.complete,
       expenseSourceModule: META_ADS_SOURCE_MODULE,
       dashboardEffect:
         'CEO Dashboard management summary already counts Expense rows whose description/account indicates Meta advertising spend.',
@@ -224,7 +351,8 @@ export class MetaAdsService {
       row.currency,
       `Meta Ads sync account ${accountId}`,
     );
-    const sourceId = `${accountId}:${date}`;
+    const campaignId = String(row.campaign_id || '').trim() || 'unattributed';
+    const sourceId = `${accountId}:${campaignId}:${date}`;
     const description = this.buildExpenseDescription(row, accountId, date);
     const itemDescription = this.buildExpenseItemDescription(row, accountId);
     const existing = await this.prisma.expense.findFirst({
@@ -310,15 +438,23 @@ export class MetaAdsService {
       row.currency,
       'Meta Ads preview row',
     );
+    const accountId = this.adapter.normalizeAccountId(
+      row.rawAccount?.accountId || row.account_id || '',
+    );
+    const brandMapping = this.resolveRowBrandMapping(row);
     return {
-      accountId: this.adapter.normalizeAccountId(
-        row.rawAccount?.accountId || row.account_id || '',
-      ),
+      accountId,
       accountName: row.account_name || row.rawAccount?.name || null,
       campaignId: row.campaign_id || null,
       campaignName: row.campaign_name || null,
       brand: row.rawAccount?.brand || null,
       reportBrand: row.rawAccount?.reportBrand || null,
+      brandMode: row.rawAccount?.brandMode || 'single',
+      allowedBrands: row.rawAccount?.allowedBrands || [],
+      resolvedBrand: brandMapping.resolvedBrand,
+      mappingStatus: brandMapping.mappingStatus,
+      mappingSource: brandMapping.mappingSource,
+      diagnostic: brandMapping.diagnostic,
       platform: row.rawAccount?.platform || null,
       market: row.rawAccount?.market || null,
       businessUnit: row.rawAccount?.businessUnit || null,
@@ -371,6 +507,7 @@ export class MetaAdsService {
     accountId: string,
     date: string,
   ) {
+    const brandMapping = this.resolveRowBrandMapping(row);
     const parts = [
       'Meta Ads 廣告費',
       row.account_name || row.rawAccount?.name || accountId,
@@ -378,6 +515,10 @@ export class MetaAdsService {
       row.rawAccount?.reportBrand
         ? `reportBrand=${row.rawAccount.reportBrand}`
         : null,
+      `resolvedBrand=${brandMapping.resolvedBrand}`,
+      `mappingStatus=${brandMapping.mappingStatus}`,
+      row.campaign_id ? `campaignId=${row.campaign_id}` : null,
+      row.campaign_name ? `campaignName=${row.campaign_name}` : null,
       row.rawAccount?.platform ? `platform=${row.rawAccount.platform}` : null,
       row.rawAccount?.market ? `market=${row.rawAccount.market}` : null,
       row.rawAccount?.businessUnit
@@ -392,6 +533,7 @@ export class MetaAdsService {
   }
 
   private buildExpenseItemDescription(row: MetaAdsInsight, accountId: string) {
+    const brandMapping = this.resolveRowBrandMapping(row);
     const parts = [
       'Meta Ads spend',
       `account=${accountId}`,
@@ -400,6 +542,10 @@ export class MetaAdsService {
       row.rawAccount?.reportBrand
         ? `reportBrand=${row.rawAccount.reportBrand}`
         : null,
+      `resolvedBrand=${brandMapping.resolvedBrand}`,
+      `mappingStatus=${brandMapping.mappingStatus}`,
+      row.campaign_id ? `campaignId=${row.campaign_id}` : null,
+      row.campaign_name ? `campaignName=${row.campaign_name}` : null,
       row.rawAccount?.platform ? `platform=${row.rawAccount.platform}` : null,
       row.rawAccount?.market ? `market=${row.rawAccount.market}` : null,
       row.rawAccount?.businessUnit
@@ -412,6 +558,181 @@ export class MetaAdsService {
       row.clicks ? `clicks=${row.clicks}` : null,
     ].filter(Boolean);
     return parts.join('; ');
+  }
+
+  private resolveRowBrandMapping(
+    row: MetaAdsInsight,
+  ): AdsBrandMappingResolution {
+    if (row.brandMapping) {
+      return row.brandMapping;
+    }
+    const accountId = this.adapter.normalizeAccountId(
+      row.rawAccount?.accountId || row.account_id || '',
+    );
+    return resolveConfiguredAdsBrandMapping(
+      'meta',
+      accountId,
+      row.rawAccount,
+      row.campaign_id,
+    );
+  }
+
+  private buildConfiguredAccountChecks(
+    configuredAccounts: MetaAdsAccountConfig[],
+    rows: MetaAdsInsight[],
+    probeSucceeded: boolean,
+  ) {
+    const rowCounts = new Map<string, number>();
+    for (const row of rows) {
+      const accountRef = this.adapter.normalizeAccountId(
+        row.rawAccount?.accountId || row.account_id || '',
+      );
+      if (accountRef) {
+        rowCounts.set(accountRef, (rowCounts.get(accountRef) || 0) + 1);
+      }
+    }
+    return configuredAccounts.map((account) => {
+      const accountRef = this.adapter.normalizeAccountId(account.accountId);
+      const rowCount = rowCounts.get(accountRef) || 0;
+      return {
+        accountRef,
+        accountName: account.name || null,
+        status: probeSucceeded
+          ? rowCount > 0
+            ? ('rows_available' as const)
+            : ('checked_no_spend' as const)
+          : ('unchecked' as const),
+        rowCount,
+      };
+    });
+  }
+
+  private unexpectedInsightAccountRefs(
+    configuredAccounts: MetaAdsAccountConfig[],
+    rows: MetaAdsInsight[],
+  ) {
+    const configuredRefs = new Set(
+      configuredAccounts.map((account) =>
+        this.adapter.normalizeAccountId(account.accountId),
+      ),
+    );
+    return [
+      ...new Set(
+        rows
+          .map((row) =>
+            this.adapter.normalizeAccountId(
+              row.rawAccount?.accountId || row.account_id || '',
+            ),
+          )
+          .filter(
+            (accountRef) => accountRef && !configuredRefs.has(accountRef),
+          ),
+      ),
+    ].sort();
+  }
+
+  private buildUnconfiguredAccessibleAccounts(
+    configuredAccounts: MetaAdsAccountConfig[],
+    accessibleAccounts: MetaAdsAdAccount[],
+  ) {
+    const configuredRefs = new Set(
+      configuredAccounts.map((account) =>
+        this.adapter.normalizeAccountId(account.accountId),
+      ),
+    );
+    const unconfiguredAccounts = new Map<
+      string,
+      {
+        accountId: string;
+        name: string | null;
+        currency: string | null;
+      }
+    >();
+    for (const account of accessibleAccounts) {
+      const rawAccountId = account.id || account.account_id || '';
+      const accountId = this.adapter.normalizeAccountId(rawAccountId);
+      if (!accountId || configuredRefs.has(accountId)) {
+        continue;
+      }
+      unconfiguredAccounts.set(accountId, {
+        accountId,
+        name: account.name || null,
+        currency: account.currency || null,
+      });
+    }
+    return [...unconfiguredAccounts.values()].sort((left, right) =>
+      left.accountId.localeCompare(right.accountId),
+    );
+  }
+
+  private buildReadinessBrandMappingCoverage(
+    configuredAccounts: MetaAdsAccountConfig[],
+    rows: MetaAdsInsight[],
+    probeSucceeded: boolean,
+  ) {
+    const rowsByAccount = new Map<string, MetaAdsInsight[]>();
+    for (const row of rows) {
+      const accountRef = this.adapter.normalizeAccountId(
+        row.rawAccount?.accountId || row.account_id || '',
+      );
+      const existing = rowsByAccount.get(accountRef) || [];
+      existing.push(row);
+      rowsByAccount.set(accountRef, existing);
+    }
+    const configuredRefs = new Set<string>();
+    const dormantPortfolioAccountRefs: string[] = [];
+    const resolutions = configuredAccounts.flatMap((account) => {
+      const accountRef = this.adapter.normalizeAccountId(account.accountId);
+      configuredRefs.add(accountRef);
+      const accountRows = rowsByAccount.get(accountRef) || [];
+      if (probeSucceeded && accountRows.length > 0) {
+        return accountRows.map((row) => this.resolveRowBrandMapping(row));
+      }
+      if (
+        probeSucceeded &&
+        accountRows.length === 0 &&
+        account.brandMode === 'portfolio' &&
+        account.allowedBrands?.length &&
+        !account.campaignBrandMappings?.length
+      ) {
+        dormantPortfolioAccountRefs.push(accountRef);
+        return [];
+      }
+      if (
+        account.brandMode === 'portfolio' &&
+        account.campaignBrandMappings?.length
+      ) {
+        return account.campaignBrandMappings.map((campaign) =>
+          resolveConfiguredAdsBrandMapping(
+            'meta',
+            accountRef,
+            account,
+            campaign.campaignId,
+          ),
+        );
+      }
+      return [resolveConfiguredAdsBrandMapping('meta', accountRef, account)];
+    });
+    if (probeSucceeded) {
+      resolutions.push(
+        ...rows
+          .filter((row) => {
+            const accountRef = this.adapter.normalizeAccountId(
+              row.rawAccount?.accountId || row.account_id || '',
+            );
+            return !configuredRefs.has(accountRef);
+          })
+          .map((row) => this.resolveRowBrandMapping(row)),
+      );
+    }
+    const coverage = summarizeAdsBrandMappingCoverage(resolutions);
+    return {
+      ...coverage,
+      complete:
+        coverage.unmappedAccounts === 0 &&
+        (coverage.totalAccounts > 0 || dormantPortfolioAccountRefs.length > 0),
+      dormantPortfolioAccountRefs: dormantPortfolioAccountRefs.sort(),
+    };
   }
 
   private toNumber(value: unknown) {

@@ -1,0 +1,6 @@
+title: LUNA Ads Dashboard Object Read Create
+description: Read and create immutable dashboard objects without list, update, delete, or IAM permissions.
+stage: GA
+includedPermissions:
+  - storage.objects.create
+  - storage.objects.get
