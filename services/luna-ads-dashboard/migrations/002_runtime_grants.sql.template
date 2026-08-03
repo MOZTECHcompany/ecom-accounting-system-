@@ -1,0 +1,11 @@
+-- Run as the table owner after replacing dashboard_runtime with the dedicated
+-- Cloud SQL login role used only by the LUNA Ads Dashboard Cloud Run service.
+--
+-- The runtime cannot ALTER/DELETE records or update immutable publication
+-- identity, hash, object, creator, or expiry fields.
+
+GRANT USAGE ON SCHEMA public TO dashboard_runtime;
+GRANT SELECT, INSERT ON TABLE luna_ads_dashboard_publications TO dashboard_runtime;
+GRANT UPDATE (revoked_at, revoked_by)
+  ON TABLE luna_ads_dashboard_publications
+  TO dashboard_runtime;

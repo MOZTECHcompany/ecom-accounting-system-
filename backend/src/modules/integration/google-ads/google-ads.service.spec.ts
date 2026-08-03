@@ -41,6 +41,8 @@ describe('GoogleAdsService reporting preview', () => {
     expect(result.sample[0]).toMatchObject({
       currency: 'TWD',
       currencySource: 'platform',
+      resolvedBrand: 'MOZTECH',
+      mappingStatus: 'mapped',
       spend: 250,
       conversions: 12,
       conversionsValue: 9876.5,
@@ -48,6 +50,12 @@ describe('GoogleAdsService reporting preview', () => {
     expect(result.spendTotalsByCurrency).toEqual({ TWD: 250 });
     expect(result.spendTotal).toBe(250);
     expect(result.spendTotalCurrency).toBe('TWD');
+    expect(result.brandMappingCoverage).toMatchObject({
+      complete: true,
+      totalAccounts: 1,
+      mappedAccounts: 1,
+      unmappedAccounts: 0,
+    });
   });
 
   it('returns the requested managed-report rows beyond the old 50-row preview cap', async () => {
@@ -185,10 +193,12 @@ describe('GoogleAdsService reporting preview', () => {
           {
             customerId: '1234567890',
             refreshTokenEnv: 'GOOGLE_ADS_REFRESH_TOKEN',
+            reportBrand: 'MOZTECH',
           },
           {
             customerId: '9876543210',
             refreshTokenEnv: 'GOOGLE_ADS_REFRESH_TOKEN',
+            reportBrand: 'BONSON',
           },
         ],
         apiVersion: 'v21',
@@ -196,7 +206,7 @@ describe('GoogleAdsService reporting preview', () => {
       }),
       listAccessibleCustomers: jest
         .fn()
-        .mockResolvedValue(['1234567890', '9876543210']),
+        .mockResolvedValue(['1111111111', '6171193760']),
       fetchInsights: jest.fn().mockResolvedValue([
         {
           customerId: '1234567890',
@@ -204,6 +214,10 @@ describe('GoogleAdsService reporting preview', () => {
           costMicros: '100000000',
           currency: 'TWD',
           currencySource: 'platform',
+          rawAccount: {
+            customerId: '1234567890',
+            reportBrand: 'MOZTECH',
+          },
         },
         {
           customerId: '9876543210',
@@ -211,6 +225,10 @@ describe('GoogleAdsService reporting preview', () => {
           costMicros: '20000000',
           currency: 'USD',
           currencySource: 'platform',
+          rawAccount: {
+            customerId: '9876543210',
+            reportBrand: 'BONSON',
+          },
         },
       ]),
     } as unknown as GoogleAdsAdapter;
@@ -221,11 +239,319 @@ describe('GoogleAdsService reporting preview', () => {
     const result = await service.getReadiness();
 
     expect(result.ready).toBe(true);
+    expect(result.accessibleCustomers).toEqual(['1111111111', '6171193760']);
+    expect(result.unconfiguredAccessibleAccounts).toEqual([
+      {
+        customerId: '1111111111',
+        name: null,
+        currency: null,
+        credentialSources: ['GOOGLE_ADS_REFRESH_TOKEN'],
+      },
+      {
+        customerId: '6171193760',
+        name: null,
+        currency: null,
+        credentialSources: ['GOOGLE_ADS_REFRESH_TOKEN'],
+      },
+    ]);
+    expect(result.inaccessibleConfiguredAccounts).toEqual([]);
+    expect(result.unverifiedConfiguredAccounts).toEqual([]);
+    expect(result.configuredAccountChecks).toEqual([
+      expect.objectContaining({
+        accountRef: '1234567890',
+        status: 'rows_available',
+        rowCount: 1,
+      }),
+      expect.objectContaining({
+        accountRef: '9876543210',
+        status: 'rows_available',
+        rowCount: 1,
+      }),
+    ]);
+    expect(result.allConfiguredAccountsChecked).toBe(true);
     expect(result.insightProbe).toMatchObject({
       success: true,
       spendTotalsByCurrency: { TWD: 100, USD: 20 },
       spendTotal: null,
       spendTotalCurrency: null,
+    });
+    expect(result.brandMappingCoverage).toMatchObject({
+      complete: true,
+      mappedAccounts: 2,
+      unmappedAccounts: 0,
+    });
+  });
+
+  it('marks a configured Google account checked_no_spend after the full probe succeeds', async () => {
+    const adapter = {
+      getConnectionInfo: jest.fn().mockReturnValue({
+        developerTokenConfigured: true,
+        oauthConfigured: true,
+        missingRefreshTokenEnvs: [],
+        configuredAccounts: [
+          {
+            customerId: '1234567890',
+            refreshTokenEnv: 'GOOGLE_ADS_REFRESH_TOKEN',
+            reportBrand: 'MOZTECH',
+          },
+          {
+            customerId: '6171193760',
+            name: '萬魔未來工學院',
+            refreshTokenEnv: 'GOOGLE_ADS_REFRESH_TOKEN',
+            brandMode: 'portfolio',
+            allowedBrands: ['MOZTECH', 'BONSON', 'AIRITY', 'MORITEK'],
+          },
+        ],
+        apiVersion: 'v21',
+        loginCustomerId: '1111111111',
+      }),
+      listAccessibleCustomers: jest
+        .fn()
+        .mockResolvedValue(['1111111111', '6171193760']),
+      fetchInsights: jest.fn().mockResolvedValue([
+        {
+          customerId: '1234567890',
+          date: '2026-08-01',
+          costMicros: '1000000',
+          currency: 'TWD',
+          currencySource: 'platform',
+          rawAccount: {
+            customerId: '1234567890',
+            reportBrand: 'MOZTECH',
+          },
+        },
+      ]),
+    } as unknown as GoogleAdsAdapter;
+    const service = new GoogleAdsService({} as PrismaService, adapter, {
+      get: (_key: string, fallback = '') => fallback,
+    } as ConfigService);
+
+    const result = await service.getReadiness();
+
+    expect(result.releaseReady).toBe(true);
+    expect(result.allConfiguredAccountsChecked).toBe(true);
+    expect(result.configuredAccountChecks).toEqual([
+      expect.objectContaining({
+        accountRef: '1234567890',
+        status: 'rows_available',
+      }),
+      expect.objectContaining({
+        accountRef: '6171193760',
+        status: 'checked_no_spend',
+      }),
+    ]);
+    expect(result.brandMappingCoverage).toMatchObject({
+      complete: true,
+      dormantPortfolioAccountRefs: ['6171193760'],
+    });
+    expect(result.inaccessibleConfiguredAccounts).toEqual([]);
+    expect(result.unconfiguredAccessibleAccounts).toEqual([]);
+  });
+
+  it('blocks release when a portfolio account starts spending on an unmapped campaign', async () => {
+    const adapter = {
+      getConnectionInfo: jest.fn().mockReturnValue({
+        developerTokenConfigured: true,
+        oauthConfigured: true,
+        missingRefreshTokenEnvs: [],
+        configuredAccounts: [
+          {
+            customerId: '6171193760',
+            name: '萬魔未來工學院',
+            refreshTokenEnv: 'GOOGLE_ADS_REFRESH_TOKEN',
+            brandMode: 'portfolio',
+            allowedBrands: ['MOZTECH', 'BONSON', 'AIRITY', 'MORITEK'],
+          },
+        ],
+        apiVersion: 'v21',
+        loginCustomerId: null,
+      }),
+      listAccessibleCustomers: jest.fn().mockResolvedValue(['6171193760']),
+      fetchInsights: jest.fn().mockResolvedValue([
+        {
+          customerId: '6171193760',
+          campaignId: 'new-unmapped-campaign',
+          date: '2026-08-01',
+          costMicros: '1000000',
+          currency: 'TWD',
+          currencySource: 'platform',
+          rawAccount: {
+            customerId: '6171193760',
+            name: '萬魔未來工學院',
+            brandMode: 'portfolio',
+            allowedBrands: ['MOZTECH', 'BONSON', 'AIRITY', 'MORITEK'],
+          },
+        },
+      ]),
+    } as unknown as GoogleAdsAdapter;
+    const service = new GoogleAdsService({} as PrismaService, adapter, {
+      get: (_key: string, fallback = '') => fallback,
+    } as ConfigService);
+
+    const result = await service.getReadiness();
+
+    expect(result.transportReady).toBe(true);
+    expect(result.releaseReady).toBe(false);
+    expect(result.configuredAccountChecks).toEqual([
+      expect.objectContaining({
+        accountRef: '6171193760',
+        status: 'rows_available',
+      }),
+    ]);
+    expect(result.brandMappingCoverage).toMatchObject({
+      complete: false,
+      unmappedAccountRefs: ['6171193760'],
+      dormantPortfolioAccountRefs: [],
+    });
+  });
+
+  it('keeps every configured Google account unchecked when the full insight probe fails', async () => {
+    const adapter = {
+      getConnectionInfo: jest.fn().mockReturnValue({
+        developerTokenConfigured: true,
+        oauthConfigured: true,
+        missingRefreshTokenEnvs: [],
+        configuredAccounts: [
+          {
+            customerId: '1234567890',
+            refreshTokenEnv: 'GOOGLE_ADS_REFRESH_TOKEN',
+            reportBrand: 'MOZTECH',
+          },
+          {
+            customerId: '9876543210',
+            refreshTokenEnv: 'GOOGLE_ADS_REFRESH_TOKEN',
+            reportBrand: 'BONSON',
+          },
+        ],
+        apiVersion: 'v21',
+        loginCustomerId: '1111111111',
+      }),
+      listAccessibleCustomers: jest.fn().mockResolvedValue(['1111111111']),
+      fetchInsights: jest
+        .fn()
+        .mockRejectedValue(new Error('Google insight probe failed')),
+    } as unknown as GoogleAdsAdapter;
+    const service = new GoogleAdsService({} as PrismaService, adapter, {
+      get: (_key: string, fallback = '') => fallback,
+    } as ConfigService);
+
+    const result = await service.getReadiness();
+
+    expect(result.releaseReady).toBe(false);
+    expect(result.allConfiguredAccountsChecked).toBe(false);
+    expect(result.unverifiedConfiguredAccounts).toEqual([
+      '1234567890',
+      '9876543210',
+    ]);
+    expect(result.configuredAccountChecks).toEqual([
+      expect.objectContaining({
+        accountRef: '1234567890',
+        status: 'unchecked',
+      }),
+      expect.objectContaining({
+        accountRef: '9876543210',
+        status: 'unchecked',
+      }),
+    ]);
+  });
+
+  it('keeps transport readiness separate from analysis release readiness', async () => {
+    const adapter = {
+      getConnectionInfo: jest.fn().mockReturnValue({
+        developerTokenConfigured: true,
+        oauthConfigured: true,
+        missingRefreshTokenEnvs: [],
+        configuredAccounts: [
+          {
+            customerId: '1406751713',
+            refreshTokenEnv: 'GOOGLE_ADS_REFRESH_TOKEN',
+          },
+        ],
+        apiVersion: 'v21',
+        loginCustomerId: null,
+      }),
+      listAccessibleCustomers: jest.fn().mockResolvedValue(['1406751713']),
+      fetchInsights: jest.fn().mockResolvedValue([
+        {
+          customerId: '1406751713',
+          date: '2026-08-01',
+          costMicros: '1000000',
+          currency: 'TWD',
+          currencySource: 'platform',
+          rawAccount: { customerId: '1406751713' },
+        },
+      ]),
+    } as unknown as GoogleAdsAdapter;
+    const service = new GoogleAdsService({} as PrismaService, adapter, {
+      get: (_key: string, fallback = '') => fallback,
+    } as ConfigService);
+
+    const result = await service.getReadiness();
+
+    expect(result.transportReady).toBe(true);
+    expect(result.readyForAnalysis).toBe(false);
+    expect(result.releaseReady).toBe(false);
+    expect(result.brandMappingCoverage.unmappedAccountRefs).toEqual([
+      '1406751713',
+    ]);
+  });
+
+  it('syncs campaign-granular rows and removes the legacy customer/day aggregate', async () => {
+    const prisma = {
+      expense: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'expense-campaign' }),
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    } as unknown as PrismaService;
+    const adapter = {
+      fetchInsights: jest.fn().mockResolvedValue([
+        {
+          customerId: '8052579705',
+          customerName: 'MOZTECH 墨子科技',
+          campaignId: '18082231625',
+          campaignName: '動態搜尋',
+          date: '2026-08-01',
+          costMicros: '100000000',
+          currency: 'TWD',
+          currencySource: 'platform',
+          rawAccount: {
+            customerId: '8052579705',
+            name: 'MOZTECH 墨子科技',
+            reportBrand: 'MOZTECH_TW',
+            brandMode: 'single',
+          },
+        },
+      ]),
+    } as unknown as GoogleAdsAdapter;
+    const service = new GoogleAdsService(prisma, adapter, {
+      get: (_key: string, fallback = '') => fallback,
+    } as ConfigService);
+
+    const result = await service.syncInsights({
+      entityId: 'tw-entity-001',
+      since: new Date('2026-08-01T00:00:00.000Z'),
+      until: new Date('2026-08-01T23:59:59.999Z'),
+    });
+
+    expect(adapter.fetchInsights).toHaveBeenCalledWith(
+      expect.objectContaining({ level: 'campaign' }),
+    );
+    expect(
+      (prisma.expense.create as jest.Mock).mock.calls[0][0].data.sourceId,
+    ).toBe('8052579705:18082231625:2026-08-01');
+    expect(prisma.expense.deleteMany).toHaveBeenCalledWith({
+      where: {
+        entityId: 'tw-entity-001',
+        sourceModule: 'google_ads',
+        sourceId: { in: ['8052579705:2026-08-01'] },
+      },
+    });
+    expect(result).toMatchObject({
+      created: 1,
+      updated: 0,
+      deletedLegacyAggregates: 1,
+      releaseReady: true,
     });
   });
 });

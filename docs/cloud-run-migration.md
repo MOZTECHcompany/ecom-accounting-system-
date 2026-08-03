@@ -42,7 +42,16 @@ BACKEND_ENV_VARS_FILE=backend/.env.cloudrun.yaml \
 - `.github/workflows/deploy-cloudrun-frontend.yml`
   - `main` 分支有任何 push 時，自動部署 `ecom-accounting-frontend`。
 - `.github/workflows/deploy-cloudrun-backend.yml`
-  - `main` 分支有任何 push 時，自動部署 `ecom-accounting-backend`。
+  - `main` 分支有任何 push 時，先建立 `0%` traffic candidate，通過 revision、
+    image digest、Cloud Run container health、exact revision migration／DB logs、
+    公開唯讀 DB probe 與 OpenAPI HTTP contract gates 後，才把本次已驗證的確切
+    revision 切成 `100%`。
+  - Prisma migration、Meta／Google Ads connector 或廣告品牌 mapping 變更不會由
+    push 直接 stage；需先備份與確認 backward compatibility，再手動執行 workflow
+    並勾選 `approve_roll_forward_only_release`。
+  - 詳細 gate、JWT 驗收邊界與 campaign-granular 首次發布的
+    roll-forward-only 規則，見
+    [`cloud-run-backend-release-runbook.md`](./cloud-run-backend-release-runbook.md)。
 
 GitHub repo 需要設定以下 Secrets：
 
@@ -57,6 +66,21 @@ CLOUD_RUN_BACKEND_SERVICE=ecom-accounting-backend
 
 如果 GitHub Actions 卡在 `Authenticate to Google Cloud`，通常就是 `GCP_WIF_PROVIDER` 或
 `GCP_WIF_SERVICE_ACCOUNT` 沒有設定到目前 repo，或 repo 轉移組織後舊 secrets 沒跟著生效。
+
+backend workflow 也會讀取 exact candidate revision 的 startup logs，部署帳號必須有
+`logging.logEntries.list`（例如 `roles/logging.viewer`）。workflow 不會輸出 log body；
+缺少此權限時會 fail closed，不會切 production traffic。
+
+workflow 還會從 candidate revision 解析正式管理員密碼所引用的 Secret Manager
+secret，登入 candidate 後驗證 Meta、Google 與 report connector readiness。WIF
+deployer 必須只對 `ecom-accounting-super-admin-password` 具備
+`secretmanager.versions.access`；密碼與 JWT 不會寫入 log，暫存檔會在 step 結束時
+清空刪除。`CLOUD_RUN_BACKEND_SMOKE_ENTITY_ID` repository variable 可指定驗收 entity，
+未設定時使用 `tw-entity-001`。
+
+workflow 只讀確認目前 service 已有 `allUsers`／`roles/run.invoker`，不會在 candidate
+stage 加上 `--allow-unauthenticated` 或更改 production IAM；既有公開存取若被移除，
+發布會 fail closed。
 
 如果沿用舊 backend workflow 的 secret，也可以保留：
 
@@ -77,8 +101,10 @@ DEFAULT_ENTITY_ID=tw-entity-001
 
 1. GitHub Actions 用 Workload Identity 登入 GCP。
 2. Cloud Build 建立 Docker image 並推到 Artifact Registry。
-3. Cloud Run 使用該 image 建立新 revision。
-4. 前端會把 `API_URL` / `WS_URL` 寫進 Cloud Run runtime env，讓 `/config.js` 指向正確後端。
+3. backend 先以 `0%` traffic + candidate tag 建立 revision，驗證成功後才把
+   本次確切 revision 切到 `100%`；不再直接追蹤 `LATEST`。
+4. frontend 會把 `API_URL` / `WS_URL` 寫進 Cloud Run runtime env，讓
+   `/config.js` 指向正確後端。
 
 ## 後端環境變數檔範例
 可以建立 `backend/.env.cloudrun.yaml`：

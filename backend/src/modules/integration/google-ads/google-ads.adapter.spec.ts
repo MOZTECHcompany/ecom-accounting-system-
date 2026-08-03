@@ -436,4 +436,36 @@ describe('GoogleAdsAdapter credential routing', () => {
       'Google Ads account 5555555555 returned monetary metrics without a source currency',
     );
   });
+
+  it('rejects an inline and external campaign brand conflict', () => {
+    const values: Record<string, string> = {
+      GOOGLE_ADS_ACCOUNTS_JSON: JSON.stringify([
+        {
+          customerId: '8052579705',
+          brandMode: 'portfolio',
+          allowedBrands: ['MOZTECH_TW', 'AIRITY'],
+          campaignBrandMappings: [
+            {
+              campaignId: '18082231625',
+              brand: 'MOZTECH_TW',
+            },
+          ],
+        },
+      ]),
+      GOOGLE_ADS_CAMPAIGN_BRANDS_JSON: JSON.stringify([
+        {
+          customerId: '8052579705',
+          campaignId: '18082231625',
+          brand: 'AIRITY',
+        },
+      ]),
+    };
+    const adapter = new GoogleAdsAdapter({
+      get: (key: string, fallback = '') => values[key] ?? fallback,
+    } as ConfigService);
+
+    expect(() => adapter.getConfiguredAccounts()).toThrow(
+      /campaign brand mapping conflict/,
+    );
+  });
 });
