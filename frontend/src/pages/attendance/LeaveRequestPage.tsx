@@ -124,6 +124,32 @@ type LeaveRequestDraft = {
   documents: LeaveRequestDocumentInput[];
 };
 
+type DuplicateLeaveConflict = {
+  date: string;
+  requestedHours: number;
+  existingHours: number;
+  totalHours: number;
+  dailyLimitHours: number;
+  existingRequests: Array<{
+    leaveRequestId: string;
+    leaveTypeId: string;
+    leaveTypeCode: string;
+    leaveTypeName: string;
+    startAt: string;
+    endAt: string;
+    hours: number;
+    status: LeaveStatus;
+    reason?: string | null;
+    location?: string | null;
+    createdAt: string;
+  }>;
+};
+
+type DuplicateLeaveConflictNotice = {
+  message: string;
+  conflicts: DuplicateLeaveConflict[];
+};
+
 const createLeaveRequestDraft = (employeeId = ""): LeaveRequestDraft => ({
   id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
   employeeId,
@@ -141,6 +167,26 @@ const createLeaveRequestDraft = (employeeId = ""): LeaveRequestDraft => ({
   documents: [],
 });
 
+const extractDuplicateLeaveConflict = (
+  error: any,
+): DuplicateLeaveConflictNotice | null => {
+  const data = error?.response?.data;
+  if (
+    data?.code !== "LEAVE_DAY_HOURS_EXCEEDED" ||
+    !Array.isArray(data.conflicts)
+  ) {
+    return null;
+  }
+
+  return {
+    message:
+      typeof data.message === "string"
+        ? data.message
+        : "該日期請假累計時數會超過 8 小時，無法送出。",
+    conflicts: data.conflicts,
+  };
+};
+
 const LeaveRequestPage: React.FC = () => {
   const { user } = useAuth();
   const canCreateForEmployees = hasPermission(user, "attendance_admin:update");
@@ -154,6 +200,8 @@ const LeaveRequestPage: React.FC = () => {
   const [requestRows, setRequestRows] = useState<LeaveRequestDraft[]>([
     createLeaveRequestDraft(),
   ]);
+  const [duplicateLeaveNotice, setDuplicateLeaveNotice] =
+    useState<DuplicateLeaveConflictNotice | null>(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -492,6 +540,13 @@ const LeaveRequestPage: React.FC = () => {
       void loadData();
     } catch (error: any) {
       console.error(error);
+      const duplicateConflict = extractDuplicateLeaveConflict(error);
+      if (duplicateConflict) {
+        setDuplicateLeaveNotice(duplicateConflict);
+        message.warning("該日請假累計時數會超過 8 小時，無法送出");
+        return;
+      }
+
       message.error(error?.response?.data?.message || "申請失敗");
     } finally {
       setLoading(false);
@@ -1394,6 +1449,98 @@ const LeaveRequestPage: React.FC = () => {
               </div>
             </>
           )}
+        </div>
+      </GlassModal>
+
+      <GlassModal
+        isOpen={Boolean(duplicateLeaveNotice)}
+        onClose={() => setDuplicateLeaveNotice(null)}
+        title="請假時數已超過上限"
+        maxWidth="max-w-[820px]"
+        footer={
+          <GlassButton
+            variant="primary"
+            onClick={() => setDuplicateLeaveNotice(null)}
+          >
+            關閉
+          </GlassButton>
+        }
+      >
+        <div className="space-y-4">
+          <Alert
+            type="warning"
+            showIcon
+            message="該日請假無法送出"
+            description={
+              duplicateLeaveNotice?.message ||
+              "系統已找到同一天的請假紀錄，這次送出後會超過每日 8 小時上限。"
+            }
+          />
+
+          <div className="overflow-x-auto rounded-2xl border border-white/20 bg-white/10">
+            <table className="min-w-[720px] w-full border-collapse text-left">
+              <thead>
+                <tr className="border-b border-white/20 bg-white/30 text-sm text-slate-500">
+                  <th className="px-4 py-3 font-medium">日期</th>
+                  <th className="px-4 py-3 font-medium">已請</th>
+                  <th className="px-4 py-3 font-medium">本次</th>
+                  <th className="px-4 py-3 font-medium">合計</th>
+                  <th className="px-4 py-3 font-medium">既有假單</th>
+                </tr>
+              </thead>
+              <tbody className="text-sm text-slate-700">
+                {duplicateLeaveNotice?.conflicts.map((conflict) => (
+                  <tr
+                    key={conflict.date}
+                    className="border-b border-white/10 last:border-b-0"
+                  >
+                    <td className="px-4 py-3 font-medium text-slate-800">
+                      {dayjs(conflict.date).format("YYYY-MM-DD")}
+                    </td>
+                    <td className="px-4 py-3 font-mono">
+                      {formatHours(conflict.existingHours)}
+                    </td>
+                    <td className="px-4 py-3 font-mono">
+                      {formatHours(conflict.requestedHours)}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-rose-600">
+                      {formatHours(conflict.totalHours)} /{" "}
+                      {formatHours(conflict.dailyLimitHours)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="space-y-2">
+                        {conflict.existingRequests.map((request) => (
+                          <div
+                            key={request.leaveRequestId}
+                            className="rounded-xl bg-white/50 px-3 py-2"
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-medium text-slate-800">
+                                {request.leaveTypeName}
+                              </span>
+                              {getStatusTag(request.status)}
+                              <span className="font-mono text-xs text-slate-500">
+                                {formatHours(request.hours)}
+                              </span>
+                            </div>
+                            <div className="mt-1 text-xs text-slate-500">
+                              {dayjs(request.startAt).format("MM/DD HH:mm")} 至{" "}
+                              {dayjs(request.endAt).format("MM/DD HH:mm")}
+                            </div>
+                            {request.reason ? (
+                              <div className="mt-1 max-w-[320px] truncate text-xs text-slate-500">
+                                {request.reason}
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </GlassModal>
     </motion.div>

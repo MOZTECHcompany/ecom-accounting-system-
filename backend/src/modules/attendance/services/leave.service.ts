@@ -139,6 +139,29 @@ type LeaveRequestRuleContext = {
   sickLeaveType?: LeaveType;
 };
 
+type DuplicateLeaveDayConflict = {
+  date: string;
+  requestedHours: number;
+  existingHours: number;
+  totalHours: number;
+  dailyLimitHours: number;
+  existingRequests: ExistingLeaveRequestSummary[];
+};
+
+type ExistingLeaveRequestSummary = {
+  leaveRequestId: string;
+  leaveTypeId: string;
+  leaveTypeCode: string;
+  leaveTypeName: string;
+  startAt: string;
+  endAt: string;
+  hours: number;
+  status: LeaveStatus;
+  reason: string | null;
+  location: string | null;
+  createdAt: string;
+};
+
 const FUNERAL_LEAVE_RELATIONSHIP_RULES: Record<
   FuneralLeaveRelationship,
   { label: string; days: number }
@@ -1106,9 +1129,31 @@ export class LeaveService {
 
     const ruleContext = await this.validateGenderSpecificLeaveRules(params);
 
-    const overlappingRequest = await this.prisma.leaveRequest.findFirst({
+    await this.assertDailyLeaveHoursWithinLimit(params.employee.id, {
+      startAt: params.startAt,
+      endAt: params.endAt,
+      hours: params.hours,
+    });
+
+    return ruleContext;
+  }
+
+  private async assertDailyLeaveHoursWithinLimit(
+    employeeId: string,
+    request: {
+      startAt: Date;
+      endAt: Date;
+      hours: number;
+    },
+  ) {
+    const dailyLimitHours = 8;
+    const requestDayBounds = this.getInclusiveLeaveDayBounds(
+      request.startAt,
+      request.endAt,
+    );
+    const existingRequests = await this.prisma.leaveRequest.findMany({
       where: {
-        employeeId: params.employee.id,
+        employeeId,
         status: {
           in: [
             LeaveStatus.SUBMITTED,
@@ -1117,22 +1162,172 @@ export class LeaveService {
           ],
         },
         startAt: {
-          lte: params.endAt,
+          lte: requestDayBounds.end,
         },
         endAt: {
-          gte: params.startAt,
+          gte: requestDayBounds.start,
         },
       },
-      select: {
-        id: true,
+      include: {
+        leaveType: true,
       },
+      orderBy: [{ startAt: 'asc' }],
     });
 
-    if (overlappingRequest) {
-      throw new BadRequestException('此時段已有請假單正在審核或已核准');
+    const requestedHoursByDate = this.distributeLeaveHoursByDate(
+      request.startAt,
+      request.endAt,
+      request.hours,
+    );
+    const existingHoursByDate = new Map<string, number>();
+    const existingRequestsByDate = new Map<
+      string,
+      ExistingLeaveRequestSummary[]
+    >();
+
+    for (const existingRequest of existingRequests) {
+      const existingHours = this.distributeLeaveHoursByDate(
+        existingRequest.startAt,
+        existingRequest.endAt,
+        Number(existingRequest.hours),
+      );
+
+      const summary: ExistingLeaveRequestSummary = {
+        leaveRequestId: existingRequest.id,
+        leaveTypeId: existingRequest.leaveTypeId,
+        leaveTypeCode: existingRequest.leaveType.code,
+        leaveTypeName: existingRequest.leaveType.name,
+        startAt: existingRequest.startAt.toISOString(),
+        endAt: existingRequest.endAt.toISOString(),
+        hours: Number(existingRequest.hours),
+        status: existingRequest.status,
+        reason: existingRequest.reason,
+        location: existingRequest.location,
+        createdAt: existingRequest.createdAt.toISOString(),
+      };
+
+      for (const [date, hours] of existingHours.entries()) {
+        if (!requestedHoursByDate.has(date)) {
+          continue;
+        }
+
+        existingHoursByDate.set(
+          date,
+          (existingHoursByDate.get(date) || 0) + hours,
+        );
+        existingRequestsByDate.set(date, [
+          ...(existingRequestsByDate.get(date) || []),
+          summary,
+        ]);
+      }
     }
 
-    return ruleContext;
+    const conflicts = Array.from(requestedHoursByDate.entries())
+      .map<DuplicateLeaveDayConflict | null>(([date, requestedHours]) => {
+        const existingHours = existingHoursByDate.get(date) || 0;
+        const totalHours = existingHours + requestedHours;
+
+        if (totalHours <= dailyLimitHours) {
+          return null;
+        }
+
+        return {
+          date,
+          requestedHours,
+          existingHours,
+          totalHours,
+          dailyLimitHours,
+          existingRequests: existingRequestsByDate.get(date) || [],
+        };
+      })
+      .filter(
+        (conflict): conflict is DuplicateLeaveDayConflict =>
+          conflict !== null,
+      );
+
+    if (conflicts.length > 0) {
+      const dates = Array.from(
+        new Set(conflicts.map((conflict) => conflict.date)),
+      );
+      throw new BadRequestException({
+        code: 'LEAVE_DAY_HOURS_EXCEEDED',
+        message: `員工在 ${dates.join('、')} 的請假累計時數會超過 8 小時，該日不可送出。`,
+        conflicts,
+      });
+    }
+  }
+
+  private distributeLeaveHoursByDate(
+    startAt: Date,
+    endAt: Date,
+    hours: number,
+  ) {
+    const hoursByDate = new Map<string, number>();
+    const totalDurationMs = Math.max(1, endAt.getTime() - startAt.getTime());
+    const dayBounds = this.getInclusiveLeaveDayBounds(startAt, endAt);
+
+    for (const date of this.getDateKeysBetween(dayBounds.start, dayBounds.end)) {
+      const dayStart = this.startOfDay(new Date(`${date}T00:00:00`));
+      const dayEnd = this.endOfDay(dayStart);
+      const overlapMs = Math.max(
+        0,
+        Math.min(endAt.getTime(), dayEnd.getTime()) -
+          Math.max(startAt.getTime(), dayStart.getTime()),
+      );
+
+      if (overlapMs <= 0) {
+        continue;
+      }
+
+      hoursByDate.set(
+        date,
+        Number(((hours * overlapMs) / totalDurationMs).toFixed(4)),
+      );
+    }
+
+    return hoursByDate;
+  }
+
+  private getInclusiveLeaveDayBounds(startAt: Date, endAt: Date) {
+    const effectiveEndAt =
+      endAt > startAt ? new Date(endAt.getTime() - 1) : endAt;
+    return {
+      start: this.startOfDay(startAt),
+      end: this.endOfDay(effectiveEndAt),
+    };
+  }
+
+  private getDateKeysBetween(startAt: Date, endAt: Date) {
+    const dates: string[] = [];
+    const cursor = this.startOfDay(startAt);
+    const end = this.startOfDay(endAt);
+
+    while (cursor <= end) {
+      dates.push(this.formatDateKey(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return dates;
+  }
+
+  private startOfDay(date: Date) {
+    const next = new Date(date);
+    next.setHours(0, 0, 0, 0);
+    return next;
+  }
+
+  private endOfDay(date: Date) {
+    const next = new Date(date);
+    next.setHours(23, 59, 59, 999);
+    return next;
+  }
+
+  private formatDateKey(date: Date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
   }
 
   private validateLeaveRequestWithinEmploymentPeriod(
