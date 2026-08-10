@@ -106,6 +106,14 @@ type GoogleAdsApiError = {
   }>;
 };
 
+const DEFAULT_GOOGLE_ADS_API_VERSION = 'v25';
+const SUPPORTED_GOOGLE_ADS_API_VERSIONS = new Set([
+  'v22',
+  'v23',
+  'v24',
+  'v25',
+]);
+
 @Injectable()
 export class GoogleAdsAdapter {
   private readonly apiBaseUrl: string;
@@ -116,8 +124,17 @@ export class GoogleAdsAdapter {
     this.apiBaseUrl =
       this.config.get<string>('GOOGLE_ADS_API_BASE_URL', '') ||
       'https://googleads.googleapis.com';
-    this.apiVersion =
-      this.config.get<string>('GOOGLE_ADS_API_VERSION', '') || 'v21';
+    const configuredApiVersion = (
+      this.config.get<string>('GOOGLE_ADS_API_VERSION', '') ||
+      DEFAULT_GOOGLE_ADS_API_VERSION
+    ).trim();
+    if (!SUPPORTED_GOOGLE_ADS_API_VERSIONS.has(configuredApiVersion)) {
+      throw new Error(
+        `Unsupported GOOGLE_ADS_API_VERSION "${configuredApiVersion}". ` +
+          `Use one of: ${[...SUPPORTED_GOOGLE_ADS_API_VERSIONS].join(', ')}.`,
+      );
+    }
+    this.apiVersion = configuredApiVersion;
     this.timeoutMs = Math.min(
       Math.max(
         Number(this.config.get<string>('GOOGLE_ADS_TIMEOUT_MS', '30000')),

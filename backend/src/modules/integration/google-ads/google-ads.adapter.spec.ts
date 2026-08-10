@@ -9,6 +9,33 @@ describe('GoogleAdsAdapter credential routing', () => {
     jest.restoreAllMocks();
   });
 
+  it('defaults new deployments to the current Google Ads API version', () => {
+    const adapter = new GoogleAdsAdapter({
+      get: (_key: string, fallback = '') => fallback,
+    } as ConfigService);
+
+    expect(adapter.getConnectionInfo().apiVersion).toBe('v25');
+  });
+
+  it('allows an explicitly configured supported fallback version', () => {
+    const adapter = new GoogleAdsAdapter({
+      get: (key: string, fallback = '') =>
+        key === 'GOOGLE_ADS_API_VERSION' ? 'v24' : fallback,
+    } as ConfigService);
+
+    expect(adapter.getConnectionInfo().apiVersion).toBe('v24');
+  });
+
+  it('rejects a sunset Google Ads API version before serving requests', () => {
+    expect(
+      () =>
+        new GoogleAdsAdapter({
+          get: (key: string, fallback = '') =>
+            key === 'GOOGLE_ADS_API_VERSION' ? 'v21' : fallback,
+        } as ConfigService),
+    ).toThrow('Unsupported GOOGLE_ADS_API_VERSION "v21"');
+  });
+
   it('uses the configured OAuth credential for each account', async () => {
     const values: Record<string, string> = {
       GOOGLE_ADS_CLIENT_ID: 'client-id',
@@ -34,6 +61,7 @@ describe('GoogleAdsAdapter credential routing', () => {
     const adapter = new GoogleAdsAdapter(config);
     const searchAuthorization = new Map<string, string[]>();
     const searchLoginCustomerIds = new Map<string, Array<string | null>>();
+    const googleAdsUrls: string[] = [];
 
     global.fetch = jest.fn(
       (input: string | URL | Request, init?: RequestInit) => {
@@ -64,6 +92,8 @@ describe('GoogleAdsAdapter credential routing', () => {
             ),
           );
         }
+
+        googleAdsUrls.push(url);
 
         const customerId =
           url.match(/\/customers\/(\d+)\/googleAds:search$/)?.[1] || '';
@@ -136,6 +166,8 @@ describe('GoogleAdsAdapter credential routing', () => {
       '9999999999',
     ]);
     expect(searchLoginCustomerIds.get('2222222222')).toEqual([null, null]);
+    expect(googleAdsUrls).not.toHaveLength(0);
+    expect(googleAdsUrls.every((url) => url.includes('/v25/'))).toBe(true);
     const searchBodies = (global.fetch as jest.Mock).mock.calls
       .map((call) =>
         JSON.parse(typeof call[1]?.body === 'string' ? call[1].body : '{}'),

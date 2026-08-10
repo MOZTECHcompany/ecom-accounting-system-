@@ -5,8 +5,16 @@ PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null)}"
 REGION="${REGION:-$(gcloud config get-value run/region 2>/dev/null || true)}"
 REGION="${REGION:-asia-east1}"
 SERVICE="${SERVICE:-ecom-accounting-backend}"
-API_VERSION="${GOOGLE_ADS_API_VERSION:-v21}"
+API_VERSION="${GOOGLE_ADS_API_VERSION:-v25}"
 DEFAULT_CURRENCY="${GOOGLE_ADS_DEFAULT_CURRENCY:-TWD}"
+
+case "${API_VERSION}" in
+  v22|v23|v24|v25) ;;
+  *)
+    echo "Unsupported GOOGLE_ADS_API_VERSION '${API_VERSION}'. Use v22, v23, v24, or v25." >&2
+    exit 1
+    ;;
+esac
 
 if [[ -z "${PROJECT_ID}" ]]; then
   echo "PROJECT_ID is empty. Run: gcloud config set project <project-id>" >&2
