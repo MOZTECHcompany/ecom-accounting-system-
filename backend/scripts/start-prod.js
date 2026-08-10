@@ -49,15 +49,11 @@ async function start() {
 
     // 2. Run Prisma Migrations
     console.log('Running pending migrations...');
-    try {
-        await runCommand('npx', ['prisma', 'migrate', 'deploy']);
-        console.log('Migrations completed successfully.');
-    } catch (e) {
-        console.error('Migration failed:', e);
-        // We do NOT exit here, because sometimes migration fails due to lock but app can still run,
-        // or we want to see the app logs.
-        console.log('Attempting to start application despite migration failure...');
-    }
+    // Production must fail closed here. Starting a new revision against a
+    // schema whose migration did not complete can pass HTTP health checks while
+    // silently serving an incompatible data contract.
+    await runCommand('npx', ['prisma', 'migrate', 'deploy']);
+    console.log('Migrations completed successfully.');
 
     // 2.5 Run Seeding (Optional but recommended for init)
     // We run this if SEED_ON_STARTUP is set, OR if we want to ensure admin exists.

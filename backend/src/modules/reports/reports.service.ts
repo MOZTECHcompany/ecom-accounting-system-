@@ -1,6 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import {
+  AdsBrandMappingResolution,
+  resolveConfiguredAdsBrandMapping,
+  summarizeAdsBrandMappingCoverage,
+} from '../integration/ads-brand-mapping';
 
 type ManagementSummaryGroupBy = 'year' | 'quarter' | 'month' | 'week' | 'day';
 type CommerceSourceBrandRule = {
@@ -12,6 +17,17 @@ type CommerceSourceBrandRule = {
   storeAccount?: string;
   shopDomain?: string;
   account?: string;
+};
+type AdsAccountBrandRule = {
+  name?: string;
+  brand?: string;
+  reportBrand?: string;
+  brandMode?: 'single' | 'portfolio';
+  allowedBrands?: string[];
+  campaignBrandMappings?: Array<{
+    campaignId: string;
+    brand: string;
+  }>;
 };
 
 const AD_EXPENSE_SOURCE_MODULES = ['meta_ads', 'google_ads'];
@@ -193,7 +209,10 @@ export class ReportsService {
     const orderDateFilter = this.buildDateFilter(startDate, endDate);
     const expenseDateFilter = this.buildDateFilter(startDate, endDate);
     const inventoryAlertThreshold = Number(
-      this.configService.get<string>('DASHBOARD_INVENTORY_ALERT_THRESHOLD', '5'),
+      this.configService.get<string>(
+        'DASHBOARD_INVENTORY_ALERT_THRESHOLD',
+        '5',
+      ),
     );
     const payoutOverdueDays = Number(
       this.configService.get<string>('DASHBOARD_PAYOUT_OVERDUE_DAYS', '3'),
@@ -503,7 +522,9 @@ export class ReportsService {
     const actualSpendCount =
       Number(expenseAgg._count.id || 0) ||
       Number(fallbackPaidExpenseAgg._count.id || 0);
-    const pendingExpenseAmount = Number(pendingExpenseAgg._sum.amountOriginal || 0);
+    const pendingExpenseAmount = Number(
+      pendingExpenseAgg._sum.amountOriginal || 0,
+    );
     const pendingExpenseCount = Number(pendingExpenseAgg._count.id || 0);
     const approvedExpenseAmount = Number(
       approvedExpenseAgg._sum.amountOriginal || 0,
@@ -516,7 +537,9 @@ export class ReportsService {
       overduePendingPayoutAgg._sum.amountNetOriginal || 0,
     );
     const feeBackfillCount = Number(feeBackfillAgg._count.id || 0);
-    const feeBackfillAmount = Number(feeBackfillAgg._sum.amountGrossOriginal || 0);
+    const feeBackfillAmount = Number(
+      feeBackfillAgg._sum.amountGrossOriginal || 0,
+    );
     const missingPayoutJournalCount = Number(
       missingPayoutJournalAgg._count.id || 0,
     );
@@ -573,7 +596,9 @@ export class ReportsService {
     }
 
     const inventoryRows = Array.from(inventoryByProduct.values());
-    const outOfStockItems = inventoryRows.filter((item) => item.qtyAvailable <= 0);
+    const outOfStockItems = inventoryRows.filter(
+      (item) => item.qtyAvailable <= 0,
+    );
     const lowStockItems = inventoryRows
       .filter(
         (item) =>
@@ -673,8 +698,7 @@ export class ReportsService {
         count: topAlerts.length,
         amount: null,
         tone: topAlerts.length > 0 ? 'critical' : 'healthy',
-        helper:
-          '庫存不足會直接影響成交與交付，先處理缺貨品項與安全庫存調整。',
+        helper: '庫存不足會直接影響成交與交付，先處理缺貨品項與安全庫存調整。',
         accountCode: null,
         accountName: null,
         statusLabel: '待補貨',
@@ -715,8 +739,7 @@ export class ReportsService {
         metric: feeBackfillCount,
         description:
           '若交易已完成但尚未回填 provider payout，系統會將其列入待補費率名單，避免毛利與淨額失真。',
-        accountingEntry:
-          '借：6131 / 6134；貸：1191',
+        accountingEntry: '借：6131 / 6134；貸：1191',
         helper:
           '綠界匯出中的交易手續費、處理費與平台手續費會個別保存，讓管理層可追蹤真實抽成結構。',
       },
@@ -727,8 +750,7 @@ export class ReportsService {
         metric: pendingPayoutCount,
         description:
           '系統把待付款、已付款、待撥款、已撥款、已對帳拆開來看，方便辨識貨到付款或超商未取造成的落差。',
-        accountingEntry:
-          '先留在 1191 應收帳款，實際撥款後才轉入 1113 銀行存款',
+        accountingEntry: '先留在 1191 應收帳款，實際撥款後才轉入 1113 銀行存款',
         helper:
           '這條規則會持續用在 1Shop、Shopify、Shopline 與綠界串接，確保不同通路可用同一套標準追帳。',
       },
@@ -899,7 +921,9 @@ export class ReportsService {
       invoiceCount,
     ] = await Promise.all([
       this.prisma.salesOrder.count({ where: orderWhere }),
-      this.prisma.salesOrder.count({ where: { ...orderWhere, customerId: null } }),
+      this.prisma.salesOrder.count({
+        where: { ...orderWhere, customerId: null },
+      }),
       this.prisma.salesOrder.count({
         where: { ...orderWhere, payments: { none: {} } },
       }),
@@ -923,7 +947,9 @@ export class ReportsService {
         where: {
           entityId,
           isActive: true,
-          salesOrders: { some: orderDateFilter ? { orderDate: orderDateFilter } : {} },
+          salesOrders: {
+            some: orderDateFilter ? { orderDate: orderDateFilter } : {},
+          },
         },
       }),
       this.prisma.payment.count({ where: paymentWhere }),
@@ -1131,7 +1157,11 @@ export class ReportsService {
                   OR: [
                     { notes: null },
                     { notes: { not: { contains: '[provider-payout]' } } },
-                    { notes: { not: { contains: 'feeSource=provider-payout:ecpay' } } },
+                    {
+                      notes: {
+                        not: { contains: 'feeSource=provider-payout:ecpay' },
+                      },
+                    },
                   ],
                 },
               ],
@@ -1200,12 +1230,24 @@ export class ReportsService {
         bankTransactions,
       },
       coverage: {
-        customerLinkedRate: ratio(totalOrders - missingCustomerOrders, totalOrders),
-        paymentLinkedRate: ratio(totalOrders - missingPaymentOrders, totalOrders),
-        invoiceLinkedRate: ratio(totalOrders - missingInvoiceOrders, totalOrders),
+        customerLinkedRate: ratio(
+          totalOrders - missingCustomerOrders,
+          totalOrders,
+        ),
+        paymentLinkedRate: ratio(
+          totalOrders - missingPaymentOrders,
+          totalOrders,
+        ),
+        invoiceLinkedRate: ratio(
+          totalOrders - missingInvoiceOrders,
+          totalOrders,
+        ),
         paymentReconciledRate: ratio(reconciledPayments, totalPayments),
         payoutLineMatchedRate: ratio(matchedPayoutLines, payoutLines),
-        bankTransactionMatchedRate: ratio(matchedBankTransactions, bankTransactions),
+        bankTransactionMatchedRate: ratio(
+          matchedBankTransactions,
+          bankTransactions,
+        ),
         feeActualRate: ratio(feeActualPayments, completedPayments),
       },
       gaps: {
@@ -1231,35 +1273,40 @@ export class ReportsService {
           label: '缺發票資料',
           count: missingInvoiceOrders,
           severity: missingInvoiceOrders ? 'critical' : 'healthy',
-          nextAction: '同步綠界電子發票狀態，或匯入發票明細後回填 SalesOrder / Invoice。',
+          nextAction:
+            '同步綠界電子發票狀態，或匯入發票明細後回填 SalesOrder / Invoice。',
         },
         {
           key: 'unreconciled-payments',
           label: 'Payment 尚未核銷',
           count: pendingPayments,
           severity: pendingPayments ? 'critical' : 'healthy',
-          nextAction: '匯入 / 同步綠界與其他金流撥款明細，回填實際手續費與實收淨額。',
+          nextAction:
+            '匯入 / 同步綠界與其他金流撥款明細，回填實際手續費與實收淨額。',
         },
         {
           key: 'fee-backfill',
           label: '手續費待補',
           count: feeMissingPayments,
           severity: feeMissingPayments ? 'warning' : 'healthy',
-          nextAction: '以綠界撥款列、服務費發票、LINE Pay 或平台報表作為最終費用來源。',
+          nextAction:
+            '以綠界撥款列、服務費發票、LINE Pay 或平台報表作為最終費用來源。',
         },
         {
           key: 'missing-payments',
           label: '訂單缺 Payment',
           count: missingPaymentOrders,
           severity: missingPaymentOrders ? 'warning' : 'healthy',
-          nextAction: '重新同步平台 transactions，或為待付款訂單建立 0 元 Payment 草稿。',
+          nextAction:
+            '重新同步平台 transactions，或為待付款訂單建立 0 元 Payment 草稿。',
         },
         {
           key: 'missing-customers',
           label: '訂單缺顧客',
           count: missingCustomerOrders,
           severity: missingCustomerOrders ? 'warning' : 'healthy',
-          nextAction: '重新同步顧客主檔，並用 email / phone / 外部 customer id 回填訂單。',
+          nextAction:
+            '重新同步顧客主檔，並用 email / phone / 外部 customer id 回填訂單。',
         },
       ],
       recommendedNextSteps: [
@@ -1272,6 +1319,8 @@ export class ReportsService {
   }
 
   async getConnectorReadiness(entityId: string) {
+    const adsAccountRefsWithRows =
+      await this.getAdsExpenseAccountRefsWithRows(entityId);
     const connectors = [
       this.buildConnectorReadiness({
         key: 'shopify',
@@ -1348,8 +1397,7 @@ export class ReportsService {
           '確認 3290494 / 3150241 的 HashKey / HashIV、B2C / B2B、查詢、作廢、折讓、字軌權限。',
           '用 stage 或正式小額測試單驗證 Issue / GetIssue / Invalid / Allowance 後，才能啟用正式開票。',
         ],
-        nextAction:
-          '未啟用正式開票前，繼續用綠界銷項發票匯入回填系統狀態。',
+        nextAction: '未啟用正式開票前，繼續用綠界銷項發票匯入回填系統狀態。',
       }),
       this.buildConnectorReadiness({
         key: 'ecpay-payout',
@@ -1358,7 +1406,11 @@ export class ReportsService {
         envNames: [],
         credentialGroups: [
           ['ECPAY_MERCHANTS_JSON'],
-          ['ECPAY_SHOPIFY_MERCHANT_ID', 'ECPAY_SHOPIFY_HASH_KEY', 'ECPAY_SHOPIFY_HASH_IV'],
+          [
+            'ECPAY_SHOPIFY_MERCHANT_ID',
+            'ECPAY_SHOPIFY_HASH_KEY',
+            'ECPAY_SHOPIFY_HASH_IV',
+          ],
         ],
         optionalEnvNames: [
           'ECPAY_SHOPIFY_API_URL',
@@ -1370,8 +1422,7 @@ export class ReportsService {
           '提供 3150241 / 3290494 綠界撥款或金流對帳報表。',
           '確認 3150241 僅供 1Shop / 團購 / 未來 Shopline 使用，不與 Shopify 3290494 混用。',
         ],
-        nextAction:
-          '撥款來源就緒後，回填實際手續費與淨額，再跑保守自動核銷。',
+        nextAction: '撥款來源就緒後，回填實際手續費與淨額，再跑保守自動核銷。',
       }),
       this.buildConnectorReadiness({
         key: 'linepay',
@@ -1380,7 +1431,11 @@ export class ReportsService {
         envNames: [],
         credentialGroups: [
           ['LINE_PAY_ACCOUNTS_JSON'],
-          ['LINE_PAY_MERCHANT_ID', 'LINE_PAY_CHANNEL_ID', 'LINE_PAY_CHANNEL_SECRET'],
+          [
+            'LINE_PAY_MERCHANT_ID',
+            'LINE_PAY_CHANNEL_ID',
+            'LINE_PAY_CHANNEL_SECRET',
+          ],
         ],
         optionalEnvNames: [
           'LINE_PAY_PROFILE_KEY',
@@ -1410,53 +1465,62 @@ export class ReportsService {
         nextAction:
           '先匯入一個小批量銀行流水，再接金流淨額 / 廣告扣款 / AP 付款 matching。',
       }),
-      this.buildConnectorReadiness({
-        key: 'ad-spend',
-        label: '廣告費 Meta / Google / TikTok',
-        category: 'expense',
-        envNames: [],
-        credentialGroups: [
-          ['META_ADS_ACCESS_TOKEN'],
-          [
-            'GOOGLE_ADS_DEVELOPER_TOKEN',
-            'GOOGLE_ADS_CLIENT_ID',
-            'GOOGLE_ADS_CLIENT_SECRET',
-            'GOOGLE_ADS_REFRESH_TOKEN',
+      this.buildAdsConnectorReadiness(
+        {
+          key: 'ad-spend',
+          label: '廣告費 Meta / Google / TikTok',
+          category: 'expense',
+          envNames: [],
+          credentialGroups: [
+            ['META_ADS_ACCESS_TOKEN'],
+            [
+              'GOOGLE_ADS_DEVELOPER_TOKEN',
+              'GOOGLE_ADS_CLIENT_ID',
+              'GOOGLE_ADS_CLIENT_SECRET',
+              'GOOGLE_ADS_REFRESH_TOKEN',
+            ],
           ],
-        ],
-        optionalEnvNames: [
-          'META_ADS_ACCOUNT_IDS',
-          'META_ADS_ACCOUNTS_JSON',
-          'META_ADS_API_VERSION',
-          'META_ADS_DEFAULT_CURRENCY',
-          'META_ADS_SYNC_ENABLED',
-          'META_ADS_SYNC_JOB_TOKEN',
-          'GOOGLE_ADS_CUSTOMER_ID',
-          'GOOGLE_ADS_CUSTOMER_IDS',
-          'GOOGLE_ADS_ACCOUNTS_JSON',
-          'GOOGLE_ADS_LOGIN_CUSTOMER_ID',
-          'GOOGLE_ADS_API_VERSION',
-          'GOOGLE_ADS_DEFAULT_CURRENCY',
-          'GOOGLE_ADS_SYNC_ENABLED',
-          'GOOGLE_ADS_SYNC_JOB_TOKEN',
-          'TIKTOK_ADVERTISER_IDS',
-        ],
-        externalNeeds: [
-          ...(!this.hasConfig('META_ADS_ACCOUNT_IDS') &&
-          !this.hasConfig('META_ADS_ACCOUNTS_JSON')
-            ? ['提供 Meta Ad Account ID，或設定 META_ADS_ACCOUNTS_JSON 做品牌 / 通路 mapping。']
-            : []),
-          ...(!this.hasConfig('GOOGLE_ADS_CUSTOMER_ID') &&
-          !this.hasConfig('GOOGLE_ADS_CUSTOMER_IDS') &&
-          !this.hasConfig('GOOGLE_ADS_ACCOUNTS_JSON')
-            ? ['提供 Google Ads customer ID，或設定 GOOGLE_ADS_ACCOUNTS_JSON 做品牌 / 通路 mapping。']
-            : []),
-          '提供廣告發票或收據來源，以及扣款信用卡 / 銀行帳戶。',
-          'TikTok Ads 尚未接入；Google Ads 與 Meta Ads 可先同步 daily spend。',
-        ],
-        nextAction:
-          'Meta / Google token 放入 Secret Manager 後，先呼叫 readiness，再同步 spend 到 Expense；之後補 AP / 銀行扣款 matching。',
-      }),
+          optionalEnvNames: [
+            'META_ADS_ACCOUNT_IDS',
+            'META_ADS_ACCOUNTS_JSON',
+            'META_ADS_CAMPAIGN_BRANDS_JSON',
+            'META_ADS_API_VERSION',
+            'META_ADS_DEFAULT_CURRENCY',
+            'META_ADS_SYNC_ENABLED',
+            'META_ADS_SYNC_JOB_TOKEN',
+            'GOOGLE_ADS_CUSTOMER_ID',
+            'GOOGLE_ADS_CUSTOMER_IDS',
+            'GOOGLE_ADS_ACCOUNTS_JSON',
+            'GOOGLE_ADS_CAMPAIGN_BRANDS_JSON',
+            'GOOGLE_ADS_LOGIN_CUSTOMER_ID',
+            'GOOGLE_ADS_API_VERSION',
+            'GOOGLE_ADS_DEFAULT_CURRENCY',
+            'GOOGLE_ADS_SYNC_ENABLED',
+            'GOOGLE_ADS_SYNC_JOB_TOKEN',
+            'TIKTOK_ADVERTISER_IDS',
+          ],
+          externalNeeds: [
+            ...(!this.hasConfig('META_ADS_ACCOUNT_IDS') &&
+            !this.hasConfig('META_ADS_ACCOUNTS_JSON')
+              ? [
+                  '提供 Meta Ad Account ID，或設定 META_ADS_ACCOUNTS_JSON 做品牌 / 通路 mapping。',
+                ]
+              : []),
+            ...(!this.hasConfig('GOOGLE_ADS_CUSTOMER_ID') &&
+            !this.hasConfig('GOOGLE_ADS_CUSTOMER_IDS') &&
+            !this.hasConfig('GOOGLE_ADS_ACCOUNTS_JSON')
+              ? [
+                  '提供 Google Ads customer ID，或設定 GOOGLE_ADS_ACCOUNTS_JSON 做品牌 / 通路 mapping。',
+                ]
+              : []),
+            '提供廣告發票或收據來源，以及扣款信用卡 / 銀行帳戶。',
+            'TikTok Ads 尚未接入；Google Ads 與 Meta Ads 可先同步 daily spend。',
+          ],
+          nextAction:
+            'Meta / Google token 放入 Secret Manager 後，先呼叫 readiness，再同步 spend 到 Expense；之後補 AP / 銀行扣款 matching。',
+        },
+        adsAccountRefsWithRows,
+      ),
     ];
 
     const summary = connectors.reduce(
@@ -1481,7 +1545,6 @@ export class ReportsService {
       inputDocument: 'backend/docs/user-input-needed-2026-04-27.md',
     };
   }
-
 
   async getLinePayReconciliationReadiness(
     entityId: string,
@@ -1615,7 +1678,10 @@ export class ReportsService {
         nextAction = feeActual
           ? '綠界已回填實際手續費，可進入核銷檢查。'
           : '已找到綠界撥款線索，等待手續費與淨額回填。';
-      } else if (directLine || metadata.feeSource === 'provider-payout:linepay') {
+      } else if (
+        directLine ||
+        metadata.feeSource === 'provider-payout:linepay'
+      ) {
         route = 'linepay';
         routeLabel = '走 LINE Pay 直連對帳';
         nextAction = feeActual
@@ -1658,15 +1724,16 @@ export class ReportsService {
         route,
         routeLabel,
         nextAction,
-        matchedPayoutLine: ecpayLine || directLine
-          ? {
-              id: (ecpayLine || directLine)!.id,
-              provider: ecpayLine ? 'ecpay' : 'linepay',
-              status: (ecpayLine || directLine)!.status,
-              confidence: (ecpayLine || directLine)!.confidence,
-              message: (ecpayLine || directLine)!.message,
-            }
-          : null,
+        matchedPayoutLine:
+          ecpayLine || directLine
+            ? {
+                id: (ecpayLine || directLine)!.id,
+                provider: ecpayLine ? 'ecpay' : 'linepay',
+                status: (ecpayLine || directLine)!.status,
+                confidence: (ecpayLine || directLine)!.confidence,
+                message: (ecpayLine || directLine)!.message,
+              }
+            : null,
       };
     });
 
@@ -1822,7 +1889,8 @@ export class ReportsService {
         externalOrderId: payment.salesOrder?.externalOrderId || null,
         orderDate: payment.salesOrder?.orderDate?.toISOString() || null,
         payoutDate: payment.payoutDate?.toISOString() || null,
-        channelCode: payment.salesOrder?.channel?.code || payment.channel || null,
+        channelCode:
+          payment.salesOrder?.channel?.code || payment.channel || null,
         bucketKey,
         bucketLabel: bucket?.label || '其他業績',
         account: bucketKey.startsWith('oneshop:')
@@ -1973,14 +2041,20 @@ export class ReportsService {
       }),
     ]);
 
-    const payrollByStatus = payrollAgg.reduce<Record<string, number>>((acc, item) => {
-      acc[item.status] = item._count._all
-      return acc
-    }, {})
-    const approvalsByType = approvalAgg.reduce<Record<string, number>>((acc, item) => {
-      acc[item.type] = item._count._all
-      return acc
-    }, {})
+    const payrollByStatus = payrollAgg.reduce<Record<string, number>>(
+      (acc, item) => {
+        acc[item.status] = item._count._all;
+        return acc;
+      },
+      {},
+    );
+    const approvalsByType = approvalAgg.reduce<Record<string, number>>(
+      (acc, item) => {
+        acc[item.type] = item._count._all;
+        return acc;
+      },
+      {},
+    );
 
     return {
       entityId,
@@ -2036,7 +2110,7 @@ export class ReportsService {
           value: Number(pendingInvoiceAgg._count.id || 0),
         },
       ],
-    }
+    };
   }
 
   async getMonthlyChannelReconciliation(
@@ -2163,8 +2237,9 @@ export class ReportsService {
         month,
         bucketKey,
         bucketLabel: bucket?.label || '其他業績',
-        account:
-          bucketKey.startsWith('oneshop:') ? bucketKey.replace('oneshop:', '') : null,
+        account: bucketKey.startsWith('oneshop:')
+          ? bucketKey.replace('oneshop:', '')
+          : null,
         salesGross: 0,
         orderCount: 0,
         payoutGross: 0,
@@ -2410,7 +2485,10 @@ export class ReportsService {
         (sum, invoice) => sum + Number(invoice.taxAmountOriginal || 0),
         0,
       );
-      const expectedInvoiceTax = this.calculateIncludedTax(invoiceGross, taxRate);
+      const expectedInvoiceTax = this.calculateIncludedTax(
+        invoiceGross,
+        taxRate,
+      );
       const paymentCompleted = order.payments.some((payment) =>
         ['completed', 'success', 'paid', 'cod'].includes(
           (payment.status || '').toLowerCase(),
@@ -2428,25 +2506,38 @@ export class ReportsService {
         );
       });
       const isRefundedOrder = (order.status || '').toLowerCase() === 'refunded';
-      const isCancelledOrder = (order.status || '').toLowerCase() === 'cancelled';
+      const isCancelledOrder =
+        (order.status || '').toLowerCase() === 'cancelled';
       const hasRefundSignal = isRefundedOrder || refundPayments.length > 0;
-      const reconciled = order.payments.some((payment) => payment.reconciledFlag);
+      const reconciled = order.payments.some(
+        (payment) => payment.reconciledFlag,
+      );
       const anomalyCodes: string[] = [];
       const anomalyMessages: string[] = [];
 
-      if (hasRefundSignal && allowanceInvoices.length === 0 && voidInvoices.length === 0) {
+      if (
+        hasRefundSignal &&
+        allowanceInvoices.length === 0 &&
+        voidInvoices.length === 0
+      ) {
         anomalyCodes.push('refund_without_allowance_or_void_invoice');
-        anomalyMessages.push('訂單或付款出現退款訊號，但尚未找到折讓單或作廢發票。');
+        anomalyMessages.push(
+          '訂單或付款出現退款訊號，但尚未找到折讓單或作廢發票。',
+        );
       }
 
       if (hasRefundSignal && reconciled) {
         anomalyCodes.push('refund_after_reconciliation_needs_reversal');
-        anomalyMessages.push('退款訂單已有核銷紀錄，需確認是否已建立反向分錄或折讓。');
+        anomalyMessages.push(
+          '退款訂單已有核銷紀錄，需確認是否已建立反向分錄或折讓。',
+        );
       }
 
       if (isCancelledOrder && paymentGross > 0) {
         anomalyCodes.push('cancelled_order_has_payment');
-        anomalyMessages.push('訂單已取消但仍有收款紀錄，需確認是否退款或保留款項。');
+        anomalyMessages.push(
+          '訂單已取消但仍有收款紀錄，需確認是否退款或保留款項。',
+        );
       }
 
       if ((paymentCompleted || reconciled) && issuedInvoices.length === 0) {
@@ -2454,7 +2545,7 @@ export class ReportsService {
         anomalyMessages.push('訂單已付款或已對帳，但尚未找到正式發票。');
       }
 
-      if (order.hasInvoice !== (issuedInvoices.length > 0)) {
+      if (order.hasInvoice !== issuedInvoices.length > 0) {
         anomalyCodes.push('invoice_flag_mismatch');
         anomalyMessages.push('訂單發票旗標與實際發票紀錄不一致。');
       }
@@ -2521,7 +2612,9 @@ export class ReportsService {
       }
 
       const feeRatePct =
-        paymentGross > 0 ? Number(((feeTotal / paymentGross) * 100).toFixed(2)) : 0;
+        paymentGross > 0
+          ? Number(((feeTotal / paymentGross) * 100).toFixed(2))
+          : 0;
       const severity = this.resolveAuditSeverity(anomalyCodes);
       const recommendation = this.buildAuditRecommendation(anomalyCodes);
 
@@ -2593,7 +2686,9 @@ export class ReportsService {
         acc.totalGatewayFeeAmount += item.gatewayFeeAmount;
         acc.totalPlatformFeeAmount += item.platformFeeAmount;
         acc.totalFeeAmount += item.feeTotalAmount;
-        acc.flaggedGrossAmount += item.anomalyCodes.length ? item.grossAmount : 0;
+        acc.flaggedGrossAmount += item.anomalyCodes.length
+          ? item.grossAmount
+          : 0;
         acc.flaggedFeeAmount += hasFeeIssue ? item.feeTotalAmount : 0;
         acc.invoiceIssueCount += hasInvoiceIssue ? 1 : 0;
         acc.taxIssueCount += hasTaxIssue ? 1 : 0;
@@ -2632,7 +2727,8 @@ export class ReportsService {
           return severityDiff;
         }
         return (
-          new Date(right.orderDate).getTime() - new Date(left.orderDate).getTime()
+          new Date(right.orderDate).getTime() -
+          new Date(left.orderDate).getTime()
         );
       });
 
@@ -2925,7 +3021,9 @@ export class ReportsService {
 
     for (const expenseRequest of expenseRequests) {
       const period = ensurePeriod(expenseRequest.updatedAt);
-      period.fallbackExpenseAmount += Number(expenseRequest.amountOriginal || 0);
+      period.fallbackExpenseAmount += Number(
+        expenseRequest.amountOriginal || 0,
+      );
       period.fallbackExpenseCount += 1;
       if (
         this.isAdvertisingSpend([
@@ -3005,7 +3103,8 @@ export class ReportsService {
         gatewayFee: acc.gatewayFee + period.gatewayFee,
         platformFee: acc.platformFee + period.platformFee,
         feeTotal: acc.feeTotal + period.feeTotal,
-        actualExpenseAmount: acc.actualExpenseAmount + period.actualExpenseAmount,
+        actualExpenseAmount:
+          acc.actualExpenseAmount + period.actualExpenseAmount,
         fallbackExpenseAmount:
           acc.fallbackExpenseAmount + period.fallbackExpenseAmount,
         operatingExpenses: acc.operatingExpenses + period.operatingExpenses,
@@ -3167,18 +3266,19 @@ export class ReportsService {
         notes: order.notes,
         stores,
       });
-      const periodDescriptor = this.resolvePeriodDescriptor(order.orderDate, groupBy);
-      const period =
-        periodMap.get(periodDescriptor.key) ||
-        {
-          key: periodDescriptor.key,
-          label: periodDescriptor.label,
-          startDate: periodDescriptor.startDate.toISOString(),
-          endDate: periodDescriptor.endDate.toISOString(),
-          revenue: 0,
-          orderCount: 0,
-          customerIds: new Set<string>(),
-        };
+      const periodDescriptor = this.resolvePeriodDescriptor(
+        order.orderDate,
+        groupBy,
+      );
+      const period = periodMap.get(periodDescriptor.key) || {
+        key: periodDescriptor.key,
+        label: periodDescriptor.label,
+        startDate: periodDescriptor.startDate.toISOString(),
+        endDate: periodDescriptor.endDate.toISOString(),
+        revenue: 0,
+        orderCount: 0,
+        customerIds: new Set<string>(),
+      };
       period.revenue += revenue;
       period.orderCount += 1;
       if (order.customerId) {
@@ -3204,17 +3304,15 @@ export class ReportsService {
           [productName, productSku].filter(Boolean).join(' '),
         );
         const productKey = `${inferredBrand}::${productSku}`;
-        const product =
-          productMap.get(productKey) ||
-          {
-            sku: productSku,
-            name: productName,
-            category: item.product?.category || null,
-            brand: inferredBrand,
-            revenue: 0,
-            quantity: 0,
-            orderIds: new Set<string>(),
-          };
+        const product = productMap.get(productKey) || {
+          sku: productSku,
+          name: productName,
+          category: item.product?.category || null,
+          brand: inferredBrand,
+          revenue: 0,
+          quantity: 0,
+          orderIds: new Set<string>(),
+        };
 
         product.revenue += itemRevenue;
         product.quantity += qty;
@@ -3222,17 +3320,15 @@ export class ReportsService {
         productMap.set(productKey, product);
 
         const brandKey = `${inferredBrand}::${source.label}::${source.channelCode || 'unknown'}`;
-        const brand =
-          brandMap.get(brandKey) ||
-          {
-            brand: inferredBrand,
-            sourceLabel: source.label,
-            channelCode: source.channelCode,
-            revenue: 0,
-            orderIds: new Set<string>(),
-            customerIds: new Set<string>(),
-            productQty: new Map<string, number>(),
-          };
+        const brand = brandMap.get(brandKey) || {
+          brand: inferredBrand,
+          sourceLabel: source.label,
+          channelCode: source.channelCode,
+          revenue: 0,
+          orderIds: new Set<string>(),
+          customerIds: new Set<string>(),
+          productQty: new Map<string, number>(),
+        };
         brand.revenue += itemRevenue;
         brand.orderIds.add(order.id);
         if (order.customerId) {
@@ -3248,17 +3344,15 @@ export class ReportsService {
 
       if (!hasLineLevelBrand) {
         const brandKey = `${source.brand}::${source.label}::${source.channelCode || 'unknown'}`;
-        const brand =
-          brandMap.get(brandKey) ||
-          {
-            brand: source.brand,
-            sourceLabel: source.label,
-            channelCode: source.channelCode,
-            revenue: 0,
-            orderIds: new Set<string>(),
-            customerIds: new Set<string>(),
-            productQty: new Map<string, number>(),
-          };
+        const brand = brandMap.get(brandKey) || {
+          brand: source.brand,
+          sourceLabel: source.label,
+          channelCode: source.channelCode,
+          revenue: 0,
+          orderIds: new Set<string>(),
+          customerIds: new Set<string>(),
+          productQty: new Map<string, number>(),
+        };
         brand.revenue += revenue;
         brand.orderIds.add(order.id);
         if (order.customerId) {
@@ -3393,9 +3487,7 @@ export class ReportsService {
           sourceModule: {
             in: AD_EXPENSE_SOURCE_MODULES,
           },
-          ...(adExpenseDateFilter
-            ? { expenseDate: adExpenseDateFilter }
-            : {}),
+          ...(adExpenseDateFilter ? { expenseDate: adExpenseDateFilter } : {}),
         },
         orderBy: {
           expenseDate: 'asc',
@@ -3439,6 +3531,21 @@ export class ReportsService {
 
     const periodBrandMap = new Map<string, AdPerformanceBucket>();
     const brandMap = new Map<string, BrandPerformanceBucket>();
+    const adAccountMap = new Map<
+      string,
+      {
+        platform: 'META_ADS' | 'GOOGLE_ADS';
+        accountRef: string;
+        accountName: string | null;
+        campaignRef: string | null;
+        brand: string;
+        mappingStatus: AdsBrandMappingResolution['mappingStatus'];
+        mappingSource: AdsBrandMappingResolution['mappingSource'];
+        diagnostic: string | null;
+        adSpend: number;
+        expenseCount: number;
+      }
+    >();
 
     const getPeriodBrandBucket = (date: Date, brandInput: string) => {
       const periodDescriptor = this.resolvePeriodDescriptor(date, groupBy);
@@ -3503,14 +3610,44 @@ export class ReportsService {
       }
     };
 
-    const addAdSpend = (date: Date, brandInput: string, amount: number) => {
+    const addAdSpend = (
+      date: Date,
+      platform: 'META_ADS' | 'GOOGLE_ADS',
+      mapping: AdsBrandMappingResolution,
+      amount: number,
+    ) => {
       if (!Number.isFinite(amount) || amount <= 0) {
         return;
       }
-      const periodBucket = getPeriodBrandBucket(date, brandInput);
-      const brandBucket = getBrandBucket(brandInput);
+      const periodBucket = getPeriodBrandBucket(date, mapping.resolvedBrand);
+      const brandBucket = getBrandBucket(mapping.resolvedBrand);
       periodBucket.adSpend += amount;
       brandBucket.adSpend += amount;
+
+      const accountKey = [
+        platform,
+        mapping.accountRef || 'unknown',
+        mapping.campaignRef || 'account',
+        mapping.resolvedBrand,
+      ].join(':');
+      const existing = adAccountMap.get(accountKey);
+      if (existing) {
+        existing.adSpend += amount;
+        existing.expenseCount += 1;
+        return;
+      }
+      adAccountMap.set(accountKey, {
+        platform,
+        accountRef: mapping.accountRef,
+        accountName: mapping.accountName,
+        campaignRef: mapping.campaignRef,
+        brand: mapping.resolvedBrand,
+        mappingStatus: mapping.mappingStatus,
+        mappingSource: mapping.mappingSource,
+        diagnostic: mapping.diagnostic,
+        adSpend: amount,
+        expenseCount: 1,
+      });
     };
 
     for (const order of orders) {
@@ -3554,20 +3691,19 @@ export class ReportsService {
     }
 
     for (const expense of adExpenses) {
-      const descriptionText = [
-        expense.description,
+      const sourceCoordinates = this.parseAdsExpenseSourceId(
+        expense.sourceModule === 'google_ads' ? 'google' : 'meta',
         expense.sourceId,
-        ...expense.items.map((item) => item.description || ''),
-      ].join(' ');
-      const brand =
+      );
+      const mapping =
         expense.sourceModule === 'google_ads'
           ? this.resolveGoogleAdsBrand(
-              this.extractGoogleAdsCustomerId(descriptionText),
-              descriptionText,
+              sourceCoordinates.accountRef,
+              sourceCoordinates.campaignRef,
             )
           : this.resolveMetaAdsBrand(
-              this.extractMetaAdsAccountId(descriptionText),
-              descriptionText,
+              sourceCoordinates.accountRef,
+              sourceCoordinates.campaignRef,
             );
       const spend =
         expense.items.length > 0
@@ -3576,7 +3712,12 @@ export class ReportsService {
               0,
             )
           : Number(expense.totalAmountOriginal || 0);
-      addAdSpend(expense.expenseDate, brand, spend);
+      addAdSpend(
+        expense.expenseDate,
+        expense.sourceModule === 'google_ads' ? 'GOOGLE_ADS' : 'META_ADS',
+        mapping,
+        spend,
+      );
     }
 
     const formatRoas = (revenue: number, adSpend: number) =>
@@ -3623,6 +3764,27 @@ export class ReportsService {
         adSpendShare: formatPercent(brand.adSpend, totalAdSpend),
       }))
       .sort((left, right) => right.adSpend - left.adSpend);
+    const adAccounts = Array.from(adAccountMap.values())
+      .map((account) => ({
+        ...account,
+        adSpend: Number(account.adSpend.toFixed(2)),
+      }))
+      .sort((left, right) =>
+        left.platform === right.platform
+          ? left.accountRef.localeCompare(right.accountRef)
+          : left.platform.localeCompare(right.platform),
+      );
+    const brandMappingCoverage = summarizeAdsBrandMappingCoverage(
+      adAccounts.map((account) => ({
+        accountRef: `${account.platform}:${account.accountRef}`,
+        accountName: account.accountName,
+        campaignRef: account.campaignRef,
+        resolvedBrand: account.brand,
+        mappingStatus: account.mappingStatus,
+        mappingSource: account.mappingSource,
+        diagnostic: account.diagnostic,
+      })),
+    );
 
     return {
       entityId,
@@ -3642,7 +3804,12 @@ export class ReportsService {
         adSource: 'META_ADS + GOOGLE_ADS',
         attributionNote:
           '這是會計口徑的 blended ROAS：電商品牌營收除以 Meta 與 Google Ads 每日花費，不等於廣告平台歸因 ROAS。',
+        brandMappingCoverage,
+        releaseReady: brandMappingCoverage.complete,
       },
+      releaseReady: brandMappingCoverage.complete,
+      diagnostics: brandMappingCoverage.diagnostics,
+      adAccounts,
       brands,
       periods,
     };
@@ -3775,9 +3942,7 @@ export class ReportsService {
           sourceModule: {
             in: AD_EXPENSE_SOURCE_MODULES,
           },
-          ...(adExpenseDateFilter
-            ? { expenseDate: adExpenseDateFilter }
-            : {}),
+          ...(adExpenseDateFilter ? { expenseDate: adExpenseDateFilter } : {}),
         },
         {
           OR: [
@@ -3879,9 +4044,7 @@ export class ReportsService {
           account:
             typeof store?.account === 'string' ? store.account.trim() : '',
           storeName:
-            typeof store?.storeName === 'string'
-              ? store.storeName.trim()
-              : '',
+            typeof store?.storeName === 'string' ? store.storeName.trim() : '',
         }))
         .filter((store) => store.account);
     } catch {
@@ -4052,9 +4215,10 @@ export class ReportsService {
 
     if (
       anomalyCodes.some((code) =>
-        ['missing_invoice_after_payment', 'reconciled_without_invoice'].includes(
-          code,
-        ),
+        [
+          'missing_invoice_after_payment',
+          'reconciled_without_invoice',
+        ].includes(code),
       )
     ) {
       return '先補發票，再確認會計分錄與稅務申報是否應同步回寫。';
@@ -4268,7 +4432,8 @@ export class ReportsService {
       };
     }
 
-    const fallback = meta.storeName || meta.storeHandle || params.channelName || '其他來源';
+    const fallback =
+      meta.storeName || meta.storeHandle || params.channelName || '其他來源';
     return {
       label: fallback,
       brand: this.resolveCommerceBrand(fallback),
@@ -4276,7 +4441,10 @@ export class ReportsService {
     };
   }
 
-  private resolveProductBrand(productName?: string | null, fallbackBrand?: string) {
+  private resolveProductBrand(
+    productName?: string | null,
+    fallbackBrand?: string,
+  ) {
     const normalizedName = (productName || '').trim();
     if (!normalizedName) {
       return this.resolveCommerceBrand(fallbackBrand);
@@ -4369,7 +4537,11 @@ export class ReportsService {
 
     return {
       brand: this.resolveCommerceBrand(matched.brand),
-      label: matched.label?.trim() || fallback?.storeName || fallback?.channelName || '',
+      label:
+        matched.label?.trim() ||
+        fallback?.storeName ||
+        fallback?.channelName ||
+        '',
     };
   }
 
@@ -4386,7 +4558,9 @@ export class ReportsService {
 
     try {
       const parsed = JSON.parse(raw);
-      const rules = Array.isArray(parsed) ? parsed : parsed?.accounts || parsed?.rules;
+      const rules = Array.isArray(parsed)
+        ? parsed
+        : parsed?.accounts || parsed?.rules;
       if (!Array.isArray(rules)) {
         return [];
       }
@@ -4412,85 +4586,80 @@ export class ReportsService {
     return 'MOZTECH';
   }
 
-  private extractMetaAdsAccountId(text: string) {
-    const match = text.match(/act_\d+|\b\d{8,}\b/);
-    if (!match) {
-      return '';
-    }
-    return match[0].startsWith('act_') ? match[0] : `act_${match[0]}`;
-  }
-
-  private resolveMetaAdsBrand(accountId: string, text: string) {
+  private resolveMetaAdsBrand(
+    accountId: string,
+    campaignId?: string | null,
+  ): AdsBrandMappingResolution {
     const normalizedAccountId = accountId.trim();
-    if (normalizedAccountId === 'act_412541399921576') return 'BONSON';
-
-    const configuredBrand = this.getMetaAdsConfiguredBrand(normalizedAccountId);
-    if (configuredBrand) {
-      return configuredBrand;
-    }
-
-    if (/bonson|邦生/i.test(text)) return 'BONSON';
-    if (/moztech|墨子/i.test(text)) return 'MOZTECH';
-
-    const reportBrandMatch = text.match(/reportBrand=([^;\s]+)/i);
-    if (reportBrandMatch?.[1]) {
-      return this.resolveCommerceBrand(reportBrandMatch[1]);
-    }
-
-    const brandMatch = text.match(/brand=([^;\s]+)/i);
-    if (brandMatch?.[1]) {
-      return this.resolveCommerceBrand(brandMatch[1]);
-    }
-
-    return '未分類品牌';
+    return resolveConfiguredAdsBrandMapping(
+      'meta',
+      normalizedAccountId,
+      this.getMetaAdsConfiguredAccount(normalizedAccountId),
+      campaignId,
+    );
   }
 
-  private extractGoogleAdsCustomerId(text: string) {
-    const explicit = text.match(/customer=(\d{6,})/i);
-    if (explicit?.[1]) {
-      return explicit[1];
-    }
-
-    const sourceId = text.match(/\b(\d{8,})(?=[:;\s]|$)/);
-    return sourceId?.[1] || '';
+  private resolveGoogleAdsBrand(
+    customerId: string,
+    campaignId?: string | null,
+  ): AdsBrandMappingResolution {
+    const normalizedCustomerId = String(customerId).replace(/[^0-9]/g, '');
+    return resolveConfiguredAdsBrandMapping(
+      'google',
+      normalizedCustomerId,
+      this.getGoogleAdsConfiguredAccount(normalizedCustomerId),
+      campaignId,
+    );
   }
 
-  private resolveGoogleAdsBrand(customerId: string, text: string) {
-    const configuredBrand = this.getGoogleAdsConfiguredBrand(customerId);
-    if (configuredBrand) {
-      return configuredBrand;
-    }
-
-    if (/bonson|邦生/i.test(text)) return 'BONSON';
-    if (/moztech|墨子/i.test(text)) return 'MOZTECH';
-    if (/moritek/i.test(text)) return 'MORITEK';
-
-    const reportBrandMatch = text.match(/reportBrand=([^;\s]+)/i);
-    if (reportBrandMatch?.[1]) {
-      return this.resolveCommerceBrand(reportBrandMatch[1]);
-    }
-
-    const brandMatch = text.match(/brand=([^;\s]+)/i);
-    if (brandMatch?.[1]) {
-      return this.resolveCommerceBrand(brandMatch[1]);
-    }
-
-    return '未分類品牌';
+  private parseAdsExpenseSourceId(
+    provider: 'meta' | 'google',
+    sourceId?: string | null,
+  ) {
+    const parts = String(sourceId || '')
+      .split(':')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const rawAccountRef = parts[0] || '';
+    const accountRef =
+      provider === 'meta'
+        ? rawAccountRef
+          ? rawAccountRef.startsWith('act_')
+            ? rawAccountRef
+            : `act_${rawAccountRef}`
+          : ''
+        : rawAccountRef.replace(/[^0-9]/g, '');
+    const hasStructuredDate =
+      parts.length >= 2 && /^\d{4}-\d{2}-\d{2}$/.test(parts.at(-1) || '');
+    const rawCampaignRef =
+      hasStructuredDate && parts.length >= 3
+        ? parts.slice(1, -1).join(':')
+        : null;
+    return {
+      accountRef,
+      campaignRef:
+        rawCampaignRef && rawCampaignRef !== 'unattributed'
+          ? rawCampaignRef
+          : null,
+      date: hasStructuredDate ? parts.at(-1) || null : null,
+    };
   }
 
-  private getMetaAdsConfiguredBrand(accountId: string) {
+  private getMetaAdsConfiguredAccount(
+    accountId: string,
+  ): AdsAccountBrandRule | null {
     const raw = (
       this.configService.get<string>('META_ADS_ACCOUNTS_JSON', '') || ''
     ).trim();
     if (!raw) {
-      return '';
+      return null;
     }
 
     try {
       const parsed = JSON.parse(raw);
       const accounts = Array.isArray(parsed) ? parsed : parsed?.accounts;
       if (!Array.isArray(accounts)) {
-        return '';
+        return null;
       }
 
       const matched = accounts.find((account) => {
@@ -4503,32 +4672,33 @@ export class ReportsService {
         const normalized = value.startsWith('act_') ? value : `act_${value}`;
         return normalized === accountId;
       });
-      const reportBrand =
-        typeof matched?.reportBrand === 'string'
-          ? matched.reportBrand.trim()
-          : '';
-      if (reportBrand) {
-        return reportBrand;
-      }
-      return typeof matched?.brand === 'string' ? matched.brand.trim() : '';
+      return matched
+        ? this.mergeAdsCampaignBrandRegistry(
+            'meta',
+            accountId,
+            this.parseAdsAccountBrandRule(matched),
+          )
+        : null;
     } catch {
-      return '';
+      return null;
     }
   }
 
-  private getGoogleAdsConfiguredBrand(customerId: string) {
+  private getGoogleAdsConfiguredAccount(
+    customerId: string,
+  ): AdsAccountBrandRule | null {
     const raw = (
       this.configService.get<string>('GOOGLE_ADS_ACCOUNTS_JSON', '') || ''
     ).trim();
     if (!raw || !customerId) {
-      return '';
+      return null;
     }
 
     try {
       const parsed = JSON.parse(raw);
       const accounts = Array.isArray(parsed) ? parsed : parsed?.accounts;
       if (!Array.isArray(accounts)) {
-        return '';
+        return null;
       }
 
       const normalizedCustomerId = String(customerId).replace(/[^0-9]/g, '');
@@ -4538,16 +4708,210 @@ export class ReportsService {
         ).replace(/[^0-9]/g, '');
         return value === normalizedCustomerId;
       });
-      const reportBrand =
-        typeof matched?.reportBrand === 'string'
-          ? matched.reportBrand.trim()
-          : '';
-      if (reportBrand) {
-        return reportBrand;
-      }
-      return typeof matched?.brand === 'string' ? matched.brand.trim() : '';
+      return matched
+        ? this.mergeAdsCampaignBrandRegistry(
+            'google',
+            normalizedCustomerId,
+            this.parseAdsAccountBrandRule(matched),
+          )
+        : null;
     } catch {
-      return '';
+      return null;
+    }
+  }
+
+  private parseAdsAccountBrandRule(
+    value: Record<string, unknown>,
+  ): AdsAccountBrandRule {
+    const rawBrandMode =
+      typeof value.brandMode === 'string'
+        ? value.brandMode
+        : typeof value.brand_mode === 'string'
+          ? value.brand_mode
+          : '';
+    const normalizedBrandMode = rawBrandMode.trim().toLowerCase();
+    const brandMode =
+      normalizedBrandMode === 'portfolio' ? 'portfolio' : 'single';
+    const rawAllowedBrands = Array.isArray(value.allowedBrands)
+      ? value.allowedBrands
+      : Array.isArray(value.allowed_brands)
+        ? value.allowed_brands
+        : [];
+    const rawCampaignMappings = Array.isArray(value.campaignBrandMappings)
+      ? value.campaignBrandMappings
+      : Array.isArray(value.campaign_brand_mappings)
+        ? value.campaign_brand_mappings
+        : Array.isArray(value.campaigns)
+          ? value.campaigns
+          : [];
+    const campaignBrandMappings = rawCampaignMappings.flatMap((item) => {
+      if (!item || typeof item !== 'object') {
+        return [];
+      }
+      const record = item as Record<string, unknown>;
+      const campaignId = String(
+        record.campaignId || record.campaign_id || record.id || '',
+      ).trim();
+      const brand = String(
+        record.reportBrand || record.report_brand || record.brand || '',
+      ).trim();
+      return campaignId && brand ? [{ campaignId, brand }] : [];
+    });
+
+    return {
+      name: typeof value.name === 'string' ? value.name.trim() : undefined,
+      brand: typeof value.brand === 'string' ? value.brand.trim() : undefined,
+      reportBrand:
+        typeof value.reportBrand === 'string'
+          ? value.reportBrand.trim()
+          : typeof value.report_brand === 'string'
+            ? value.report_brand.trim()
+            : undefined,
+      brandMode,
+      allowedBrands: rawAllowedBrands
+        .map((item) => String(item || '').trim())
+        .filter(Boolean),
+      campaignBrandMappings,
+    };
+  }
+
+  private mergeAdsCampaignBrandRegistry(
+    provider: 'meta' | 'google',
+    accountRef: string,
+    brandRule: AdsAccountBrandRule,
+  ): AdsAccountBrandRule {
+    const registry = this.getAdsCampaignBrandRegistry(provider);
+    if (!registry.valid) {
+      throw new BadRequestException(
+        registry.error || `${registry.envName} is invalid`,
+      );
+    }
+    const externalMappings = registry.entries
+      .filter((entry) => entry.accountRef === accountRef)
+      .map(({ campaignId, brand }) => ({ campaignId, brand }));
+    if (!externalMappings.length) {
+      return brandRule;
+    }
+    const mappings = new Map(
+      (brandRule.campaignBrandMappings || []).map((item) => [
+        item.campaignId,
+        item,
+      ]),
+    );
+    for (const mapping of externalMappings) {
+      const existing = mappings.get(mapping.campaignId);
+      if (existing && existing.brand !== mapping.brand) {
+        throw new BadRequestException(
+          `${registry.envName} conflicts with inline campaign mapping for ${accountRef}:${mapping.campaignId}: ${existing.brand} / ${mapping.brand}`,
+        );
+      }
+      mappings.set(mapping.campaignId, mapping);
+    }
+    return {
+      ...brandRule,
+      campaignBrandMappings: [...mappings.values()],
+    };
+  }
+
+  private getAdsCampaignBrandRegistry(provider: 'meta' | 'google') {
+    const envName =
+      provider === 'meta'
+        ? 'META_ADS_CAMPAIGN_BRANDS_JSON'
+        : 'GOOGLE_ADS_CAMPAIGN_BRANDS_JSON';
+    const raw = (this.configService.get<string>(envName, '') || '').trim();
+    if (!raw) {
+      return {
+        envName,
+        present: false,
+        valid: true,
+        error: null,
+        entries: [] as Array<{
+          accountRef: string;
+          campaignId: string;
+          brand: string;
+        }>,
+      };
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      const items = Array.isArray(parsed) ? parsed : parsed?.campaigns;
+      if (!Array.isArray(items)) {
+        return {
+          envName,
+          present: true,
+          valid: false,
+          error: `${envName} 必須是陣列，或包含 campaigns 陣列。`,
+          entries: [] as Array<{
+            accountRef: string;
+            campaignId: string;
+            brand: string;
+          }>,
+        };
+      }
+      const entries = items.flatMap((item) => {
+        if (!item || typeof item !== 'object') {
+          return [];
+        }
+        const record = item as Record<string, unknown>;
+        const rawAccountRef = String(
+          provider === 'meta'
+            ? record.accountId || record.account_id || record.adAccountId || ''
+            : record.customerId || record.customer_id || record.accountId || '',
+        ).trim();
+        const accountRef =
+          provider === 'meta'
+            ? rawAccountRef
+              ? rawAccountRef.startsWith('act_')
+                ? rawAccountRef
+                : `act_${rawAccountRef}`
+              : ''
+            : rawAccountRef.replace(/[^0-9]/g, '');
+        const campaignId = String(
+          record.campaignId || record.campaign_id || record.id || '',
+        ).trim();
+        const brand = String(
+          record.reportBrand || record.report_brand || record.brand || '',
+        ).trim();
+        return accountRef && campaignId && brand
+          ? [{ accountRef, campaignId, brand }]
+          : [];
+      });
+      const uniqueEntries = new Map<string, (typeof entries)[number]>();
+      for (const entry of entries) {
+        const key = `${entry.accountRef}:${entry.campaignId}`;
+        const existing = uniqueEntries.get(key);
+        if (existing && existing.brand !== entry.brand) {
+          return {
+            envName,
+            present: true,
+            valid: false,
+            error: `${envName} 對 ${key} 設定了互相衝突的品牌 ${existing.brand} / ${entry.brand}。`,
+            entries: [] as typeof entries,
+          };
+        }
+        uniqueEntries.set(key, entry);
+      }
+      return {
+        envName,
+        present: true,
+        valid: true,
+        error: null,
+        entries: [...uniqueEntries.values()],
+      };
+    } catch (error: unknown) {
+      return {
+        envName,
+        present: true,
+        valid: false,
+        error: `${envName} JSON 無法解析：${
+          error instanceof Error ? error.message : 'Invalid JSON'
+        }`,
+        entries: [] as Array<{
+          accountRef: string;
+          campaignId: string;
+          brand: string;
+        }>,
+      };
     }
   }
 
@@ -4571,6 +4935,318 @@ export class ReportsService {
     return ['萬魔未來工學院', '萬物未來工學院', '1SHOP', 'SHOPLINE'].some(
       (keyword) => value.toUpperCase().includes(keyword.toUpperCase()),
     );
+  }
+
+  private async getAdsExpenseAccountRefsWithRows(entityId: string) {
+    const rows = await this.prisma.expense.findMany({
+      where: {
+        entityId,
+        sourceModule: {
+          in: ['meta_ads', 'google_ads'],
+        },
+      },
+      select: {
+        sourceModule: true,
+        sourceId: true,
+      },
+    });
+    const accountRefs = new Set<string>();
+    for (const row of rows) {
+      const provider = row.sourceModule === 'google_ads' ? 'google' : 'meta';
+      const coordinates = this.parseAdsExpenseSourceId(provider, row.sourceId);
+      if (coordinates.accountRef) {
+        accountRefs.add(`${provider}:${coordinates.accountRef}`);
+      }
+    }
+    return accountRefs;
+  }
+
+  private buildAdsConnectorReadiness(
+    params: {
+      key: string;
+      label: string;
+      category: string;
+      envNames: string[];
+      credentialGroups: string[][];
+      optionalEnvNames: string[];
+      jsonEnvName?: string;
+      externalNeeds: string[];
+      nextAction: string;
+    },
+    accountRefsWithRows: Set<string>,
+  ) {
+    const base = this.buildConnectorReadiness(params);
+    const meta = this.getConfiguredAdsMappingEvidence(
+      'meta',
+      accountRefsWithRows,
+    );
+    const google = this.getConfiguredAdsMappingEvidence(
+      'google',
+      accountRefsWithRows,
+    );
+    const metaCampaignRegistry = this.getAdsCampaignBrandRegistry('meta');
+    const googleCampaignRegistry = this.getAdsCampaignBrandRegistry('google');
+    const rawCombinedCoverage = summarizeAdsBrandMappingCoverage([
+      ...meta.resolutions.map((resolution) => ({
+        ...resolution,
+        accountRef: `META_ADS:${resolution.accountRef}`,
+      })),
+      ...google.resolutions.map((resolution) => ({
+        ...resolution,
+        accountRef: `GOOGLE_ADS:${resolution.accountRef}`,
+      })),
+    ]);
+    const metaCoverage = this.summarizeConfiguredAdsMappingEvidence(meta);
+    const googleCoverage = this.summarizeConfiguredAdsMappingEvidence(google);
+    const configuredAccountCount =
+      meta.configuredAccountCount + google.configuredAccountCount;
+    const dormantPortfolioAccountRefs = [
+      ...meta.dormantPortfolioAccountRefs.map(
+        (accountRef) => `META_ADS:${accountRef}`,
+      ),
+      ...google.dormantPortfolioAccountRefs.map(
+        (accountRef) => `GOOGLE_ADS:${accountRef}`,
+      ),
+    ].sort();
+    const dormantPortfolioAccounts = dormantPortfolioAccountRefs.length;
+    const unmappedAccounts = Math.max(
+      rawCombinedCoverage.unmappedAccounts,
+      configuredAccountCount -
+        rawCombinedCoverage.mappedAccounts -
+        dormantPortfolioAccounts,
+    );
+    const combinedCoverage = {
+      ...rawCombinedCoverage,
+      complete: metaCoverage.complete && googleCoverage.complete,
+      totalAccounts: configuredAccountCount,
+      unmappedAccounts,
+      dormantPortfolioAccounts,
+      dormantPortfolioAccountRefs,
+      coveragePercent: configuredAccountCount
+        ? Number(
+            (
+              ((rawCombinedCoverage.mappedAccounts + dormantPortfolioAccounts) /
+                configuredAccountCount) *
+              100
+            ).toFixed(2),
+          )
+        : 0,
+    };
+    const releaseBlockers = [
+      ...(meta.error ? [meta.error] : []),
+      ...(google.error ? [google.error] : []),
+      ...combinedCoverage.diagnostics,
+    ];
+    const releaseReady =
+      base.internallyConfigured &&
+      meta.valid &&
+      google.valid &&
+      meta.configuredAccountCount > 0 &&
+      google.configuredAccountCount > 0 &&
+      combinedCoverage.complete;
+
+    return {
+      ...base,
+      releaseReady,
+      brandMappingCoverage: {
+        complete: releaseReady,
+        combined: combinedCoverage,
+        meta: {
+          envName: meta.envName,
+          present: meta.present,
+          valid: meta.valid,
+          error: meta.error,
+          ...metaCoverage,
+        },
+        google: {
+          envName: google.envName,
+          present: google.present,
+          valid: google.valid,
+          error: google.error,
+          ...googleCoverage,
+        },
+        campaignRegistries: {
+          meta: {
+            envName: metaCampaignRegistry.envName,
+            present: metaCampaignRegistry.present,
+            valid: metaCampaignRegistry.valid,
+            count: metaCampaignRegistry.entries.length,
+            error: metaCampaignRegistry.error,
+          },
+          google: {
+            envName: googleCampaignRegistry.envName,
+            present: googleCampaignRegistry.present,
+            valid: googleCampaignRegistry.valid,
+            count: googleCampaignRegistry.entries.length,
+            error: googleCampaignRegistry.error,
+          },
+        },
+      },
+      releaseBlockers,
+      mappingPolicy:
+        '單一品牌帳號只接受 *_ADS_ACCOUNTS_JSON 的 account-level reportBrand / brand；portfolio 帳號只接受 nested campaignBrandMappings 或 *_ADS_CAMPAIGN_BRANDS_JSON 的精確 campaignId mapping。帳號名稱、campaign 名稱與歷史描述不得用來猜品牌。',
+    };
+  }
+
+  private summarizeConfiguredAdsMappingEvidence(evidence: {
+    valid: boolean;
+    configuredAccountCount: number;
+    dormantPortfolioAccountRefs: string[];
+    resolutions: AdsBrandMappingResolution[];
+  }) {
+    const rawCoverage = summarizeAdsBrandMappingCoverage(evidence.resolutions);
+    const dormantPortfolioAccounts =
+      evidence.dormantPortfolioAccountRefs.length;
+    const unmappedAccounts = Math.max(
+      rawCoverage.unmappedAccounts,
+      evidence.configuredAccountCount -
+        rawCoverage.mappedAccounts -
+        dormantPortfolioAccounts,
+    );
+    return {
+      ...rawCoverage,
+      complete:
+        evidence.valid &&
+        evidence.configuredAccountCount > 0 &&
+        unmappedAccounts === 0 &&
+        rawCoverage.mappedAccounts + dormantPortfolioAccounts ===
+          evidence.configuredAccountCount,
+      totalAccounts: evidence.configuredAccountCount,
+      unmappedAccounts,
+      dormantPortfolioAccounts,
+      dormantPortfolioAccountRefs: evidence.dormantPortfolioAccountRefs,
+      coveragePercent: evidence.configuredAccountCount
+        ? Number(
+            (
+              ((rawCoverage.mappedAccounts + dormantPortfolioAccounts) /
+                evidence.configuredAccountCount) *
+              100
+            ).toFixed(2),
+          )
+        : 0,
+    };
+  }
+
+  private getConfiguredAdsMappingEvidence(
+    provider: 'meta' | 'google',
+    accountRefsWithRows: Set<string>,
+  ) {
+    const envName =
+      provider === 'meta'
+        ? 'META_ADS_ACCOUNTS_JSON'
+        : 'GOOGLE_ADS_ACCOUNTS_JSON';
+    const raw = (this.configService.get<string>(envName, '') || '').trim();
+    const campaignRegistry = this.getAdsCampaignBrandRegistry(provider);
+    if (!campaignRegistry.valid) {
+      return {
+        envName,
+        present: Boolean(raw),
+        valid: false,
+        error: campaignRegistry.error,
+        configuredAccountCount: 0,
+        dormantPortfolioAccountRefs: [] as string[],
+        resolutions: [] as AdsBrandMappingResolution[],
+      };
+    }
+    if (!raw) {
+      return {
+        envName,
+        present: false,
+        valid: false,
+        error: `${envName} 尚未設定，無法建立權威的廣告帳號品牌主檔。`,
+        configuredAccountCount: 0,
+        dormantPortfolioAccountRefs: [] as string[],
+        resolutions: [] as AdsBrandMappingResolution[],
+      };
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      const accounts = Array.isArray(parsed) ? parsed : parsed?.accounts;
+      if (!Array.isArray(accounts)) {
+        return {
+          envName,
+          present: true,
+          valid: false,
+          error: `${envName} 必須是帳號陣列，或包含 accounts 陣列。`,
+          configuredAccountCount: 0,
+          dormantPortfolioAccountRefs: [] as string[],
+          resolutions: [] as AdsBrandMappingResolution[],
+        };
+      }
+      const dormantPortfolioAccountRefs: string[] = [];
+      const resolutions = accounts.flatMap((account) => {
+        const record =
+          account && typeof account === 'object'
+            ? (account as Record<string, unknown>)
+            : {};
+        const rawAccountRef =
+          provider === 'meta'
+            ? String(
+                record.accountId || record.account_id || record.id || '',
+              ).trim()
+            : String(
+                record.customerId || record.customer_id || record.id || '',
+              ).replace(/[^0-9]/g, '');
+        const accountRef =
+          provider === 'meta' && rawAccountRef
+            ? rawAccountRef.startsWith('act_')
+              ? rawAccountRef
+              : `act_${rawAccountRef}`
+            : rawAccountRef;
+        const brandRule = this.mergeAdsCampaignBrandRegistry(
+          provider,
+          accountRef,
+          this.parseAdsAccountBrandRule(record),
+        );
+        if (
+          brandRule.brandMode === 'portfolio' &&
+          brandRule.allowedBrands?.length &&
+          !brandRule.campaignBrandMappings?.length &&
+          !accountRefsWithRows.has(`${provider}:${accountRef}`)
+        ) {
+          dormantPortfolioAccountRefs.push(accountRef);
+          return [];
+        }
+        if (
+          brandRule.brandMode === 'portfolio' &&
+          brandRule.campaignBrandMappings?.length
+        ) {
+          return brandRule.campaignBrandMappings.map((campaign) =>
+            resolveConfiguredAdsBrandMapping(
+              provider,
+              accountRef,
+              brandRule,
+              campaign.campaignId,
+            ),
+          );
+        }
+        return [
+          resolveConfiguredAdsBrandMapping(provider, accountRef, brandRule),
+        ];
+      });
+      return {
+        envName,
+        present: true,
+        valid: true,
+        error: null,
+        configuredAccountCount: accounts.length,
+        dormantPortfolioAccountRefs: dormantPortfolioAccountRefs.sort(),
+        resolutions,
+      };
+    } catch (error: unknown) {
+      return {
+        envName,
+        present: true,
+        valid: false,
+        error: `${envName} JSON 無法解析：${
+          error instanceof Error ? error.message : 'Invalid JSON'
+        }`,
+        configuredAccountCount: 0,
+        dormantPortfolioAccountRefs: [] as string[],
+        resolutions: [] as AdsBrandMappingResolution[],
+      };
+    }
   }
 
   private buildConnectorReadiness(params: {
@@ -4607,7 +5283,11 @@ export class ReportsService {
       params.externalNeeds.length === 0;
     const internallyConfigured =
       missingRequired.length === 0 && hasCredentialGroup;
-    const status = ready ? 'ready' : internallyConfigured ? 'partial' : 'blocked';
+    const status = ready
+      ? 'ready'
+      : internallyConfigured
+        ? 'partial'
+        : 'blocked';
     const jsonSummary = params.jsonEnvName
       ? this.summarizeJsonConfig(params.jsonEnvName)
       : null;

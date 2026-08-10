@@ -3,11 +3,23 @@ name: Deploy Backend to Cloud Run
 on:
   push:
     branches: ["main"]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      approve_roll_forward_only_release:
+        description: "I confirmed a Cloud SQL backup, backward-compatible migrations, and roll-forward-only recovery."
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
   id-token: write
+
+# Only one backend release may inspect or change production traffic at a time.
+# This also prevents an older run from promoting a newer run's LATEST revision.
+concurrency:
+  group: cloud-run-backend-production
+  cancel-in-progress: false
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'moztech-main-db' }}
@@ -20,10 +32,63 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Classify release risk and require pre-stage approval
+        id: risk
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TARGET_REF: ${{ github.ref }}
+          PUSH_BEFORE: ${{ github.event.before || '' }}
+          ROLL_FORWARD_APPROVED: ${{ inputs.approve_roll_forward_only_release || false }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${TARGET_REF}" != "refs/heads/main" ]]; then
+            echo "::error::Production backend releases must target refs/heads/main."
+            exit 1
+          fi
+
+          BASE_SHA="${PUSH_BEFORE}"
+          if [[ -z "${BASE_SHA}" || "${BASE_SHA}" =~ ^0+$ ]]; then
+            BASE_SHA="$(git rev-parse "${GITHUB_SHA}^")"
+          fi
+
+          HIGH_RISK="no"
+          while IFS= read -r changed_file; do
+            case "${changed_file}" in
+              backend/prisma/migrations/* | \
+              backend/src/modules/integration/meta-ads/* | \
+              backend/src/modules/integration/google-ads/* | \
+              backend/src/modules/integration/ads-brand-mapping.*)
+                HIGH_RISK="yes"
+                ;;
+            esac
+          done < <(git diff --name-only "${BASE_SHA}" "${GITHUB_SHA}")
+
+          # A manual production dispatch is always treated as high-risk so an
+          # earlier commit in a multi-commit push cannot bypass the checkbox.
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+            HIGH_RISK="yes"
+          fi
+
+          echo "high_risk=${HIGH_RISK}" >> "${GITHUB_OUTPUT}"
+
+          if [[ "${HIGH_RISK}" == "yes" ]]; then
+            if [[ "${EVENT_NAME}" != "workflow_dispatch" || "${ROLL_FORWARD_APPROVED}" != "true" ]]; then
+              echo "::error::This release changes ad synchronization/mapping or Prisma migrations, or is a manual production dispatch."
+              echo "::error::Create and record a Cloud SQL backup, verify migrations are backward compatible, then manually run this workflow with approve_roll_forward_only_release checked."
+              exit 1
+            fi
+            echo "::warning title=Roll-forward-only release approved::After the first campaign-granular sync writes data, do not route production back to an older account-aggregate revision."
+          fi
 
       - name: Validate Google Cloud auth config
         shell: bash
@@ -34,7 +99,7 @@ jobs:
             exit 1
           fi
 
-      # Recommended: Workload Identity Federation (no JSON key in GitHub)
+      # Recommended: Workload Identity Federation (no JSON key in GitHub).
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
@@ -45,13 +110,56 @@ jobs:
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Build and deploy backend
-        id: deploy
+      - name: Gate - verify existing public invoker without changing IAM
         shell: bash
         run: |
           set -euo pipefail
 
-          IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPOSITORY}/${BACKEND_SERVICE}:${GITHUB_SHA}"
+          IAM_POLICY="$(gcloud run services get-iam-policy "${BACKEND_SERVICE}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --format=json)"
+          IAM_POLICY="${IAM_POLICY}" node <<'NODE'
+          const policy = JSON.parse(process.env.IAM_POLICY || '{}');
+          const publicInvoker = (policy.bindings || []).some(
+            (binding) =>
+              binding?.role === 'roles/run.invoker'
+              && (binding?.members || []).includes('allUsers'),
+          );
+          if (!publicInvoker) {
+            throw new Error(
+              'Existing Cloud Run IAM does not grant allUsers roles/run.invoker; refusing to change IAM during candidate deployment.',
+            );
+          }
+          NODE
+
+      - name: Prepare immutable release identifiers
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REVISION_SUFFIX="cand-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          CANDIDATE_REVISION="${BACKEND_SERVICE}-${REVISION_SUFFIX}"
+          CANDIDATE_TAG="${REVISION_SUFFIX}"
+          IMAGE_TAG="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPOSITORY}/${BACKEND_SERVICE}:${GITHUB_SHA}"
+
+          if (( ${#CANDIDATE_REVISION} > 63 )); then
+            echo "::error::Generated Cloud Run revision name exceeds 63 characters."
+            exit 1
+          fi
+
+          {
+            echo "image_tag=${IMAGE_TAG}"
+            echo "candidate_revision=${CANDIDATE_REVISION}"
+            echo "candidate_tag=${CANDIDATE_TAG}"
+            echo "revision_suffix=${REVISION_SUFFIX}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Ensure Artifact Registry repository exists
+        shell: bash
+        run: |
+          set -euo pipefail
 
           gcloud artifacts repositories describe "${ARTIFACT_REPOSITORY}" \
             --project="${GCP_PROJECT_ID}" \
@@ -62,22 +170,766 @@ jobs:
             --location="${GCP_REGION}" \
             --description="Cloud Run containers for ecom-accounting-system"
 
+      - name: Build immutable backend image
+        shell: bash
+        run: |
+          set -euo pipefail
           gcloud builds submit backend \
             --project="${GCP_PROJECT_ID}" \
-            --tag="${IMAGE}"
+            --tag="${{ steps.release.outputs.image_tag }}"
+
+      - name: Resolve immutable backend image digest
+        id: image
+        shell: bash
+        env:
+          IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+
+          IMAGE_DIGEST="$(gcloud artifacts docker images describe "${IMAGE_TAG}" \
+            --project="${GCP_PROJECT_ID}" \
+            --format='value(image_summary.fully_qualified_digest)')"
+          if [[ "${IMAGE_DIGEST}" != *@sha256:* ]]; then
+            echo "::error::Artifact Registry did not return an immutable sha256 image digest."
+            exit 1
+          fi
+          echo "digest=${IMAGE_DIGEST}" >> "${GITHUB_OUTPUT}"
+
+      - name: Gate 0 - snapshot current production traffic
+        shell: bash
+        env:
+          BEFORE_SERVING_FILE: ${{ runner.temp }}/backend-before-serving.json
+        run: |
+          set -euo pipefail
+
+          SERVICE_STATE="$(gcloud run services describe "${BACKEND_SERVICE}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --format='json(status.traffic)')"
+
+          SERVICE_STATE="${SERVICE_STATE}" BEFORE_SERVING_FILE="${BEFORE_SERVING_FILE}" node <<'NODE'
+          const fs = require('fs');
+          const state = JSON.parse(process.env.SERVICE_STATE || '{}');
+          const traffic = Array.isArray(state?.status?.traffic)
+            ? state.status.traffic
+            : [];
+          const servingByRevision = new Map();
+
+          for (const entry of traffic) {
+            const percent = Number(entry?.percent || 0);
+            if (percent <= 0) continue;
+            if (!entry?.revisionName) {
+              throw new Error('Production traffic entry has no explicit revisionName.');
+            }
+            servingByRevision.set(
+              entry.revisionName,
+              (servingByRevision.get(entry.revisionName) || 0) + percent,
+            );
+          }
+
+          const serving = [...servingByRevision.entries()]
+            .map(([revisionName, percent]) => ({ revisionName, percent }))
+            .sort((left, right) => left.revisionName.localeCompare(right.revisionName));
+          const total = serving.reduce((sum, entry) => sum + entry.percent, 0);
+
+          if (serving.length === 0 || total !== 100) {
+            throw new Error(`Expected exactly 100% existing production traffic; found ${total}%.`);
+          }
+
+          fs.writeFileSync(process.env.BEFORE_SERVING_FILE, JSON.stringify(serving));
+          NODE
+
+      - name: Gate 0a - keep high-risk candidates outside ad sync window
+        if: ${{ steps.risk.outputs.high_risk == 'yes' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAIPEI_HHMM="$(TZ=Asia/Taipei date +%H%M)"
+          if (( 10#${TAIPEI_HHMM} >= 330 && 10#${TAIPEI_HHMM} <= 445 )); then
+            echo "::error::High-risk candidate staging is blocked from 03:30 through 04:45 Asia/Taipei because Meta and Google Ads cron syncs run at 04:17 and 04:27."
+            exit 1
+          fi
+
+      - name: Stage candidate revision at zero percent traffic
+        id: stage
+        shell: bash
+        run: |
+          set -euo pipefail
 
           gcloud run deploy "${BACKEND_SERVICE}" \
             --project="${GCP_PROJECT_ID}" \
             --region="${GCP_REGION}" \
-            --image="${IMAGE}" \
-            --allow-unauthenticated \
-            --port=3000
+            --image="${{ steps.image.outputs.digest }}" \
+            --revision-suffix="${{ steps.release.outputs.revision_suffix }}" \
+            --tag="${{ steps.release.outputs.candidate_tag }}" \
+            --no-traffic \
+            --port=3000 \
+            --quiet
 
-          URL="$(gcloud run services describe "${BACKEND_SERVICE}" \
+      - name: Gate 1 - verify candidate identity, readiness, digest, and zero traffic
+        id: candidate
+        shell: bash
+        env:
+          BEFORE_SERVING_FILE: ${{ runner.temp }}/backend-before-serving.json
+          CANDIDATE_REVISION: ${{ steps.release.outputs.candidate_revision }}
+          CANDIDATE_TAG: ${{ steps.release.outputs.candidate_tag }}
+          EXPECTED_IMAGE: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+
+          SERVICE_STATE="$(gcloud run services describe "${BACKEND_SERVICE}" \
             --project="${GCP_PROJECT_ID}" \
             --region="${GCP_REGION}" \
-            --format='value(status.url)')"
+            --format='json(status.latestCreatedRevisionName,status.latestReadyRevisionName,status.traffic)')"
+          REVISION_STATE="$(gcloud run revisions describe "${CANDIDATE_REVISION}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --format='json(status.conditions)')"
+          DEPLOYED_IMAGE="$(gcloud run revisions describe "${CANDIDATE_REVISION}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --format='value(spec.containers[0].image)')"
+
+          CANDIDATE_URL="$(
+            SERVICE_STATE="${SERVICE_STATE}" \
+            REVISION_STATE="${REVISION_STATE}" \
+            EXPECTED_IMAGE="${EXPECTED_IMAGE}" \
+            DEPLOYED_IMAGE="${DEPLOYED_IMAGE}" \
+            BEFORE_SERVING_FILE="${BEFORE_SERVING_FILE}" \
+            CANDIDATE_REVISION="${CANDIDATE_REVISION}" \
+            CANDIDATE_TAG="${CANDIDATE_TAG}" \
+            node <<'NODE'
+          const fs = require('fs');
+          const service = JSON.parse(process.env.SERVICE_STATE || '{}');
+          const revision = JSON.parse(process.env.REVISION_STATE || '{}');
+          const status = service.status || {};
+          const traffic = Array.isArray(status.traffic) ? status.traffic : [];
+          const expectedRevision = process.env.CANDIDATE_REVISION;
+          const expectedTag = process.env.CANDIDATE_TAG;
+
+          if (status.latestCreatedRevisionName !== expectedRevision) {
+            throw new Error('The candidate is no longer the latest created revision; refusing to promote.');
+          }
+          if (status.latestReadyRevisionName !== expectedRevision) {
+            throw new Error('The exact candidate revision is not Cloud Run ready.');
+          }
+
+          const conditions = Array.isArray(revision?.status?.conditions)
+            ? revision.status.conditions
+            : [];
+          const ready = conditions.find((condition) => condition?.type === 'Ready');
+          if (String(ready?.status).toLowerCase() !== 'true') {
+            throw new Error('Candidate revision Ready condition is not true.');
+          }
+          for (const requiredCondition of ['ContainerHealthy', 'ContainerReady']) {
+            const condition = conditions.find(
+              (entry) => entry?.type === requiredCondition,
+            );
+            if (String(condition?.status).toLowerCase() !== 'true') {
+              throw new Error(`Candidate condition ${requiredCondition} is not true.`);
+            }
+          }
+
+          if (
+            !process.env.EXPECTED_IMAGE
+            || process.env.DEPLOYED_IMAGE !== process.env.EXPECTED_IMAGE
+          ) {
+            throw new Error('Candidate revision image digest does not match the image built by this run.');
+          }
+
+          const candidateEntries = traffic.filter((entry) => entry?.tag === expectedTag);
+          if (
+            candidateEntries.length !== 1
+            || candidateEntries[0]?.revisionName !== expectedRevision
+            || Number(candidateEntries[0]?.percent || 0) !== 0
+            || !String(candidateEntries[0]?.url || '').startsWith('https://')
+          ) {
+            throw new Error('Candidate tag is not bound exclusively to the zero-percent candidate revision.');
+          }
+          if (
+            traffic.some(
+              (entry) =>
+                entry?.revisionName === expectedRevision
+                && Number(entry?.percent || 0) > 0,
+            )
+          ) {
+            throw new Error('Candidate received production traffic before release gates passed.');
+          }
+
+          const servingByRevision = new Map();
+          for (const entry of traffic) {
+            const percent = Number(entry?.percent || 0);
+            if (percent <= 0) continue;
+            if (!entry?.revisionName) {
+              throw new Error('Serving traffic entry has no explicit revisionName.');
+            }
+            servingByRevision.set(
+              entry.revisionName,
+              (servingByRevision.get(entry.revisionName) || 0) + percent,
+            );
+          }
+          const servingNow = [...servingByRevision.entries()]
+            .map(([revisionName, percent]) => ({ revisionName, percent }))
+            .sort((left, right) => left.revisionName.localeCompare(right.revisionName));
+          const servingBefore = JSON.parse(
+            fs.readFileSync(process.env.BEFORE_SERVING_FILE, 'utf8'),
+          );
+          if (JSON.stringify(servingNow) !== JSON.stringify(servingBefore)) {
+            throw new Error('Production traffic changed while staging the candidate.');
+          }
+
+          process.stdout.write(candidateEntries[0].url);
+          NODE
+          )"
+
+          echo "candidate_url=${CANDIDATE_URL}" >> "${GITHUB_OUTPUT}"
+
+      - name: Gate 2 - require successful migration and database startup logs
+        shell: bash
+        env:
+          CANDIDATE_REVISION: ${{ steps.release.outputs.candidate_revision }}
+          LOG_ERROR_FILE: ${{ runner.temp }}/backend-candidate-log-read-error.txt
+        run: |
+          set -euo pipefail
+
+          FILTER="resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${BACKEND_SERVICE}\" AND resource.labels.revision_name=\"${CANDIDATE_REVISION}\" AND (textPayload:\"Migrations completed successfully\" OR textPayload:\"Migration failed\" OR textPayload:\"Successfully connected to database\" OR textPayload:\"Failed to connect to database\" OR jsonPayload.message:\"Migrations completed successfully\" OR jsonPayload.message:\"Migration failed\" OR jsonPayload.message:\"Successfully connected to database\" OR jsonPayload.message:\"Failed to connect to database\")"
+          STARTUP_STATE="pending"
+
+          for attempt in {1..12}; do
+            if ! STARTUP_LOGS="$(
+              gcloud logging read "${FILTER}" \
+                --project="${GCP_PROJECT_ID}" \
+                --freshness=30m \
+                --limit=50 \
+                --format='json(textPayload,jsonPayload.message)' \
+                2>"${LOG_ERROR_FILE}"
+            )"; then
+              echo "::error::Unable to read exact candidate revision logs. Grant the deployer logging.logEntries.list (for example roles/logging.viewer); no log body was printed."
+              exit 1
+            fi
+
+            STARTUP_STATE="$(
+              STARTUP_LOGS="${STARTUP_LOGS}" node <<'NODE'
+              const logs = JSON.parse(process.env.STARTUP_LOGS || '[]');
+              const serialized = JSON.stringify(logs);
+              const failed =
+                serialized.includes('Migration failed')
+                || serialized.includes('Failed to connect to database');
+              const migrationComplete = serialized.includes(
+                'Migrations completed successfully.',
+              );
+              const databaseConnected = serialized.includes(
+                'Successfully connected to database',
+              );
+
+              process.stdout.write(
+                failed
+                  ? 'failed'
+                  : migrationComplete && databaseConnected
+                    ? 'ready'
+                    : 'pending',
+              );
+              NODE
+            )"
+
+            if [[ "${STARTUP_STATE}" == "ready" ]]; then
+              break
+            fi
+            if [[ "${STARTUP_STATE}" == "failed" ]]; then
+              echo "::error::Exact candidate logs report migration or database startup failure. Log bodies are intentionally not printed."
+              exit 1
+            fi
+            sleep 5
+          done
+
+          if [[ "${STARTUP_STATE}" != "ready" ]]; then
+            echo "::error::Exact candidate logs did not prove both migration completion and database connection within the gate window."
+            exit 1
+          fi
+
+      - name: Gate 3 - smoke candidate container, database query, and API contract
+        shell: bash
+        env:
+          CANDIDATE_URL: ${{ steps.candidate.outputs.candidate_url }}
+          CANDIDATE_REVISION: ${{ steps.release.outputs.candidate_revision }}
+          SMOKE_ENTITY_ID: ${{ vars.CLOUD_RUN_BACKEND_SMOKE_ENTITY_ID || 'tw-entity-001' }}
+          HEALTH_FILE: ${{ runner.temp }}/backend-candidate-health.json
+          DB_PROBE_FILE: ${{ runner.temp }}/backend-candidate-login-entities.json
+          OPENAPI_FILE: ${{ runner.temp }}/backend-candidate-openapi.json
+          SMOKE_PASSWORD_FILE: ${{ runner.temp }}/backend-candidate-smoke-password
+        run: |
+          set -euo pipefail
+          umask 077
+          cleanup_smoke_password() {
+            if [[ -f "${SMOKE_PASSWORD_FILE}" ]]; then
+              : > "${SMOKE_PASSWORD_FILE}"
+              rm -f "${SMOKE_PASSWORD_FILE}"
+            fi
+          }
+          trap cleanup_smoke_password EXIT
+
+          fetch_candidate() {
+            local path="$1"
+            local output_file="$2"
+            curl \
+              --silent \
+              --show-error \
+              --fail \
+              --location \
+              --retry 8 \
+              --retry-all-errors \
+              --retry-delay 5 \
+              --connect-timeout 10 \
+              --max-time 30 \
+              --output "${output_file}" \
+              "${CANDIDATE_URL}${path}"
+          }
+
+          fetch_candidate "/api-docs-json" "${OPENAPI_FILE}"
+          fetch_candidate "/api/v1/auth/login-entities" "${DB_PROBE_FILE}"
+
+          HEALTH_HTTP_CODE="$(
+            curl \
+              --silent \
+              --show-error \
+              --location \
+              --retry 5 \
+              --retry-all-errors \
+              --retry-delay 3 \
+              --connect-timeout 10 \
+              --max-time 30 \
+              --output "${HEALTH_FILE}" \
+              --write-out '%{http_code}' \
+              "${CANDIDATE_URL}/api/v1/health"
+          )"
+
+          OPENAPI_FILE="${OPENAPI_FILE}" DB_PROBE_FILE="${DB_PROBE_FILE}" node <<'NODE'
+          const fs = require('fs');
+          const openapi = JSON.parse(fs.readFileSync(process.env.OPENAPI_FILE, 'utf8'));
+          const loginEntities = JSON.parse(
+            fs.readFileSync(process.env.DB_PROBE_FILE, 'utf8'),
+          );
+
+          if (!Array.isArray(loginEntities)) {
+            throw new Error('Candidate public login-entities DB probe did not return an array.');
+          }
+
+          const documentedPaths = Object.keys(openapi?.paths || {});
+          const requiredPathSuffixes = [
+            '/health',
+            '/auth/login-entities',
+            '/integrations/meta-ads/readiness',
+            '/integrations/google-ads/readiness',
+            '/reports/connector-readiness',
+          ];
+          const missing = requiredPathSuffixes.filter(
+            (suffix) => !documentedPaths.some((path) => path.endsWith(suffix)),
+          );
+          if (missing.length > 0) {
+            throw new Error(`Candidate OpenAPI contract is missing required paths: ${missing.join(', ')}`);
+          }
+          NODE
+
+          if [[ "${HEALTH_HTTP_CODE}" == "200" ]]; then
+          HEALTH_FILE="${HEALTH_FILE}" CANDIDATE_REVISION="${CANDIDATE_REVISION}" node <<'NODE'
+          const fs = require('fs');
+          const health = JSON.parse(fs.readFileSync(process.env.HEALTH_FILE, 'utf8'));
+          if (
+            health?.status !== 'ok'
+            || health?.cloudRun?.revision !== process.env.CANDIDATE_REVISION
+          ) {
+            throw new Error('Public candidate health response did not come from the exact candidate revision.');
+          }
+          NODE
+          elif [[ "${HEALTH_HTTP_CODE}" == "401" ]]; then
+            echo "::notice title=Protected health endpoint::The application JWT guard protects /api/v1/health in the current backend. Candidate identity is proven by its Cloud Run tag binding, Ready/ContainerHealthy/ContainerReady conditions, image digest, and successful OpenAPI HTTP smoke."
+          else
+            echo "::error::Candidate /api/v1/health returned unexpected HTTP ${HEALTH_HTTP_CODE}."
+            exit 1
+          fi
+
+          CANDIDATE_ENV_JSON="$(
+            gcloud run revisions describe "${CANDIDATE_REVISION}" \
+              --project="${GCP_PROJECT_ID}" \
+              --region="${GCP_REGION}" \
+              --format='json(spec.containers[0].env)'
+          )"
+
+          SMOKE_CONFIG="$(
+            CANDIDATE_ENV_JSON="${CANDIDATE_ENV_JSON}" node <<'NODE'
+          const revision = JSON.parse(process.env.CANDIDATE_ENV_JSON || '{}');
+          const env = revision?.spec?.containers?.[0]?.env || [];
+          const byName = new Map(env.map((entry) => [entry?.name, entry]));
+          const email = String(byName.get('SUPER_ADMIN_EMAIL')?.value || '').trim();
+          const passwordSecret = String(
+            byName.get('SUPER_ADMIN_PASSWORD')?.valueFrom?.secretKeyRef?.name || '',
+          ).trim();
+          const passwordSecretVersion = String(
+            byName.get('SUPER_ADMIN_PASSWORD')?.valueFrom?.secretKeyRef?.key || '',
+          ).trim();
+          if (!email || !passwordSecret || !passwordSecretVersion) {
+            throw new Error(
+              'Candidate must inherit SUPER_ADMIN_EMAIL and a Secret Manager backed SUPER_ADMIN_PASSWORD for authenticated release readiness.',
+            );
+          }
+          process.stdout.write(
+            JSON.stringify({ email, passwordSecret, passwordSecretVersion }),
+          );
+          NODE
+          )"
+
+          SMOKE_EMAIL="$(
+            SMOKE_CONFIG="${SMOKE_CONFIG}" node -e \
+              'process.stdout.write(JSON.parse(process.env.SMOKE_CONFIG).email)'
+          )"
+          SMOKE_PASSWORD_SECRET="$(
+            SMOKE_CONFIG="${SMOKE_CONFIG}" node -e \
+              'process.stdout.write(JSON.parse(process.env.SMOKE_CONFIG).passwordSecret)'
+          )"
+          SMOKE_PASSWORD_SECRET_VERSION="$(
+            SMOKE_CONFIG="${SMOKE_CONFIG}" node -e \
+              'process.stdout.write(JSON.parse(process.env.SMOKE_CONFIG).passwordSecretVersion)'
+          )"
+
+          if ! gcloud secrets versions access "${SMOKE_PASSWORD_SECRET_VERSION}" \
+            --project="${GCP_PROJECT_ID}" \
+            --secret="${SMOKE_PASSWORD_SECRET}" \
+            > "${SMOKE_PASSWORD_FILE}"; then
+            echo "::error::Unable to read the candidate SUPER_ADMIN_PASSWORD secret. Grant the deployer secretmanager.versions.access on that one secret; no secret value was printed."
+            exit 1
+          fi
+          chmod 600 "${SMOKE_PASSWORD_FILE}"
+
+          CANDIDATE_URL="${CANDIDATE_URL}" \
+          SMOKE_EMAIL="${SMOKE_EMAIL}" \
+          SMOKE_PASSWORD_FILE="${SMOKE_PASSWORD_FILE}" \
+          SMOKE_ENTITY_ID="${SMOKE_ENTITY_ID}" \
+          node <<'NODE'
+          const fs = require('fs');
+
+          const baseUrl = new URL(process.env.CANDIDATE_URL);
+          const email = String(process.env.SMOKE_EMAIL || '').trim();
+          const password = fs.readFileSync(process.env.SMOKE_PASSWORD_FILE, 'utf8').trim();
+          const entityId = String(process.env.SMOKE_ENTITY_ID || '').trim();
+          if (!email || !password || !entityId) {
+            throw new Error('Authenticated release smoke configuration is incomplete.');
+          }
+
+          async function requestJson(path, options = {}) {
+            const response = await fetch(new URL(path, baseUrl), {
+              ...options,
+              signal: AbortSignal.timeout(120_000),
+              headers: {
+                accept: 'application/json',
+                ...(options.headers || {}),
+              },
+            });
+            if (!response.ok) {
+              throw new Error(`${path} returned HTTP ${response.status}.`);
+            }
+            return response.json();
+          }
+
+          function requireAdsReleaseReady(provider, value) {
+            if (
+              value?.releaseReady !== true
+              || value?.readyForAnalysis !== true
+              || value?.allConfiguredAccountsChecked !== true
+              || !Number.isInteger(value?.configuredAccountCount)
+              || value.configuredAccountCount < 1
+              || (value?.unexpectedAccountRefs || []).length > 0
+              || value?.brandMappingCoverage?.complete !== true
+            ) {
+              throw new Error(
+                `${provider} authenticated readiness is not release-ready.`,
+              );
+            }
+          }
+
+          (async () => {
+            const login = await requestJson('/api/v1/auth/login', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ email, password }),
+            });
+            const token = String(login?.access_token || '');
+            if (!token) {
+              throw new Error('Candidate login did not return an access token.');
+            }
+            const headers = { authorization: `Bearer ${token}` };
+            const [meta, google, reports] = await Promise.all([
+              requestJson('/api/v1/integrations/meta-ads/readiness', { headers }),
+              requestJson('/api/v1/integrations/google-ads/readiness', { headers }),
+              requestJson(
+                `/api/v1/reports/connector-readiness?entityId=${encodeURIComponent(entityId)}`,
+                { headers },
+              ),
+            ]);
+
+            requireAdsReleaseReady('Meta Ads', meta);
+            requireAdsReleaseReady('Google Ads', google);
+
+            const adsConnector = (reports?.connectors || []).find(
+              (connector) => connector?.key === 'ad-spend',
+            );
+            if (
+              adsConnector?.releaseReady !== true
+              || adsConnector?.brandMappingCoverage?.complete !== true
+              || (adsConnector?.releaseBlockers || []).length > 0
+            ) {
+              throw new Error(
+                'Authenticated report connector readiness is not release-ready.',
+              );
+            }
+
+            process.stdout.write(
+              `Authenticated ads readiness passed: Meta ${meta.configuredAccountCount}, Google ${google.configuredAccountCount}, report mapping complete.\n`,
+            );
+          })().catch((error) => {
+            process.stderr.write(
+              `${error instanceof Error ? error.message : 'Authenticated release smoke failed.'}\n`,
+            );
+            process.exit(1);
+          });
+          NODE
+
+      - name: Gate 4 - recheck zero traffic immediately before promotion
+        shell: bash
+        env:
+          BEFORE_SERVING_FILE: ${{ runner.temp }}/backend-before-serving.json
+          CANDIDATE_REVISION: ${{ steps.release.outputs.candidate_revision }}
+          CANDIDATE_TAG: ${{ steps.release.outputs.candidate_tag }}
+        run: |
+          set -euo pipefail
+
+          SERVICE_STATE="$(gcloud run services describe "${BACKEND_SERVICE}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --format='json(status.latestCreatedRevisionName,status.latestReadyRevisionName,status.traffic)')"
+
+          SERVICE_STATE="${SERVICE_STATE}" \
+          BEFORE_SERVING_FILE="${BEFORE_SERVING_FILE}" \
+          CANDIDATE_REVISION="${CANDIDATE_REVISION}" \
+          CANDIDATE_TAG="${CANDIDATE_TAG}" \
+          node <<'NODE'
+          const fs = require('fs');
+          const state = JSON.parse(process.env.SERVICE_STATE || '{}');
+          const status = state.status || {};
+          const traffic = Array.isArray(status.traffic) ? status.traffic : [];
+          const candidateRevision = process.env.CANDIDATE_REVISION;
+          const candidateTag = process.env.CANDIDATE_TAG;
+
+          if (
+            status.latestCreatedRevisionName !== candidateRevision
+            || status.latestReadyRevisionName !== candidateRevision
+          ) {
+            throw new Error('Candidate identity changed after smoke checks; refusing to promote.');
+          }
+          if (
+            !traffic.some(
+              (entry) =>
+                entry?.tag === candidateTag
+                && entry?.revisionName === candidateRevision
+                && Number(entry?.percent || 0) === 0,
+            )
+            || traffic.some(
+              (entry) =>
+                entry?.revisionName === candidateRevision
+                && Number(entry?.percent || 0) > 0,
+            )
+          ) {
+            throw new Error('Candidate is not isolated at zero percent immediately before promotion.');
+          }
+
+          const servingByRevision = new Map();
+          for (const entry of traffic) {
+            const percent = Number(entry?.percent || 0);
+            if (percent <= 0) continue;
+            servingByRevision.set(
+              entry.revisionName,
+              (servingByRevision.get(entry.revisionName) || 0) + percent,
+            );
+          }
+          const servingNow = [...servingByRevision.entries()]
+            .map(([revisionName, percent]) => ({ revisionName, percent }))
+            .sort((left, right) => left.revisionName.localeCompare(right.revisionName));
+          const servingBefore = JSON.parse(
+            fs.readFileSync(process.env.BEFORE_SERVING_FILE, 'utf8'),
+          );
+          if (JSON.stringify(servingNow) !== JSON.stringify(servingBefore)) {
+            throw new Error('Production traffic changed during candidate validation.');
+          }
+          NODE
+
+      - name: Promote exact candidate to one hundred percent
+        id: promote
+        shell: bash
+        env:
+          CANDIDATE_REVISION: ${{ steps.release.outputs.candidate_revision }}
+          CANDIDATE_TAG: ${{ steps.release.outputs.candidate_tag }}
+        run: |
+          set -euo pipefail
+
+          # Promote the exact revision validated above. Never use --to-latest:
+          # a concurrent/manual revision must not be able to replace this target.
+          # Remove only this run's temporary tag; preserve unrelated tagged URLs.
+          gcloud run services update-traffic "${BACKEND_SERVICE}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --remove-tags="${CANDIDATE_TAG}" \
+            --to-revisions="${CANDIDATE_REVISION}=100" \
+            --quiet
+
+      - name: Verify promoted production revision and HTTP
+        id: production
+        shell: bash
+        env:
+          CANDIDATE_REVISION: ${{ steps.release.outputs.candidate_revision }}
+          CANDIDATE_TAG: ${{ steps.release.outputs.candidate_tag }}
+          EXPECTED_IMAGE: ${{ steps.image.outputs.digest }}
+          HEALTH_FILE: ${{ runner.temp }}/backend-production-health.json
+          OPENAPI_FILE: ${{ runner.temp }}/backend-production-openapi.json
+        run: |
+          set -euo pipefail
+
+          SERVICE_STATE="$(gcloud run services describe "${BACKEND_SERVICE}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --format='json(status.latestReadyRevisionName,status.traffic,status.url)')"
+          DEPLOYED_IMAGE="$(gcloud run revisions describe "${CANDIDATE_REVISION}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --format='value(spec.containers[0].image)')"
+
+          URL="$(
+            SERVICE_STATE="${SERVICE_STATE}" \
+            EXPECTED_IMAGE="${EXPECTED_IMAGE}" \
+            DEPLOYED_IMAGE="${DEPLOYED_IMAGE}" \
+            CANDIDATE_REVISION="${CANDIDATE_REVISION}" \
+            node <<'NODE'
+          const state = JSON.parse(process.env.SERVICE_STATE || '{}');
+          const status = state.status || {};
+          const traffic = Array.isArray(status.traffic) ? status.traffic : [];
+          const expectedRevision = process.env.CANDIDATE_REVISION;
+          const servingByRevision = new Map();
+
+          for (const entry of traffic) {
+            const percent = Number(entry?.percent || 0);
+            if (percent <= 0) continue;
+            if (!entry?.revisionName) {
+              throw new Error('Production traffic entry has no explicit revisionName.');
+            }
+            servingByRevision.set(
+              entry.revisionName,
+              (servingByRevision.get(entry.revisionName) || 0) + percent,
+            );
+          }
+          const serving = [...servingByRevision.entries()]
+            .map(([revisionName, percent]) => ({ revisionName, percent }));
+
+          if (
+            status.latestReadyRevisionName !== expectedRevision
+            || serving.length !== 1
+            || serving[0]?.revisionName !== expectedRevision
+            || serving[0]?.percent !== 100
+            || traffic.some((entry) => entry?.tag === process.env.CANDIDATE_TAG)
+          ) {
+            throw new Error('Production is not exclusively serving the exact validated candidate revision.');
+          }
+          if (
+            !process.env.EXPECTED_IMAGE
+            || process.env.DEPLOYED_IMAGE !== process.env.EXPECTED_IMAGE
+          ) {
+            throw new Error('Promoted production revision does not match this run image digest.');
+          }
+          if (!String(status.url || '').startsWith('https://')) {
+            throw new Error('Cloud Run did not return a production HTTPS URL.');
+          }
+          process.stdout.write(status.url);
+          NODE
+          )"
+
+          curl \
+            --silent \
+            --show-error \
+            --fail \
+            --location \
+            --retry 5 \
+            --retry-all-errors \
+            --retry-delay 3 \
+            --connect-timeout 10 \
+            --max-time 30 \
+            --output "${OPENAPI_FILE}" \
+            "${URL}/api-docs-json"
+
+          HEALTH_HTTP_CODE="$(
+            curl \
+              --silent \
+              --show-error \
+              --location \
+              --retry 5 \
+              --retry-all-errors \
+              --retry-delay 3 \
+              --connect-timeout 10 \
+              --max-time 30 \
+              --output "${HEALTH_FILE}" \
+              --write-out '%{http_code}' \
+              "${URL}/api/v1/health"
+          )"
+          if [[ "${HEALTH_HTTP_CODE}" == "200" ]]; then
+          HEALTH_FILE="${HEALTH_FILE}" CANDIDATE_REVISION="${CANDIDATE_REVISION}" node <<'NODE'
+          const fs = require('fs');
+          const health = JSON.parse(fs.readFileSync(process.env.HEALTH_FILE, 'utf8'));
+          if (
+            health?.status !== 'ok'
+            || health?.cloudRun?.revision !== process.env.CANDIDATE_REVISION
+          ) {
+            throw new Error('Public production health response did not come from the promoted revision.');
+          }
+          NODE
+          elif [[ "${HEALTH_HTTP_CODE}" != "401" ]]; then
+            echo "::error::Production /api/v1/health returned unexpected HTTP ${HEALTH_HTTP_CODE}."
+            echo "::error::Do not route traffic back to an older campaign-aggregate revision; reconcile and roll forward."
+            exit 1
+          fi
+
           echo "url=${URL}" >> "${GITHUB_OUTPUT}"
 
+      - name: Remove this run candidate tag if it still exists
+        if: ${{ always() && steps.release.outcome == 'success' && steps.stage.outcome != 'skipped' }}
+        shell: bash
+        env:
+          CANDIDATE_TAG: ${{ steps.release.outputs.candidate_tag }}
+        run: |
+          set -euo pipefail
+
+          SERVICE_STATE="$(gcloud run services describe "${BACKEND_SERVICE}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --format='json(status.traffic)')"
+          HAS_TAG="$(
+            SERVICE_STATE="${SERVICE_STATE}" CANDIDATE_TAG="${CANDIDATE_TAG}" node <<'NODE'
+          const state = JSON.parse(process.env.SERVICE_STATE || '{}');
+          const traffic = Array.isArray(state?.status?.traffic)
+            ? state.status.traffic
+            : [];
+          process.stdout.write(
+            traffic.some((entry) => entry?.tag === process.env.CANDIDATE_TAG)
+              ? 'yes'
+              : 'no',
+          );
+          NODE
+          )"
+
+          if [[ "${HAS_TAG}" == "yes" ]]; then
+            gcloud run services update-traffic "${BACKEND_SERVICE}" \
+              --project="${GCP_PROJECT_ID}" \
+              --region="${GCP_REGION}" \
+              --remove-tags="${CANDIDATE_TAG}" \
+              --quiet
+          fi
+
       - name: Show service URL
-        run: echo "Deployed to ${{ steps.deploy.outputs.url }}"
+        if: ${{ success() }}
+        run: echo "Deployed exact validated revision to ${{ steps.production.outputs.url }}"

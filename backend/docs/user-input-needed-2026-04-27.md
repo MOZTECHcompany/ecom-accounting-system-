@@ -180,6 +180,28 @@
       }
     ]
     ```
+  - 若一個廣告帳號同時投放多個品牌，必須標記為 `brandMode=portfolio`，並提供品牌白名單與精確 campaign ID 主檔；系統不會用帳號名稱或 campaign 名稱猜品牌：
+    ```json
+    [
+      {
+        "accountId": "act_140675171327599",
+        "name": "萬魔未來工學院 OMFUTURE",
+        "brandMode": "portfolio",
+        "allowedBrands": ["MOZTECH", "BONSON", "AIRITY"],
+        "currency": "TWD"
+      }
+    ]
+    ```
+    ```json
+    [
+      {
+        "accountId": "act_140675171327599",
+        "campaignId": "120247330504490618",
+        "brand": "AIRITY"
+      }
+    ]
+    ```
+    第二段設定放在 `META_ADS_CAMPAIGN_BRANDS_JSON`；portfolio 中未列出的 campaign 一律顯示 `待對應`，不得混入任何品牌。
   - Google Ads 帳號與 API 權限：
     - `GOOGLE_ADS_DEVELOPER_TOKEN`：Google Ads 後台「工具與設定 > API 中心」取得。
     - `GOOGLE_ADS_CLIENT_ID` / `GOOGLE_ADS_CLIENT_SECRET`：Google Cloud Console OAuth client。
@@ -210,7 +232,10 @@
   - 2026-05-01 到 2026-05-09 已抓到 Google Ads spend `NT$341,789.47`，來源包含 `8052579705 MOZTECH 墨子科技` 與 `8602556100 bonson 邦生`。
   - 已補最近 30 天 `2026-04-12` 到 `2026-05-11` 的 Google Ads daily spend：`fetched=72`、`synced=72`、`created=54`、`updated=18`，寫入 `Expense / ExpenseItem`，`sourceModule=google_ads`。
   - Cloud Run 已開啟 `GOOGLE_ADS_SYNC_ENABLED=true`，revision `ecom-accounting-backend-00361-khw` 已驗證 Google Ads readiness 仍為 `ready=true`，每日會回刷最近 7 天。
-  - 2026-05-11 使用者確認 Google Ads 品牌歸屬：`8052579705` 是 MOZTECH 全球獨立站目前使用帳戶，`8602556100` 是 BONSON，`8672054842` 是 MORITEK，`5801010919` 歸 MOZTECH。Cloud Run `GOOGLE_ADS_ACCOUNTS_JSON` 已依此設定。
+  - Google Ads 權威品牌 / 市場主檔：`8052579705` 是 `MOZTECH_TW`（TWD / Asia/Taipei / market TW）；`8602556100` 是 `BONSON`（market TW）；`8672054842` 是 `MORITEK`（TWD / Asia/Taipei / market TW）；`5801010919` 是 `MOZTECH_US` 美國獨立站（TWD / America/New_York / market US），不可因 MOZTECH 名稱把它混入台灣帳號。Cloud Run `GOOGLE_ADS_ACCOUNTS_JSON` 每列必須明確設定 `reportBrand`、`market`、`businessUnit`、`channelCode`、`brandMode=single`（也接受 `single_brand` alias）；程式不得以名稱或 timezone 自行推論。
+  - 2026-08-03 品牌治理 contract 已改成權威主檔：單一品牌帳號只接受 `*_ADS_ACCOUNTS_JSON` 的 `reportBrand` / `brand`；portfolio 帳號只接受精確 campaign ID mapping。未映射列會保留資料但隔離在 `待對應`，readiness / insights / sync / ad-performance-summary 都會回傳 mapping coverage 與 diagnostic，releaseReady 必須在 coverage 完整時才為 true。
+  - 2026-08-03 正式帳號主檔已擴充為 Meta 7 個分析帳號與 Google Ads 5 個分析帳號。Meta 新納入 `act_791999392715510 MORITEK TW => MORITEK`；`act_140675171327599 萬魔未來工學院 OMFUTURE` 維持 portfolio，現有三個有花費 campaign 以精確 ID 對應 AIRITY。Google 新納入 `6171193760 萬魔未來工學院` 作 dormant portfolio（TWD / Asia/Taipei，近 30 日零花費），日後一旦出現有花費 campaign，沒有精確 mapping 就會阻止 release。`1047400912417236 DAILY LAB OFFICIAL` 目前只列為 Meta token 可見但未納入分析，不得自動猜成公司品牌；`6215621647` 是 Google manager account，不是廣告花費帳號。
+  - 2026-08-03 首次 campaign-granular 正式同步已完成：Meta `215` 筆、Google Ads `162` 筆，共 `377` 筆 `account:campaign:date` Expense；舊 `account:date` aggregate 已清為 `0`。正式基線不得退回 `ecom-accounting-backend-brand-reg-v2` 之前，只能 roll forward / reconcile。
   - 2026-05-11 已重新同步 `2026-04-12` 到 `2026-05-11` Google Ads daily spend，`fetched=72`、`synced=72`、`created=0`、`updated=72`，讓既有費用列補上 brand / platform 描述。
   - 2026-05-11 Cloud Run revision `ecom-accounting-backend-00366-z76` 已驗證 `GET /reports/ad-performance-summary` 合併 Meta Ads + Google Ads，且 `adSource` 顯示 `META_ADS + GOOGLE_ADS`。正式 API 驗證同區間 `adSpend=NT$1,927,783.01`，其中 `MOZTECH=NT$1,221,124.60`、`BONSON=NT$703,230.34`、`MORITEK=NT$3,428.07`。
   - 2026-05-11 Cloud Run revision `ecom-accounting-backend-00368-7tc` 已修正 ROAS 營收端：不再只抓 Shopify，而是合併 Shopify + Shopline + 1Shop。正式 API 驗證 `2026-04-12` 到 `2026-05-11` 回傳 `salesSource=SHOPIFY + SHOPLINE + 1SHOP`、整體 `revenue=NT$3,454,888`、`adSpend=NT$1,928,246.65`、`ROAS=1.7917`；BONSON 已可看到 `revenue=NT$999,594`、`adSpend=NT$703,290.09`、`ROAS=1.4213`，不再因 BONSON 營收在 Shopline / 1Shop 而顯示為 0。
