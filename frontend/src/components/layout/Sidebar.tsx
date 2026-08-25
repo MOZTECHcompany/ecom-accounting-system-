@@ -75,7 +75,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       children: [
         { key: '/ap/expenses', label: '費用申請' },
         { key: '/ap/expense-review', label: '費用審核中心' },
-        { key: '/ap/payable', label: '應付帳款 (AP)' },
+        { key: '/ap/payable', label: '應付帳款' },
       ],
     },
     {
@@ -125,7 +125,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               <BrandMark className="w-5 h-5" alt="System logo" />
             </div>
             <div className="max-w-[152px] text-gray-800 font-medium text-sm leading-tight tracking-wide">
-              AI 電子商務營運中樞
+              電子商務 ERP
             </div>
           </div>
         ) : (

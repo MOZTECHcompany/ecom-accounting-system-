@@ -44,6 +44,13 @@ jobs:
         working-directory: backend
         run: npm run build
 
+      - name: Validate production entrypoints
+        working-directory: backend
+        run: |
+          node --check scripts/database-url.js
+          node --check scripts/migrate-prod.js
+          node --check scripts/start-prod.js
+
       - name: Run backend unit tests
         working-directory: backend
         run: npm test -- --runInBand

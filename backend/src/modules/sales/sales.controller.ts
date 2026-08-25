@@ -17,6 +17,8 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { EntityAccessGuard } from '../../common/guards/entity-access.guard';
+import { RequireEntityAccess } from '../../common/decorators/entity-access.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { SalesService } from './sales.service';
 import { SalesOrderService } from './services/sales-order.service';
@@ -36,7 +38,8 @@ import {
 @ApiTags('sales')
 @ApiBearerAuth()
 @Controller('sales')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, EntityAccessGuard)
+@RequireEntityAccess('sales')
 export class SalesController {
   constructor(
     private readonly salesService: SalesService,

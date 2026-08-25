@@ -21,6 +21,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { EntitiesService } from './entities.service';
 import { CreateEntityDto } from './dto/create-entity.dto';
 import { UpdateEntityDto } from './dto/update-entity.dto';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 /**
  * 公司實體控制器
@@ -36,17 +37,21 @@ export class EntitiesController {
   @Get()
   @ApiOperation({ summary: '查詢所有公司實體' })
   @ApiResponse({ status: 200, description: '成功取得實體列表' })
-  async findAll(@Query('isActive') isActive?: string) {
-    const activeFilter = isActive === undefined ? undefined : isActive === 'true';
-    return this.entitiesService.findAll(activeFilter);
+  async findAll(
+    @CurrentUser('id') userId: string,
+    @Query('isActive') isActive?: string,
+  ) {
+    const activeFilter =
+      isActive === undefined ? undefined : isActive === 'true';
+    return this.entitiesService.findAccessible(userId, activeFilter);
   }
 
   @Get(':id')
   @ApiOperation({ summary: '查詢單一公司實體' })
   @ApiResponse({ status: 200, description: '成功取得實體詳情' })
   @ApiResponse({ status: 404, description: '實體不存在' })
-  async findOne(@Param('id') id: string) {
-    return this.entitiesService.findOne(id);
+  async findOne(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.entitiesService.findOneAccessible(userId, id);
   }
 
   @Post()

@@ -6,7 +6,6 @@ import {
   LoginOutlined,
   LogoutOutlined,
   ClockCircleOutlined,
-  WarningOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -321,33 +320,7 @@ const EmployeeDashboardPage: React.FC = () => {
         />
       ) : null}
 
-      {/* Stats Grid - Moved to top like AP page */}
-      <div className="grid w-full grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-6">
-        <GlassCard className="relative overflow-hidden group h-full">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <ClockCircleOutlined className="text-6xl text-blue-500" />
-          </div>
-          <div className="text-sm text-slate-500 mb-2 font-medium">
-            累積工時
-          </div>
-          <div className="mb-1 text-2xl font-semibold text-slate-800 sm:text-3xl">
-            —
-          </div>
-          <div className="text-xs text-slate-400">個人工時摘要尚未串接</div>
-        </GlassCard>
-
-        <GlassCard className="relative overflow-hidden group h-full">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <WarningOutlined className="text-6xl text-red-500" />
-          </div>
-          <div className="text-sm text-slate-500 mb-2 font-medium">
-            遲到次數
-          </div>
-          <div className="mb-1 text-2xl font-semibold text-slate-800 sm:text-3xl">
-            —
-          </div>
-          <div className="text-xs text-slate-400">個人遲到摘要尚未串接</div>
-        </GlassCard>
+      <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:gap-6">
 
         <GlassCard className="relative overflow-hidden group h-full">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">

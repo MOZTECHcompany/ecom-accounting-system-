@@ -11,7 +11,7 @@ export interface SalesOrder {
   customerType?: 'individual' | 'company'
   totalAmount: number
   currency: string
-  status: 'pending' | 'completed' | 'cancelled'
+  status: 'pending' | 'paid' | 'fulfilling' | 'fulfilled' | 'shipped' | 'completed' | 'cancelled' | 'refunded'
   paymentStatus: string
   fulfillmentStatus: string
   createdAt: string
@@ -55,6 +55,7 @@ export interface SalesOrderItem {
   productName: string
   sku?: string
   category?: string | null
+  hasSerialNumbers?: boolean
   quantity: number
   unitPrice: number
   discount: number
@@ -291,6 +292,7 @@ type SalesOrderApiResponse = {
       sku?: string | null
       name?: string | null
       category?: string | null
+      hasSerialNumbers?: boolean | null
     } | null
   }>
   payments?: Array<{
@@ -484,6 +486,7 @@ const mapSalesOrder = (order: SalesOrderApiResponse): SalesOrder => ({
       productName: item.product?.name?.trim() || item.product?.sku?.trim() || '未命名商品',
       sku: item.product?.sku?.trim() || undefined,
       category: item.product?.category || undefined,
+      hasSerialNumbers: Boolean(item.product?.hasSerialNumbers),
       quantity,
       unitPrice,
       discount,

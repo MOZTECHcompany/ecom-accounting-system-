@@ -9,6 +9,7 @@ import { EntitiesRepository } from './entities.repository';
 import { CreateEntityDto } from './dto/create-entity.dto';
 import { UpdateEntityDto } from './dto/update-entity.dto';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { EntityAccessService } from '../../common/entity-access/entity-access.service';
 
 /**
  * 公司實體服務
@@ -19,6 +20,7 @@ export class EntitiesService {
   constructor(
     private readonly entitiesRepository: EntitiesRepository,
     private readonly prisma: PrismaService,
+    private readonly entityAccessService: EntityAccessService,
   ) {}
 
   /**
@@ -26,6 +28,12 @@ export class EntitiesService {
    */
   async findAll(isActive?: boolean) {
     return this.entitiesRepository.findAll(isActive);
+  }
+
+  async findAccessible(userId: string, isActive?: boolean) {
+    const entityIds =
+      await this.entityAccessService.getAccessibleEntityIds(userId);
+    return this.entitiesRepository.findAll(isActive, entityIds);
   }
 
   /**
@@ -37,6 +45,11 @@ export class EntitiesService {
       throw new NotFoundException(`Entity with ID ${id} not found`);
     }
     return entity;
+  }
+
+  async findOneAccessible(userId: string, id: string) {
+    await this.entityAccessService.assertAccess(userId, 'employees', id);
+    return this.findOne(id);
   }
 
   /**
@@ -61,7 +74,10 @@ export class EntitiesService {
   async update(id: string, updateEntityDto: UpdateEntityDto) {
     await this.findOne(id); // 確認存在
     const entity = await this.entitiesRepository.update(id, updateEntityDto);
-    const initialAdmin = await this.createInitialCompanyAdmin(id, updateEntityDto);
+    const initialAdmin = await this.createInitialCompanyAdmin(
+      id,
+      updateEntityDto,
+    );
 
     return {
       ...entity,
@@ -103,7 +119,9 @@ export class EntitiesService {
     }
 
     if (adminPassword.length < 8) {
-      throw new BadRequestException('Admin password must be at least 8 characters');
+      throw new BadRequestException(
+        'Admin password must be at least 8 characters',
+      );
     }
 
     const existingUser = await this.prisma.user.findUnique({

@@ -16,6 +16,9 @@ describe('ReconciliationService - autoMatchTransactions', () => {
   let prismaService: PrismaService;
 
   const mockPrismaService = {
+    bankImportBatch: {
+      findUnique: jest.fn(),
+    },
     bankTransaction: {
       findMany: jest.fn(),
       update: jest.fn(),
@@ -34,6 +37,9 @@ describe('ReconciliationService - autoMatchTransactions', () => {
   };
 
   beforeEach(async () => {
+    mockPrismaService.bankImportBatch.findUnique.mockResolvedValue({
+      entityId: 'entity-1',
+    });
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ReconciliationService,

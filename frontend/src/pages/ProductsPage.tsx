@@ -291,24 +291,24 @@ const ProductsPage: React.FC = () => {
           <Form.Item name="sku" label="SKU" rules={[{ required: true }]}>
             <Input placeholder="例如: PB-001" />
           </Form.Item>
-          <Form.Item name="barcode" label="國際條碼 (Barcode)" rules={[{ required: true, message: '國際條碼為必填' }]}>
+          <Form.Item name="barcode" label="國際條碼" rules={[{ required: true, message: '國際條碼為必填' }]}>
             <Input placeholder="例如: 4710000000000" prefix={<BarcodeOutlined />} />
           </Form.Item>
           <Form.Item name="modelNumber" label="原廠型號 (Model No.)">
             <Input placeholder="例如: A2890" />
           </Form.Item>
           <Form.Item name="hasSerialNumbers" valuePropName="checked">
-            <Checkbox>啟用單品序號追蹤 (Serial Number Tracking)</Checkbox>
+            <Checkbox>啟用單品序號追蹤</Checkbox>
           </Form.Item>
           <Form.Item name="name" label="產品名稱" rules={[{ required: true }]}>
             <Input placeholder="例如: Power Bank 10000mAh" />
           </Form.Item>
           <Form.Item name="type" label="類型" rules={[{ required: true }]}>
             <Select>
-              <Option value="RAW_MATERIAL">原物料 (Raw Material)</Option>
-              <Option value="SEMI_FINISHED">半成品 (Semi-Finished)</Option>
-              <Option value="FINISHED_GOOD">製成品 (Finished Good)</Option>
-              <Option value="SERVICE">服務 (Service)</Option>
+              <Option value="RAW_MATERIAL">原物料</Option>
+              <Option value="SEMI_FINISHED">半成品</Option>
+              <Option value="FINISHED_GOOD">製成品</Option>
+              <Option value="SERVICE">服務</Option>
             </Select>
           </Form.Item>
           <Form.Item name="unit" label="單位" rules={[{ required: true }]}>
@@ -364,7 +364,7 @@ const ProductsPage: React.FC = () => {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="countryOfOrigin" label="原產地 (Country of Origin)">
+              <Form.Item name="countryOfOrigin" label="原產地">
                 <Input placeholder="例如: TW, CN" />
               </Form.Item>
             </Col>

@@ -1,10 +1,8 @@
 import React, { useState } from 'react'
-import { Descriptions, Steps, Button, Tag, Divider, List, Avatar, Typography, Tooltip, message, Modal, Form, Input, InputNumber, DatePicker } from 'antd'
+import { Descriptions, Steps, Button, Tag, Divider, List, Avatar, Typography, message, Modal, Form, Input, InputNumber, DatePicker } from 'antd'
 import { isAxiosError } from 'axios'
 import { GlassDrawer, GlassDrawerSection } from './ui/GlassDrawer'
 import { 
-  PrinterOutlined, 
-  MailOutlined, 
   UserOutlined,
   CreditCardOutlined,
   CarOutlined,
@@ -15,6 +13,7 @@ import {
 } from '@ant-design/icons'
 import { salesService } from '../services/sales.service'
 import type { SalesOrder, SalesOrderItem } from '../services/sales.service'
+import FulfillOrderModal from './FulfillOrderModal'
 
 const { Title, Text } = Typography
 
@@ -41,6 +40,7 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
   const [syncingInvoice, setSyncingInvoice] = useState(false)
   const [refundModalOpen, setRefundModalOpen] = useState(false)
   const [refunding, setRefunding] = useState(false)
+  const [fulfillOpen, setFulfillOpen] = useState(false)
   const [refundForm] = Form.useForm()
 
   if (!order) return null
@@ -135,20 +135,6 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
               <Tag color="blue" className="max-w-full truncate">{order.id}</Tag>
             </div>
             <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
-              <Tooltip title="訂單列印尚未開放">
-                <span>
-                  <Button size="small" icon={<PrinterOutlined />} className="rounded-full whitespace-nowrap" disabled>
-                    列印（尚未開放）
-                  </Button>
-                </span>
-              </Tooltip>
-              <Tooltip title="發票寄送尚未串接">
-                <span>
-                  <Button size="small" icon={<MailOutlined />} className="rounded-full whitespace-nowrap" disabled>
-                    寄送發票（未串接）
-                  </Button>
-                </span>
-              </Tooltip>
               <Button
                 size="small"
                 icon={<SyncOutlined spin={syncingInvoice} />}
@@ -158,19 +144,17 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
               >
                 同步發票狀態
               </Button>
-              <Tooltip title="出貨流程尚未完成防重複扣庫存與交易原子性檢查，暫時停用">
-                <span>
-                  <Button
-                    size="small"
-                    type="primary"
-                    icon={<SendOutlined />}
-                    className="rounded-full whitespace-nowrap"
-                    disabled
-                  >
-                    出貨（安全檢查中）
-                  </Button>
-                </span>
-              </Tooltip>
+              {!['shipped', 'completed', 'cancelled', 'refunded'].includes(order.status) && (
+                <Button
+                  size="small"
+                  type="primary"
+                  icon={<SendOutlined />}
+                  className="rounded-full whitespace-nowrap"
+                  onClick={() => setFulfillOpen(true)}
+                >
+                  出貨
+                </Button>
+              )}
               <Button
                 size="small"
                 type="primary"
@@ -212,11 +196,6 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
             <GlassDrawerSection>
               <div className="flex justify-between items-center mb-4">
                 <div className="font-semibold text-slate-800">客戶資訊</div>
-                <Tooltip title="客戶歷史檢視尚未串接">
-                  <span>
-                    <Button type="link" className="p-0 h-auto" disabled>查看歷史（未串接）</Button>
-                  </span>
-                </Tooltip>
               </div>
               <div className="flex items-center gap-4 mb-6">
                 <Avatar size={64} icon={<UserOutlined />} className="bg-blue-100 text-blue-600" />
@@ -385,6 +364,12 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
           </Form.Item>
         </Form>
       </Modal>
+      <FulfillOrderModal
+        open={fulfillOpen}
+        onClose={() => setFulfillOpen(false)}
+        onSuccess={() => onUpdate?.()}
+        order={order}
+      />
     </>
   )
 }

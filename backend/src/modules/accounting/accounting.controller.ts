@@ -23,6 +23,8 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { AccountingService } from './accounting.service';
 import { ReportService } from './services/report.service';
 import { JournalService } from './services/journal.service';
+import { EntityAccessGuard } from '../../common/guards/entity-access.guard';
+import { RequireEntityAccess } from '../../common/decorators/entity-access.decorator';
 
 /**
  * AccountingController
@@ -31,7 +33,8 @@ import { JournalService } from './services/journal.service';
 @ApiTags('Accounting')
 @ApiBearerAuth()
 @Controller('accounting')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, EntityAccessGuard)
+@RequireEntityAccess('accounting')
 export class AccountingController {
   constructor(
     private readonly accountingService: AccountingService,
@@ -100,7 +103,10 @@ export class AccountingController {
     @Query('periodId') periodId?: string,
   ) {
     const safeEntityId = this.ensureEntityId(entityId);
-    return this.journalService.getJournalEntriesByPeriod(safeEntityId, periodId);
+    return this.journalService.getJournalEntriesByPeriod(
+      safeEntityId,
+      periodId,
+    );
   }
 
   @Post('journals')

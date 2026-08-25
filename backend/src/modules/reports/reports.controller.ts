@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Body, Query, UseGuards, Param, UseInterceptors } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Query,
+  UseGuards,
+  Param,
+  UseInterceptors,
+  NotImplementedException,
+} from '@nestjs/common';
 import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import {
   ApiTags,
@@ -13,6 +23,8 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { ReportsService } from './reports.service';
 import { ExpenseIntelligenceService } from './expense-intelligence.service';
+import { EntityAccessGuard } from '../../common/guards/entity-access.guard';
+import { RequireEntityAccess } from '../../common/decorators/entity-access.decorator';
 
 /**
  * 報表控制器
@@ -20,8 +32,9 @@ import { ExpenseIntelligenceService } from './expense-intelligence.service';
  */
 @ApiTags('reports')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard, EntityAccessGuard)
 @RequirePermissions({ resource: 'reports', action: 'read' })
+@RequireEntityAccess('accounting')
 @UseInterceptors(CacheInterceptor) // Enable Caching for all reports
 @Controller('reports')
 export class ReportsController {
@@ -33,26 +46,39 @@ export class ReportsController {
   @Post('analyze')
   @ApiOperation({ summary: 'AI 財務分析 (Expense Intelligence)' })
   @ApiResponse({ status: 200, description: '成功產生分析報告' })
-  @ApiBody({ 
+  @ApiBody({
     schema: {
       type: 'object',
       properties: {
         entityId: { type: 'string' },
         startDate: { type: 'string' },
         endDate: { type: 'string' },
-        context: { type: 'string', description: 'Context for analysis (e.g. "Monthly Review")' }
-      }
-    }
+        context: {
+          type: 'string',
+          description: 'Context for analysis (e.g. "Monthly Review")',
+        },
+      },
+    },
   })
   async getAIAnalysis(
-    @Body() body: { entityId: string; startDate: string; endDate: string; context?: string },
+    @Body()
+    body: {
+      entityId: string;
+      startDate: string;
+      endDate: string;
+      context?: string;
+    },
   ) {
     const { entityId, startDate, endDate, context } = body;
-    
+
     // Fetch underlying financial data (e.g., Income Statement)
     // Note: This relies on reportsService.getIncomeStatement returning raw data object, not a StreamableFile.
     // We assume it returns an object based on standard NestJS patterns unless it's designed for PDF export.
-    const financialData = await this.reportsService.getIncomeStatement(entityId, new Date(startDate), new Date(endDate));
+    const financialData = await this.reportsService.getIncomeStatement(
+      entityId,
+      new Date(startDate),
+      new Date(endDate),
+    );
 
     return this.expenseIntelligenceService.analyzeFinancialReport(
       context || 'General Financial Health Check',
@@ -62,13 +88,13 @@ export class ReportsController {
 
   @Get('income-statement')
   @CacheTTL(300000) // Cache for 5 minutes (in ms for v5, or seconds for v4/v6? Nest Cache v5 uses ms usually)
-  // Check version: cache-manager v5 changed to milliseconds? 
+  // Check version: cache-manager v5 changed to milliseconds?
   // CacheModule v3 (Nest v10) uses milliseconds.
-  // Let's assume ms to be safe or verify. 
+  // Let's assume ms to be safe or verify.
   // "cache-manager": "^6.0.0" in package.json.
   // NestJS Cache Manager usually takes milliseconds.
   // Actually, @CacheTTL() behavior depends on the store. Redis store might expect seconds or ms.
-  // Let's use 60 seconds (60000 ms) to be safe for now, or just trust defaults. 
+  // Let's use 60 seconds (60000 ms) to be safe for now, or just trust defaults.
   // Let's put 60 * 1000 = 60000 if it is ms.
   @ApiOperation({ summary: '產生損益表 (Income Statement / P&L)' })
   @ApiResponse({ status: 200, description: '成功產生損益表' })
@@ -248,7 +274,10 @@ export class ReportsController {
 
   @Get('dashboard-operations-hub')
   @ApiOperation({ summary: '儀錶板營運總控台摘要' })
-  @ApiResponse({ status: 200, description: '成功取得營運、人事、薪資與發票總覽' })
+  @ApiResponse({
+    status: 200,
+    description: '成功取得營運、人事、薪資與發票總覽',
+  })
   @ApiQuery({ name: 'entityId', required: true })
   @ApiQuery({ name: 'startDate', required: false })
   @ApiQuery({ name: 'endDate', required: false })
@@ -282,9 +311,30 @@ export class ReportsController {
     );
   }
 
+  @Get('journal-approval-readiness')
+  @ApiOperation({ summary: '只讀盤點已審核／未審核分錄與報表發布狀態' })
+  @ApiResponse({ status: 200, description: '成功取得分錄審核盤點' })
+  @ApiQuery({ name: 'entityId', required: true })
+  @ApiQuery({ name: 'startDate', required: false })
+  @ApiQuery({ name: 'endDate', required: false })
+  async getJournalApprovalReadiness(
+    @Query('entityId') entityId: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.reportsService.getJournalApprovalReadiness(
+      entityId,
+      startDate ? new Date(startDate) : undefined,
+      endDate ? new Date(endDate) : undefined,
+    );
+  }
+
   @Get('connector-readiness')
   @ApiOperation({ summary: '外部通路 / 金流 / 發票 connector 準備狀態' })
-  @ApiResponse({ status: 200, description: '成功取得 connector 設定與缺口盤點' })
+  @ApiResponse({
+    status: 200,
+    description: '成功取得 connector 設定與缺口盤點',
+  })
   @ApiQuery({ name: 'entityId', required: true })
   async getConnectorReadiness(@Query('entityId') entityId: string) {
     return this.reportsService.getConnectorReadiness(entityId);
@@ -328,7 +378,10 @@ export class ReportsController {
 
   @Get('order-reconciliation-audit')
   @ApiOperation({ summary: '逐筆訂單對帳稽核' })
-  @ApiResponse({ status: 200, description: '成功取得訂單、帳款、發票與稅額逐筆稽核結果' })
+  @ApiResponse({
+    status: 200,
+    description: '成功取得訂單、帳款、發票與稅額逐筆稽核結果',
+  })
   @ApiQuery({ name: 'entityId', required: true })
   @ApiQuery({ name: 'startDate', required: false })
   @ApiQuery({ name: 'endDate', required: false })
@@ -431,13 +484,8 @@ export class ReportsController {
     @Query('format') format: string,
     @Query('entityId') entityId: string,
   ) {
-    // Mock export implementation
-    // In a real app, this would generate a file stream
-    return {
-      message: 'Report export initiated',
-      reportId: id,
-      format,
-      downloadUrl: `/api/v1/reports/download/${id}.${format}?token=temp-token`,
-    };
+    throw new NotImplementedException(
+      `Report export is not available until the approved-data release gate is implemented (${id}/${format}/${entityId})`,
+    );
   }
 }

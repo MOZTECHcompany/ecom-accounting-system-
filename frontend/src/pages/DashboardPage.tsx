@@ -31,7 +31,6 @@ import {
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import PageSkeleton from "../components/PageSkeleton";
-import AIInsightsWidget from "../components/AIInsightsWidget";
 import { GlassCard } from "../components/ui/GlassCard";
 import { resolveEntityId } from "../services/entities.service";
 import { shopifyService } from "../services/shopify.service";
@@ -748,7 +747,7 @@ const DashboardPage: React.FC = () => {
       <div className="page-section-stack page-section-stack--compact">
         <GlassCard className="p-6">
           <Title level={2} className="!mb-2 !text-gray-800">
-            CEO 儀表板
+            營運儀表板
           </Title>
           <Text className="mb-5 block text-sm text-slate-500">
             核心資料尚未成功載入，因此暫不顯示可能被誤認為真實數字的預設 KPI。
@@ -823,47 +822,41 @@ const DashboardPage: React.FC = () => {
   const bonsonData = sumBuckets(bonsonBuckets);
   const teamData = sumBuckets(teamBuckets);
 
-  // ─── 通路貢獻（從真實 performanceBuckets 計算）──────────────
-  const channelColorMap: [RegExp, string][] = [
-    [/shopify/i, '#475569'],
-    [/shopline/i, '#0f766e'],
-    [/1shop|oneshop/i, '#4f46e5'],
-    [/ecpay/i, '#6d28d9'],
-    [/citiesocial/i, '#7e22ce'],
-    [/pchome/i, '#1d4ed8'],
-    [/momo/i, '#9f1239'],
-    [/pinkoi/i, '#b45309'],
-    [/line/i, '#166534'],
-  ]
-  const getChannelColor = (key: string): string => {
-    for (const [re, color] of channelColorMap) {
-      if (re.test(key)) return color
-    }
-    return '#adb5bd'
-  }
-  // 排除金流商（ECPay 是收款工具，不算銷售通路）
+  // ─── 銷售通路：官網、1Shop 團購、線下、其他 ──────────────
   const PAYMENT_GATEWAY_PATTERN = /ecpay|linepay|jkos|aftee|atome|spgateway|newebpay/i
-  const platformContribs: PlatformContribution[] = performanceBuckets
-    .filter(b => !PAYMENT_GATEWAY_PATTERN.test(b.key || ''))
-    .map(b => ({
-      platform: b.label,
-      net: b.payoutNet,
-      color: getChannelColor(b.key),
-    }))
-  const platformRevenueRows = performanceBuckets
-    .filter(b => !PAYMENT_GATEWAY_PATTERN.test(b.key || ''))
-    .map((bucket) => ({
-      key: bucket.key,
-      label: bucket.label,
-      gross: Number(bucket.gross || 0),
-      payoutNet: Number(bucket.payoutNet || 0),
-      feeTotal: Number(bucket.feeTotal || 0),
-      orderCount: Number(bucket.orderCount || 0),
-      paymentCount: Number(bucket.paymentCount || 0),
-      color: getChannelColor(`${bucket.key} ${bucket.label}`),
-    }))
+  const channelDefinitions = [
+    { key: "group-buy", label: "1Shop 團購", color: "#4f46e5", pattern: /1shop|oneshop|團購|萬魔/i },
+    { key: "official", label: "官網", color: "#0f766e", pattern: /shopify|shopline|official|官網/i },
+    { key: "offline", label: "線下通路", color: "#b45309", pattern: /offline|retail|mpos|(?:^|\W)pos(?:\W|$)|門市|線下|展場|快閃|電話/i },
+    { key: "other", label: "其他通路", color: "#94a3b8", pattern: /.*/ },
+  ] as const
+  const platformRevenueRows = channelDefinitions
+    .map((definition) => {
+      const buckets = performanceBuckets.filter((bucket) => {
+        const source = `${bucket.key || ""} ${bucket.label || ""}`
+        if (PAYMENT_GATEWAY_PATTERN.test(source)) return false
+        const firstMatch = channelDefinitions.find((candidate) => candidate.pattern.test(source))
+        return firstMatch?.key === definition.key
+      })
+      return {
+        key: definition.key,
+        label: definition.label,
+        gross: buckets.reduce((sum, bucket) => sum + Number(bucket.gross || 0), 0),
+        payoutNet: buckets.reduce((sum, bucket) => sum + Number(bucket.payoutNet || 0), 0),
+        feeTotal: buckets.reduce((sum, bucket) => sum + Number(bucket.feeTotal || 0), 0),
+        orderCount: buckets.reduce((sum, bucket) => sum + Number(bucket.orderCount || 0), 0),
+        paymentCount: buckets.reduce((sum, bucket) => sum + Number(bucket.paymentCount || 0), 0),
+        color: definition.color,
+      }
+    })
+    .filter((row) => row.gross > 0 || row.payoutNet > 0 || row.orderCount > 0)
     .sort((left, right) => right.gross - left.gross)
-  const topPlatformRevenueRows = platformRevenueRows.slice(0, 5)
+  const topPlatformRevenueRows = platformRevenueRows
+  const platformContribs: PlatformContribution[] = platformRevenueRows.map((row) => ({
+    platform: row.label,
+    net: row.payoutNet,
+    color: row.color,
+  }))
   const adPerformanceRows = (adPerformance?.brands || [])
     .map((brand) => ({
       brand: brand.brand,
@@ -876,21 +869,18 @@ const DashboardPage: React.FC = () => {
     }))
     .sort((left, right) => right.adSpend - left.adSpend)
   const topAdPerformanceRows = adPerformanceRows.slice(0, 5)
-  const channelPieData = (() => {
-    const sorted = platformContribs
-      .filter((item) => item.net > 0)
-      .sort((a, b) => b.net - a.net)
-    const top = sorted.slice(0, 5)
-    const other = sorted.slice(5).reduce((sum, item) => sum + item.net, 0)
-    return other > 0
-      ? [...top, { platform: "其他通路", net: other, color: "#94a3b8" }]
-      : top
-  })()
-  const brandPieData = [
-    { name: "MOZTECH", value: mOZtechData.payoutNet, color: "#475569" },
-    { name: "BONSON", value: bonsonData.payoutNet, color: "#0f766e" },
-    { name: "團購", value: teamData.payoutNet, color: "#4f46e5" },
-  ].filter((item) => item.value > 0)
+  const channelPieData = platformContribs
+    .filter((item) => item.net > 0)
+    .sort((left, right) => right.net - left.net)
+  const brandColors = ["#475569", "#0f766e", "#4f46e5", "#b45309", "#7e22ce"]
+  const brandPieData = adPerformanceRows
+    .filter((item) => item.revenue > 0 && item.brand.trim().length > 0)
+    .map((item, index) => ({
+      name: item.brand,
+      value: item.revenue,
+      color: brandColors[index % brandColors.length],
+    }))
+    .sort((left, right) => right.value - left.value)
 
   // ─── 紅燈警示計數 ──────────────────────────────────────
   const criticalInventory = inventoryAlerts.filter(a => a.severity === 'critical').length;
@@ -1109,15 +1099,12 @@ const DashboardPage: React.FC = () => {
 
   return (
     <div className="page-section-stack page-section-stack--compact">
-      {/* AI Insights Widget */}
-      <AIInsightsWidget />
-
       {/* ── 頁面標題 + 篩選控制 ── */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
             <Title level={2} className="!text-gray-800 font-light tracking-tight !mb-0">
-              CEO 儀表板
+              營運儀表板
             </Title>
             <div className={`flex items-center gap-2 rounded-full border px-3 py-1 ${dataStatusMeta.className}`}>
               {dataStatusMeta.icon}
@@ -1125,7 +1112,7 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
           <Text className="text-slate-400 text-sm">
-            Moztech · Bonson · Moritek — 三品牌、三通路、財務一覽
+            營運、財務與庫存總覽
           </Text>
           {lastSuccessfulLabel && (
             <div className="mt-1 text-xs text-slate-400">
@@ -1275,13 +1262,7 @@ const DashboardPage: React.FC = () => {
       {/* ── CEO 財務管制：現金流、淨利、廣告與異常 ── */}
       <div className="glass-card p-6">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">CEO Control Tower</div>
-            <div className="mt-1 text-lg font-semibold text-slate-900">財務管制與營運風險</div>
-            <div className="mt-1 text-sm text-slate-500">
-              所選期間淨利、廣告花費、目前現金流壓力與需要財務追蹤的異常集中在這裡。
-            </div>
-          </div>
+          <div className="text-lg font-semibold text-slate-900">財務概況</div>
           <div className="flex shrink-0 flex-wrap gap-2">
             <Button icon={<AlertOutlined />} onClick={() => setFinanceOptionsOpen(true)}>
               財務選項
@@ -1404,13 +1385,7 @@ const DashboardPage: React.FC = () => {
       <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6">
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Platform Revenue</div>
-              <div className="mt-1 text-lg font-semibold text-slate-900">各平台營收情況</div>
-              <div className="mt-1 text-sm text-slate-500">
-                {selectedPeriodLabel}的 Shopify、Shopline、1Shop 等銷售通路，直接看營收、訂單與實際淨入帳。
-              </div>
-            </div>
+            <div className="text-lg font-semibold text-slate-900">銷售通路</div>
             <Tag className="rounded-full bg-slate-100 text-slate-500 border-slate-200 text-xs">
               {platformRevenueRows.length} 個通路
             </Tag>
@@ -1449,16 +1424,7 @@ const DashboardPage: React.FC = () => {
 
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6">
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Ad Efficiency</div>
-              <div className="mt-1 text-lg font-semibold text-slate-900">廣告花費與營業額對照</div>
-              <div className="mt-1 text-sm text-slate-500">
-                以品牌對齊 Meta / Google 花費與 Shopify、Shopline、1Shop 營收，先看會計口徑 ROAS。
-              </div>
-            </div>
-            <Tag className="rounded-full bg-amber-50 text-amber-700 border-amber-100 text-xs">
-              {adPerformance?.summary?.adSource || "Meta / Google"}
-            </Tag>
+            <div className="text-lg font-semibold text-slate-900">廣告效益</div>
           </div>
 
           {topAdPerformanceRows.length > 0 ? (
@@ -1505,13 +1471,7 @@ const DashboardPage: React.FC = () => {
       <div className="grid gap-4 xl:grid-cols-[1.25fr_0.85fr]">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6">
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">CEO Trend</div>
-              <div className="mt-1 text-lg font-semibold text-slate-900">30 天關鍵趨勢</div>
-              <div className="mt-1 text-sm text-slate-500">
-                同時看營收、淨利、淨入帳與廣告費，快速判斷成長是否真的變成現金。
-              </div>
-            </div>
+            <div className="text-lg font-semibold text-slate-900">30 天趨勢</div>
             <div className="flex flex-wrap gap-2 text-xs">
               <Tag color="default">營收</Tag>
               <Tag color="green">淨利</Tag>
@@ -1559,10 +1519,7 @@ const DashboardPage: React.FC = () => {
         <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-1">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6">
             <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Revenue Mix</div>
-                <div className="mt-1 text-lg font-semibold text-slate-900">錢從哪裡來</div>
-              </div>
+              <div className="text-lg font-semibold text-slate-900">銷售通路</div>
               <Tag className="rounded-full bg-slate-100 text-slate-500 border-slate-200 text-xs">淨入帳占比</Tag>
             </div>
             {channelPieData.length > 0 ? (
@@ -1596,10 +1553,7 @@ const DashboardPage: React.FC = () => {
 
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6">
             <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Brand Mix</div>
-                <div className="mt-1 text-lg font-semibold text-slate-900">品牌現金貢獻</div>
-              </div>
+              <div className="text-lg font-semibold text-slate-900">品牌貢獻</div>
             </div>
             {brandPieData.length > 0 ? (
               <div className="grid gap-4 sm:grid-cols-[150px_1fr]">
@@ -1625,7 +1579,7 @@ const DashboardPage: React.FC = () => {
               </div>
             ) : (
               <div className="flex h-[140px] items-center justify-center rounded-2xl border border-dashed border-slate-200 text-sm text-slate-400">
-                尚無品牌淨入帳資料
+                尚無品牌營業額資料
               </div>
             )}
           </motion.div>
@@ -1635,12 +1589,8 @@ const DashboardPage: React.FC = () => {
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6">
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Risk Priority</div>
-              <div className="mt-1 text-lg font-semibold text-slate-900">現在最需要注意的事</div>
-              <div className="mt-1 text-sm text-slate-500">依數量排序，CEO 先看最大阻塞，再交給財務或營運往下處理。</div>
-            </div>
-            <Button size="small" onClick={() => setFinanceOptionsOpen(true)}>展開財務選項</Button>
+            <div className="text-lg font-semibold text-slate-900">待處理事項</div>
+            <Button onClick={() => setFinanceOptionsOpen(true)}>財務選項</Button>
           </div>
           {riskChartRows.length > 0 ? (
             <div className="grid gap-5 lg:grid-cols-[1fr_1fr]">
@@ -1689,11 +1639,7 @@ const DashboardPage: React.FC = () => {
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6">
-          <div className="mb-5">
-            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Exception Aging</div>
-            <div className="mt-1 text-lg font-semibold text-slate-900">異常拖多久了</div>
-            <div className="mt-1 text-sm text-slate-500">以缺發票與對帳異常樣本估算，越紅代表越不能再拖。</div>
-          </div>
+          <div className="mb-5 text-lg font-semibold text-slate-900">異常帳齡</div>
           <div className="space-y-3">
             {agingBuckets.map((bucket) => (
               <div key={bucket.label} className="rounded-2xl border border-slate-100 bg-white/70 px-4 py-3">
@@ -1715,21 +1661,23 @@ const DashboardPage: React.FC = () => {
         </motion.div>
       </div>
 
+      {false && <>
+      {/* ── 舊版重複區塊：保留程式兼容，不再顯示 ── */}
       {/* ── 核心 KPI（4 張，全部真實資料）── */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {[
           {
             label: '本期總業績',
-            value: overviewAvailable && total ? fmtMoney(total.gross) : "—",
-            sub: overviewAvailable && total ? `${total.orderCount} 筆訂單` : "銷售概況未取得",
+            value: overviewAvailable && total ? fmtMoney(total!.gross) : "—",
+            sub: overviewAvailable && total ? `${total!.orderCount} 筆訂單` : "銷售概況未取得",
             icon: <ShoppingOutlined className="text-slate-500 text-lg" />,
             accent: 'border-l-slate-500',
             alert: false,
           },
           {
             label: '本期淨入帳',
-            value: overviewAvailable && total ? fmtMoney(total.payoutNet) : "—",
-            sub: overviewAvailable && total ? `手續費 ${fmtMoney(total.feeTotal)}` : "銷售概況未取得",
+            value: overviewAvailable && total ? fmtMoney(total!.payoutNet) : "—",
+            sub: overviewAvailable && total ? `手續費 ${fmtMoney(total!.feeTotal)}` : "銷售概況未取得",
             icon: <RiseOutlined className="text-teal-600 text-lg" />,
             accent: 'border-l-teal-500',
             alert: false,
@@ -1931,14 +1879,14 @@ const DashboardPage: React.FC = () => {
           </div>
         </motion.div>
       )}
+      </>}
 
       {/* ── 庫存警示（有才顯示）── */}
       {inventoryAlerts.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Inventory Alert</div>
-              <div className="mt-1 text-lg font-semibold text-slate-900">
+              <div className="text-lg font-semibold text-slate-900">
                 庫存警示
                 {criticalInventory > 0 && (
                   <Tag color="red" className="ml-3 rounded-full">{criticalInventory} 項斷貨</Tag>
@@ -1965,6 +1913,8 @@ const DashboardPage: React.FC = () => {
         </motion.div>
       )}
 
+      {false && <>
+      {/* ── 舊版重複待辦：保留程式兼容，不再顯示 ── */}
       {/* ── CEO 決策清單 ── */}
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="glass-card p-6">
@@ -2040,6 +1990,7 @@ const DashboardPage: React.FC = () => {
           </div>
         </div>
       </div>
+      </>}
 
       <Modal
         title="財務追蹤選項"

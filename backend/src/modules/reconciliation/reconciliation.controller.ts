@@ -12,6 +12,7 @@ import {
   Query,
   UseGuards,
   Headers,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   IsArray,
@@ -43,6 +44,10 @@ import { ProviderPayoutReconciliationService } from './provider-payout-reconcili
 import { EcpayShopifyPayoutService } from './ecpay-shopify-payout.service';
 import { LinePayService } from './line-pay.service';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { EntityAccessGuard } from '../../common/guards/entity-access.guard';
+import { RequireEntityAccess } from '../../common/decorators/entity-access.decorator';
+import { EntityAccessService } from '../../common/entity-access/entity-access.service';
+import { PrismaService } from '../../common/prisma/prisma.service';
 
 class BackfillEcpayShopifyHistoryDto {
   @IsString()
@@ -238,7 +243,8 @@ class ReturnTimeoutReconciliationCaseDto {
 
 @ApiTags('Reconciliation')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, EntityAccessGuard)
+@RequireEntityAccess('accounting')
 @Controller('reconciliation')
 export class ReconciliationController {
   constructor(
@@ -246,7 +252,59 @@ export class ReconciliationController {
     private readonly providerPayoutService: ProviderPayoutReconciliationService,
     private readonly ecpayShopifyPayoutService: EcpayShopifyPayoutService,
     private readonly linePayService: LinePayService,
+    private readonly prisma: PrismaService,
+    private readonly entityAccessService: EntityAccessService,
   ) {}
+
+  private async assertBankBatchAccess(userId: string, batchId: string) {
+    const batch = await this.prisma.bankImportBatch.findUnique({
+      where: { id: batchId },
+      select: { entityId: true },
+    });
+    if (!batch) {
+      throw new NotFoundException(`Bank import batch not found: ${batchId}`);
+    }
+    await this.entityAccessService.assertAccess(
+      userId,
+      'banking',
+      batch.entityId,
+    );
+  }
+
+  private async assertBankTransactionAccess(
+    userId: string,
+    bankTransactionId: string,
+  ) {
+    const transaction = await this.prisma.bankTransaction.findUnique({
+      where: { id: bankTransactionId },
+      select: { bankAccount: { select: { entityId: true } } },
+    });
+    if (!transaction) {
+      throw new NotFoundException(
+        `Bank transaction not found: ${bankTransactionId}`,
+      );
+    }
+    await this.entityAccessService.assertAccess(
+      userId,
+      'banking',
+      transaction.bankAccount.entityId,
+    );
+  }
+
+  private async assertPayoutBatchAccess(userId: string, batchId: string) {
+    const batch = await this.prisma.payoutImportBatch.findUnique({
+      where: { id: batchId },
+      select: { entityId: true },
+    });
+    if (!batch) {
+      throw new NotFoundException(`Payout import batch not found: ${batchId}`);
+    }
+    await this.entityAccessService.assertAccess(
+      userId,
+      'banking',
+      batch.entityId,
+    );
+  }
 
   @Get('center')
   @Roles('ADMIN', 'ACCOUNTANT')
@@ -311,7 +369,10 @@ export class ReconciliationController {
     @Query('entityId') entityId: string,
     @Param('orderId') orderId: string,
   ) {
-    return this.reconciliationService.resendTimeoutPaymentLink(entityId, orderId);
+    return this.reconciliationService.resendTimeoutPaymentLink(
+      entityId,
+      orderId,
+    );
   }
 
   @Post('timeout-cases/:orderId/return-accounting')
@@ -447,9 +508,23 @@ export class ReconciliationController {
   @ApiResponse({ status: 201, description: '匯入成功' })
   async importBankTransactions(
     @Body() dto: ImportBankTransactionsDto,
-    @CurrentUser() user: any,
+    @CurrentUser('id') userId: string,
   ) {
-    return this.reconciliationService.importBankTransactions(dto, user.userId);
+    const bankAccount = await this.prisma.bankAccount.findUnique({
+      where: { id: dto.bankAccountId },
+      select: { entityId: true },
+    });
+    if (!bankAccount) {
+      throw new NotFoundException(
+        `Bank account not found: ${dto.bankAccountId}`,
+      );
+    }
+    await this.entityAccessService.assertAccess(
+      userId,
+      'banking',
+      bankAccount.entityId,
+    );
+    return this.reconciliationService.importBankTransactions(dto, userId);
   }
 
   @Post('bank/auto-match/:batchId')
@@ -461,8 +536,10 @@ export class ReconciliationController {
   @ApiResponse({ status: 200, description: '對帳完成' })
   async autoMatchBankTransactions(
     @Param('batchId') batchId: string,
+    @CurrentUser('id') userId: string,
     @Body() config?: AutoMatchDto,
   ) {
+    await this.assertBankBatchAccess(userId, batchId);
     return this.reconciliationService.autoMatchTransactions(batchId, config);
   }
 
@@ -487,13 +564,14 @@ export class ReconciliationController {
   async manualMatch(
     @Body()
     body: { bankTransactionId: string; matchedType: string; matchedId: string },
-    @CurrentUser() user: any,
+    @CurrentUser('id') userId: string,
   ) {
+    await this.assertBankTransactionAccess(userId, body.bankTransactionId);
     return this.reconciliationService.manualMatch(
       body.bankTransactionId,
       body.matchedType,
       body.matchedId,
-      user.userId,
+      userId,
     );
   }
 
@@ -503,12 +581,10 @@ export class ReconciliationController {
   @ApiResponse({ status: 200, description: '取消成功' })
   async unmatch(
     @Body() body: { bankTransactionId: string },
-    @CurrentUser() user: any,
+    @CurrentUser('id') userId: string,
   ) {
-    return this.reconciliationService.unmatch(
-      body.bankTransactionId,
-      user.userId,
-    );
+    await this.assertBankTransactionAccess(userId, body.bankTransactionId);
+    return this.reconciliationService.unmatch(body.bankTransactionId, userId);
   }
 
   @Post('payouts/import')
@@ -521,9 +597,9 @@ export class ReconciliationController {
   @ApiResponse({ status: 201, description: '匯入成功' })
   async importProviderPayouts(
     @Body() dto: ImportProviderPayoutsDto,
-    @CurrentUser() user: any,
+    @CurrentUser('id') userId: string,
   ) {
-    return this.providerPayoutService.importProviderPayouts(dto, user.userId);
+    return this.providerPayoutService.importProviderPayouts(dto, userId);
   }
 
   @Get('line-pay/config-status')
@@ -659,7 +735,11 @@ export class ReconciliationController {
     description: '查看批次內每一列實際撥款資料與匹配結果',
   })
   @ApiResponse({ status: 200, description: '查詢成功' })
-  async getPayoutImportBatchDetail(@Param('batchId') batchId: string) {
+  async getPayoutImportBatchDetail(
+    @Param('batchId') batchId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    await this.assertPayoutBatchAccess(userId, batchId);
     return this.providerPayoutService.getPayoutImportBatchDetail(batchId);
   }
 
@@ -674,9 +754,9 @@ export class ReconciliationController {
   @ApiResponse({ status: 201, description: '同步成功' })
   async syncEcpayShopifyPayouts(
     @Body() dto: SyncEcpayShopifyPayoutsDto,
-    @CurrentUser() user: any,
+    @CurrentUser('id') userId: string,
   ) {
-    return this.ecpayShopifyPayoutService.syncShopifyPayouts(dto, user.userId);
+    return this.ecpayShopifyPayoutService.syncShopifyPayouts(dto, userId);
   }
 
   @Post('payouts/ecpay-shopify/backfill')
@@ -690,9 +770,9 @@ export class ReconciliationController {
   @ApiResponse({ status: 201, description: '回補成功' })
   async backfillEcpayShopifyPayouts(
     @Body() dto: BackfillEcpayShopifyHistoryDto,
-    @CurrentUser() user: any,
+    @CurrentUser('id') userId: string,
   ) {
-    return this.ecpayShopifyPayoutService.backfillHistory(dto, user.userId);
+    return this.ecpayShopifyPayoutService.backfillHistory(dto, userId);
   }
 
   @Public()
@@ -715,7 +795,8 @@ export class ReconciliationController {
   @Roles('ADMIN', 'ACCOUNTANT')
   @ApiOperation({
     summary: '平台撥款彙總',
-    description: '依 channel 分組加總 amountGross/feePlatform/feeGateway/amountNet',
+    description:
+      '依 channel 分組加總 amountGross/feePlatform/feeGateway/amountNet',
   })
   @ApiResponse({ status: 200, description: '各平台撥款彙總陣列' })
   async getPlatformPayouts(
@@ -740,7 +821,8 @@ export class ReconciliationController {
   @Roles('ADMIN', 'ACCOUNTANT')
   @ApiOperation({
     summary: '缺發票訂單列表',
-    description: '查詢 hasInvoice = false 且 status in [paid, fulfilled, completed] 的訂單',
+    description:
+      '查詢 hasInvoice = false 且 status in [paid, fulfilled, completed] 的訂單',
   })
   @ApiResponse({ status: 200, description: '缺發票訂單列表' })
   async getMissingInvoices(@Query('entityId') entityId: string) {
@@ -755,7 +837,8 @@ export class ReconciliationController {
   @Roles('ADMIN', 'ACCOUNTANT')
   @ApiOperation({
     summary: 'ECPay 撥款狀態統計',
-    description: '查詢 channel LIKE ECPAY 的 Payment，回傳 pending/completed 統計及在途金額',
+    description:
+      '查詢 channel LIKE ECPAY 的 Payment，回傳 pending/completed 統計及在途金額',
   })
   @ApiResponse({ status: 200, description: 'ECPay 撥款狀態' })
   async getEcpayPayoutStatus(@Query('entityId') entityId: string) {

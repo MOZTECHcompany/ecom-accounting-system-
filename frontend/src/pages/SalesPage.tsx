@@ -1,11 +1,8 @@
 import React, { useCallback, useState, useEffect } from 'react'
-import { Alert, Table, Tag, Button, Space, Input, DatePicker, Card, Typography, Segmented, Tooltip, message } from 'antd'
+import { Alert, Table, Tag, Button, Space, Input, DatePicker, Card, Typography, Segmented, message } from 'antd'
 import { 
-  PlusOutlined, 
   SearchOutlined, 
   FilterOutlined, 
-  MoreOutlined, 
-  PrinterOutlined,
   DownloadOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
@@ -37,11 +34,6 @@ const KanbanColumn: React.FC<{ title: string; orders: SalesOrder[]; color: strin
         <span className="font-medium text-gray-700">{title}</span>
         <span className="bg-white/50 px-2 py-0.5 rounded-full text-xs text-gray-500">{orders.length}</span>
       </div>
-      <Tooltip title="看板欄位操作尚未開放">
-        <span>
-          <Button type="text" icon={<MoreOutlined />} size="small" disabled aria-label="看板欄位操作尚未開放" />
-        </span>
-      </Tooltip>
     </div>
     <div className="space-y-3">
       {orders.map(order => (
@@ -55,13 +47,13 @@ const KanbanColumn: React.FC<{ title: string; orders: SalesOrder[]; color: strin
             <span className="text-blue-600 font-medium text-sm">{order.orderNumber}</span>
             <span className="text-xs text-gray-400">{new Date(order.createdAt).toLocaleDateString()}</span>
           </div>
-          <div className="font-medium text-gray-800 dark:text-gray-200 mb-1">{order.customerName || 'Guest'}</div>
+          <div className="font-medium text-gray-800 dark:text-gray-200 mb-1">{order.customerName || '訪客'}</div>
           <div className="flex flex-wrap gap-1 text-xs">
             <Tag color="geekblue" className="m-0">{order.sourceBrand || '未分類品牌'}</Tag>
             <Tag className="m-0">{order.sourcePlatform || order.sourceLabel || order.channelName || '未歸戶平台'}</Tag>
           </div>
           <div className="flex justify-between items-center mt-3">
-            <span className="text-gray-500 text-sm">{order.items?.length || 0} items</span>
+            <span className="text-gray-500 text-sm">{order.items?.length || 0} 項</span>
             <span className="font-mono font-medium dark:text-gray-300">NT$ {Number(order.totalAmount).toLocaleString()}</span>
           </div>
         </motion.div>
@@ -168,7 +160,7 @@ const SalesPage: React.FC = () => {
     const exportRows = rows.map((order) => ({
       訂單編號: order.orderNumber,
       日期: dayjs(order.createdAt).format('YYYY-MM-DD HH:mm'),
-      客戶: order.customerName || 'Guest',
+      客戶: order.customerName || '訪客',
       Email: order.customerEmail || '',
       電話: order.customerPhone || '',
       品牌: order.sourceBrand || '未分類品牌',
@@ -244,7 +236,7 @@ const SalesPage: React.FC = () => {
       width: 300,
       render: (_: string, record: SalesOrder) => (
         <div>
-          <div className="font-medium text-slate-900 leading-5">{record.customerName || 'Guest'}</div>
+          <div className="font-medium text-slate-900 leading-5">{record.customerName || '訪客'}</div>
           <div className="text-xs text-slate-400">
             {record.customerEmail || '未填 Email'}
             {record.customerPhone ? ` · ${record.customerPhone}` : ''}
@@ -291,17 +283,24 @@ const SalesPage: React.FC = () => {
       render: (status: string) => {
         const colors: Record<string, string> = {
           completed: 'success',
+          shipped: 'cyan',
+          fulfilling: 'gold',
+          paid: 'blue',
           pending: 'processing',
           cancelled: 'error',
+          refunded: 'error',
         }
         const icons: Record<string, React.ReactNode> = {
           completed: <CheckCircleOutlined />,
           pending: <ClockCircleOutlined />,
           cancelled: <CloseCircleOutlined />,
         }
+        const labels: Record<string, string> = {
+          pending: '待處理', paid: '已付款', fulfilling: '出貨中', fulfilled: '已出貨', shipped: '已出貨', completed: '已完成', cancelled: '已取消', refunded: '已退款',
+        }
         return (
           <Tag icon={icons[status]} color={colors[status]}>
-            {status.toUpperCase()}
+            {labels[status] || status}
           </Tag>
         )
       },
@@ -358,18 +357,6 @@ const SalesPage: React.FC = () => {
       width: 110,
       render: (_: unknown, record: SalesOrder) => (
         <Tag color="blue">{record.channelName || record.channelCode || '未知通路'}</Tag>
-      ),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 80,
-      render: () => (
-        <Tooltip title="更多訂單操作尚未開放">
-          <span>
-            <Button type="text" icon={<MoreOutlined />} disabled aria-label="更多訂單操作尚未開放" />
-          </span>
-        </Tooltip>
       ),
     },
   ]
@@ -450,13 +437,6 @@ const SalesPage: React.FC = () => {
             同步發票狀態
           </Button>
           <Button icon={<DownloadOutlined />} onClick={handleExport}>匯出報表</Button>
-          <Tooltip title="新增訂單介面尚未開放">
-            <span>
-              <Button type="primary" icon={<PlusOutlined />} size="large" disabled>
-                新增訂單（尚未開放）
-              </Button>
-            </span>
-          </Tooltip>
         </Space>
       </div>
 
@@ -551,21 +531,27 @@ const SalesPage: React.FC = () => {
           />
         </Card>
       ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-7">
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-7">
           <KanbanColumn 
-            title="待處理 (Pending)" 
-            orders={filteredOrders.filter(o => o.status === 'pending')} 
+            title="待處理"
+            orders={filteredOrders.filter(o => ['pending', 'paid', 'fulfilled'].includes(o.status))}
             color="bg-blue-500"
             onClick={handleRowClick}
           />
+          <KanbanColumn
+            title="已出貨"
+            orders={filteredOrders.filter(o => o.status === 'shipped')}
+            color="bg-cyan-500"
+            onClick={handleRowClick}
+          />
           <KanbanColumn 
-            title="已完成 (Completed)" 
+            title="已完成"
             orders={filteredOrders.filter(o => o.status === 'completed')} 
             color="bg-green-500"
             onClick={handleRowClick}
           />
           <KanbanColumn 
-            title="已取消 (Cancelled)" 
+            title="已取消"
             orders={filteredOrders.filter(o => o.status === 'cancelled')} 
             color="bg-red-500"
             onClick={handleRowClick}
@@ -586,16 +572,6 @@ const SalesPage: React.FC = () => {
             <Button type="link" size="small" onClick={() => setSelectedRowKeys([])} className="!text-gray-300">
               取消
             </Button>
-            <Tooltip title="批次完成尚未開放">
-              <span>
-                <Button type="primary" disabled>批次完成（尚未開放）</Button>
-              </span>
-            </Tooltip>
-            <Tooltip title="出貨單列印尚未開放">
-              <span>
-                <Button icon={<PrinterOutlined />} disabled>列印出貨單</Button>
-              </span>
-            </Tooltip>
             <Button icon={<DownloadOutlined />} onClick={handleSelectedExport}>
               匯出選取
             </Button>

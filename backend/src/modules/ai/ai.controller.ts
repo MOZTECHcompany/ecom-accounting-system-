@@ -26,10 +26,13 @@ import { CreateComputerUseSessionDto } from './dto/create-computer-use-session.d
 import { RunComputerUseTaskDto } from './dto/run-computer-use-task.dto';
 import { NavigateComputerUseSessionDto } from './dto/navigate-computer-use-session.dto';
 import type { Request } from 'express';
+import { EntityAccessGuard } from '../../common/guards/entity-access.guard';
+import { RequireEntityAccess } from '../../common/decorators/entity-access.decorator';
 
 @ApiTags('AI Core')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, EntityAccessGuard)
+@RequireEntityAccess('accounting')
 @Controller('ai')
 export class AiController {
   constructor(
@@ -116,7 +119,11 @@ export class AiController {
     @Body() body: NavigateComputerUseSessionDto,
   ) {
     const user = req.user as any;
-    return this.computerUseService.navigateSession(user.id, sessionId, body.url);
+    return this.computerUseService.navigateSession(
+      user.id,
+      sessionId,
+      body.url,
+    );
   }
 
   @Post('computer-use/sessions/:sessionId/run')

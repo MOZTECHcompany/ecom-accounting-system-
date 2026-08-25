@@ -850,3 +850,30 @@ body.dark .glass-input {
   background-color: #4B5563 !important; /* Dark Gray to ensure contrast */
   color: #ffffff !important;
 }
+
+/* ERP action controls use one consistent hit area across pages. */
+.ant-btn:not(.ant-btn-link):not(.ant-btn-text) {
+  min-height: 40px;
+  height: 40px;
+  padding-inline: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ant-btn-sm:not(.ant-btn-link):not(.ant-btn-text),
+.ant-btn-lg:not(.ant-btn-link):not(.ant-btn-text) {
+  min-height: 40px;
+  height: 40px;
+}
+
+.ant-btn-icon-only:not(.ant-btn-link):not(.ant-btn-text) {
+  width: 40px;
+  padding-inline: 0;
+}
+
+.ant-radio-button-wrapper {
+  min-height: 40px;
+  height: 40px;
+  line-height: 38px;
+}

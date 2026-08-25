@@ -690,6 +690,37 @@ Cloud Run 正式資料目前已經不是空系統，但核心治理缺口很大�
 - 廣告費若先用報表匯入，需確認匯入格式與費用科目，避免與一般行銷費混淆。
 - 財務異常追蹤下一步可再拆成正式 review queue，讓財務主管標記處理狀態與責任人。
 
+### R. 多公司資料邊界必須由後端強制執行
+
+2026-08-25 程式稽核發現，會計、報表、AI、對帳與公司清單部分 API 會直接採信前端傳入的 `entityId`。原本 `ENTITY` scope 使用者即使綁定單一公司，也可能用修改 request 的方式查詢其他公司；只帶 journal、period、bank transaction、bank import batch 或 payout batch ID 的端點也缺少一致的公司歸屬驗證。
+
+本地已修正（尚未部署）：
+
+- 新增集中式 `EntityAccessService` / `EntityAccessGuard`：`SUPER_ADMIN` 可跨公司；其他使用者必須綁定 Employee，且只能存取 Employee 所屬公司。沒有 Employee 綁定時一律 fail closed，不再退回第一間公司。
+- 會計、報表、AI 與對帳 controller 對 query/body/param 中的 `entityId` 統一執行後端驗證；受 scheduler token 保護的 `@Public()` 排程端點維持獨立驗證，不套用登入使用者規則。
+- `GET /entities` 對一般使用者只回傳所屬公司，`GET /entities/:id` 也會驗證公司歸屬；只有 `SUPER_ADMIN` 可列出全部公司。
+- 分錄審核、關帳與鎖帳會先從資料庫取得實際 `entityId` 再驗證，避免只帶資源 ID 繞過公司邊界。
+- 銀行匯入、auto-match、manual-match、unmatch 與 payout batch detail 已補資源歸屬驗證；manual-match 另限制銀行交易與 Payment / SalesOrder / AR / AP 必須屬於同一公司。
+- 修正銀行匯入 DTO 與 service 欄位不一致（`date` 被誤讀成 `transactionDate`、不存在的 `entityId/source/fileName` 被直接使用），改由 BankAccount 推導公司並以單一 transaction 建立 batch 與交易明細。
+- 修正 reconciliation controller 使用不存在的 `user.userId`，統一改讀 JWT user 的 `id`。
+- 自動銀行匹配改用正確的 Payment 欄位 `amountGrossOriginal` / `payoutDate`，並限制只能匹配同公司 Payment / SalesOrder。
+- 新增只讀 `GET /reports/journal-approval-readiness`，依公司與日期區間盤點已審核／未審核分錄筆數、借貸金額與最多 20 筆未審核樣本，不會自動核准或修改正式財務資料。
+- 管理報表回傳 `dataBasis=operational_sources` 與 `releaseGate`；只要區間仍有未審核分錄，報表中心會顯示紅色「暫不可發布」警示。正式損益表、資產負債表、試算表與總分類帳維持 approved-only。
+- 後端原本仍會回傳假 `downloadUrl` 的報表匯出端點已改為明確 `501 Not Implemented`，避免前端或第三方誤把不存在的匯出結果當正式文件。
+- 生產容器啟動已移除 `prisma migrate deploy` 與 seed；Cloud Run 發布流程會先用同一個 image 執行單次 migration Job，成功後才建立無流量 candidate revision。應用程序也已開啟 Nest shutdown hooks 並轉送 `SIGTERM` / `SIGINT`。
+- ERP 導覽已改為桌面版固定側邊欄：收合時保留 80px 圖示軌道，不再整個消失；目前路由所在群組會保持展開。所有一般操作按鈕統一為 40px 高。
+- Dashboard 已移除浮動 AI 助手、昨日 AI 提示、中英雙標題、重複 KPI / 品牌 / 趨勢 / 通路 / 待辦區塊；設定與報表頁的未上線 AI 介面預留也不再顯示。
+- 銷售通路與品牌貢獻已拆成獲立維度：通路固定彙總為「官網」、「1Shop 團購」、「線下通路」、「其他通路」；品牌圖只使用廣告業績 API 的實際品牌營業額，不再把「團購」當成品牌。
+- 採購收貨與銷售出貨已改為原子交易：單據狀態 claim、庫存異動、庫存快照、序號、移動平均成本、Shipment 與最終狀態同時成功或全數 rollback。重試已收貨 / 已出貨單據不會再次加扣庫存；若發現舊版留下的部分出庫異動，會中止並要求人工複核。
+- 採購 API 已改為必傳 `entityId` 並套用 purchasing entity access guard，不再依賴 JWT 中不存在的 `req.user.entityId`。採購頁已提供真實倉庫選擇與序號掃描收貨流程；銷售訂單側欄的出貨按鈕也已啟用相同倉庫 / 序號驗證。
+- 後端 build 通過，全部 7 個 test suites、33 個 tests 通過；新增 entity access service / guard 的 own-entity、cross-entity、unlinked-user、department-scope、public scheduler 與 malformed entityId 測試。
+- 2026-08-25 再次驗證：backend build、10 suites / 41 tests、frontend production build、兩份 GitHub Actions YAML 解析均通過。Frontend 全專案 lint 仍有大量歷史錯誤，本次不將「編譯通過」誤報為「lint 已清零」。
+
+正式部署前仍需：
+
+- 只讀盤點正式環境所有 ADMIN / ACCOUNTANT 是否有正確 Employee 與 Entity 綁定，避免舊帳號因新 fail-closed 規則被擋；`SUPER_ADMIN` 不受此限制。
+- 完成 release quality gate、候選 revision 無流量驗證與登入後 smoke test，再切正式流量。
+
 ## 建議收斂順序
 
 ### Sprint 1：入口與驗證基礎

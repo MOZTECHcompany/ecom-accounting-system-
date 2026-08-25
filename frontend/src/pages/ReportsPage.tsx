@@ -15,17 +15,14 @@ import {
   message,
   Empty,
   Spin,
-  Modal,
   Descriptions,
 } from 'antd'
 import { 
-  DownloadOutlined, 
   RiseOutlined, 
   PieChartOutlined,
   BarChartOutlined,
   FileTextOutlined,
-  ReloadOutlined,
-  RobotOutlined
+  ReloadOutlined
 } from '@ant-design/icons'
 import { 
   BarChart, 
@@ -111,11 +108,6 @@ const ReportsPage: React.FC = () => {
   const [invoiceQueue, setInvoiceQueue] = useState<InvoiceQueueResponse | null>(null)
   const [reconciliationAudit, setReconciliationAudit] = useState<OrderReconciliationAudit | null>(null)
   const [loadIssues, setLoadIssues] = useState<string[]>([])
-
-  // AI State
-  const [aiModalVisible, setAiModalVisible] = useState(false)
-  const [aiLoading, setAiLoading] = useState(false)
-  const [aiResult, setAiResult] = useState<any>(null)
 
   const ecommercePeriods = useMemo(() => safeArray(ecommerceHistory?.periods), [ecommerceHistory])
   const ecommerceBrands = useMemo(() => safeArray(ecommerceHistory?.brands), [ecommerceHistory])
@@ -335,24 +327,6 @@ const ReportsPage: React.FC = () => {
     fetchData()
   }, [dateRange, managementGroupBy])
 
-  const handleAIAnalysis = async () => {
-    if (!incomeStatement) return
-    setAiModalVisible(true)
-    setAiLoading(true)
-    try {
-      const result = await accountingService.analyzeReport({
-        startDate: dateRange[0].format('YYYY-MM-DD'),
-        endDate: dateRange[1].format('YYYY-MM-DD'),
-        context: 'Income Statement Review'
-      })
-      setAiResult(result)
-    } catch {
-      message.error('AI Analysis failed')
-    } finally {
-      setAiLoading(false)
-    }
-  }
-
   // Transform Income Statement Data
   const getPLData = (): ReportRow[] => {
     if (!incomeStatement) return []
@@ -375,13 +349,13 @@ const ReportsPage: React.FC = () => {
     }))
 
     return [
-      { key: 'header_rev', category: '營業收入 (Revenue)', amount: null, isHeader: true },
+      { key: 'header_rev', category: '營業收入', amount: null, isHeader: true },
       ...revenues,
       { key: 'total_rev', category: '總收入', amount: toNumber(incomeStatement.totalRevenue), isTotal: true },
-      { key: 'header_exp', category: '營業費用 (Expenses)', amount: null, isHeader: true },
+      { key: 'header_exp', category: '營業費用', amount: null, isHeader: true },
       ...expenses,
       { key: 'total_exp', category: '總費用', amount: toNumber(incomeStatement.totalExpense), isTotal: true },
-      { key: 'net_income', category: '淨利 (Net Income)', amount: toNumber(incomeStatement.netIncome), isTotal: true, isNet: true }
+      { key: 'net_income', category: '淨利', amount: toNumber(incomeStatement.netIncome), isTotal: true, isNet: true }
     ]
   }
 
@@ -401,21 +375,21 @@ const ReportsPage: React.FC = () => {
     const displayedTotalEquity = totalEquity + (retainedEarnings ?? 0)
 
     return [
-      { key: 'header_asset', category: '資產 (Assets)', amount: null, isHeader: true },
+      { key: 'header_asset', category: '資產', amount: null, isHeader: true },
       ...assets.map(a => ({ key: a.code, category: a.name, amount: toNumber(a.amount) })),
       { key: 'total_asset', category: '資產總計', amount: toNumber(balanceSheet.totalAssets), isTotal: true },
       
-      { key: 'header_liab', category: '負債 (Liabilities)', amount: null, isHeader: true },
+      { key: 'header_liab', category: '負債', amount: null, isHeader: true },
       ...liabilities.map(l => ({ key: l.code, category: l.name, amount: toNumber(l.amount) })),
       { key: 'total_liab', category: '負債總計', amount: totalLiabilities, isTotal: true },
       
-      { key: 'header_equity', category: '權益 (Equity)', amount: null, isHeader: true },
+      { key: 'header_equity', category: '權益', amount: null, isHeader: true },
       ...equity.map(e => ({ key: e.code, category: e.name, amount: toNumber(e.amount) })),
       {
         key: 'retained_earnings',
         category: retainedEarnings === null
           ? '本期損益（尚未完成結轉）'
-          : '本期損益 (Retained Earnings)',
+          : '本期損益',
         amount: retainedEarnings,
       },
       { key: 'total_equity', category: '權益總計', amount: displayedTotalEquity, isTotal: true },
@@ -493,7 +467,7 @@ const ReportsPage: React.FC = () => {
       <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div className="min-w-0">
           <Title level={2} className="!mb-1 !text-2xl font-light tracking-tight !text-gray-800 sm:!text-3xl">
-            報表中心 (Reports Center)
+            報表中心
           </Title>
           <Text className="text-gray-500">
             查看與分析您的財務狀況、銷售績效與營運指標。
@@ -506,25 +480,6 @@ const ReportsPage: React.FC = () => {
             onChange={(dates) => setDateRange(dates as [dayjs.Dayjs, dayjs.Dayjs])}
           />
           <Button className="w-full xl:w-auto" icon={<ReloadOutlined />} onClick={fetchData} loading={loading}>重新整理</Button>
-          <Button 
-            icon={<RobotOutlined />} 
-            onClick={handleAIAnalysis}
-            loading={aiLoading}
-            disabled
-            title="AI 財務分析的 canonical 財務資料來源尚未完成，暫時停用"
-            className="w-full border-purple-500 text-purple-600 hover:text-purple-700 hover:border-purple-600 xl:w-auto"
-          >
-            AI 財務分析（資料源未完成）
-          </Button>
-          <Button 
-            type="primary" 
-            icon={<DownloadOutlined />} 
-            disabled
-            title="報表匯出尚未完成"
-            className="w-full bg-black hover:!bg-gray-800 xl:w-auto"
-          >
-            匯出報表（未完成）
-          </Button>
         </div>
       </div>
 
@@ -545,6 +500,23 @@ const ReportsPage: React.FC = () => {
               className="mb-4 rounded-2xl"
               message="部分報表區塊這次沒有讀取成功"
               description={`目前失敗區塊：${loadIssues.join('、')}。其餘已成功讀到的區塊仍會先顯示，不會整頁空白。`}
+            />
+          ) : null}
+          {managementSummary?.releaseGate?.status === 'blocked' ? (
+            <Alert
+              showIcon
+              type="error"
+              className="mb-4 rounded-2xl"
+              message={`財務報表暫不可發布：尚有 ${managementSummary.journalApproval.counts.unapproved} 筆未審核分錄`}
+              description={managementSummary.releaseGate.reason}
+            />
+          ) : managementSummary?.releaseGate?.status === 'ready' ? (
+            <Alert
+              showIcon
+              type="success"
+              className="mb-4 rounded-2xl"
+              message="所選區間分錄審核閘門已通過"
+              description="正式損益表、資產負債表、試算表與總分類帳只採用已審核分錄。"
             />
           ) : null}
           <Tabs defaultActiveKey="1" type="card" size="large" className="custom-tabs">
@@ -1127,7 +1099,7 @@ const ReportsPage: React.FC = () => {
             >
               <Row gutter={[24, 24]}>
                 <Col xs={24} lg={12}>
-                  <Card title="損益表 (Profit & Loss)" bordered={false} className="shadow-sm">
+                  <Card title="損益表" bordered={false} className="shadow-sm">
                     {incomeStatement ? (
                       <Table 
                         dataSource={getPLData()} 
@@ -1140,7 +1112,7 @@ const ReportsPage: React.FC = () => {
                   </Card>
                 </Col>
                 <Col xs={24} lg={12}>
-                  <Card title="資產負債表 (Balance Sheet)" bordered={false} className="shadow-sm">
+                  <Card title="資產負債表" bordered={false} className="shadow-sm">
                     {balanceSheet ? (
                       <>
                         {!isBalanceSheetBalanced ? (
@@ -1188,7 +1160,7 @@ const ReportsPage: React.FC = () => {
             >
               <Row gutter={[24, 24]}>
                 <Col xs={24} lg={10}>
-                  <Card title="試算表 (Trial Balance)" bordered={false} className="shadow-sm">
+                  <Card title="試算表" bordered={false} className="shadow-sm">
                     {trialBalance ? (
                       <>
                         <div className="mb-4 flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-sm">
@@ -1246,7 +1218,7 @@ const ReportsPage: React.FC = () => {
                   </Card>
                 </Col>
                 <Col xs={24} lg={14}>
-                  <Card title="總分類帳 (General Ledger)" bordered={false} className="shadow-sm">
+                  <Card title="總分類帳" bordered={false} className="shadow-sm">
                     {generalLedger ? (
                       <>
                         <div className="mb-4 grid gap-3 md:grid-cols-2">
@@ -1667,55 +1639,6 @@ const ReportsPage: React.FC = () => {
         </Spin>
       </div>
 
-      <Modal
-        title={<span><RobotOutlined className="text-purple-600 mr-2" /> AI 財務分析報告 (Expense Intelligence)</span>}
-        open={aiModalVisible}
-        onCancel={() => setAiModalVisible(false)}
-        footer={null}
-        width={800}
-      >
-        {aiLoading ? (
-           <div className="flex flex-col items-center justify-center py-12">
-             <Spin size="large" />
-             <Text className="mt-4 text-gray-500">正在分析財務數據...</Text>
-           </div>
-        ) : aiResult ? (
-          <div className="space-y-8">
-             {aiResult.analysis === 'AI service not configured.' && (
-               <div className="bg-orange-50 p-4 rounded text-orange-700">
-                 請聯繫管理員配置 GEMINI_API_KEY 以啟用 AI 功能。
-               </div>
-             )}
-             
-             {aiResult.insights && (
-               <Card size="small" title="📊 關鍵洞察 (Insights)" className="border-purple-100">
-                  <Text>{aiResult.insights}</Text>
-               </Card>
-             )}
-
-             {aiResult.anomalies && (
-               <Card size="small" title="⚠️ 異常偵測 (Anomalies)" className="border-red-100">
-                  <Text>{aiResult.anomalies}</Text>
-               </Card>
-             )}
-
-             {aiResult.suggestions && (
-               <Card size="small" title="💡 優化建議 (Suggestions)" className="border-green-100">
-                  <Text>{aiResult.suggestions}</Text>
-               </Card>
-             )}
-
-             {/* Fallback for raw text response */}
-             {!aiResult.insights && !aiResult.analysis && (
-               <pre className="whitespace-pre-wrap bg-gray-50 p-4 rounded text-sm">
-                 {JSON.stringify(aiResult, null, 2)}
-               </pre>
-             )}
-          </div>
-        ) : (
-          <Empty description="點擊分析按鈕以生成報告" />
-        )}
-      </Modal>
     </div>
   )
 }

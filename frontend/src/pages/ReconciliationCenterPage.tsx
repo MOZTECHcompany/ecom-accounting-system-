@@ -343,12 +343,9 @@ const ReconciliationCenterPage: React.FC = () => {
     >
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.26em] text-slate-400">
-            Reconciliation Center
-          </div>
           <Title level={2} className="!mb-1 !font-light">對帳中心</Title>
           <Text type="secondary">
-            只看核對狀態：每筆訂單是否完成訂單、撥款、手續費與發票的閉環，不在這裡做會計補件。
+            訂單、撥款、手續費與發票核對
           </Text>
         </div>
         <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 xl:w-auto xl:flex xl:flex-wrap xl:justify-end">

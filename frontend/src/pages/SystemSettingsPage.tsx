@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   Switch,
-  Slider,
   InputNumber,
   Button,
   Typography,
@@ -16,7 +15,6 @@ import { motion } from "framer-motion";
 import {
   SettingOutlined,
   BellOutlined,
-  RobotOutlined,
   SafetyCertificateOutlined,
   CalculatorOutlined,
 } from "@ant-design/icons";
@@ -29,8 +27,6 @@ const { Option } = Select;
 const UNBACKED_FORM_VALUES = {
   emailNotifications: true,
   pushNotifications: true,
-  aiConfidenceThreshold: 80,
-  aiAutoFillSuggestions: true,
   sessionTimeout: 30,
   passwordExpiry: 90,
   language: "zh-TW",
@@ -178,18 +174,10 @@ const SystemSettingsPage: React.FC = () => {
       </div>
 
       <Alert
-        type="info"
-        showIcon
-        message="少即是多，大道至簡"
-        description="AI 的工作是理解問題、找資料、整理答案；高風險決策仍應由制度、權限與人工複核來把關。"
-        className="!rounded-2xl !border-sky-200 !bg-sky-50/80"
-      />
-
-      <Alert
         type="warning"
         showIcon
-        message="目前已正式接上後端的，是下方的「薪資規則」區塊"
-        description="通知、AI、安全與一般設定暫時仍屬介面預留；真正會影響薪資計算的工時、加班倍率與保險比例，現在都會寫入後端。"
+        message="目前僅薪資規則會寫入後端"
+        description="通知、安全與一般設定尚未啟用。"
         className="!rounded-2xl !border-amber-200 !bg-amber-50/80"
       />
 
@@ -325,49 +313,6 @@ const SystemSettingsPage: React.FC = () => {
                 name="pushNotifications"
                 valuePropName="checked"
                 extra="在瀏覽器中顯示即時推播通知"
-              >
-                <Switch disabled />
-              </Form.Item>
-            </div>
-
-            {/* AI Settings */}
-            <div className="glass-panel p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <RobotOutlined className="text-2xl text-sky-600" />
-                <Title level={4} className="!m-0">
-                  AI 協作方式
-                </Title>
-              </div>
-
-              <Alert
-                type="info"
-                showIcon
-                message="尚未接上後端，目前僅供介面預覽，不會儲存"
-                className="!mb-5 !rounded-xl"
-              />
-
-              <div className="mb-5 rounded-2xl border border-slate-200 bg-white/50 px-4 py-3 text-xs leading-6 text-slate-500">
-                原則很簡單：AI
-                先幫你縮小範圍、整理答案；真的需要拍板的地方，再交回人工確認。
-              </div>
-
-              <Form.Item
-                label="低信心轉人工複核門檻 (%)"
-                name="aiConfidenceThreshold"
-                extra="低於此門檻時，系統只提供建議，不幫你直接下判斷。"
-              >
-                <Slider
-                  marks={{ 0: "0%", 50: "50%", 80: "80%", 100: "100%" }}
-                  step={5}
-                  disabled
-                />
-              </Form.Item>
-
-              <Form.Item
-                label="自動帶入 AI 建議欄位"
-                name="aiAutoFillSuggestions"
-                valuePropName="checked"
-                extra="例如自動帶入推薦項目、預估金額或摘要，但不直接替你核准。"
               >
                 <Switch disabled />
               </Form.Item>

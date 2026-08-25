@@ -345,7 +345,7 @@ const AccountsPayablePage: React.FC = () => {
     <div className="page-section-stack animate-[fadeInUp_0.4s_ease-out]">
       <div className="flex justify-between items-end">
         <div>
-          <Title level={2} className="!mb-1 !font-light">應付帳款 (AP)</Title>
+          <Title level={2} className="!mb-1 !font-light">應付帳款</Title>
           <Text className="text-gray-500">集中管理所有待付款項，包含員工報銷與廠商發票</Text>
         </div>
         <div className="flex gap-2">
@@ -361,7 +361,7 @@ const AccountsPayablePage: React.FC = () => {
         <Col span={8}>
           <GlassCard className="h-full flex flex-col justify-center">
             <Statistic 
-              title="待付總額 (Total Payable)" 
+              title="待付總額"
               value={totalExpenseAmount + totalInvoiceAmount} 
               precision={0}
               prefix={<DollarOutlined />}
@@ -373,7 +373,7 @@ const AccountsPayablePage: React.FC = () => {
         <Col span={8}>
           <GlassCard className="h-full flex flex-col justify-center">
             <Statistic 
-              title="待處理單據 (Pending Items)" 
+              title="待處理單據"
               value={expenseRequests.length + invoices.length} 
               suffix="筆"
             />
@@ -382,7 +382,7 @@ const AccountsPayablePage: React.FC = () => {
         <Col span={8}>
           <GlassCard className="h-full flex flex-col justify-center">
             <Statistic 
-              title="已逾期 (Overdue)" 
+              title="已逾期"
               value={overdueCount} 
               valueStyle={{ color: '#cf1322' }}
               prefix={<WarningOutlined />}

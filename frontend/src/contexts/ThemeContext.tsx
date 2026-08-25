@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react'
 import { ConfigProvider, theme } from 'antd'
 
 type ThemeMode = 'light' | 'dark'
-type PrimaryColor = 'blue' | 'purple' | 'green' | 'orange' | 'black'
+export type PrimaryColor = 'blue' | 'purple' | 'green' | 'orange' | 'black'
 
 interface ThemeContextType {
   mode: ThemeMode

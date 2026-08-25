@@ -11,6 +11,12 @@ import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import {
+  DataAccessModule,
+  DataAccessScope,
+  EntityAccessService,
+  UserDataAccessContext,
+} from '../../common/entity-access/entity-access.service';
 
 const USER_INCLUDE = {
   roles: {
@@ -33,25 +39,6 @@ type UserWithRelations = Prisma.UserGetPayload<{
 }>;
 
 type PrismaClientOrTx = PrismaService | Prisma.TransactionClient;
-type DataAccessScope = 'SELF' | 'DEPARTMENT' | 'ENTITY';
-type DataAccessModule =
-  | 'employees'
-  | 'attendance'
-  | 'payroll'
-  | 'accounting'
-  | 'inventory'
-  | 'sales'
-  | 'purchasing'
-  | 'banking';
-
-type UserDataAccessContext = {
-  scope: DataAccessScope;
-  entityId: string;
-  employeeId: string | null;
-  departmentId: string | null;
-  noAccess: boolean;
-};
-
 /**
  * UsersService
  * 使用者服務，處理使用者相關的資料庫操作
@@ -61,28 +48,10 @@ export class UsersService {
   private readonly logger = new Logger(UsersService.name);
   private readonly SALT_ROUNDS = 10;
 
-  constructor(private readonly prisma: PrismaService) {}
-
-  private readonly dataScopeFields: Record<
-    DataAccessModule,
-    | 'employeeDataScope'
-    | 'attendanceDataScope'
-    | 'payrollDataScope'
-    | 'accountingDataScope'
-    | 'inventoryDataScope'
-    | 'salesDataScope'
-    | 'purchasingDataScope'
-    | 'bankingDataScope'
-  > = {
-    employees: 'employeeDataScope',
-    attendance: 'attendanceDataScope',
-    payroll: 'payrollDataScope',
-    accounting: 'accountingDataScope',
-    inventory: 'inventoryDataScope',
-    sales: 'salesDataScope',
-    purchasing: 'purchasingDataScope',
-    banking: 'bankingDataScope',
-  };
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly entityAccessService: EntityAccessService,
+  ) {}
 
   private normalizeDataScope(value?: string | null): DataAccessScope {
     return value === 'DEPARTMENT' || value === 'ENTITY' ? value : 'SELF';
@@ -640,63 +609,11 @@ export class UsersService {
     module: DataAccessModule,
     requestedEntityId?: string,
   ): Promise<UserDataAccessContext> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        employeeDataScope: true,
-        attendanceDataScope: true,
-        payrollDataScope: true,
-        accountingDataScope: true,
-        inventoryDataScope: true,
-        salesDataScope: true,
-        purchasingDataScope: true,
-        bankingDataScope: true,
-        employee: {
-          select: {
-            id: true,
-            entityId: true,
-            departmentId: true,
-          },
-        },
-      },
-    });
-
-    if (!user) {
-      throw new NotFoundException(`User with ID ${userId} not found`);
-    }
-
-    const scope = this.normalizeDataScope(user[this.dataScopeFields[module]]);
-
-    const fallbackEntity = await this.prisma.entity.findFirst({
-      orderBy: { id: 'asc' },
-      select: { id: true },
-    });
-
-    if (!fallbackEntity && !requestedEntityId && !user.employee?.entityId) {
-      throw new NotFoundException('No entity configured');
-    }
-
-    const entityId =
-      requestedEntityId || user.employee?.entityId || fallbackEntity?.id || '';
-
-    const noAccess =
-      scope === 'SELF'
-        ? !user.employee?.id ||
-          (Boolean(requestedEntityId) &&
-            requestedEntityId !== user.employee?.entityId)
-        : scope === 'DEPARTMENT'
-          ? !user.employee?.departmentId ||
-            (Boolean(requestedEntityId) &&
-              requestedEntityId !== user.employee?.entityId)
-          : false;
-
-    return {
-      scope,
-      entityId,
-      employeeId: user.employee?.id || null,
-      departmentId: user.employee?.departmentId || null,
-      noAccess,
-    };
+    return this.entityAccessService.getContext(
+      userId,
+      module,
+      requestedEntityId,
+    );
   }
 
   /**

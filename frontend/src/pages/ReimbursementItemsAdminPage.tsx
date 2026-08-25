@@ -226,7 +226,7 @@ const ReimbursementItemsAdminPage: React.FC = () => {
     try {
       // Direct API call or add to service
       await expenseService.seedAiItems(entityId)
-      message.success('已成功生成 AI 預設報銷項目')
+      message.success('已成功建立預設報銷項目')
       await fetchItems()
     } catch (error) {
       console.error(error)
@@ -362,7 +362,7 @@ const ReimbursementItemsAdminPage: React.FC = () => {
         </div>
         <Space>
           <Button icon={<RobotOutlined />} onClick={handleSeedAiItems} loading={seeding}>
-            AI 生成預設庫
+            建立預設庫
           </Button>
           <Button icon={<ReloadOutlined />} onClick={fetchItems}>
             重新整理
@@ -449,7 +449,7 @@ const ReimbursementItemsAdminPage: React.FC = () => {
                 <Select mode="tags" tokenSeparators={[',']} placeholder="輸入後按 Enter 新增" />
               </Form.Item>
 
-              <Form.Item label="金額上限 (TWD)" name="amountLimit">
+              <Form.Item label="金額上限（TWD）" name="amountLimit">
                 <InputNumber min={0} style={{ width: '100%' }} placeholder="留空則不限" />
               </Form.Item>
             </GlassDrawerSection>

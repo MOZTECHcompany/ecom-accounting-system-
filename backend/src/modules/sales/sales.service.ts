@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { InventoryService } from '../inventory/inventory.service';
-import { ProductType } from '@prisma/client';
+import { Prisma, Product, ProductType } from '@prisma/client';
 
 /**
  * SalesService
@@ -65,65 +65,112 @@ export class SalesService {
     itemSerialNumbers?: Record<string, string[]>;
   }) {
     const { entityId, warehouseId, salesOrderId, itemSerialNumbers } = params;
+    return this.prisma.$transaction(async (tx) => {
+      const order = await tx.salesOrder.findFirst({
+        where: { id: salesOrderId, entityId },
+        include: { items: { include: { product: true } } },
+      });
+      if (!order) throw new NotFoundException('Sales order not found for entity');
+      if (order.status === 'shipped' || order.status === 'completed') {
+        return { success: true, alreadyFulfilled: true, status: order.status };
+      }
+      if (['cancelled', 'refunded'].includes(order.status)) {
+        throw new BadRequestException(`Sales order cannot be fulfilled from status ${order.status}`);
+      }
 
-    const order = await this.prisma.salesOrder.findUnique({
-      where: { id: salesOrderId },
-      include: { 
-        items: {
-          include: { product: true }
-        } 
-      },
-    });
+      const existingOutbound = await tx.inventoryTransaction.count({
+        where: {
+          entityId,
+          referenceType: 'SALES_ORDER',
+          referenceId: salesOrderId,
+          direction: 'OUT',
+        },
+      });
+      if (existingOutbound > 0) {
+        throw new BadRequestException(
+          'Existing shipment inventory movements require manual review before retrying',
+        );
+      }
 
-    if (!order || order.entityId !== entityId) {
-      throw new Error('Sales order not found for entity');
-    }
+      const claimed = await tx.salesOrder.updateMany({
+        where: { id: salesOrderId, entityId, status: order.status },
+        data: { status: 'fulfilling' },
+      });
+      if (claimed.count !== 1) {
+        const latest = await tx.salesOrder.findFirst({ where: { id: salesOrderId, entityId } });
+        if (latest?.status === 'shipped' || latest?.status === 'completed') {
+          return { success: true, alreadyFulfilled: true, status: latest.status };
+        }
+        throw new BadRequestException('Sales order is already being fulfilled');
+      }
 
-    for (const item of order.items) {
-      // 處理序號
-      if (item.product.hasSerialNumbers) {
-        const sns = itemSerialNumbers?.[item.id] || [];
-        if (sns.length !== Number(item.qty)) {
-          throw new Error(
-            `Product ${item.product.sku} requires ${item.qty} serial numbers, but got ${sns.length}`,
+      const warehouse = await tx.warehouse.findFirst({
+        where: { id: warehouseId, entityId, isActive: true },
+      });
+      if (!warehouse) throw new BadRequestException('Warehouse not found or inactive');
+
+      for (const item of order.items) {
+        if (item.product.hasSerialNumbers) {
+          const sns = itemSerialNumbers?.[item.id] || [];
+          if (sns.length !== Number(item.qty)) {
+            throw new BadRequestException(
+              `Product ${item.product.sku} requires ${item.qty} serial numbers, but got ${sns.length}`,
+            );
+          }
+          await this.inventoryService.markSerialNumbersAsSold(
+            {
+              entityId,
+              warehouseId,
+              productId: item.productId,
+              serialNumbers: sns,
+              outboundRefType: 'SALES_ORDER',
+              outboundRefId: salesOrderId,
+            },
+            tx,
           );
         }
 
-        await this.inventoryService.markSerialNumbersAsSold({
+        await this.fulfillInventoryForItem(
+          tx,
           entityId,
           warehouseId,
-          productId: item.productId,
-          serialNumbers: sns,
-          outboundRefType: 'SALES_ORDER',
-          outboundRefId: salesOrderId,
-        });
+          salesOrderId,
+          item.product,
+          Number(item.qty),
+        );
       }
 
-      await this.fulfillInventoryForItem(
-        entityId,
-        warehouseId,
-        salesOrderId,
-        item.product,
-        Number(item.qty)
-      );
-    }
-
-    return { success: true };
+      await tx.shipment.create({
+        data: {
+          entityId,
+          salesOrderId,
+          shipDate: new Date(),
+          status: 'shipped',
+          notes: `Warehouse: ${warehouse.code}`,
+        },
+      });
+      await tx.salesOrder.update({
+        where: { id: salesOrderId },
+        data: { status: 'shipped' },
+      });
+      return { success: true, alreadyFulfilled: false, status: 'shipped' };
+    }, { maxWait: 5_000, timeout: 20_000 });
   }
 
   /**
    * 遞迴扣減庫存 (支援 Bundle 展開)
    */
   private async fulfillInventoryForItem(
+    tx: Prisma.TransactionClient,
     entityId: string,
     warehouseId: string,
     orderId: string,
-    product: any,
+    product: Product,
     qty: number,
   ) {
     if (product.type === ProductType.BUNDLE) {
       // 展開 BOM
-      const bom = await this.prisma.billOfMaterial.findMany({
+      const bom = await tx.billOfMaterial.findMany({
         where: { parentId: product.id },
         include: { child: true },
       });
@@ -136,6 +183,7 @@ export class SalesService {
       for (const component of bom) {
         const requiredQty = Number(component.quantity) * qty;
         await this.fulfillInventoryForItem(
+          tx,
           entityId,
           warehouseId,
           orderId,
@@ -146,27 +194,18 @@ export class SalesService {
     } else {
       if (product.type === ProductType.SERVICE) return;
 
-      // 1) 釋放預留庫存
-      await this.inventoryService.releaseReservedStock({
-        entityId,
-        warehouseId,
-        productId: product.id,
-        quantity: qty,
-        referenceType: 'SALES_ORDER',
-        referenceId: orderId,
-      });
-
-      // 2) 實際出庫
-      await this.inventoryService.adjustStock({
-        entityId,
-        warehouseId,
-        productId: product.id,
-        quantity: qty,
-        direction: 'OUT',
-        referenceType: 'SALES_ORDER',
-        referenceId: orderId,
-        reason: 'Sales order shipment',
-      });
+      await this.inventoryService.shipStock(
+        {
+          entityId,
+          warehouseId,
+          productId: product.id,
+          quantity: qty,
+          referenceType: 'SALES_ORDER',
+          referenceId: orderId,
+          reason: 'Sales order shipment',
+        },
+        tx,
+      );
     }
   }
 }

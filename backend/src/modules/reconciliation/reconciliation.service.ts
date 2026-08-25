@@ -93,7 +93,12 @@ export class ReconciliationService {
       task: () => Promise<any>,
     ) => {
       if (!enabled) {
-        steps.push({ key, label, status: 'skipped', result: { skipped: true } });
+        steps.push({
+          key,
+          label,
+          status: 'skipped',
+          result: { skipped: true },
+        });
         return null;
       }
       try {
@@ -142,16 +147,12 @@ export class ReconciliationService {
         ),
     );
 
-    await runStep(
-      'ar-sync',
-      '同步銷售訂單到 AR / 分錄',
-      true,
-      () =>
-        this.arService.syncSalesReceivables(entityId, params.userId || '', {
-          startDate: params.startDate,
-          endDate: params.endDate,
-          limit: 5000,
-        }),
+    await runStep('ar-sync', '同步銷售訂單到 AR / 分錄', true, () =>
+      this.arService.syncSalesReceivables(entityId, params.userId || '', {
+        startDate: params.startDate,
+        endDate: params.endDate,
+        limit: 5000,
+      }),
     );
 
     await runStep(
@@ -208,7 +209,12 @@ export class ReconciliationService {
         }),
     );
 
-    const center = await this.getReconciliationCenter(entityId, since, until, 500);
+    const center = await this.getReconciliationCenter(
+      entityId,
+      since,
+      until,
+      500,
+    );
     const failedCount = steps.filter((step) => step.status === 'failed').length;
 
     return {
@@ -333,34 +339,39 @@ export class ReconciliationService {
       ),
     );
 
-    await runStep('groupbuy-invoice-backfill', '補跑 1Shop 團購發票狀態', async () => {
-      const windows: Array<{
-        beginDate: string;
-        endDate: string;
-        result: any;
-      }> = [];
+    await runStep(
+      'groupbuy-invoice-backfill',
+      '補跑 1Shop 團購發票狀態',
+      async () => {
+        const windows: Array<{
+          beginDate: string;
+          endDate: string;
+          result: any;
+        }> = [];
 
-      for (const window of selectedInvoiceWindows) {
-        const result = await this.salesOrderService.syncInvoiceStatusForOrders({
-          entityId,
-          channelId: 'channel-oneshop',
-          startDate: this.parseDate(window.beginDate),
-          endDate: this.parseEndDate(window.endDate),
-          limit: invoiceBatchLimit,
-        });
+        for (const window of selectedInvoiceWindows) {
+          const result =
+            await this.salesOrderService.syncInvoiceStatusForOrders({
+              entityId,
+              channelId: 'channel-oneshop',
+              startDate: this.parseDate(window.beginDate),
+              endDate: this.parseEndDate(window.endDate),
+              limit: invoiceBatchLimit,
+            });
 
-        windows.push({
-          beginDate: window.beginDate,
-          endDate: window.endDate,
-          result,
-        });
-      }
+          windows.push({
+            beginDate: window.beginDate,
+            endDate: window.endDate,
+            result,
+          });
+        }
 
-      return {
-        requestedWindows: selectedInvoiceWindows.length,
-        windows,
-      };
-    });
+        return {
+          requestedWindows: selectedInvoiceWindows.length,
+          windows,
+        };
+      },
+    );
 
     await runStep('groupbuy-ar-sync', '同步 1Shop 團購應收 / 分錄', () =>
       this.arService.syncSalesReceivables(entityId, syncUserId, {
@@ -395,7 +406,8 @@ export class ReconciliationService {
       endDate,
     );
     const groupbuyChannel =
-      audit.channelBreakdown.find((item) => item.channelCode === '1SHOP') || null;
+      audit.channelBreakdown.find((item) => item.channelCode === '1SHOP') ||
+      null;
 
     return {
       success: !steps.some((step) => step.status === 'failed'),
@@ -429,8 +441,7 @@ export class ReconciliationService {
 
     const until = params.endDate || new Date();
     const since =
-      params.startDate ||
-      new Date(until.getTime() - 31 * 24 * 60 * 60 * 1000);
+      params.startDate || new Date(until.getTime() - 31 * 24 * 60 * 60 * 1000);
     const limit = Math.min(Math.max(params.limit || 300, 1), 500);
     const syncUserId = await this.resolveSyncUserId(params.userId);
     const steps: Array<{
@@ -448,7 +459,12 @@ export class ReconciliationService {
       task: () => Promise<any>,
     ) => {
       if (!enabled) {
-        steps.push({ key, label, status: 'skipped', result: { skipped: true } });
+        steps.push({
+          key,
+          label,
+          status: 'skipped',
+          result: { skipped: true },
+        });
         return null;
       }
 
@@ -534,7 +550,12 @@ export class ReconciliationService {
         }),
     );
 
-    const center = await this.getReconciliationCenter(entityId, since, until, 300);
+    const center = await this.getReconciliationCenter(
+      entityId,
+      since,
+      until,
+      300,
+    );
 
     return {
       success: !steps.some((step) => step.status === 'failed'),
@@ -570,7 +591,10 @@ export class ReconciliationService {
     }
 
     const limit = Math.min(Math.max(Number(params.limit || 100), 1), 500);
-    const payoutDateFilter = this.buildDateFilter(params.startDate, params.endDate);
+    const payoutDateFilter = this.buildDateFilter(
+      params.startDate,
+      params.endDate,
+    );
     const userId = params.dryRun
       ? params.userId || 'dry-run'
       : await this.resolveSyncUserId(params.userId);
@@ -622,7 +646,10 @@ export class ReconciliationService {
       journalEntryId?: string | null;
     }> = [];
     const journalContextCache = new Map<string, any>();
-    const openPeriodCache = new Map<string, { periodId: string | null; blockedReason: string | null }>();
+    const openPeriodCache = new Map<
+      string,
+      { periodId: string | null; blockedReason: string | null }
+    >();
 
     for (const payment of payments) {
       const order = payment.salesOrder;
@@ -690,10 +717,16 @@ export class ReconciliationService {
         continue;
       }
       if (!order) {
-        results.push({ ...baseResult, status: 'skipped', reason: 'missing_order' });
+        results.push({
+          ...baseResult,
+          status: 'skipped',
+          reason: 'missing_order',
+        });
         continue;
       }
-      if (['cancelled', 'refunded'].includes((order.status || '').toLowerCase())) {
+      if (
+        ['cancelled', 'refunded'].includes((order.status || '').toLowerCase())
+      ) {
         results.push({
           ...baseResult,
           status: 'skipped',
@@ -702,7 +735,11 @@ export class ReconciliationService {
         continue;
       }
       if (!hasInvoice) {
-        results.push({ ...baseResult, status: 'skipped', reason: 'missing_invoice' });
+        results.push({
+          ...baseResult,
+          status: 'skipped',
+          reason: 'missing_invoice',
+        });
         continue;
       }
       if (!amountMatches) {
@@ -713,15 +750,33 @@ export class ReconciliationService {
         results.push({ ...baseResult, status: 'skipped', reason });
         continue;
       }
-      if (!hasActualFee || (orderPaymentCount > 1 && !allOrderPaymentsHaveActualFees)) {
-        results.push({ ...baseResult, status: 'skipped', reason: 'missing_actual_fee' });
+      if (
+        !hasActualFee ||
+        (orderPaymentCount > 1 && !allOrderPaymentsHaveActualFees)
+      ) {
+        results.push({
+          ...baseResult,
+          status: 'skipped',
+          reason: 'missing_actual_fee',
+        });
         continue;
       }
       if (netAmount.lessThan(0) || grossAmount.lessThanOrEqualTo(0)) {
-        results.push({ ...baseResult, status: 'skipped', reason: 'invalid_amount' });
+        results.push({
+          ...baseResult,
+          status: 'skipped',
+          reason: 'invalid_amount',
+        });
         continue;
       }
-      if (netAmount.plus(gatewayFee).plus(platformFee).minus(grossAmount).abs().greaterThan(1)) {
+      if (
+        netAmount
+          .plus(gatewayFee)
+          .plus(platformFee)
+          .minus(grossAmount)
+          .abs()
+          .greaterThan(1)
+      ) {
         results.push({
           ...baseResult,
           status: 'skipped',
@@ -745,7 +800,11 @@ export class ReconciliationService {
       }
 
       if (params.dryRun) {
-        results.push({ ...baseResult, status: 'dry_run', reason: 'ready_to_clear' });
+        results.push({
+          ...baseResult,
+          status: 'dry_run',
+          reason: 'ready_to_clear',
+        });
         continue;
       }
 
@@ -916,7 +975,9 @@ export class ReconciliationService {
       pendingPayoutAmount: buckets.pending_payout.outstandingAmount,
       exceptionAmount: buckets.exceptions.outstandingAmount,
       feeTotal: this.sumCenterItems(items, 'feeTotal'),
-      completionRate: totalCount ? Math.round((clearedCount / totalCount) * 100) : 0,
+      completionRate: totalCount
+        ? Math.round((clearedCount / totalCount) * 100)
+        : 0,
       lastGeneratedAt: new Date().toISOString(),
       exceptionBreakdown,
     };
@@ -972,8 +1033,14 @@ export class ReconciliationService {
       overdueDays?: number;
     } = {},
   ) {
-    const normalizedLimit = Math.min(Math.max(Number(params.limit || 300), 20), 500);
-    const overdueDays = Math.min(Math.max(Number(params.overdueDays || 30), 1), 365);
+    const normalizedLimit = Math.min(
+      Math.max(Number(params.limit || 300), 20),
+      500,
+    );
+    const overdueDays = Math.min(
+      Math.max(Number(params.overdueDays || 30), 1),
+      365,
+    );
     const cutoff = new Date(Date.now() - overdueDays * 24 * 60 * 60 * 1000);
     const statusFilter = params.status?.trim();
 
@@ -1011,10 +1078,18 @@ export class ReconciliationService {
       cutoff: cutoff.toISOString(),
       summary: {
         total: allItems.length,
-        customerService: allItems.filter((item) => item.timeoutStatus === 'customer_service').length,
-        accounting: allItems.filter((item) => item.timeoutStatus === 'accounting').length,
-        completed: allItems.filter((item) => item.timeoutStatus === 'completed').length,
-        outstandingAmount: allItems.reduce((sum, item) => sum + item.outstandingAmount, 0),
+        customerService: allItems.filter(
+          (item) => item.timeoutStatus === 'customer_service',
+        ).length,
+        accounting: allItems.filter(
+          (item) => item.timeoutStatus === 'accounting',
+        ).length,
+        completed: allItems.filter((item) => item.timeoutStatus === 'completed')
+          .length,
+        outstandingAmount: allItems.reduce(
+          (sum, item) => sum + item.outstandingAmount,
+          0,
+        ),
       },
       items,
     };
@@ -1092,7 +1167,10 @@ export class ReconciliationService {
     return this.getTimeoutReconciliationCaseById(entityId, orderId);
   }
 
-  private async getTimeoutReconciliationCaseById(entityId: string, orderId: string) {
+  private async getTimeoutReconciliationCaseById(
+    entityId: string,
+    orderId: string,
+  ) {
     const order = await this.prisma.salesOrder.findFirst({
       where: { id: orderId, entityId },
       include: {
@@ -1132,8 +1210,12 @@ export class ReconciliationService {
     );
     const grossAmount = Number(order.totalGrossOriginal || 0);
     const outstandingAmount = Math.max(grossAmount - paidAmount, 0);
-    const hasInvoice = Boolean(order.hasInvoice || order.invoiceId || order.invoices?.length);
-    const reconciled = (order.payments || []).some((payment) => payment.reconciledFlag);
+    const hasInvoice = Boolean(
+      order.hasInvoice || order.invoiceId || order.invoices?.length,
+    );
+    const reconciled = (order.payments || []).some(
+      (payment) => payment.reconciledFlag,
+    );
     const isTimeoutCandidate =
       (cutoff ? new Date(order.orderDate) <= cutoff : true) &&
       outstandingAmount > 0 &&
@@ -1153,7 +1235,10 @@ export class ReconciliationService {
       sourceLabel: order.channel?.name || order.channel?.code || '未指定通路',
       orderDate: order.orderDate?.toISOString?.() || order.orderDate,
       daysOverdue: Math.max(
-        Math.floor((Date.now() - new Date(order.orderDate).getTime()) / (24 * 60 * 60 * 1000)),
+        Math.floor(
+          (Date.now() - new Date(order.orderDate).getTime()) /
+            (24 * 60 * 60 * 1000),
+        ),
         0,
       ),
       grossAmount,
@@ -1165,10 +1250,14 @@ export class ReconciliationService {
       timeoutNote: order.timeoutReconciliationNote || null,
       paymentLinkUrl: order.paymentLinkUrl || this.buildPaymentLink(order),
       paymentLinkLastSentAt:
-        order.paymentLinkLastSentAt?.toISOString?.() || order.paymentLinkLastSentAt || null,
+        order.paymentLinkLastSentAt?.toISOString?.() ||
+        order.paymentLinkLastSentAt ||
+        null,
       paymentLinkResendCount: Number(order.paymentLinkResendCount || 0),
       returnedToAccountingAt:
-        order.returnedToAccountingAt?.toISOString?.() || order.returnedToAccountingAt || null,
+        order.returnedToAccountingAt?.toISOString?.() ||
+        order.returnedToAccountingAt ||
+        null,
       updatedAt:
         order.timeoutReconciliationUpdatedAt?.toISOString?.() ||
         order.updatedAt?.toISOString?.() ||
@@ -1252,7 +1341,10 @@ export class ReconciliationService {
         anomalyMessages,
         item.settlementDiagnostic,
       );
-      nextAction = this.buildCenterNextAction(anomalyCodes, auditItem?.recommendation);
+      nextAction = this.buildCenterNextAction(
+        anomalyCodes,
+        auditItem?.recommendation,
+      );
     } else if (Number(item.paidAmount || 0) > 0 || item.reconciledFlag) {
       bucket = 'ready_to_clear';
       reason = '已看到收款或撥款資料，可以進入核銷檢查。';
@@ -1327,8 +1419,7 @@ export class ReconciliationService {
         const severityRank = { critical: 3, warning: 2, info: 1 };
         return (
           (severityRank[right.severity] || 0) -
-            (severityRank[left.severity] || 0) ||
-          right.count - left.count
+            (severityRank[left.severity] || 0) || right.count - left.count
         );
       });
   }
@@ -1336,7 +1427,11 @@ export class ReconciliationService {
   private describeCenterExceptionCode(code: string) {
     const descriptions: Record<
       string,
-      { label: string; severity: 'critical' | 'warning' | 'info'; description: string }
+      {
+        label: string;
+        severity: 'critical' | 'warning' | 'info';
+        description: string;
+      }
     > = {
       missing_invoice_after_payment: {
         label: '已付款但缺正式發票',
@@ -1346,7 +1441,8 @@ export class ReconciliationService {
       order_payment_mismatch: {
         label: '訂單與收款金額不一致',
         severity: 'critical',
-        description: '平台訂單金額與付款總額不同，需先確認退款、折讓或重複付款。',
+        description:
+          '平台訂單金額與付款總額不同，需先確認退款、折讓或重複付款。',
       },
       reconciled_without_invoice: {
         label: '已核銷但缺發票',
@@ -1396,12 +1492,14 @@ export class ReconciliationService {
       overpaid_receivable: {
         label: '收款大於訂單',
         severity: 'warning',
-        description: '收款總額高於訂單金額，可能是重複付款、合併款或資料歸戶問題。',
+        description:
+          '收款總額高於訂單金額，可能是重複付款、合併款或資料歸戶問題。',
       },
       order_tax_mismatch: {
         label: '訂單稅額口徑不一致',
         severity: 'info',
-        description: '平台訂單稅額與台灣 5% 內含稅推估值不同，通常需用電子發票確認。',
+        description:
+          '平台訂單稅額與台灣 5% 內含稅推估值不同，通常需用電子發票確認。',
       },
       fee_mismatch: {
         label: '手續費淨額不符',
@@ -1455,26 +1553,41 @@ export class ReconciliationService {
       const description = this.describeCenterExceptionCode(firstCode);
       return description.description;
     }
-    return messages[0] || settlementDiagnostic || '這筆訂單有資料缺口，需要人工確認。';
+    return (
+      messages[0] ||
+      settlementDiagnostic ||
+      '這筆訂單有資料缺口，需要人工確認。'
+    );
   }
 
-  private buildCenterNextAction(codes: string[], auditRecommendation?: string | null) {
+  private buildCenterNextAction(
+    codes: string[],
+    auditRecommendation?: string | null,
+  ) {
     if (
       codes.some((code) =>
-        ['missing_invoice_after_payment', 'invoice_pending', 'reconciled_without_invoice'].includes(
-          code,
-        ),
+        [
+          'missing_invoice_after_payment',
+          'invoice_pending',
+          'reconciled_without_invoice',
+        ].includes(code),
       )
     ) {
       return '先同步或匯入電子發票，確認發票號碼能回連訂單。';
     }
-    if (codes.includes('missing_fee') || codes.includes('fee_backfill_needed')) {
+    if (
+      codes.includes('missing_fee') ||
+      codes.includes('fee_backfill_needed')
+    ) {
       return '先補平台/綠界撥款與手續費資料，再重新跑自動核銷。';
     }
     if (codes.includes('missing_journal') || codes.includes('missing_ar')) {
       return '補齊 AR 與會計分錄後，再確認是否可核銷。';
     }
-    if (codes.includes('overpaid_receivable') || codes.includes('order_payment_mismatch')) {
+    if (
+      codes.includes('overpaid_receivable') ||
+      codes.includes('order_payment_mismatch')
+    ) {
       return '核對是否重複收款、合併付款、退款或折讓，再決定沖銷方式。';
     }
     return auditRecommendation || '先補綠界撥款/手續費或發票狀態，再重新同步。';
@@ -1515,39 +1628,50 @@ export class ReconciliationService {
    */
   async importBankTransactions(dto: ImportBankTransactionsDto, userId: string) {
     this.logger.log(
-      `匯入銀行交易 - 來源: ${dto.source}, 筆數: ${dto.transactions.length}`,
+      `匯入銀行交易 - 帳戶: ${dto.bankAccountId}, 筆數: ${dto.transactions.length}`,
     );
 
-    // 建立匯入批次
-    const batch = await this.prisma.bankImportBatch.create({
-      data: {
-        entityId: dto.entityId,
-        source: dto.source,
-        importedBy: userId,
-        fileName: dto.fileName || null,
-        recordCount: dto.transactions.length,
-        notes: dto.notes || null,
-      },
+    const bankAccount = await this.prisma.bankAccount.findUnique({
+      where: { id: dto.bankAccountId },
+      select: { entityId: true },
     });
+    if (!bankAccount) {
+      throw new NotFoundException(
+        `Bank account not found: ${dto.bankAccountId}`,
+      );
+    }
 
     // 批次寫入銀行交易
     const bankTransactions = dto.transactions.map((tx) => ({
       bankAccountId: dto.bankAccountId,
-      batchId: batch.id,
-      txnDate: new Date(tx.transactionDate),
-      valueDate: new Date(tx.transactionDate),
+      txnDate: new Date(tx.date),
+      valueDate: new Date(tx.date),
       amountOriginal: new Decimal(tx.amount),
       amountCurrency: tx.currency || 'TWD',
-      amountFxRate: new Decimal(tx.fxRate || 1),
-      amountBase: new Decimal(tx.amount).mul(new Decimal(tx.fxRate || 1)),
+      amountFxRate: new Decimal(1),
+      amountBase: new Decimal(tx.amount),
       descriptionRaw: tx.description,
-      referenceNo: tx.referenceNo || null,
+      referenceNo: null,
       virtualAccountNo: tx.virtualAccount || null,
       reconcileStatus: 'unmatched',
     }));
 
-    await this.prisma.bankTransaction.createMany({
-      data: bankTransactions,
+    const batch = await this.prisma.$transaction(async (tx) => {
+      const createdBatch = await tx.bankImportBatch.create({
+        data: {
+          entityId: bankAccount.entityId,
+          source: 'manual',
+          importedBy: userId,
+          recordCount: dto.transactions.length,
+        },
+      });
+      await tx.bankTransaction.createMany({
+        data: bankTransactions.map((transaction) => ({
+          ...transaction,
+          batchId: createdBatch.id,
+        })),
+      });
+      return createdBatch;
     });
 
     this.logger.log(`匯入完成 - BatchID: ${batch.id}`);
@@ -1564,6 +1688,14 @@ export class ReconciliationService {
    */
   async autoMatchTransactions(batchId: string, config?: AutoMatchDto) {
     this.logger.log(`自動對帳 - BatchID: ${batchId}`);
+
+    const batch = await this.prisma.bankImportBatch.findUnique({
+      where: { id: batchId },
+      select: { entityId: true },
+    });
+    if (!batch) {
+      throw new NotFoundException(`Bank import batch not found: ${batchId}`);
+    }
 
     const dateTolerance = config?.dateTolerance || 1;
     const amountTolerance = config?.amountTolerance || 0;
@@ -1583,8 +1715,9 @@ export class ReconciliationService {
       // 嘗試精準匹配 - 金額相同且日期接近的 Payment
       const exactMatch = await this.prisma.payment.findFirst({
         where: {
-          amountOriginal: tx.amountOriginal,
-          paymentDate: {
+          entityId: batch.entityId,
+          amountGrossOriginal: tx.amountOriginal,
+          payoutDate: {
             gte: new Date(
               tx.txnDate.getTime() - dateTolerance * 24 * 60 * 60 * 1000,
             ),
@@ -1621,7 +1754,7 @@ export class ReconciliationService {
         if (orderIdMatch) {
           const orderId = orderIdMatch[0];
           const order = await this.prisma.salesOrder.findFirst({
-            where: { id: orderId },
+            where: { id: orderId, entityId: batch.entityId },
           });
 
           if (order) {
@@ -1696,6 +1829,9 @@ export class ReconciliationService {
       `手動對帳 - 銀行交易: ${bankTransactionId}, 匹配: ${matchedType}/${matchedId}`,
     );
 
+    const entityId = await this.getBankTransactionEntityId(bankTransactionId);
+    await this.assertMatchedRecordEntity(matchedType, matchedId, entityId);
+
     await this.prisma.$transaction(async (tx) => {
       await this.createReconciliationResult(
         bankTransactionId,
@@ -1703,6 +1839,7 @@ export class ReconciliationService {
         matchedId,
         100,
         'manual',
+        tx,
       );
 
       await tx.bankTransaction.update({
@@ -1740,6 +1877,68 @@ export class ReconciliationService {
     });
 
     return { success: true };
+  }
+
+  private async getBankTransactionEntityId(bankTransactionId: string) {
+    const transaction = await this.prisma.bankTransaction.findUnique({
+      where: { id: bankTransactionId },
+      select: { bankAccount: { select: { entityId: true } } },
+    });
+    if (!transaction) {
+      throw new NotFoundException(
+        `Bank transaction not found: ${bankTransactionId}`,
+      );
+    }
+    return transaction.bankAccount.entityId;
+  }
+
+  private async assertMatchedRecordEntity(
+    matchedType: string,
+    matchedId: string,
+    entityId: string,
+  ) {
+    let matched: { entityId: string } | null;
+    switch (matchedType) {
+      case 'payment':
+        matched = await this.prisma.payment.findUnique({
+          where: { id: matchedId },
+          select: { entityId: true },
+        });
+        break;
+      case 'sales_order':
+        matched = await this.prisma.salesOrder.findUnique({
+          where: { id: matchedId },
+          select: { entityId: true },
+        });
+        break;
+      case 'ar_invoice':
+        matched = await this.prisma.arInvoice.findUnique({
+          where: { id: matchedId },
+          select: { entityId: true },
+        });
+        break;
+      case 'ap_invoice':
+        matched = await this.prisma.apInvoice.findUnique({
+          where: { id: matchedId },
+          select: { entityId: true },
+        });
+        break;
+      default:
+        throw new BadRequestException(
+          `Unsupported matched type: ${matchedType}`,
+        );
+    }
+
+    if (!matched) {
+      throw new NotFoundException(
+        `${matchedType} record not found: ${matchedId}`,
+      );
+    }
+    if (matched.entityId !== entityId) {
+      throw new BadRequestException(
+        'Bank transaction and matched record must belong to the same company',
+      );
+    }
   }
 
   private buildDateFilter(startDate?: Date, endDate?: Date) {
@@ -1831,27 +2030,36 @@ export class ReconciliationService {
       return cached;
     }
 
-    const [bankDepositAccount, clearingAccount, platformFeeAccount, gatewayFeeAccount] =
-      await Promise.all([
-        tx.account.findUnique({
-          where: { entityId_code: { entityId, code: '1113' } },
-          select: { id: true },
-        }),
-        tx.account.findUnique({
-          where: { entityId_code: { entityId, code: '1191' } },
-          select: { id: true },
-        }),
-        tx.account.findUnique({
-          where: { entityId_code: { entityId, code: '6131' } },
-          select: { id: true },
-        }),
-        tx.account.findUnique({
-          where: { entityId_code: { entityId, code: '6134' } },
-          select: { id: true },
-        }),
-      ]);
+    const [
+      bankDepositAccount,
+      clearingAccount,
+      platformFeeAccount,
+      gatewayFeeAccount,
+    ] = await Promise.all([
+      tx.account.findUnique({
+        where: { entityId_code: { entityId, code: '1113' } },
+        select: { id: true },
+      }),
+      tx.account.findUnique({
+        where: { entityId_code: { entityId, code: '1191' } },
+        select: { id: true },
+      }),
+      tx.account.findUnique({
+        where: { entityId_code: { entityId, code: '6131' } },
+        select: { id: true },
+      }),
+      tx.account.findUnique({
+        where: { entityId_code: { entityId, code: '6134' } },
+        select: { id: true },
+      }),
+    ]);
 
-    if (!bankDepositAccount || !clearingAccount || !platformFeeAccount || !gatewayFeeAccount) {
+    if (
+      !bankDepositAccount ||
+      !clearingAccount ||
+      !platformFeeAccount ||
+      !gatewayFeeAccount
+    ) {
       throw new NotFoundException(
         '缺少自動核銷所需會計科目（1113 / 1191 / 6131 / 6134）',
       );
@@ -1884,7 +2092,10 @@ export class ReconciliationService {
     tx: Prisma.TransactionClient,
     entityId: string,
     targetDate: Date,
-    cache: Map<string, { periodId: string | null; blockedReason: string | null }>,
+    cache: Map<
+      string,
+      { periodId: string | null; blockedReason: string | null }
+    >,
   ) {
     const cacheKey = `${entityId}:${targetDate.toISOString().slice(0, 10)}`;
     if (cache.has(cacheKey)) {
@@ -1938,8 +2149,7 @@ export class ReconciliationService {
     const sourceId = params.payment.id;
     const currency = params.payment.amountGrossCurrency || 'TWD';
     const fxRate = new Decimal(params.payment.amountGrossFxRate || 1);
-    const amountBase = (value: Decimal) =>
-      value.mul(fxRate).toDecimalPlaces(2);
+    const amountBase = (value: Decimal) => value.mul(fxRate).toDecimalPlaces(2);
     const description = `自動核銷撥款 ${params.order.externalOrderId || params.order.id}`;
     const journalLines = [
       {
@@ -2045,7 +2255,9 @@ export class ReconciliationService {
       .join('\n')
       .trim();
 
-    return preservedNotes ? `${preservedNotes}\n${autoClearNote}` : autoClearNote;
+    return preservedNotes
+      ? `${preservedNotes}\n${autoClearNote}`
+      : autoClearNote;
   }
 
   // ── 新增 Summary Methods（2026-04）──────────────────────────
@@ -2184,8 +2396,9 @@ export class ReconciliationService {
     matchedId: string,
     confidence: number,
     ruleUsed: string,
+    db: PrismaService | Prisma.TransactionClient = this.prisma,
   ) {
-    await this.prisma.reconciliationResult.create({
+    await db.reconciliationResult.create({
       data: {
         bankTransactionId,
         matchedType,

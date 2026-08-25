@@ -364,6 +364,20 @@ export type ManagementSummary = {
   };
   summary: Omit<ManagementSummaryPeriod, "key" | "label" | "startDate" | "endDate">;
   periods: ManagementSummaryPeriod[];
+  dataBasis: "operational_sources";
+  releaseGate: {
+    status: "ready" | "blocked";
+    financialReportsUseApprovedOnly: boolean;
+    canPublishFinancialStatements: boolean;
+    reason: string;
+  };
+  journalApproval: {
+    counts: { total: number; approved: number; unapproved: number };
+    amounts: {
+      approved: { debit: number; credit: number; amountBase: number };
+      unapproved: { debit: number; credit: number; amountBase: number };
+    };
+  };
 };
 
 export type AdPerformanceBrand = {

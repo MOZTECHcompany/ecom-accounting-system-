@@ -7,6 +7,7 @@ import {
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { JournalService } from './services/journal.service';
+import { EntityAccessService } from '../../common/entity-access/entity-access.service';
 
 /**
  * AccountingService
@@ -19,6 +20,7 @@ export class AccountingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly journalService: JournalService,
+    private readonly entityAccessService: EntityAccessService,
   ) {}
 
   /**
@@ -228,6 +230,12 @@ export class AccountingService {
       throw new NotFoundException(`Journal entry ${journalEntryId} not found`);
     }
 
+    await this.entityAccessService.assertAccess(
+      approvedBy,
+      'accounting',
+      journal.entityId,
+    );
+
     const period = journal.periodId
       ? await this.prisma.period.findUnique({
           where: { id: journal.periodId },
@@ -305,6 +313,12 @@ export class AccountingService {
       throw new NotFoundException(`Period ${periodId} not found`);
     }
 
+    await this.entityAccessService.assertAccess(
+      userId,
+      'accounting',
+      period.entityId,
+    );
+
     if (period.status === 'locked') {
       throw new BadRequestException('Locked period cannot be closed again');
     }
@@ -353,6 +367,12 @@ export class AccountingService {
     if (!period) {
       throw new NotFoundException(`Period ${periodId} not found`);
     }
+
+    await this.entityAccessService.assertAccess(
+      userId,
+      'accounting',
+      period.entityId,
+    );
 
     if (period.status === 'locked') {
       return period;

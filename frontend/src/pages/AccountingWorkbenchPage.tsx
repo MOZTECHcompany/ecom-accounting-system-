@@ -1090,7 +1090,7 @@ const AccountingWorkbenchPage: React.FC = () => {
       ),
     },
     {
-      title: 'AI 判斷',
+      title: '系統判斷',
       render: (_, record) => {
         const meta = auditMeta(record.severity)
         return (
@@ -1585,15 +1585,7 @@ const AccountingWorkbenchPage: React.FC = () => {
         loading={initialWorkbenchLoading}
       >
         <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
-          <div className="max-w-3xl">
-            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
-              Invoice Handling
-            </div>
-            <div className="mt-2 text-xl font-semibold text-slate-900">缺發票訂單在這裡處理</div>
-            <div className="mt-1 text-sm leading-6 text-slate-500">
-              這裡不是報表頁，也不是只看訂單的銷售頁。發票處理順序是：同步既有發票狀態、匯入綠界銷項發票、補跑團購閉環，最後回到對帳中心看是否可核銷。
-            </div>
-          </div>
+          <div className="text-xl font-semibold text-slate-900">發票處理</div>
           <div className="grid w-full gap-3 sm:grid-cols-3 xl:max-w-2xl">
             <Card size="small" className="rounded-2xl bg-amber-50">
               <Statistic title="缺發票訂單" value={missingInvoiceOrderCount} />
@@ -1679,13 +1671,7 @@ const AccountingWorkbenchPage: React.FC = () => {
       >
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
           <div className="bg-[linear-gradient(135deg,#0f172a,#1e293b,#0f766e)] px-7 py-7 text-white">
-            <div className="text-xs font-semibold uppercase tracking-[0.28em] text-white/55">
-              Accounting Control Room
-            </div>
-            <div className="mt-3 text-4xl font-semibold">自動對帳閉環</div>
-            <div className="mt-3 max-w-3xl text-sm leading-6 text-white/72">
-              系統先自動比對；只有缺綠界撥款、缺手續費、未開票、金額不一致或尚未產生分錄時，才會留在這裡讓會計處理。
-            </div>
+            <div className="text-4xl font-semibold">自動對帳</div>
             <div className="mt-6 grid gap-3 sm:grid-cols-4">
               <div className="rounded-3xl border border-white/10 bg-white/10 px-4 py-4">
                 <div className="text-xs text-white/50">開放異常</div>
@@ -1776,13 +1762,7 @@ const AccountingWorkbenchPage: React.FC = () => {
       >
         <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
           <div className="max-w-2xl">
-            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
-              Data Completeness Radar
-            </div>
-            <div className="mt-2 text-xl font-semibold text-slate-900">資料完整度稽核</div>
-            <div className="mt-1 text-sm leading-6 text-slate-500">
-              這裡回答「到底缺什麼才不能自動對帳」：顧客、Payment、發票、撥款列、銀行入帳與實際手續費會集中檢查。
-            </div>
+            <div className="text-xl font-semibold text-slate-900">資料完整度</div>
             <div className="mt-3 flex flex-wrap gap-2">
               {dataCompleteness?.historicalData.needsShopifyReadAllOrdersCheck ? (
                 <Tag color="gold">Shopify 舊單需確認 read_all_orders</Tag>
@@ -1821,17 +1801,7 @@ const AccountingWorkbenchPage: React.FC = () => {
 
       <Card className="rounded-3xl border-0 bg-white/65 shadow-sm" bodyStyle={{ padding: 28 }}>
         <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
-              Action Rail
-            </div>
-            <div className="mt-2 text-lg font-semibold text-slate-900">
-              把警示往核銷推進
-            </div>
-            <div className="mt-1 text-sm text-slate-500">
-              這裡只處理會計補件與入帳推進；待撥款、可核銷與異常判斷請回對帳中心查看。
-            </div>
-          </div>
+          <div className="text-lg font-semibold text-slate-900">核銷處理</div>
           <Space wrap>
             <Button
               type="primary"
