@@ -29,7 +29,7 @@ import type { Request } from 'express';
 
 @ApiTags('AI Core')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('ai')
 export class AiController {
   constructor(
@@ -47,6 +47,7 @@ export class AiController {
   }
 
   @Post('insights/daily-briefing')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT')
   @ApiOperation({ summary: '取得每日財務 AI 簡報' })
   async getDailyBriefing(@Body() body: { entityId: string; modelId?: string }) {
     const briefing = await this.insightsService.getDailyBriefing(
@@ -57,6 +58,7 @@ export class AiController {
   }
 
   @Post('copilot/chat')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT')
   @ApiOperation({ summary: '與 AI 助手對話（系統知識 + 實際資料查詢）' })
   async chat(
     @Req() req: Request,

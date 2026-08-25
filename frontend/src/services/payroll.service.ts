@@ -341,15 +341,20 @@ export const payrollService = {
     return response.data;
   },
 
-  getPayrollSettings: async () => {
-    const response = await api.get<PayrollSettings>("/payroll/settings");
+  getPayrollSettings: async (entityId: string) => {
+    const response = await api.get<PayrollSettings>("/payroll/settings", {
+      params: { entityId },
+    });
     return response.data;
   },
 
-  updatePayrollSettings: async (data: Partial<PayrollSettings>) => {
+  updatePayrollSettings: async (
+    entityId: string,
+    data: Partial<PayrollSettings>,
+  ) => {
     const response = await api.patch<PayrollSettings>(
       "/payroll/settings",
-      data,
+      { ...data, entityId },
     );
     return response.data;
   },

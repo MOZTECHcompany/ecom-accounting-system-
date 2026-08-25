@@ -246,8 +246,6 @@ const onboardingStatusMeta: Record<
   VERIFIED: { color: "green", label: "已核實" },
 };
 
-const DEFAULT_EMPLOYEE_INITIAL_PASSWORD = "qwer1234";
-
 const employeeFormFieldLabels: Record<string, string> = {
   employeeNo: "員工代碼",
   name: "姓名",
@@ -406,7 +404,7 @@ const EmployeesTab = ({ departments }: { departments: Department[] }) => {
     salaryBaseOriginal: employee?.salaryBaseOriginal ?? 0,
     isActive: employee?.isActive ?? true,
     loginEmail: employee?.user?.email || "",
-    loginPassword: employee ? "" : DEFAULT_EMPLOYEE_INITIAL_PASSWORD,
+    loginPassword: "",
     onboardingRequirements: onboardingDocDefinitions.reduce(
       (acc, { docType }) => ({
         ...acc,
@@ -1119,7 +1117,7 @@ const EmployeesTab = ({ departments }: { departments: Department[] }) => {
             showIcon
             message={
               mode === "create"
-                ? `新增員工後會自動產生員工代碼；初始密碼預設為 ${DEFAULT_EMPLOYEE_INITIAL_PASSWORD}。`
+                ? "新增員工後會自動產生員工代碼與唯一的臨時密碼；只會在建立成功後顯示一次。"
                 : "密碼不會以明文保存；輸入新密碼後，員工下次登入會被要求修改密碼。"
             }
           />

@@ -1,39 +1,27 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import { AppService } from './app.service';
 import { PrismaService } from './common/prisma/prisma.service';
+import { Public } from './common/decorators/public.decorator';
 
 @Controller()
 export class AppController {
   constructor(
     private readonly appService: AppService,
     private readonly prisma: PrismaService,
-  ) { }
+  ) {}
 
   @Get('debug')
   async debug() {
     try {
-      // Test DB Connection
       await this.prisma.$queryRaw`SELECT 1`;
       return {
         status: 'ok',
         db: 'connected',
-        env: {
-          NODE_ENV: process.env.NODE_ENV,
-          HAS_DB_URL: !!process.env.DATABASE_URL,
-          // Mask password
-          DB_URL_MASKED: process.env.DATABASE_URL?.replace(/:([^:@]+)@/, ':***@'),
-        }
       };
-    } catch (e) {
+    } catch {
       return {
         status: 'error',
         db: 'disconnected',
-        error: e.message,
-        stack: e.stack,
-        env: {
-          HAS_DB_URL: !!process.env.DATABASE_URL,
-          DB_URL_MASKED: process.env.DATABASE_URL?.replace(/:([^:@]+)@/, ':***@'),
-        }
       };
     }
   }
@@ -43,19 +31,26 @@ export class AppController {
     return this.appService.getHello();
   }
 
+  @Public()
   @Get('health')
   health() {
     return {
       status: 'ok',
-      timestamp: new Date().toISOString(),
-      env: process.env.NODE_ENV,
-      cloudRun: {
-        service: process.env.K_SERVICE,
-        revision: process.env.K_REVISION,
-        configuration: process.env.K_CONFIGURATION,
-        project: process.env.GOOGLE_CLOUD_PROJECT,
-        region: process.env.CLOUD_RUN_REGION,
-      },
     };
+  }
+
+  @Public()
+  @Get('health/ready')
+  async readiness() {
+    try {
+      await this.prisma.$queryRaw`SELECT 1`;
+      return {
+        status: 'ready',
+      };
+    } catch {
+      throw new ServiceUnavailableException({
+        status: 'not_ready',
+      });
+    }
   }
 }

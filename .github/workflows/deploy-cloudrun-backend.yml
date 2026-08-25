@@ -9,6 +9,10 @@ permissions:
   contents: read
   id-token: write
 
+concurrency:
+  group: deploy-backend-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'moztech-main-db' }}
   GCP_REGION: ${{ secrets.GCP_REGION || 'asia-east1' }}
@@ -18,7 +22,11 @@ env:
   BACKEND_SERVICE: ${{ secrets.CLOUD_RUN_BACKEND_SERVICE || secrets.CLOUD_RUN_SERVICE || 'ecom-accounting-backend' }}
 
 jobs:
+  quality:
+    uses: ./.github/workflows/release-quality-gate.yml
+
   deploy:
+    needs: quality
     runs-on: ubuntu-latest
 
     steps:
@@ -52,15 +60,20 @@ jobs:
           set -euo pipefail
 
           IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPOSITORY}/${BACKEND_SERVICE}:${GITHUB_SHA}"
+          CANDIDATE_TAG="candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
 
-          gcloud artifacts repositories describe "${ARTIFACT_REPOSITORY}" \
+          if ! gcloud artifacts repositories describe "${ARTIFACT_REPOSITORY}" \
             --project="${GCP_PROJECT_ID}" \
-            --location="${GCP_REGION}" >/dev/null 2>&1 || \
-          gcloud artifacts repositories create "${ARTIFACT_REPOSITORY}" \
-            --project="${GCP_PROJECT_ID}" \
-            --repository-format=docker \
-            --location="${GCP_REGION}" \
-            --description="Cloud Run containers for ecom-accounting-system"
+            --location="${GCP_REGION}" >/dev/null 2>&1; then
+            gcloud artifacts repositories create "${ARTIFACT_REPOSITORY}" \
+              --project="${GCP_PROJECT_ID}" \
+              --repository-format=docker \
+              --location="${GCP_REGION}" \
+              --description="Cloud Run containers for ecom-accounting-system" || \
+            gcloud artifacts repositories describe "${ARTIFACT_REPOSITORY}" \
+              --project="${GCP_PROJECT_ID}" \
+              --location="${GCP_REGION}" >/dev/null
+          fi
 
           gcloud builds submit backend \
             --project="${GCP_PROJECT_ID}" \
@@ -71,12 +84,48 @@ jobs:
             --region="${GCP_REGION}" \
             --image="${IMAGE}" \
             --allow-unauthenticated \
+            --no-traffic \
+            --tag="${CANDIDATE_TAG}" \
             --port=3000
+
+          SERVICE_JSON="$(gcloud run services describe "${BACKEND_SERVICE}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --format=json)"
+          CANDIDATE_URL="$(jq -r --arg tag "${CANDIDATE_TAG}" \
+            '.status.traffic[] | select(.tag == $tag) | .url' <<<"${SERVICE_JSON}")"
+
+          if [[ -z "${CANDIDATE_URL}" || "${CANDIDATE_URL}" == "null" ]]; then
+            echo "::error::Unable to resolve the candidate Cloud Run URL."
+            exit 1
+          fi
+
+          curl --fail --silent --show-error \
+            --connect-timeout 10 \
+            --max-time 60 \
+            --retry 5 \
+            --retry-delay 3 \
+            --retry-all-errors \
+            "${CANDIDATE_URL}/api/v1/health/ready" >/dev/null
+
+          gcloud run services update-traffic "${BACKEND_SERVICE}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --to-tags="${CANDIDATE_TAG}=100"
 
           URL="$(gcloud run services describe "${BACKEND_SERVICE}" \
             --project="${GCP_PROJECT_ID}" \
             --region="${GCP_REGION}" \
             --format='value(status.url)')"
+
+          curl --fail --silent --show-error \
+            --connect-timeout 10 \
+            --max-time 60 \
+            --retry 5 \
+            --retry-delay 3 \
+            --retry-all-errors \
+            "${URL}/api/v1/health/ready" >/dev/null
+
           echo "url=${URL}" >> "${GITHUB_OUTPUT}"
 
       - name: Show service URL

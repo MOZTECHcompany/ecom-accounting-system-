@@ -238,7 +238,7 @@ class ReturnTimeoutReconciliationCaseDto {
 
 @ApiTags('Reconciliation')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('reconciliation')
 export class ReconciliationController {
   constructor(

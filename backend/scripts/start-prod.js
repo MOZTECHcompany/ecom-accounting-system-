@@ -3,6 +3,7 @@ const { spawn } = require('child_process');
 function runCommand(command, args, env = process.env) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: 'inherit', env });
+    child.on('error', reject);
     child.on('close', (code) => {
       if (code !== 0) {
         reject(new Error(`${command} exited with code ${code}`));
@@ -49,15 +50,8 @@ async function start() {
 
     // 2. Run Prisma Migrations
     console.log('Running pending migrations...');
-    try {
-        await runCommand('npx', ['prisma', 'migrate', 'deploy']);
-        console.log('Migrations completed successfully.');
-    } catch (e) {
-        console.error('Migration failed:', e);
-        // We do NOT exit here, because sometimes migration fails due to lock but app can still run,
-        // or we want to see the app logs.
-        console.log('Attempting to start application despite migration failure...');
-    }
+    await runCommand('npx', ['prisma', 'migrate', 'deploy']);
+    console.log('Migrations completed successfully.');
 
     // 2.5 Run Seeding (Optional but recommended for init)
     // We run this if SEED_ON_STARTUP is set, OR if we want to ensure admin exists.

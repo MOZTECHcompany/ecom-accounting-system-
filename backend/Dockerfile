@@ -18,8 +18,8 @@ WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Install all dependencies (including devDependencies for build)
-RUN npm install --no-audit --no-fund
+# Install the exact lockfile versions (including devDependencies for build)
+RUN npm ci --no-audit --no-fund
 
 # Install Chromium for Playwright-based browser automation
 RUN npx playwright install --with-deps chromium
@@ -56,8 +56,8 @@ COPY package*.json ./
 COPY prisma ./prisma/
 COPY scripts ./scripts/
 
-# Install only production dependencies
-RUN npm install --omit=dev --no-audit --no-fund
+# Install only the exact production lockfile dependencies
+RUN npm ci --omit=dev --no-audit --no-fund
 
 # Install Chromium runtime for Playwright-based browser automation
 RUN npx playwright install --with-deps chromium

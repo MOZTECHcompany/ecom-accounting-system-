@@ -11,6 +11,7 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { aiService, AiCopilotSource } from "../services/ai.service";
+import { resolveEntityId } from "../services/entities.service";
 import { useAI } from "../contexts/AIContext";
 
 const { Text } = Typography;
@@ -64,7 +65,6 @@ const AICopilotWidget: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { selectedModelId } = useAI();
-  const entityId = import.meta.env.VITE_DEFAULT_ENTITY_ID || "tw-entity-001";
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -85,6 +85,7 @@ const AICopilotWidget: React.FC = () => {
     setIsTyping(true);
 
     try {
+      const entityId = await resolveEntityId();
       const response = await aiService.chat(text, entityId, selectedModelId);
       const aiMsg: Message = {
         id: (Date.now() + 1).toString(),

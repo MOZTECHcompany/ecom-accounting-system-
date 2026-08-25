@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   Alert,
   Button,
@@ -34,11 +34,10 @@ import {
   ReconciliationCenterItem,
   ReconciliationCenterResponse,
 } from '../services/reconciliation.service'
+import { resolveEntityId } from '../services/entities.service'
 
 const { Title, Text } = Typography
 const { RangePicker } = DatePicker
-
-const DEFAULT_ENTITY_ID = import.meta.env.VITE_DEFAULT_ENTITY_ID?.trim() || 'tw-entity-001'
 
 const money = (value?: number | null) =>
   `NT$ ${Number(value || 0).toLocaleString('zh-TW', { maximumFractionDigits: 0 })}`
@@ -132,7 +131,6 @@ const ReconciliationCenterPage: React.FC = () => {
   const [center, setCenter] = useState<ReconciliationCenterResponse | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  const entityId = localStorage.getItem('entityId')?.trim() || DEFAULT_ENTITY_ID
   const startDate = dateRange[0].startOf('day').toISOString()
   const endDate = dateRange[1].endOf('day').toISOString()
 
@@ -140,6 +138,7 @@ const ReconciliationCenterPage: React.FC = () => {
     setLoading(true)
     setErrorMessage(null)
     try {
+      const entityId = await resolveEntityId()
       const centerData = await reconciliationService.getCenter({
         entityId,
         startDate,
@@ -194,6 +193,7 @@ const ReconciliationCenterPage: React.FC = () => {
   const handleSyncCore = async () => {
     setSyncing(true)
     try {
+      const entityId = await resolveEntityId()
       const result = await reconciliationService.runCore({
         entityId,
         startDate,
@@ -223,6 +223,7 @@ const ReconciliationCenterPage: React.FC = () => {
   const handlePreviewClearReady = async () => {
     setClearing(true)
     try {
+      const entityId = await resolveEntityId()
       const result = await reconciliationService.clearReady({
         entityId,
         startDate,
@@ -252,6 +253,7 @@ const ReconciliationCenterPage: React.FC = () => {
   const handleConfirmClearReady = async () => {
     setClearing(true)
     try {
+      const entityId = await resolveEntityId()
       const result = await reconciliationService.clearReady({
         entityId,
         startDate,
@@ -337,7 +339,7 @@ const ReconciliationCenterPage: React.FC = () => {
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45 }}
-      className="page-section-stack page-section-stack--roomy p-6"
+      className="page-section-stack page-section-stack--roomy p-3 sm:p-6"
     >
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
@@ -349,34 +351,36 @@ const ReconciliationCenterPage: React.FC = () => {
             只看核對狀態：每筆訂單是否完成訂單、撥款、手續費與發票的閉環，不在這裡做會計補件。
           </Text>
         </div>
-        <Space wrap>
+        <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 xl:w-auto xl:flex xl:flex-wrap xl:justify-end">
           <RangePicker
+            className="w-full sm:col-span-2 xl:w-[260px]"
             value={dateRange}
             onChange={(value) => {
               if (value?.[0] && value?.[1]) setDateRange([value[0], value[1]])
             }}
             allowClear={false}
           />
-          <Button icon={<ReloadOutlined />} loading={loading} onClick={fetchData}>
+          <Button className="w-full xl:w-auto" icon={<ReloadOutlined />} loading={loading} onClick={fetchData}>
             重新整理
           </Button>
           <Button
+            className="w-full bg-slate-950 hover:!bg-slate-800 xl:w-auto"
             type="primary"
             icon={<SafetyCertificateOutlined />}
             loading={syncing}
             onClick={handleSyncCore}
-            className="bg-slate-950 hover:!bg-slate-800"
           >
             跑核心同步
           </Button>
           <Button
+            className="w-full xl:w-auto"
             icon={<CheckCircleOutlined />}
             loading={clearing}
             onClick={handlePreviewClearReady}
           >
             預覽可核銷
           </Button>
-        </Space>
+        </div>
       </div>
 
       <Alert
@@ -549,7 +553,7 @@ const ReconciliationCenterPage: React.FC = () => {
             value: key,
           }))}
         />
-        <Space>
+        <Space wrap className="w-full lg:w-auto">
           <Button onClick={() => navigate('/accounting/workbench?focus=missing-invoices')}>
             缺發票處理
           </Button>
@@ -569,6 +573,7 @@ const ReconciliationCenterPage: React.FC = () => {
         dataSource={visibleItems}
         pagination={{ pageSize: 12 }}
         className="rounded-3xl bg-white/60"
+        scroll={{ x: 760 }}
       />
 
       <Modal
@@ -628,6 +633,7 @@ const ReconciliationCenterPage: React.FC = () => {
               rowKey={(record) => record.paymentId}
               dataSource={clearPreview.results.slice(0, 20)}
               pagination={false}
+              scroll={{ x: 560 }}
               columns={[
                 {
                   title: 'Payment',

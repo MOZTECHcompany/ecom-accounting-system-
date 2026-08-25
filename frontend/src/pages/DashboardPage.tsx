@@ -2,17 +2,14 @@
  * DashboardPage.tsx
  * 修改（2026-04）：新增財務即時快覽、本週損益快覽、各平台貢獻度橫條圖
  */
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  Row,
-  Col,
+  Alert,
   Button,
-  Card,
   message,
   Radio,
   DatePicker,
   Modal,
-  Statistic,
   Tag,
   Typography,
   Progress,
@@ -36,12 +33,12 @@ import { useNavigate } from "react-router-dom";
 import PageSkeleton from "../components/PageSkeleton";
 import AIInsightsWidget from "../components/AIInsightsWidget";
 import { GlassCard } from "../components/ui/GlassCard";
+import { resolveEntityId } from "../services/entities.service";
 import { shopifyService } from "../services/shopify.service";
 import { oneShopService } from "../services/oneshop.service";
 import { shoplineService } from "../services/shopline.service";
 import {
   invoicingService,
-  InvoiceQueueItem,
   InvoiceQueueResponse,
 } from "../services/invoicing.service";
 import {
@@ -57,12 +54,9 @@ import {
   AdPerformanceSummary,
   ConnectorReadiness,
   DashboardExecutiveOverview,
-  DashboardOperationsHub,
-  DashboardPerformanceBucket,
   DashboardSalesOverview,
   ManagementSummary,
   OrderReconciliationAudit,
-  OrderReconciliationAuditItem,
 } from "../services/dashboard.service";
 import dayjs, { Dayjs } from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -94,6 +88,44 @@ dayjs.tz.setDefault(DASHBOARD_TZ);
 type RangeMode = "all" | "today" | "yesterday" | "last7d" | "last30d" | "last1y" | "custom";
 type CustomRange = [Dayjs, Dayjs] | null;
 type RangeValue = [Dayjs | null, Dayjs | null] | null;
+type DashboardLoadState =
+  | "initial-loading"
+  | "refreshing"
+  | "ready"
+  | "partial"
+  | "stale"
+  | "error";
+
+const DASHBOARD_SECTION_LABELS = {
+  overview: "銷售與通路概況",
+  executive: "CEO 待辦與庫存",
+  operations: "營運中心",
+  invoices: "發票處理",
+  audit: "訂單對帳稽核",
+  receivables: "應收帳款",
+  trend: "30 天趨勢",
+  rangeFinancial: "本期損益",
+  todayFinancial: "今日損益",
+  ads: "廣告效益",
+  connectors: "串接狀態",
+  payables: "應付帳款",
+  banking: "銀行餘額",
+} as const;
+
+function getRequestErrorMessage(error: unknown, fallback: string) {
+  if (!error || typeof error !== "object") return fallback;
+
+  const candidate = error as {
+    message?: unknown;
+    response?: { data?: { message?: unknown } };
+  };
+  const apiMessage = candidate.response?.data?.message;
+  if (typeof apiMessage === "string" && apiMessage.trim()) return apiMessage;
+  if (typeof candidate.message === "string" && candidate.message.trim()) {
+    return candidate.message;
+  }
+  return fallback;
+}
 
 // ─── 財務快覽型別 ────────────────────────────────────────
 
@@ -113,6 +145,7 @@ interface WeeklyPnl {
 }
 
 interface PlatformContribution {
+  [key: string]: string | number;
   platform: string;
   net: number;
   color: string;
@@ -213,49 +246,6 @@ function resolveRange(
   return { since: undefined, until: undefined };
 }
 
-function getBucketAccent(index: number) {
-  const accents = [
-    "from-sky-500/15 to-sky-100/10 text-sky-600",
-    "from-emerald-500/15 to-emerald-100/10 text-emerald-600",
-    "from-amber-500/15 to-amber-100/10 text-amber-600",
-    "from-fuchsia-500/15 to-fuchsia-100/10 text-fuchsia-600",
-    "from-slate-700/15 to-slate-100/10 text-slate-700",
-  ];
-  return accents[index % accents.length];
-}
-
-function getBucketStatus(bucket: DashboardPerformanceBucket) {
-  if (!bucket.paymentCount) {
-    return {
-      color: "default" as const,
-      label: "待同步金流",
-      helper: "目前只有訂單，尚未建立收款或撥款資料",
-    };
-  }
-
-  if (bucket.pendingPayoutCount === 0) {
-    return {
-      color: "green" as const,
-      label: "已完成對帳",
-      helper: "這個區塊的收款都已完成對帳回填",
-    };
-  }
-
-  if (bucket.reconciledCount > 0) {
-    return {
-      color: "gold" as const,
-      label: "部分待撥款",
-      helper: "已有部分收款完成對帳，仍有款項待撥或待核對",
-    };
-  }
-
-  return {
-    color: "blue" as const,
-    label: "待撥款 / 待對帳",
-    helper: "訂單已進系統，但金流與撥款明細尚未全部完成回填",
-  };
-}
-
 function getTaskToneMeta(tone: DashboardExecutiveOverview["tasks"][number]["tone"]) {
   switch (tone) {
     case "critical":
@@ -269,32 +259,14 @@ function getTaskToneMeta(tone: DashboardExecutiveOverview["tasks"][number]["tone
   }
 }
 
-
-function getAuditSeverityMeta(
-  severity: OrderReconciliationAuditItem["severity"],
-) {
-  if (severity === "critical") {
-    return { color: "red" as const, label: "高風險" };
-  }
-  if (severity === "warning") {
-    return { color: "gold" as const, label: "需追蹤" };
-  }
-  return { color: "green" as const, label: "正常" };
-}
-
-function getInvoiceQueueMeta(item: InvoiceQueueItem) {
-  if (item.invoiceStatus === "completed") {
-    return { color: "green" as const, label: "已開票" };
-  }
-  if (item.invoiceStatus === "eligible") {
-    return { color: "gold" as const, label: "可批次開票" };
-  }
-  return { color: "blue" as const, label: "待付款後開票" };
-}
-
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
+  const hasSuccessfulSnapshotRef = useRef(false);
+  const [loadState, setLoadState] =
+    useState<DashboardLoadState>("initial-loading");
+  const [failedSections, setFailedSections] = useState<string[]>([]);
+  const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null);
+  const [lastSuccessfulAt, setLastSuccessfulAt] = useState<Date | null>(null);
   const [rangeMode, setRangeMode] = useState<RangeMode>("today");
   const [customRange, setCustomRange] = useState<CustomRange>(null);
   const [refreshToken, setRefreshToken] = useState(0);
@@ -303,7 +275,6 @@ const DashboardPage: React.FC = () => {
   const [syncingInvoiceStatuses, setSyncingInvoiceStatuses] = useState(false);
   const [overview, setOverview] = useState<DashboardSalesOverview | null>(null);
   const [executive, setExecutive] = useState<DashboardExecutiveOverview | null>(null);
-  const [operationsHub, setOperationsHub] = useState<DashboardOperationsHub | null>(null);
   const [invoiceQueue, setInvoiceQueue] = useState<InvoiceQueueResponse | null>(null);
   const [audit, setAudit] = useState<OrderReconciliationAudit | null>(null);
   const [receivableMonitor, setReceivableMonitor] =
@@ -316,6 +287,10 @@ const DashboardPage: React.FC = () => {
     inTransit: 0,
     bankBalance: 0,
   })
+  const [financeAvailability, setFinanceAvailability] = useState({
+    payables: false,
+    banking: false,
+  })
   const [weeklyPnl, setWeeklyPnl] = useState<WeeklyPnl>({
     revenue: 0,
     cost: 0,
@@ -325,7 +300,6 @@ const DashboardPage: React.FC = () => {
   })
   const [managementSummary, setManagementSummary] = useState<ManagementSummary | null>(null)
   const [rangeManagementSummary, setRangeManagementSummary] = useState<ManagementSummary | null>(null)
-  const [todayManagementSummary, setTodayManagementSummary] = useState<ManagementSummary | null>(null)
   const [adPerformance, setAdPerformance] = useState<AdPerformanceSummary | null>(null)
   const [connectorReadiness, setConnectorReadiness] = useState<ConnectorReadiness | null>(null)
   const [financeOptionsOpen, setFinanceOptionsOpen] = useState(false)
@@ -335,18 +309,25 @@ const DashboardPage: React.FC = () => {
 
   useEffect(() => {
     if (rangeMode === "custom" && (!customRange?.[0] || !customRange?.[1])) {
-      setLoading(false);
+      if (hasSuccessfulSnapshotRef.current) {
+        setLoadState("stale");
+        setFailedSections(["自訂日期區間尚未完成"]);
+        setLoadErrorMessage("請選擇完整的開始與結束日期後再更新資料。");
+      }
       return;
     }
 
     const storedEntityId = localStorage.getItem("entityId")?.trim();
     const { since, until } = resolveRange(rangeMode, DASHBOARD_TZ, customRange);
-
+    const hadSnapshot = hasSuccessfulSnapshotRef.current;
     let ignore = false;
 
     const fetchSummary = async () => {
-      setLoading(true);
+      setLoadState(hadSnapshot ? "refreshing" : "initial-loading");
+      setLoadErrorMessage(null);
+
       try {
+        const entityId = await resolveEntityId(storedEntityId);
         // 30天趨勢 & 損益：固定取最近30天日報，不跟著 rangeMode 走
         const trend30Start = dayjs().tz(DASHBOARD_TZ).subtract(29, 'day').startOf('day').toISOString()
         const trend30End = dayjs().tz(DASHBOARD_TZ).endOf('day').toISOString()
@@ -358,159 +339,90 @@ const DashboardPage: React.FC = () => {
         const arMonitorStart =
           since || dayjs().tz(DASHBOARD_TZ).subtract(90, 'day').startOf('day').toISOString()
         const arMonitorEnd = until || dayjs().tz(DASHBOARD_TZ).endOf('day').toISOString()
+        const inSelectedRange = (dateValue?: string | null) => {
+          if (!since && !until) return true
+          if (!dateValue) return false
+          const value = dayjs(dateValue)
+          if (!value.isValid()) return false
+          if (since && value.isBefore(dayjs(since))) return false
+          if (until && value.isAfter(dayjs(until))) return false
+          return true
+        }
 
         const [
-          summary,
-          executiveOverview,
-          operationsHubData,
-          invoiceQueueData,
-          auditData,
-          receivableMonitorData,
-          mgmtSummaryData,
-          rangeMgmtSummaryData,
-          todayMgmtSummaryData,
-          adPerformanceData,
-          connectorReadinessData,
-        ] = await Promise.all([
+          summaryResult,
+          executiveResult,
+          operationsResult,
+          invoiceQueueResult,
+          auditResult,
+          receivableResult,
+          trendResult,
+          rangeFinancialResult,
+          todayFinancialResult,
+          adPerformanceResult,
+          connectorReadinessResult,
+          payablesResult,
+          bankingResult,
+        ] = await Promise.allSettled([
           dashboardService.getSalesOverview({
-            entityId: storedEntityId,
+            entityId,
             startDate: since,
             endDate: until,
           }),
           dashboardService.getExecutiveOverview({
-            entityId: storedEntityId,
+            entityId,
             startDate: since,
             endDate: until,
           }),
           dashboardService.getOperationsHub({
-            entityId: storedEntityId,
+            entityId,
             startDate: since,
             endDate: until,
           }),
           invoicingService.getQueue({
-            entityId: storedEntityId,
+            entityId,
             startDate: since,
             endDate: until,
             limit: 24,
           }),
           dashboardService.getOrderReconciliationAudit({
-            entityId: storedEntityId,
+            entityId,
             startDate: since,
             endDate: until,
             limit: 24,
           }),
           arService.getReceivableMonitor({
-            entityId: storedEntityId,
+            entityId,
             startDate: arMonitorStart,
             endDate: arMonitorEnd,
           }),
           dashboardService.getManagementSummary({
-            entityId: storedEntityId,
+            entityId,
             groupBy: 'day',
             startDate: trend30Start,
             endDate: trend30End,
           }),
           dashboardService.getManagementSummary({
-            entityId: storedEntityId,
+            entityId,
             groupBy: rangeMode === 'all' || rangeMode === 'last1y' ? 'month' : 'day',
             startDate: since,
             endDate: until,
           }),
           dashboardService.getManagementSummary({
-            entityId: storedEntityId,
+            entityId,
             groupBy: 'day',
             startDate: todayStart,
             endDate: todayEnd,
           }),
           dashboardService.getAdPerformanceSummary({
-            entityId: storedEntityId,
+            entityId,
             groupBy: rangeMode === 'all' || rangeMode === 'last1y' ? 'month' : 'day',
             startDate: since,
             endDate: until,
-          }).catch(() => null),
-          dashboardService.getConnectorReadiness({
-            entityId: storedEntityId,
           }),
-        ]);
-
-        if (ignore) return;
-
-        setOverview(summary);
-        setExecutive(executiveOverview);
-        setOperationsHub(operationsHubData);
-        setInvoiceQueue(invoiceQueueData);
-        setAudit(auditData);
-        setReceivableMonitor(receivableMonitorData);
-        setFinance((prev) => ({
-          ...prev,
-          arOutstanding: receivableMonitorData.summary?.outstandingAmount ?? prev.arOutstanding,
-        }));
-        setManagementSummary(mgmtSummaryData);
-        setRangeManagementSummary(rangeMgmtSummaryData);
-        setTodayManagementSummary(todayMgmtSummaryData);
-        setAdPerformance(adPerformanceData);
-        setConnectorReadiness(connectorReadinessData);
-
-        // 30天走勢圖 — 真實日報資料
-        if (mgmtSummaryData?.periods?.length) {
-          setRevenueTrend(
-            mgmtSummaryData.periods.map((p) => ({
-              date: dayjs(p.startDate).tz(DASHBOARD_TZ).format('MM/DD'),
-              revenue: p.revenue,
-              profit: p.grossProfit,
-              netProfit: p.netProfit,
-              payoutNet: p.payoutNet,
-              adSpend: p.adSpendAmount,
-            }))
-          )
-        }
-
-        // 本期損益 — 使用本次查詢範圍的彙總，不再拿 30 天趨勢資料充當今日數字
-        if (rangeMgmtSummaryData?.summary) {
-          const s = rangeMgmtSummaryData.summary
-          setWeeklyPnl({
-            revenue: s.revenue,
-            cost: s.estimatedCogs + s.operatingExpenses,
-            grossProfit: s.grossProfit,
-            grossMargin: s.grossMarginPct / 100,
-            monthlyEarned: s.payoutNet,
-          })
-        }
-      } catch (error: any) {
-        if (!ignore) {
-          message.error(error?.response?.data?.message || "讀取儀表板資料失敗");
-        }
-      } finally {
-        if (!ignore) {
-          setLoading(false);
-        }
-      }
-    };
-
-    fetchSummary();
-
-    return () => {
-      ignore = true;
-    };
-  }, [rangeMode, customRange, refreshToken]);
-
-  // 財務快覽資料：跟著目前日期範圍計算，避免卡片混用全歷史快照。
-  useEffect(() => {
-    const entityId = localStorage.getItem('entityId')?.trim() ?? ''
-    const { since, until } = resolveRange(rangeMode, DASHBOARD_TZ, customRange)
-    const inSelectedRange = (dateValue?: string | null) => {
-      if (!since && !until) return true
-      if (!dateValue) return false
-      const value = dayjs(dateValue)
-      if (!value.isValid()) return false
-      if (since && value.isBefore(dayjs(since))) return false
-      if (until && value.isAfter(dayjs(until))) return false
-      return true
-    }
-
-    const fetchFinance = async () => {
-      try {
-        const [apRes, bankRes] = await Promise.allSettled([
+          dashboardService.getConnectorReadiness({
+            entityId,
+          }),
           apService.getInvoices(entityId).then((invoices) => ({
             outstanding: invoices
               .filter((invoice) => !['paid', 'void', 'cancelled'].includes(String(invoice.status || '').toLowerCase()))
@@ -524,21 +436,128 @@ const DashboardPage: React.FC = () => {
           bankingService.getAccounts(entityId).then((accounts) => ({
             balance: accounts.reduce((sum, account) => sum + Number(account.balance || 0), 0),
           })),
-        ])
+        ]);
 
+        if (ignore) return;
+
+        const sectionResults: Array<[PromiseSettledResult<unknown>, string]> = [
+          [summaryResult, DASHBOARD_SECTION_LABELS.overview],
+          [executiveResult, DASHBOARD_SECTION_LABELS.executive],
+          [operationsResult, DASHBOARD_SECTION_LABELS.operations],
+          [invoiceQueueResult, DASHBOARD_SECTION_LABELS.invoices],
+          [auditResult, DASHBOARD_SECTION_LABELS.audit],
+          [receivableResult, DASHBOARD_SECTION_LABELS.receivables],
+          [trendResult, DASHBOARD_SECTION_LABELS.trend],
+          [rangeFinancialResult, DASHBOARD_SECTION_LABELS.rangeFinancial],
+          [todayFinancialResult, DASHBOARD_SECTION_LABELS.todayFinancial],
+          [adPerformanceResult, DASHBOARD_SECTION_LABELS.ads],
+          [connectorReadinessResult, DASHBOARD_SECTION_LABELS.connectors],
+          [payablesResult, DASHBOARD_SECTION_LABELS.payables],
+          [bankingResult, DASHBOARD_SECTION_LABELS.banking],
+        ];
+        const nextFailedSections = sectionResults
+          .filter(([result]) => result.status === "rejected")
+          .map(([, label]) => label);
+
+        if (summaryResult.status === "fulfilled") setOverview(summaryResult.value);
+        if (executiveResult.status === "fulfilled") setExecutive(executiveResult.value);
+        if (invoiceQueueResult.status === "fulfilled") setInvoiceQueue(invoiceQueueResult.value);
+        if (auditResult.status === "fulfilled") setAudit(auditResult.value);
+        if (receivableResult.status === "fulfilled") setReceivableMonitor(receivableResult.value);
+        if (trendResult.status === "fulfilled") {
+          setManagementSummary(trendResult.value);
+          setRevenueTrend(
+            (trendResult.value?.periods || []).map((period) => ({
+              date: dayjs(period.startDate).tz(DASHBOARD_TZ).format('MM/DD'),
+              revenue: period.revenue,
+              profit: period.grossProfit,
+              netProfit: period.netProfit,
+              payoutNet: period.payoutNet,
+              adSpend: period.adSpendAmount,
+            })),
+          );
+        }
+        if (rangeFinancialResult.status === "fulfilled") {
+          setRangeManagementSummary(rangeFinancialResult.value);
+          const summary = rangeFinancialResult.value?.summary;
+          setWeeklyPnl(summary ? {
+            revenue: summary.revenue,
+            cost: summary.estimatedCogs + summary.operatingExpenses,
+            grossProfit: summary.grossProfit,
+            grossMargin: summary.grossMarginPct / 100,
+            monthlyEarned: summary.payoutNet,
+          } : {
+            revenue: 0,
+            cost: 0,
+            grossProfit: 0,
+            grossMargin: 0,
+            monthlyEarned: 0,
+          });
+        }
+        if (adPerformanceResult.status === "fulfilled") setAdPerformance(adPerformanceResult.value);
+        if (connectorReadinessResult.status === "fulfilled") {
+          setConnectorReadiness(connectorReadinessResult.value);
+        }
         setFinance((prev) => ({
-          arOutstanding: prev.arOutstanding,
-          apOutstanding: apRes.status === 'fulfilled' ? (apRes.value?.outstanding ?? prev.apOutstanding) : prev.apOutstanding,
-          inTransit: prev.inTransit, // from reconciliation endpoint
-          bankBalance: bankRes.status === 'fulfilled' ? (bankRes.value?.balance ?? prev.bankBalance) : prev.bankBalance,
-        }))
-      } catch {
-        // API 失敗時靜默保留上一次值（初始為 0）
-      }
-    }
+          arOutstanding: receivableResult.status === "fulfilled"
+            ? (receivableResult.value.summary?.outstandingAmount ?? prev.arOutstanding)
+            : prev.arOutstanding,
+          apOutstanding: payablesResult.status === "fulfilled"
+            ? payablesResult.value.outstanding
+            : prev.apOutstanding,
+          inTransit: prev.inTransit,
+          bankBalance: bankingResult.status === "fulfilled"
+            ? bankingResult.value.balance
+            : prev.bankBalance,
+        }));
+        setFinanceAvailability((prev) => ({
+          payables: payablesResult.status === "fulfilled" || prev.payables,
+          banking: bankingResult.status === "fulfilled" || prev.banking,
+        }));
 
-    fetchFinance()
-  }, [rangeMode, customRange, refreshToken])
+        const coreResults = [
+          summaryResult,
+          executiveResult,
+          receivableResult,
+          rangeFinancialResult,
+        ];
+        const coreSuccessCount = coreResults.filter(
+          (result) => result.status === "fulfilled",
+        ).length;
+        const allCoreSucceeded = coreSuccessCount === coreResults.length;
+
+        setFailedSections(nextFailedSections);
+        if (allCoreSucceeded) setLastSuccessfulAt(new Date());
+
+        if (coreSuccessCount === 0) {
+          setLoadErrorMessage("核心營運資料無法取得，畫面不會以預設 0 取代真實 KPI。");
+          setLoadState(hadSnapshot ? "stale" : "error");
+          return;
+        }
+
+        hasSuccessfulSnapshotRef.current = true;
+        setLoadErrorMessage(null);
+        if (nextFailedSections.length === 0) {
+          setLoadState("ready");
+        } else {
+          setLoadState(hadSnapshot ? "stale" : "partial");
+        }
+      } catch (error: unknown) {
+        if (ignore) return;
+        setFailedSections(["公司實體與核心儀表板資料"]);
+        setLoadErrorMessage(
+          getRequestErrorMessage(error, "讀取儀表板資料失敗，請稍後重試。"),
+        );
+        setLoadState(hadSnapshot ? "stale" : "error");
+      }
+    };
+
+    fetchSummary();
+
+    return () => {
+      ignore = true;
+    };
+  }, [rangeMode, customRange, refreshToken]);
 
   const handleCustomRangeChange = (value: RangeValue) => {
     if (!value || !value[0] || !value[1]) {
@@ -649,8 +668,8 @@ const DashboardPage: React.FC = () => {
         } 筆`,
       );
       setRefreshToken((prev) => prev + 1);
-    } catch (error: any) {
-      message.error(error?.response?.data?.message || "同步失敗，請稍後再試");
+    } catch (error: unknown) {
+      message.error(getRequestErrorMessage(error, "同步失敗，請稍後再試"));
     } finally {
       setSyncing(false);
     }
@@ -685,8 +704,8 @@ const DashboardPage: React.FC = () => {
           : "廣告費同步完成：本區間目前沒有平台回傳的花費",
       );
       setRefreshToken((prev) => prev + 1);
-    } catch (error: any) {
-      message.error(error?.response?.data?.message || "同步廣告費失敗");
+    } catch (error: unknown) {
+      message.error(getRequestErrorMessage(error, "同步廣告費失敗"));
     } finally {
       setSyncingAdSpend(false);
     }
@@ -697,8 +716,9 @@ const DashboardPage: React.FC = () => {
     const { since, until } = resolveRange(rangeMode, DASHBOARD_TZ, customRange);
     setSyncingInvoiceStatuses(true);
     try {
+      const entityId = await resolveEntityId(storedEntityId);
       const result = await salesService.syncInvoiceStatusBatch({
-        entityId: storedEntityId || "tw-entity-001",
+        entityId,
         startDate: since,
         endDate: until,
         limit: 120,
@@ -710,15 +730,54 @@ const DashboardPage: React.FC = () => {
         `發票狀態同步完成：成功 ${syncedCount} 筆，略過 ${skippedCount} 筆，失敗 ${failedCount} 筆`,
       );
       setRefreshToken((prev) => prev + 1);
-    } catch (error: any) {
-      message.error(error?.response?.data?.message || "同步發票狀態失敗");
+    } catch (error: unknown) {
+      message.error(getRequestErrorMessage(error, "同步發票狀態失敗"));
     } finally {
       setSyncingInvoiceStatuses(false);
     }
   };
 
-  if (loading) {
+  const handleRetry = () => setRefreshToken((prev) => prev + 1);
+
+  if (loadState === "initial-loading") {
     return <PageSkeleton />;
+  }
+
+  if (loadState === "error") {
+    return (
+      <div className="page-section-stack page-section-stack--compact">
+        <GlassCard className="p-6">
+          <Title level={2} className="!mb-2 !text-gray-800">
+            CEO 儀表板
+          </Title>
+          <Text className="mb-5 block text-sm text-slate-500">
+            核心資料尚未成功載入，因此暫不顯示可能被誤認為真實數字的預設 KPI。
+          </Text>
+          <Alert
+            type="error"
+            showIcon
+            message="無法取得核心儀表板資料"
+            description={
+              <div className="space-y-1">
+                <div>{loadErrorMessage || "請確認連線後重新載入。"}</div>
+                {failedSections.length > 0 && (
+                  <div>未取得區塊：{failedSections.join("、")}</div>
+                )}
+              </div>
+            }
+            action={
+              <Button
+                danger
+                icon={<SyncOutlined />}
+                onClick={handleRetry}
+              >
+                重新載入
+              </Button>
+            }
+          />
+        </GlassCard>
+      </div>
+    );
   }
 
   const performanceBuckets = overview?.buckets || [];
@@ -728,16 +787,14 @@ const DashboardPage: React.FC = () => {
   const anomalies = executive?.anomalies || [];
   const invoiceSummary = invoiceQueue?.summary;
   const invoiceItems = invoiceQueue?.items || [];
-  const operationsHighlights = operationsHub?.highlights || [];
   const arSummary = receivableMonitor?.summary;
   const auditSummary = audit?.summary;
   const auditItems = audit?.items || [];
   const rangeLabel = getRangeModeLabel(rangeMode);
-  const todayFinancial = todayManagementSummary?.summary;
   const rangeFinancial = rangeManagementSummary?.summary;
-  const selectedFinancial = rangeFinancial || todayFinancial;
-  const selectedNetProfit = selectedFinancial?.netProfit || 0;
-  const selectedRevenue = selectedFinancial?.revenue || 0;
+  const selectedFinancial = rangeFinancial;
+  const selectedNetProfit = selectedFinancial?.netProfit ?? 0;
+  const selectedRevenue = selectedFinancial?.revenue ?? 0;
   const selectedNetMarginPct = selectedFinancial?.netMarginPct;
   const selectedPeriodLabel =
     rangeMode === "custom" && customRange?.[0] && customRange?.[1]
@@ -1001,6 +1058,54 @@ const DashboardPage: React.FC = () => {
       amount: items.reduce((sum, item) => sum + item.amount, 0),
     }
   })
+  const lastSuccessfulLabel = lastSuccessfulAt
+    ? dayjs(lastSuccessfulAt).tz(DASHBOARD_TZ).format("YYYY/MM/DD HH:mm:ss")
+    : null;
+  const dataStatusMeta = {
+    "initial-loading": {
+      label: "初次載入中",
+      className: "border-blue-200 bg-blue-50 text-blue-700",
+      icon: <SyncOutlined spin />,
+    },
+    refreshing: {
+      label: "資料更新中",
+      className: "border-blue-200 bg-blue-50 text-blue-700",
+      icon: <SyncOutlined spin />,
+    },
+    ready: {
+      label: "資料已更新",
+      className: "border-green-200 bg-green-50 text-green-700",
+      icon: <span className="h-2 w-2 rounded-full bg-green-500" />,
+    },
+    partial: {
+      label: "部分資料",
+      className: "border-amber-200 bg-amber-50 text-amber-700",
+      icon: <WarningOutlined />,
+    },
+    stale: {
+      label: "資料可能過期",
+      className: "border-amber-200 bg-amber-50 text-amber-700",
+      icon: <ClockCircleOutlined />,
+    },
+    error: {
+      label: "載入失敗",
+      className: "border-red-200 bg-red-50 text-red-700",
+      icon: <WarningOutlined />,
+    },
+  }[loadState];
+  const selectedFinancialAvailable = Boolean(selectedFinancial);
+  const overviewAvailable = Boolean(overview);
+  const receivablesAvailable = Boolean(arSummary);
+  const adFinancialAvailable = Boolean(rangeFinancial);
+  const adCardDataAvailable = adFinancialAvailable && (
+    Boolean(connectorReadiness) || adSpendTracked || hasHistoricalAdSpend
+  );
+  const cashRiskDataAvailable = Boolean(arSummary) && (
+    financeAvailability.payables || Boolean(executive?.expenses)
+  );
+  const financeWatchDataAvailable = Boolean(
+    invoiceSummary && auditSummary && arSummary && rangeManagementSummary,
+  );
 
   return (
     <div className="page-section-stack page-section-stack--compact">
@@ -1014,14 +1119,19 @@ const DashboardPage: React.FC = () => {
             <Title level={2} className="!text-gray-800 font-light tracking-tight !mb-0">
               CEO 儀表板
             </Title>
-            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse-green" />
-              <span className="text-xs font-medium text-green-600 uppercase tracking-wider">即時資料</span>
+            <div className={`flex items-center gap-2 rounded-full border px-3 py-1 ${dataStatusMeta.className}`}>
+              {dataStatusMeta.icon}
+              <span className="text-xs font-medium uppercase tracking-wider">{dataStatusMeta.label}</span>
             </div>
           </div>
           <Text className="text-slate-400 text-sm">
             Moztech · Bonson · Moritek — 三品牌、三通路、財務一覽
           </Text>
+          {lastSuccessfulLabel && (
+            <div className="mt-1 text-xs text-slate-400">
+              最後成功取得核心資料：{lastSuccessfulLabel}
+            </div>
+          )}
         </div>
         <div className="flex flex-col sm:items-end gap-3 w-full sm:w-auto">
           <div className="flex flex-wrap justify-end gap-2 items-center">
@@ -1055,6 +1165,38 @@ const DashboardPage: React.FC = () => {
         </div>
       </div>
 
+      {(loadState === "partial" || loadState === "stale") && (
+        <Alert
+          type="warning"
+          showIcon
+          message={loadState === "stale" ? "部分資料可能已過期" : "儀表板資料未完整載入"}
+          description={
+            <div className="space-y-1">
+              <div>
+                {loadState === "stale"
+                  ? "已保留上一次成功取得的數值；請勿將未更新區塊視為目前即時狀態。"
+                  : "已載入成功的區塊可繼續查看，未取得的 KPI 會顯示為「—」。"}
+              </div>
+              {lastSuccessfulLabel && <div>最後成功取得核心資料：{lastSuccessfulLabel}</div>}
+              {failedSections.length > 0 && (
+                <div>未完整區塊：{failedSections.join("、")}</div>
+              )}
+              {loadErrorMessage && <div>{loadErrorMessage}</div>}
+            </div>
+          }
+          action={
+            rangeMode === "custom" && (!customRange?.[0] || !customRange?.[1]) ? undefined : (
+              <Button
+                icon={<SyncOutlined />}
+                onClick={handleRetry}
+              >
+                重新載入
+              </Button>
+            )
+          }
+        />
+      )}
+
       {/* ── 🚨 紅燈警示 ── */}
       {criticalCount > 0 && (
         <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}
@@ -1063,9 +1205,9 @@ const DashboardPage: React.FC = () => {
           <div className="flex-1 text-sm">
             <span className="font-semibold text-red-700">需要立刻處理：</span>
             <span className="ml-2 text-red-600">
-              {criticalInventory > 0 && `${criticalInventory} 個商品斷貨　`}
-              {overdueAR > 0 && `${overdueAR} 筆應收逾期　`}
-              {overpaidAR > 0 && `${overpaidAR} 筆疑似超收 / 重複收款　`}
+              {criticalInventory > 0 && `${criticalInventory} 個商品斷貨；`}
+              {overdueAR > 0 && `${overdueAR} 筆應收逾期；`}
+              {overpaidAR > 0 && `${overpaidAR} 筆疑似超收 / 重複收款；`}
               {criticalAnomalies > 0 && `${criticalAnomalies} 個財務異常`}
             </span>
           </div>
@@ -1106,8 +1248,12 @@ const DashboardPage: React.FC = () => {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold text-slate-900">缺發票訂單處理入口</span>
-                <Tag color={missingInvoiceCount > 0 ? "gold" : "green"}>
-                  {missingInvoiceCount > 0 ? `${missingInvoiceCount} 筆待處理` : "目前無待處理"}
+                <Tag color={!invoiceSummary ? "default" : missingInvoiceCount > 0 ? "gold" : "green"}>
+                  {!invoiceSummary
+                    ? "資料未取得"
+                    : missingInvoiceCount > 0
+                      ? `${missingInvoiceCount} 筆待處理`
+                      : "目前無待處理"}
                 </Tag>
               </div>
               <div className="mt-1 text-sm leading-6 text-slate-600">
@@ -1148,22 +1294,30 @@ const DashboardPage: React.FC = () => {
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className={`rounded-2xl border px-5 py-4 ${
-            selectedNetProfit < 0 ? "border-red-200 bg-red-50/70" : "border-emerald-100 bg-emerald-50/60"
+            !selectedFinancialAvailable
+              ? "border-slate-200 bg-slate-50/70"
+              : selectedNetProfit < 0
+                ? "border-red-200 bg-red-50/70"
+                : "border-emerald-100 bg-emerald-50/60"
           }`}>
             <div className="mb-3 flex items-center justify-between">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-emerald-700 shadow-sm">
                 <DollarOutlined />
               </div>
-              <Tag color={selectedNetProfit < 0 ? "red" : "green"}>{selectedPeriodLabel}</Tag>
+              <Tag color={!selectedFinancialAvailable ? "default" : selectedNetProfit < 0 ? "red" : "green"}>
+                {selectedFinancialAvailable ? selectedPeriodLabel : "資料未取得"}
+              </Tag>
             </div>
             <div className="text-xs text-slate-500">{selectedPeriodLabel}淨利</div>
             <div className={`mt-1 text-2xl font-bold ${
               selectedNetProfit < 0 ? "text-red-700" : "text-slate-900"
             }`}>
-              {fmtSignedMoney(selectedNetProfit)}
+              {selectedFinancialAvailable ? fmtSignedMoney(selectedNetProfit) : "—"}
             </div>
             <div className="mt-2 text-xs leading-5 text-slate-500">
-              營收 {fmtMoney(selectedRevenue)} · 淨利率 {fmtPct(selectedNetMarginPct)}
+              {selectedFinancialAvailable
+                ? `營收 ${fmtMoney(selectedRevenue)} · 淨利率 ${fmtPct(selectedNetMarginPct)}`
+                : "本期損益區塊未成功載入"}
             </div>
           </div>
 
@@ -1174,18 +1328,20 @@ const DashboardPage: React.FC = () => {
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-indigo-700 shadow-sm">
                 <CreditCardOutlined />
               </div>
-              <Tag color={adSpendTracked ? "blue" : adSpendNeedsAttention ? "gold" : "green"}>
-                {adSpendStatusLabel}
+              <Tag color={!adCardDataAvailable ? "default" : adSpendTracked ? "blue" : adSpendNeedsAttention ? "gold" : "green"}>
+                {adCardDataAvailable ? adSpendStatusLabel : "資料未取得"}
               </Tag>
             </div>
             <div className="text-xs text-slate-500">{rangeLabel}廣告花費</div>
             <div className="mt-1 text-2xl font-bold text-slate-900">
-              {adSpendCanShowAmount ? fmtMoney(adSpendAmount) : "待串接"}
+              {adCardDataAvailable
+                ? (adSpendCanShowAmount ? fmtMoney(adSpendAmount) : "待串接")
+                : "—"}
             </div>
             <div className="mt-2 text-xs leading-5 text-slate-500">
-              {adSpendHelper}
+              {adCardDataAvailable ? adSpendHelper : "本期損益或串接狀態未成功載入"}
             </div>
-            {adSpendCanSyncDaily && !adSpendTracked && (
+            {adCardDataAvailable && adSpendCanSyncDaily && !adSpendTracked && (
               <Button
                 size="small"
                 type="link"
@@ -1205,12 +1361,18 @@ const DashboardPage: React.FC = () => {
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-rose-700 shadow-sm">
                 <BankOutlined />
               </div>
-              <Tag color={cashRiskAmount > 0 ? "red" : "green"}>現金流</Tag>
+              <Tag color={!cashRiskDataAvailable ? "default" : cashRiskAmount > 0 ? "red" : "green"}>
+                {cashRiskDataAvailable ? "現金流" : "資料未取得"}
+              </Tag>
             </div>
             <div className="text-xs text-slate-500">目前現金流風險金額</div>
-            <div className="mt-1 text-2xl font-bold text-slate-900">{fmtMoney(cashRiskAmount)}</div>
+            <div className="mt-1 text-2xl font-bold text-slate-900">
+              {cashRiskDataAvailable ? fmtMoney(cashRiskAmount) : "—"}
+            </div>
             <div className="mt-2 text-xs leading-5 text-slate-500">
-              未結狀態，不完全跟日期切換：逾期 AR {overdueAR} 筆 · 超收 {overpaidAR} 筆 · 待付款費用 {fmtMoney(payableExposure)}
+              {cashRiskDataAvailable
+                ? `未結狀態，不完全跟日期切換：逾期 AR ${overdueAR} 筆 · 超收 ${overpaidAR} 筆 · 待付款費用 ${fmtMoney(payableExposure)}`
+                : "應收或應付資料未成功載入"}
             </div>
           </div>
 
@@ -1221,14 +1383,18 @@ const DashboardPage: React.FC = () => {
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-red-700 shadow-sm">
                 <WarningOutlined />
               </div>
-              <Tag color={financeWatchCount > 0 ? "red" : "green"}>
-                {financeWatchCount > 0 ? "需追蹤" : "正常"}
+              <Tag color={!financeWatchDataAvailable ? "default" : financeWatchCount > 0 ? "red" : "green"}>
+                {!financeWatchDataAvailable ? "資料未取得" : financeWatchCount > 0 ? "需追蹤" : "正常"}
               </Tag>
             </div>
             <div className="text-xs text-slate-500">財務異常追蹤</div>
-            <div className="mt-1 text-2xl font-bold text-slate-900">{financeWatchCount} 項</div>
+            <div className="mt-1 text-2xl font-bold text-slate-900">
+              {financeWatchDataAvailable ? `${financeWatchCount} 項` : "—"}
+            </div>
             <div className="mt-2 text-xs leading-5 text-slate-500">
-              缺發票 {missingInvoiceCount} · 訂單稽核 {financialAuditIssueCount} · 廣告費 {adSpendNeedsAttention ? "需確認" : "可追"}
+              {financeWatchDataAvailable
+                ? `缺發票 ${missingInvoiceCount} · 訂單稽核 ${financialAuditIssueCount} · 廣告費 ${adSpendNeedsAttention ? "需確認" : "可追"}`
+                : "發票、稽核、應收或損益資料未完整載入"}
             </div>
           </div>
         </div>
@@ -1276,7 +1442,7 @@ const DashboardPage: React.FC = () => {
             </div>
           ) : (
             <div className="flex h-[180px] items-center justify-center rounded-2xl border border-dashed border-slate-200 text-sm text-slate-400">
-              目前區間尚無平台營收資料
+              {overview ? "目前區間尚無平台營收資料" : "銷售與通路概況未取得"}
             </div>
           )}
         </motion.div>
@@ -1329,7 +1495,7 @@ const DashboardPage: React.FC = () => {
             </div>
           ) : (
             <div className="flex h-[180px] items-center justify-center rounded-2xl border border-dashed border-slate-200 text-sm text-slate-400">
-              目前區間尚無廣告效益資料
+              {adPerformance ? "目前區間尚無廣告效益資料" : "廣告效益資料未取得"}
             </div>
           )}
         </motion.div>
@@ -1385,7 +1551,7 @@ const DashboardPage: React.FC = () => {
             </ResponsiveContainer>
           ) : (
             <div className="flex h-[260px] items-center justify-center text-sm text-slate-400">
-              尚無足夠趨勢資料
+              {managementSummary ? "尚無足夠趨勢資料" : "30 天趨勢資料未取得"}
             </div>
           )}
         </motion.div>
@@ -1403,7 +1569,7 @@ const DashboardPage: React.FC = () => {
               <div className="grid gap-4 sm:grid-cols-[160px_1fr] xl:grid-cols-[150px_1fr]">
                 <ResponsiveContainer width="100%" height={150}>
                   <PieChart>
-                    <Pie data={channelPieData as any[]} dataKey="net" nameKey="platform" innerRadius={48} outerRadius={70} paddingAngle={2}>
+                    <Pie data={channelPieData} dataKey="net" nameKey="platform" innerRadius={48} outerRadius={70} paddingAngle={2}>
                       {channelPieData.map((entry) => (
                         <Cell key={entry.platform} fill={entry.color} />
                       ))}
@@ -1423,7 +1589,7 @@ const DashboardPage: React.FC = () => {
               </div>
             ) : (
               <div className="flex h-[150px] items-center justify-center rounded-2xl border border-dashed border-slate-200 text-sm text-slate-400">
-                尚無通路淨入帳資料
+                {overview ? "尚無通路淨入帳資料" : "銷售與通路概況未取得"}
               </div>
             )}
           </motion.div>
@@ -1439,7 +1605,7 @@ const DashboardPage: React.FC = () => {
               <div className="grid gap-4 sm:grid-cols-[150px_1fr]">
                 <ResponsiveContainer width="100%" height={140}>
                   <PieChart>
-                    <Pie data={brandPieData as any[]} dataKey="value" nameKey="name" innerRadius={44} outerRadius={64} paddingAngle={2}>
+                    <Pie data={brandPieData} dataKey="value" nameKey="name" innerRadius={44} outerRadius={64} paddingAngle={2}>
                       {brandPieData.map((entry) => (
                         <Cell key={entry.name} fill={entry.color} />
                       ))}
@@ -1554,32 +1720,34 @@ const DashboardPage: React.FC = () => {
         {[
           {
             label: '本期總業績',
-            value: fmtMoney(total?.gross ?? 0),
-            sub: `${total?.orderCount ?? 0} 筆訂單`,
+            value: overviewAvailable && total ? fmtMoney(total.gross) : "—",
+            sub: overviewAvailable && total ? `${total.orderCount} 筆訂單` : "銷售概況未取得",
             icon: <ShoppingOutlined className="text-slate-500 text-lg" />,
             accent: 'border-l-slate-500',
             alert: false,
           },
           {
             label: '本期淨入帳',
-            value: fmtMoney(total?.payoutNet ?? 0),
-            sub: `手續費 ${fmtMoney(total?.feeTotal ?? 0)}`,
+            value: overviewAvailable && total ? fmtMoney(total.payoutNet) : "—",
+            sub: overviewAvailable && total ? `手續費 ${fmtMoney(total.feeTotal)}` : "銷售概況未取得",
             icon: <RiseOutlined className="text-teal-600 text-lg" />,
             accent: 'border-l-teal-500',
             alert: false,
           },
           {
             label: '逾期應收帳款',
-            value: fmtMoney(arSummary?.overdueReceivableAmount ?? arSummary?.outstandingAmount ?? 0),
-            sub: `${overdueAR} 筆逾期`,
+            value: receivablesAvailable
+              ? fmtMoney(arSummary?.overdueReceivableAmount ?? arSummary?.outstandingAmount ?? 0)
+              : "—",
+            sub: receivablesAvailable ? `${overdueAR} 筆逾期` : "應收帳款未取得",
             icon: <FallOutlined className="text-rose-500 text-lg" />,
             accent: overdueAR > 0 ? 'border-l-rose-500' : 'border-l-slate-200',
             alert: overdueAR > 0,
           },
           {
             label: '超收 / 重複收款',
-            value: fmtMoney(overpaidARAmount),
-            sub: `${overpaidAR} 筆需核對`,
+            value: receivablesAvailable ? fmtMoney(overpaidARAmount) : "—",
+            sub: receivablesAvailable ? `${overpaidAR} 筆需核對` : "應收帳款未取得",
             icon: <DollarOutlined className="text-red-500 text-lg" />,
             accent: overpaidAR > 0 ? 'border-l-red-500' : 'border-l-slate-200',
             alert: overpaidAR > 0,
@@ -1608,16 +1776,19 @@ const DashboardPage: React.FC = () => {
             {
               brand: 'Moztech 墨子科技', sub: '3C 手機配件 · Shopify',
               gross: mOZtechData.gross, orders: mOZtechData.orderCount, net: mOZtechData.payoutNet,
+              available: overviewAvailable,
               gradient: 'from-slate-700 to-slate-900',
             },
             {
               brand: 'Bonson 邦生', sub: '居家 / 清潔 / 戶外 · Shopline',
               gross: bonsonData.gross, orders: bonsonData.orderCount, net: bonsonData.payoutNet,
+              available: overviewAvailable,
               gradient: 'from-teal-700 to-teal-900',
             },
             {
               brand: 'KOL 團購 (1Shop)', sub: 'Moztech + Bonson · 網紅通路',
               gross: teamData.gross, orders: teamData.orderCount, net: teamData.payoutNet,
+              available: overviewAvailable,
               gradient: 'from-indigo-700 to-violet-800',
             },
           ].map((b) => (
@@ -1630,15 +1801,21 @@ const DashboardPage: React.FC = () => {
               <div className="grid grid-cols-3 gap-0 divide-x divide-slate-100">
                 <div className="px-4 py-3">
                   <div className="text-xs text-slate-400">業績</div>
-                  <div className="mt-1 text-base font-bold text-slate-800">{fmtMoney(b.gross)}</div>
+                  <div className="mt-1 text-base font-bold text-slate-800">
+                    {b.available ? fmtMoney(b.gross) : "—"}
+                  </div>
                 </div>
                 <div className="px-4 py-3">
                   <div className="text-xs text-slate-400">訂單數</div>
-                  <div className="mt-1 text-base font-bold text-slate-800">{b.orders}</div>
+                  <div className="mt-1 text-base font-bold text-slate-800">
+                    {b.available ? b.orders : "—"}
+                  </div>
                 </div>
                 <div className="px-4 py-3">
                   <div className="text-xs text-slate-400">淨入帳</div>
-                  <div className="mt-1 text-base font-bold text-teal-700">{fmtMoney(b.net)}</div>
+                  <div className="mt-1 text-base font-bold text-teal-700">
+                    {b.available ? fmtMoney(b.net) : "—"}
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -1682,7 +1859,7 @@ const DashboardPage: React.FC = () => {
             </ResponsiveContainer>
           ) : (
             <div className="h-[180px] flex items-center justify-center text-sm text-slate-400">
-              資料讀取中…
+              {managementSummary ? "尚無足夠趨勢資料" : "30 天趨勢資料未取得"}
             </div>
           )}
         </motion.div>
@@ -1690,7 +1867,7 @@ const DashboardPage: React.FC = () => {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6">
           <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400 mb-1">P&L Snapshot</div>
           <div className="text-lg font-semibold text-slate-900 mb-4">損益快照</div>
-          {weeklyPnl.revenue > 0 ? (
+          {rangeManagementSummary?.summary ? (
             <div className="space-y-3">
               {[
                 { label: '區間營收', value: weeklyPnl.revenue, color: 'text-slate-800' },
@@ -1717,7 +1894,7 @@ const DashboardPage: React.FC = () => {
             </div>
           ) : (
             <div className="h-[160px] flex items-center justify-center text-sm text-slate-400">
-              請選擇日期範圍
+              {rangeManagementSummary ? "目前區間沒有損益資料" : "本期損益資料未取得"}
             </div>
           )}
         </motion.div>
@@ -1821,7 +1998,7 @@ const DashboardPage: React.FC = () => {
             })}
             {!anomalies.length && (
               <div className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-sm text-slate-400 text-center">
-                ✓ 目前沒有異常
+                {executive ? "✓ 目前沒有異常" : "CEO 異常資料未取得"}
               </div>
             )}
           </div>
@@ -1857,7 +2034,7 @@ const DashboardPage: React.FC = () => {
             })}
             {!tasks.length && (
               <div className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-sm text-slate-400 text-center">
-                ✓ 目前沒有待辦事項
+                {executive ? "✓ 目前沒有待辦事項" : "CEO 待辦資料未取得"}
               </div>
             )}
           </div>

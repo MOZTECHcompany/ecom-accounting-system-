@@ -3,6 +3,7 @@ import { Button, Card, Skeleton, Typography } from "antd";
 import { ReloadOutlined, RobotOutlined } from "@ant-design/icons";
 import { motion } from "framer-motion";
 import { aiService, DailyBriefingAlert } from "../services/ai.service";
+import { resolveEntityId } from "../services/entities.service";
 import { useAI } from "../contexts/AIContext";
 
 const { Text } = Typography;
@@ -12,11 +13,11 @@ const AIInsightsWidget: React.FC = () => {
   const [alerts, setAlerts] = useState<DailyBriefingAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const { selectedModelId } = useAI();
-  const entityId = import.meta.env.VITE_DEFAULT_ENTITY_ID || "tw-entity-001";
 
   const fetchInsight = async () => {
     setLoading(true);
     try {
+      const entityId = await resolveEntityId();
       const data = await aiService.getDailyBriefing(entityId, selectedModelId);
       setInsight(data.insight);
       setAlerts(data.alerts || []);

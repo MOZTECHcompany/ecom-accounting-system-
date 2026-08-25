@@ -170,19 +170,20 @@ const ProductsPage: React.FC = () => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="p-6"
+      className="px-2 py-4 sm:p-6"
     >
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <Title level={2} className="!mb-0">產品與庫存管理</Title>
+      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <Title level={2} className="!mb-0 !text-2xl sm:!text-3xl">產品與庫存管理</Title>
           <p className="text-gray-500 mt-1">管理所有商品資料、庫存數量與成本結構</p>
         </div>
-        <Space>
-          <Button icon={<ReloadOutlined />} onClick={fetchProducts}>重新整理</Button>
-          <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>
+        <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:w-auto lg:flex lg:flex-wrap lg:justify-end">
+          <Button className="w-full lg:w-auto" icon={<ReloadOutlined />} onClick={fetchProducts}>重新整理</Button>
+          <Button className="w-full lg:w-auto" icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>
             下載匯入範本
           </Button>
           <Upload
+            className="w-full lg:w-auto"
             accept=".xlsx,.xls,.csv"
             showUploadList={false}
             beforeUpload={(file) => {
@@ -200,17 +201,17 @@ const ProductsPage: React.FC = () => {
               }
             }}
           >
-            <Button icon={<UploadOutlined />} loading={previewingImport} disabled={importing || previewingImport}>
+            <Button className="w-full lg:w-auto" icon={<UploadOutlined />} loading={previewingImport} disabled={importing || previewingImport}>
               預覽匯入 Excel/CSV
             </Button>
           </Upload>
-          <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => setIsModalVisible(true)}>
+          <Button className="w-full lg:w-auto" type="primary" icon={<PlusOutlined />} size="large" onClick={() => setIsModalVisible(true)}>
             新增產品
           </Button>
-        </Space>
+        </div>
       </div>
 
-      <Card className="shadow-sm rounded-xl border-0">
+      <Card className="overflow-hidden shadow-sm rounded-xl border-0">
         {!loading && !products.length && (
           <Alert
             className="mb-4"
@@ -225,6 +226,7 @@ const ProductsPage: React.FC = () => {
           dataSource={products} 
           rowKey="id" 
           loading={loading}
+          scroll={{ x: 980 }}
         />
       </Card>
 

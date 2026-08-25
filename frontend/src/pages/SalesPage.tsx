@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { Table, Tag, Button, Space, Input, DatePicker, Card, Typography, Segmented, message } from 'antd'
+import React, { useCallback, useState, useEffect } from 'react'
+import { Alert, Table, Tag, Button, Space, Input, DatePicker, Card, Typography, Segmented, Tooltip, message } from 'antd'
 import { 
   PlusOutlined, 
   SearchOutlined, 
@@ -20,16 +20,16 @@ import * as XLSX from 'xlsx'
 import dayjs, { Dayjs } from 'dayjs'
 import OrderDetailsDrawer from '../components/OrderDetailsDrawer'
 import SalesAnalytics from '../components/SalesAnalytics'
-import BulkActionBar from '../components/BulkActionBar'
 import { salesService, SalesOrder } from '../services/sales.service'
 import { dashboardService, EcommerceHistory } from '../services/dashboard.service'
+import { resolveEntityId } from '../services/entities.service'
 
 const { Title, Text } = Typography
 const { RangePicker } = DatePicker
 
 type QuickRange = 'today' | 'last7Days' | 'lastMonth' | 'lastYear' | 'custom'
 
-const KanbanColumn: React.FC<{ title: string; status: string; orders: SalesOrder[]; color: string; onClick: (order: SalesOrder) => void }> = ({ title, status, orders, color, onClick }) => (
+const KanbanColumn: React.FC<{ title: string; orders: SalesOrder[]; color: string; onClick: (order: SalesOrder) => void }> = ({ title, orders, color, onClick }) => (
   <div className="flex-1 min-w-[300px] glass-panel p-4">
     <div className="flex items-center justify-between mb-4">
       <div className="flex items-center gap-2">
@@ -37,7 +37,11 @@ const KanbanColumn: React.FC<{ title: string; status: string; orders: SalesOrder
         <span className="font-medium text-gray-700">{title}</span>
         <span className="bg-white/50 px-2 py-0.5 rounded-full text-xs text-gray-500">{orders.length}</span>
       </div>
-      <Button type="text" icon={<MoreOutlined />} size="small" />
+      <Tooltip title="看板欄位操作尚未開放">
+        <span>
+          <Button type="text" icon={<MoreOutlined />} size="small" disabled aria-label="看板欄位操作尚未開放" />
+        </span>
+      </Tooltip>
     </div>
     <div className="space-y-3">
       {orders.map(order => (
@@ -80,11 +84,56 @@ const SalesPage: React.FC = () => {
   const [syncingInvoiceBatch, setSyncingInvoiceBatch] = useState(false)
   const now = dayjs()
 
-  const fetchOrders = async () => {
+  const resolveRangePayload = useCallback(() => {
+    const rangeNow = dayjs()
+
+    if (quickRange === 'today') {
+      return {
+        startDate: rangeNow.startOf('day').toISOString(),
+        endDate: rangeNow.endOf('day').toISOString(),
+      }
+    }
+
+    if (quickRange === 'last7Days') {
+      return {
+        startDate: rangeNow.subtract(6, 'day').startOf('day').toISOString(),
+        endDate: rangeNow.endOf('day').toISOString(),
+      }
+    }
+
+    if (quickRange === 'lastMonth') {
+      return {
+        startDate: rangeNow.subtract(1, 'month').startOf('day').toISOString(),
+        endDate: rangeNow.endOf('day').toISOString(),
+      }
+    }
+
+    if (quickRange === 'lastYear') {
+      return {
+        startDate: rangeNow.subtract(1, 'year').startOf('day').toISOString(),
+        endDate: rangeNow.endOf('day').toISOString(),
+      }
+    }
+
+    if (customRange?.[0] && customRange?.[1]) {
+      return {
+        startDate: customRange[0].startOf('day').toISOString(),
+        endDate: customRange[1].endOf('day').toISOString(),
+      }
+    }
+
+    return {}
+  }, [customRange, quickRange])
+
+  const fetchOrders = useCallback(async () => {
+    if (quickRange === 'custom' && (!customRange?.[0] || !customRange?.[1])) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     try {
       const rangePayload = resolveRangePayload()
-      const entityId = localStorage.getItem('entityId')?.trim() || 'tw-entity-001'
+      const entityId = await resolveEntityId()
       const [orderData, historyData] = await Promise.all([
         salesService.findAll({
           entityId,
@@ -99,19 +148,24 @@ const SalesPage: React.FC = () => {
       ])
       setOrders(orderData)
       setEcommerceHistory(historyData)
-    } catch (error) {
+    } catch {
       message.error('無法載入銷售分析')
     } finally {
       setLoading(false)
     }
-  }
+  }, [customRange, quickRange, resolveRangePayload])
 
   useEffect(() => {
     fetchOrders()
-  }, [quickRange, customRange])
+  }, [fetchOrders])
 
-  const handleExport = () => {
-    const exportRows = filteredOrders.map((order) => ({
+  const exportOrders = (rows: SalesOrder[], fileName: string) => {
+    if (rows.length === 0) {
+      message.warning('目前沒有可匯出的訂單')
+      return
+    }
+
+    const exportRows = rows.map((order) => ({
       訂單編號: order.orderNumber,
       日期: dayjs(order.createdAt).format('YYYY-MM-DD HH:mm'),
       客戶: order.customerName || 'Guest',
@@ -133,8 +187,18 @@ const SalesPage: React.FC = () => {
     const ws = XLSX.utils.json_to_sheet(exportRows)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, "Sales Orders")
-    XLSX.writeFile(wb, "sales_orders_export.xlsx")
-    message.success('報表匯出成功')
+    XLSX.writeFile(wb, fileName)
+    message.success(`已匯出 ${rows.length} 筆訂單`)
+  }
+
+  const handleExport = () => {
+    exportOrders(filteredOrders, 'sales_orders_export.xlsx')
+  }
+
+  const handleSelectedExport = () => {
+    const selectedIds = new Set(selectedRowKeys.map(String))
+    const selectedOrders = orders.filter((order) => selectedIds.has(String(order.id)))
+    exportOrders(selectedOrders, 'sales_orders_selected_export.xlsx')
   }
 
   const handleRowClick = (record: SalesOrder) => {
@@ -142,54 +206,10 @@ const SalesPage: React.FC = () => {
     setDrawerOpen(true)
   }
 
-  const handleBulkComplete = () => {
-    message.success(`已完成 ${selectedRowKeys.length} 筆訂單`)
-    setSelectedRowKeys([])
-  }
-
-  const resolveRangePayload = () => {
-    if (quickRange === 'today') {
-      return {
-        startDate: now.startOf('day').toISOString(),
-        endDate: now.endOf('day').toISOString(),
-      }
-    }
-
-    if (quickRange === 'last7Days') {
-      return {
-        startDate: now.subtract(6, 'day').startOf('day').toISOString(),
-        endDate: now.endOf('day').toISOString(),
-      }
-    }
-
-    if (quickRange === 'lastMonth') {
-      return {
-        startDate: now.subtract(1, 'month').startOf('day').toISOString(),
-        endDate: now.endOf('day').toISOString(),
-      }
-    }
-
-    if (quickRange === 'lastYear') {
-      return {
-        startDate: now.subtract(1, 'year').startOf('day').toISOString(),
-        endDate: now.endOf('day').toISOString(),
-      }
-    }
-
-    if (customRange?.[0] && customRange?.[1]) {
-      return {
-        startDate: customRange[0].startOf('day').toISOString(),
-        endDate: customRange[1].endOf('day').toISOString(),
-      }
-    }
-
-    return {}
-  }
-
   const handleBatchSyncInvoiceStatus = async () => {
     setSyncingInvoiceBatch(true)
     try {
-      const entityId = localStorage.getItem('entityId')?.trim() || 'tw-entity-001'
+      const entityId = await resolveEntityId()
       const result = await salesService.syncInvoiceStatusBatch({
         entityId,
         ...resolveRangePayload(),
@@ -197,7 +217,7 @@ const SalesPage: React.FC = () => {
       })
       message.success(`已同步 ${result.synced || 0} 筆，略過 ${result.skipped || 0} 筆`)
       await fetchOrders()
-    } catch (error) {
+    } catch {
       message.error('批次同步發票狀態失敗')
     } finally {
       setSyncingInvoiceBatch(false)
@@ -345,7 +365,11 @@ const SalesPage: React.FC = () => {
       key: 'action',
       width: 80,
       render: () => (
-        <Button type="text" icon={<MoreOutlined />} />
+        <Tooltip title="更多訂單操作尚未開放">
+          <span>
+            <Button type="text" icon={<MoreOutlined />} disabled aria-label="更多訂單操作尚未開放" />
+          </span>
+        </Tooltip>
       ),
     },
   ]
@@ -426,7 +450,13 @@ const SalesPage: React.FC = () => {
             同步發票狀態
           </Button>
           <Button icon={<DownloadOutlined />} onClick={handleExport}>匯出報表</Button>
-          <Button type="primary" icon={<PlusOutlined />} size="large">新增訂單</Button>
+          <Tooltip title="新增訂單介面尚未開放">
+            <span>
+              <Button type="primary" icon={<PlusOutlined />} size="large" disabled>
+                新增訂單（尚未開放）
+              </Button>
+            </span>
+          </Tooltip>
         </Space>
       </div>
 
@@ -440,6 +470,15 @@ const SalesPage: React.FC = () => {
         onQuickRangeChange={setQuickRange}
         onCustomRangeChange={setCustomRange}
       />
+
+      {quickRange === 'custom' && (!customRange?.[0] || !customRange?.[1]) ? (
+        <Alert
+          type="info"
+          showIcon
+          message="請選擇完整的自訂日期區間"
+          description="選擇開始與結束日期前，系統會保留上一個成功載入的訂單快照，不會改成無日期範圍的查詢。"
+        />
+      ) : null}
 
       {/* Filters & Actions */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-5 glass-panel p-5">
@@ -515,21 +554,18 @@ const SalesPage: React.FC = () => {
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-7">
           <KanbanColumn 
             title="待處理 (Pending)" 
-            status="pending" 
             orders={filteredOrders.filter(o => o.status === 'pending')} 
             color="bg-blue-500"
             onClick={handleRowClick}
           />
           <KanbanColumn 
             title="已完成 (Completed)" 
-            status="completed" 
             orders={filteredOrders.filter(o => o.status === 'completed')} 
             color="bg-green-500"
             onClick={handleRowClick}
           />
           <KanbanColumn 
             title="已取消 (Cancelled)" 
-            status="cancelled" 
             orders={filteredOrders.filter(o => o.status === 'cancelled')} 
             color="bg-red-500"
             onClick={handleRowClick}
@@ -538,21 +574,40 @@ const SalesPage: React.FC = () => {
       )}
 
       {/* Bulk Actions */}
-      <BulkActionBar 
-        selectedCount={selectedRowKeys.length} 
-        onClear={() => setSelectedRowKeys([])}
-        actions={[
-          { label: '批次完成', onClick: handleBulkComplete, type: 'primary' },
-          { label: '列印出貨單', onClick: () => {}, icon: <PrinterOutlined /> },
-          { label: '匯出選取', onClick: () => {}, icon: <DownloadOutlined /> },
-        ]}
-      />
+      {selectedRowKeys.length > 0 && (
+        <motion.div
+          initial={{ y: 100, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 100, opacity: 0 }}
+          className="fixed bottom-8 left-1/2 z-50 -translate-x-1/2"
+        >
+          <div className="flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-white/10 bg-gray-900/90 px-5 py-3 text-white shadow-2xl backdrop-blur-md">
+            <span className="font-medium">已選擇 {selectedRowKeys.length} 筆訂單</span>
+            <Button type="link" size="small" onClick={() => setSelectedRowKeys([])} className="!text-gray-300">
+              取消
+            </Button>
+            <Tooltip title="批次完成尚未開放">
+              <span>
+                <Button type="primary" disabled>批次完成（尚未開放）</Button>
+              </span>
+            </Tooltip>
+            <Tooltip title="出貨單列印尚未開放">
+              <span>
+                <Button icon={<PrinterOutlined />} disabled>列印出貨單</Button>
+              </span>
+            </Tooltip>
+            <Button icon={<DownloadOutlined />} onClick={handleSelectedExport}>
+              匯出選取
+            </Button>
+          </div>
+        </motion.div>
+      )}
 
       {/* Order Details Drawer */}
       <OrderDetailsDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        order={selectedOrder as any}
+        order={selectedOrder}
         onUpdate={fetchOrders}
       />
     </motion.div>

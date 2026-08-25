@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { 
   Alert,
   Typography, 
@@ -11,7 +11,6 @@ import {
   Table, 
   Tag, 
   Statistic,
-  Space,
   Select,
   message,
   Empty,
@@ -21,9 +20,7 @@ import {
 } from 'antd'
 import { 
   DownloadOutlined, 
-  PrinterOutlined, 
   RiseOutlined, 
-  FallOutlined,
   PieChartOutlined,
   BarChartOutlined,
   FileTextOutlined,
@@ -45,7 +42,6 @@ import {
   LineChart,
   Line
 } from 'recharts'
-import { motion } from 'framer-motion'
 import dayjs from 'dayjs'
 import {
   accountingService,
@@ -64,6 +60,7 @@ import {
   OrderReconciliationAudit,
 } from '../services/dashboard.service'
 import { invoicingService, InvoiceQueueResponse } from '../services/invoicing.service'
+import { resolveEntityId } from '../services/entities.service'
 
 const { Title, Text } = Typography
 const { RangePicker } = DatePicker
@@ -99,6 +96,7 @@ interface ReportRow {
 }
 
 const ReportsPage: React.FC = () => {
+  const reportRequestRef = useRef(0)
   const [loading, setLoading] = useState(false)
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([dayjs().startOf('year'), dayjs()])
   const [incomeStatement, setIncomeStatement] = useState<IncomeStatement | null>(null)
@@ -183,43 +181,66 @@ const ReportsPage: React.FC = () => {
 
   const fetchData = async () => {
     if (!dateRange || !dateRange[0] || !dateRange[1]) return
+    const requestId = ++reportRequestRef.current
     setLoading(true)
+    setLoadIssues([])
+    setIncomeStatement(null)
+    setBalanceSheet(null)
+    setTrialBalance(null)
+    setGeneralLedger(null)
+    setOperationsHub(null)
+    setManagementSummary(null)
+    setEcommerceHistory(null)
+    setMonthlyReconciliation(null)
+    setInvoiceQueue(null)
+    setReconciliationAudit(null)
     try {
       const [start, end] = dateRange
+      const entityId = await resolveEntityId()
+      const accountingStart = start.startOf('day').toISOString()
+      const accountingEnd = end.endOf('day').toISOString()
       const results = await Promise.allSettled([
-        accountingService.getIncomeStatement(start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD')),
-        accountingService.getBalanceSheet(end.format('YYYY-MM-DD')),
-        accountingService.getTrialBalance(end.format('YYYY-MM-DD')),
-        accountingService.getGeneralLedger(start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD')),
+        accountingService.getIncomeStatement(accountingStart, accountingEnd, entityId),
+        accountingService.getBalanceSheet(accountingEnd, entityId),
+        accountingService.getTrialBalance(accountingEnd, entityId),
+        accountingService.getGeneralLedger(accountingStart, accountingEnd, entityId),
         dashboardService.getOperationsHub({
+          entityId,
           startDate: start.format('YYYY-MM-DD'),
           endDate: end.format('YYYY-MM-DD'),
         }),
         dashboardService.getManagementSummary({
+          entityId,
           groupBy: managementGroupBy,
           startDate: start.format('YYYY-MM-DD'),
           endDate: end.format('YYYY-MM-DD'),
         }),
         dashboardService.getEcommerceHistory({
+          entityId,
           groupBy: managementGroupBy,
           startDate: start.format('YYYY-MM-DD'),
           endDate: end.format('YYYY-MM-DD'),
         }),
         dashboardService.getMonthlyChannelReconciliation({
+          entityId,
           startDate: start.format('YYYY-MM-DD'),
           endDate: end.format('YYYY-MM-DD'),
         }),
         invoicingService.getQueue({
+          entityId,
           startDate: start.format('YYYY-MM-DD'),
           endDate: end.format('YYYY-MM-DD'),
           limit: 6,
         }),
         dashboardService.getOrderReconciliationAudit({
+          entityId,
           startDate: start.format('YYYY-MM-DD'),
           endDate: end.format('YYYY-MM-DD'),
           limit: 50,
         }),
       ])
+
+      if (requestId !== reportRequestRef.current) return
 
       const failedSections: string[] = []
 
@@ -301,11 +322,12 @@ const ReportsPage: React.FC = () => {
         message.warning(`部分報表區塊讀取失敗：${failedSections.join('、')}`)
       }
     } catch (error) {
+      if (requestId !== reportRequestRef.current) return
       console.error(error)
       setLoadIssues(['整體讀取'])
       message.error('無法載入報表數據')
     } finally {
-      setLoading(false)
+      if (requestId === reportRequestRef.current) setLoading(false)
     }
   }
 
@@ -313,23 +335,18 @@ const ReportsPage: React.FC = () => {
     fetchData()
   }, [dateRange, managementGroupBy])
 
-  const handleExport = () => {
-    message.info('匯出功能開發中')
-  }
-
   const handleAIAnalysis = async () => {
     if (!incomeStatement) return
     setAiModalVisible(true)
     setAiLoading(true)
     try {
       const result = await accountingService.analyzeReport({
-        entityId: 'tw-entity-001', // Should come from a selector in real app
         startDate: dateRange[0].format('YYYY-MM-DD'),
         endDate: dateRange[1].format('YYYY-MM-DD'),
         context: 'Income Statement Review'
       })
       setAiResult(result)
-    } catch (error) {
+    } catch {
       message.error('AI Analysis failed')
     } finally {
       setAiLoading(false)
@@ -377,7 +394,11 @@ const ReportsPage: React.FC = () => {
     const equity = safeArray(balanceSheet.equity).map(e => ({ ...e, type: 'equity' }))
     const totalLiabilities = toNumber(balanceSheet.totalLiabilities)
     const totalEquity = toNumber(balanceSheet.totalEquity)
-    const retainedEarnings = toNumber(balanceSheet.calculatedRetainedEarnings)
+    const retainedEarnings = typeof balanceSheet.calculatedRetainedEarnings === 'number'
+      && Number.isFinite(balanceSheet.calculatedRetainedEarnings)
+      ? balanceSheet.calculatedRetainedEarnings
+      : null
+    const displayedTotalEquity = totalEquity + (retainedEarnings ?? 0)
 
     return [
       { key: 'header_asset', category: '資產 (Assets)', amount: null, isHeader: true },
@@ -390,12 +411,30 @@ const ReportsPage: React.FC = () => {
       
       { key: 'header_equity', category: '權益 (Equity)', amount: null, isHeader: true },
       ...equity.map(e => ({ key: e.code, category: e.name, amount: toNumber(e.amount) })),
-      { key: 'retained_earnings', category: '本期損益 (Retained Earnings)', amount: retainedEarnings },
-      { key: 'total_equity', category: '權益總計', amount: totalEquity + retainedEarnings, isTotal: true },
+      {
+        key: 'retained_earnings',
+        category: retainedEarnings === null
+          ? '本期損益（尚未完成結轉）'
+          : '本期損益 (Retained Earnings)',
+        amount: retainedEarnings,
+      },
+      { key: 'total_equity', category: '權益總計', amount: displayedTotalEquity, isTotal: true },
       
-      { key: 'total_liab_equity', category: '負債與權益總計', amount: totalLiabilities + totalEquity + retainedEarnings, isTotal: true, isNet: true }
+      { key: 'total_liab_equity', category: '負債與權益總計', amount: totalLiabilities + displayedTotalEquity, isTotal: true, isNet: true }
     ]
   }
+
+  const balanceSheetDifference = balanceSheet && Number.isFinite(Number(balanceSheet.difference))
+    ? Number(balanceSheet.difference)
+    : null
+  const hasCalculatedRetainedEarnings = typeof balanceSheet?.calculatedRetainedEarnings === 'number'
+    && Number.isFinite(balanceSheet.calculatedRetainedEarnings)
+  const isBalanceSheetBalanced = Boolean(
+    balanceSheet
+      && balanceSheet.balanced === true
+      && balanceSheetDifference !== null
+      && Math.abs(balanceSheetDifference) <= 0.01,
+  )
 
   // Expense Analysis Data
   const getExpenseData = () => {
@@ -451,43 +490,46 @@ const ReportsPage: React.FC = () => {
   return (
     <div className="page-section-stack">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <Title level={2} className="!text-gray-800 font-light tracking-tight !mb-1">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="min-w-0">
+          <Title level={2} className="!mb-1 !text-2xl font-light tracking-tight !text-gray-800 sm:!text-3xl">
             報表中心 (Reports Center)
           </Title>
           <Text className="text-gray-500">
             查看與分析您的財務狀況、銷售績效與營運指標。
           </Text>
         </div>
-        <div className="flex gap-3">
+        <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 xl:w-auto xl:flex xl:flex-wrap xl:justify-end">
           <RangePicker 
-            className="w-64" 
+            className="w-full sm:col-span-2 xl:w-64"
             value={dateRange}
             onChange={(dates) => setDateRange(dates as [dayjs.Dayjs, dayjs.Dayjs])}
           />
-          <Button icon={<ReloadOutlined />} onClick={fetchData} loading={loading}>重新整理</Button>
+          <Button className="w-full xl:w-auto" icon={<ReloadOutlined />} onClick={fetchData} loading={loading}>重新整理</Button>
           <Button 
             icon={<RobotOutlined />} 
-            onClick={handleAIAnalysis} 
+            onClick={handleAIAnalysis}
             loading={aiLoading}
-            className="border-purple-500 text-purple-600 hover:text-purple-700 hover:border-purple-600"
+            disabled
+            title="AI 財務分析的 canonical 財務資料來源尚未完成，暫時停用"
+            className="w-full border-purple-500 text-purple-600 hover:text-purple-700 hover:border-purple-600 xl:w-auto"
           >
-            AI 財務分析
+            AI 財務分析（資料源未完成）
           </Button>
           <Button 
             type="primary" 
             icon={<DownloadOutlined />} 
-            onClick={handleExport}
-            className="bg-black hover:!bg-gray-800"
+            disabled
+            title="報表匯出尚未完成"
+            className="w-full bg-black hover:!bg-gray-800 xl:w-auto"
           >
-            匯出報表
+            匯出報表（未完成）
           </Button>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="glass-card p-6 min-h-[600px]">
+      <div className="glass-card min-h-[600px] p-3 sm:p-6">
         <Spin spinning={loading}>
           <Alert
             showIcon
@@ -518,22 +560,22 @@ const ReportsPage: React.FC = () => {
               <Row gutter={[16, 16]}>
                 <Col xs={24} md={6}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="歷年電商營收" value={ecommerceHistory?.summary?.revenue || 0} precision={0} prefix="NT$" />
+                    <Statistic title="歷年電商營收" value={ecommerceHistory ? (ecommerceHistory.summary?.revenue ?? 0) : '—'} precision={0} prefix={ecommerceHistory ? 'NT$' : undefined} />
                   </Card>
                 </Col>
                 <Col xs={24} md={6}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="訂單數" value={ecommerceHistory?.summary?.orderCount || 0} />
+                    <Statistic title="訂單數" value={ecommerceHistory ? (ecommerceHistory.summary?.orderCount ?? 0) : '—'} />
                   </Card>
                 </Col>
                 <Col xs={24} md={6}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="客戶數" value={ecommerceHistory?.summary?.customerCount || 0} />
+                    <Statistic title="客戶數" value={ecommerceHistory ? (ecommerceHistory.summary?.customerCount ?? 0) : '—'} />
                   </Card>
                 </Col>
                 <Col xs={24} md={6}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="品牌 / 商品" value={`${ecommerceHistory?.summary?.brandCount || 0} / ${ecommerceHistory?.summary?.productCount || 0}`} />
+                    <Statistic title="品牌 / 商品" value={ecommerceHistory ? `${ecommerceHistory.summary?.brandCount ?? 0} / ${ecommerceHistory.summary?.productCount ?? 0}` : '—'} />
                   </Card>
                 </Col>
               </Row>
@@ -655,10 +697,10 @@ const ReportsPage: React.FC = () => {
                           <div className="rounded-2xl bg-slate-50 px-4 py-4 h-full">
                             <div className="text-xs text-slate-400">官網業績</div>
                             <div className="mt-2 text-2xl font-semibold text-slate-900">
-                              {formatMoney(ecommerceMixSummary.officialSiteRevenue)}
+                              {ecommerceHistory ? formatMoney(ecommerceMixSummary.officialSiteRevenue) : '—'}
                             </div>
                             <div className="mt-1 text-xs text-slate-500">
-                              佔比 {formatPercent(ecommerceMixSummary.total ? (ecommerceMixSummary.officialSiteRevenue / ecommerceMixSummary.total) * 100 : 0, 1)}
+                              {ecommerceHistory ? `佔比 ${formatPercent(ecommerceMixSummary.total ? (ecommerceMixSummary.officialSiteRevenue / ecommerceMixSummary.total) * 100 : 0, 1)}` : '資料未取得'}
                             </div>
                           </div>
                         </Col>
@@ -666,10 +708,10 @@ const ReportsPage: React.FC = () => {
                           <div className="rounded-2xl bg-slate-50 px-4 py-4 h-full">
                             <div className="text-xs text-slate-400">團購業績</div>
                             <div className="mt-2 text-2xl font-semibold text-slate-900">
-                              {formatMoney(ecommerceMixSummary.groupBuyRevenue)}
+                              {ecommerceHistory ? formatMoney(ecommerceMixSummary.groupBuyRevenue) : '—'}
                             </div>
                             <div className="mt-1 text-xs text-slate-500">
-                              佔比 {formatPercent(ecommerceMixSummary.total ? (ecommerceMixSummary.groupBuyRevenue / ecommerceMixSummary.total) * 100 : 0, 1)}
+                              {ecommerceHistory ? `佔比 ${formatPercent(ecommerceMixSummary.total ? (ecommerceMixSummary.groupBuyRevenue / ecommerceMixSummary.total) * 100 : 0, 1)}` : '資料未取得'}
                             </div>
                           </div>
                         </Col>
@@ -677,10 +719,10 @@ const ReportsPage: React.FC = () => {
                           <div className="rounded-2xl bg-slate-50 px-4 py-4 h-full">
                             <div className="text-xs text-slate-400">其他來源</div>
                             <div className="mt-2 text-2xl font-semibold text-slate-900">
-                              {formatMoney(ecommerceMixSummary.otherRevenue)}
+                              {ecommerceHistory ? formatMoney(ecommerceMixSummary.otherRevenue) : '—'}
                             </div>
                             <div className="mt-1 text-xs text-slate-500">
-                              佔比 {formatPercent(ecommerceMixSummary.total ? (ecommerceMixSummary.otherRevenue / ecommerceMixSummary.total) * 100 : 0, 1)}
+                              {ecommerceHistory ? `佔比 ${formatPercent(ecommerceMixSummary.total ? (ecommerceMixSummary.otherRevenue / ecommerceMixSummary.total) * 100 : 0, 1)}` : '資料未取得'}
                             </div>
                           </div>
                         </Col>
@@ -717,6 +759,7 @@ const ReportsPage: React.FC = () => {
                         rowKey="name"
                         dataSource={ecommercePlatformMix.slice(0, 8)}
                         size="small"
+                        scroll={{ x: 520 }}
                         pagination={false}
                         columns={[
                           {
@@ -748,6 +791,7 @@ const ReportsPage: React.FC = () => {
                         rowKey="name"
                         dataSource={ecommerceBrandMix.slice(0, 8)}
                         size="small"
+                        scroll={{ x: 620 }}
                         pagination={false}
                         columns={[
                           {
@@ -868,32 +912,32 @@ const ReportsPage: React.FC = () => {
               <Row gutter={[16, 16]}>
                 <Col xs={24} md={8} xl={4}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="營業額" value={managementSummary?.summary?.revenue || 0} precision={0} prefix="NT$" />
+                    <Statistic title="營業額" value={managementSummary ? (managementSummary.summary?.revenue ?? 0) : '—'} precision={0} prefix={managementSummary ? 'NT$' : undefined} />
                   </Card>
                 </Col>
                 <Col xs={24} md={8} xl={4}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="毛利" value={managementSummary?.summary?.grossProfit || 0} precision={0} prefix="NT$" />
+                    <Statistic title="毛利" value={managementSummary ? (managementSummary.summary?.grossProfit ?? 0) : '—'} precision={0} prefix={managementSummary ? 'NT$' : undefined} />
                   </Card>
                 </Col>
                 <Col xs={24} md={8} xl={4}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="毛利率" value={managementSummary?.summary?.grossMarginPct || 0} precision={2} suffix="%" />
+                    <Statistic title="毛利率" value={managementSummary ? (managementSummary.summary?.grossMarginPct ?? 0) : '—'} precision={2} suffix={managementSummary ? '%' : undefined} />
                   </Card>
                 </Col>
                 <Col xs={24} md={8} xl={4}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="淨利" value={managementSummary?.summary?.netProfit || 0} precision={0} prefix="NT$" />
+                    <Statistic title="淨利" value={managementSummary ? (managementSummary.summary?.netProfit ?? 0) : '—'} precision={0} prefix={managementSummary ? 'NT$' : undefined} />
                   </Card>
                 </Col>
                 <Col xs={24} md={8} xl={4}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="手續費" value={managementSummary?.summary?.feeTotal || 0} precision={0} prefix="NT$" />
+                    <Statistic title="手續費" value={managementSummary ? (managementSummary.summary?.feeTotal ?? 0) : '—'} precision={0} prefix={managementSummary ? 'NT$' : undefined} />
                   </Card>
                 </Col>
                 <Col xs={24} md={8} xl={4}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="應收未收" value={managementSummary?.summary?.openArAmount || 0} precision={0} prefix="NT$" />
+                    <Statistic title="應收未收" value={managementSummary ? (managementSummary.summary?.openArAmount ?? 0) : '—'} precision={0} prefix={managementSummary ? 'NT$' : undefined} />
                   </Card>
                 </Col>
               </Row>
@@ -1008,22 +1052,22 @@ const ReportsPage: React.FC = () => {
               <Row gutter={[16, 16]}>
                 <Col xs={24} md={6}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="在職員工" value={operationsHub?.people.activeEmployees || 0} />
+                    <Statistic title="在職員工" value={operationsHub ? (operationsHub.people.activeEmployees ?? 0) : '—'} />
                   </Card>
                 </Col>
                 <Col xs={24} md={6}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="待審假單" value={operationsHub?.people.pendingLeaveRequests || 0} />
+                    <Statistic title="待審假單" value={operationsHub ? (operationsHub.people.pendingLeaveRequests ?? 0) : '—'} />
                   </Card>
                 </Col>
                 <Col xs={24} md={6}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="出勤異常" value={operationsHub?.people.openAttendanceAnomalies || 0} />
+                    <Statistic title="出勤異常" value={operationsHub ? (operationsHub.people.openAttendanceAnomalies ?? 0) : '—'} />
                   </Card>
                 </Col>
                 <Col xs={24} md={6}>
                   <Card bordered={false} className="shadow-sm">
-                    <Statistic title="待開票訂單" value={operationsHub?.invoicing.pendingInvoiceCount || 0} />
+                    <Statistic title="待開票訂單" value={operationsHub ? (operationsHub.invoicing.pendingInvoiceCount ?? 0) : '—'} />
                   </Card>
                 </Col>
               </Row>
@@ -1033,19 +1077,19 @@ const ReportsPage: React.FC = () => {
                   <Card title="薪資與審批" bordered={false} className="shadow-sm h-full">
                     <Descriptions column={1} size="small">
                       <Descriptions.Item label="待審薪資批次">
-                        {operationsHub?.payroll.pendingApprovalRuns || 0}
+                        {operationsHub ? (operationsHub.payroll.pendingApprovalRuns ?? 0) : '—'}
                       </Descriptions.Item>
                       <Descriptions.Item label="已核准薪資批次">
-                        {operationsHub?.payroll.approvedRuns || 0}
+                        {operationsHub ? (operationsHub.payroll.approvedRuns ?? 0) : '—'}
                       </Descriptions.Item>
                       <Descriptions.Item label="已過帳薪資批次">
-                        {operationsHub?.payroll.postedRuns || 0}
+                        {operationsHub ? (operationsHub.payroll.postedRuns ?? 0) : '—'}
                       </Descriptions.Item>
                       <Descriptions.Item label="待審費用">
-                        {operationsHub?.approvals.expenseRequests || 0}
+                        {operationsHub ? (operationsHub.approvals.expenseRequests ?? 0) : '—'}
                       </Descriptions.Item>
                       <Descriptions.Item label="待審分錄">
-                        {operationsHub?.approvals.journalEntries || 0}
+                        {operationsHub ? (operationsHub.approvals.journalEntries ?? 0) : '—'}
                       </Descriptions.Item>
                     </Descriptions>
                   </Card>
@@ -1054,16 +1098,16 @@ const ReportsPage: React.FC = () => {
                   <Card title="發票閉環" bordered={false} className="shadow-sm h-full">
                     <Descriptions column={1} size="small">
                       <Descriptions.Item label="已開票數">
-                        {invoiceQueue?.summary?.issuedCount || 0}
+                        {invoiceQueue ? (invoiceQueue.summary?.issuedCount ?? 0) : '—'}
                       </Descriptions.Item>
                       <Descriptions.Item label="可批次開票">
-                        {invoiceQueue?.summary?.eligibleCount || 0}
+                        {invoiceQueue ? (invoiceQueue.summary?.eligibleCount ?? 0) : '—'}
                       </Descriptions.Item>
                       <Descriptions.Item label="待付款後開票">
-                        {invoiceQueue?.summary?.waitingPaymentCount || 0}
+                        {invoiceQueue ? (invoiceQueue.summary?.waitingPaymentCount ?? 0) : '—'}
                       </Descriptions.Item>
                       <Descriptions.Item label="已作廢發票">
-                        {invoiceQueue?.summary?.voidCount || 0}
+                        {invoiceQueue ? (invoiceQueue.summary?.voidCount ?? 0) : '—'}
                       </Descriptions.Item>
                     </Descriptions>
                   </Card>
@@ -1098,13 +1142,35 @@ const ReportsPage: React.FC = () => {
                 <Col xs={24} lg={12}>
                   <Card title="資產負債表 (Balance Sheet)" bordered={false} className="shadow-sm">
                     {balanceSheet ? (
-                      <Table 
-                        dataSource={getBSData()} 
-                        columns={columns.filter(c => c.key !== 'percentage')} 
-                        pagination={false} 
-                        size="small"
-                        rowClassName={(record) => record.isTotal ? 'bg-gray-50' : ''}
-                      />
+                      <>
+                        {!isBalanceSheetBalanced ? (
+                          <Alert
+                            showIcon
+                            type="error"
+                            className="mb-4"
+                            message="資產負債表尚未平衡，不可作為正式財務報表"
+                            description={balanceSheetDifference === null
+                              ? '系統未取得可驗證的平衡差額。此表僅供資料查核。'
+                              : `目前差額為 ${formatMoney(balanceSheetDifference)}。此表僅供資料查核。`}
+                          />
+                        ) : !hasCalculatedRetainedEarnings ? (
+                          <Alert
+                            showIcon
+                            type="warning"
+                            className="mb-4"
+                            message="資產負債表目前平衡，但期末損益結轉尚未完成"
+                            description="平衡檢查已通過；保留盈餘仍須在正式結帳流程完成後確認。"
+                          />
+                        ) : null}
+                        <Table
+                          dataSource={getBSData()}
+                          columns={columns.filter(c => c.key !== 'percentage')}
+                          pagination={false}
+                          size="small"
+                          scroll={{ x: 520 }}
+                          rowClassName={(record) => record.isTotal ? 'bg-gray-50' : ''}
+                        />
+                      </>
                     ) : <Empty description="無資料" />}
                   </Card>
                 </Col>
@@ -1391,22 +1457,22 @@ const ReportsPage: React.FC = () => {
                 <Row gutter={[16, 16]}>
                   <Col xs={24} md={6}>
                     <Card bordered={false} className="bg-slate-50">
-                      <Statistic title="已稽核訂單" value={reconciliationAudit?.summary?.auditedOrderCount || 0} />
+                      <Statistic title="已稽核訂單" value={reconciliationAudit ? (reconciliationAudit.summary?.auditedOrderCount ?? 0) : '—'} />
                     </Card>
                   </Col>
                   <Col xs={24} md={6}>
                     <Card bordered={false} className="bg-slate-50">
-                      <Statistic title="發票異常" value={reconciliationAudit?.summary?.invoiceIssueCount || 0} />
+                      <Statistic title="發票異常" value={reconciliationAudit ? (reconciliationAudit.summary?.invoiceIssueCount ?? 0) : '—'} />
                     </Card>
                   </Col>
                   <Col xs={24} md={6}>
                     <Card bordered={false} className="bg-slate-50">
-                      <Statistic title="稅務異常" value={reconciliationAudit?.summary?.taxIssueCount || 0} />
+                      <Statistic title="稅務異常" value={reconciliationAudit ? (reconciliationAudit.summary?.taxIssueCount ?? 0) : '—'} />
                     </Card>
                   </Col>
                   <Col xs={24} md={6}>
                     <Card bordered={false} className="bg-slate-50">
-                      <Statistic title="帳款不一致" value={reconciliationAudit?.summary?.orderPaymentIssueCount || 0} />
+                      <Statistic title="帳款不一致" value={reconciliationAudit ? (reconciliationAudit.summary?.orderPaymentIssueCount ?? 0) : '—'} />
                     </Card>
                   </Col>
                 </Row>
@@ -1416,9 +1482,9 @@ const ReportsPage: React.FC = () => {
                     <Card bordered={false} className="bg-slate-50">
                       <Statistic
                         title="總手續費"
-                        value={reconciliationAudit?.summary?.totalFeeAmount || 0}
+                        value={reconciliationAudit ? (reconciliationAudit.summary?.totalFeeAmount ?? 0) : '—'}
                         precision={0}
-                        prefix="NT$"
+                        prefix={reconciliationAudit ? 'NT$' : undefined}
                       />
                     </Card>
                   </Col>
@@ -1426,9 +1492,9 @@ const ReportsPage: React.FC = () => {
                     <Card bordered={false} className="bg-slate-50">
                       <Statistic
                         title="金流手續費"
-                        value={reconciliationAudit?.summary?.totalGatewayFeeAmount || 0}
+                        value={reconciliationAudit ? (reconciliationAudit.summary?.totalGatewayFeeAmount ?? 0) : '—'}
                         precision={0}
-                        prefix="NT$"
+                        prefix={reconciliationAudit ? 'NT$' : undefined}
                       />
                     </Card>
                   </Col>
@@ -1436,10 +1502,10 @@ const ReportsPage: React.FC = () => {
                     <Card bordered={false} className="bg-slate-50">
                       <Statistic
                         title="平台手續費"
-                        value={reconciliationAudit?.summary?.totalPlatformFeeAmount || 0}
+                        value={reconciliationAudit ? (reconciliationAudit.summary?.totalPlatformFeeAmount ?? 0) : '—'}
                         precision={0}
-                        prefix="NT$"
-                        suffix={` / ${formatPercent(reconciliationAudit?.summary?.feeTakeRatePct)}`}
+                        prefix={reconciliationAudit ? 'NT$' : undefined}
+                        suffix={reconciliationAudit ? ` / ${formatPercent(reconciliationAudit.summary?.feeTakeRatePct)}` : undefined}
                       />
                     </Card>
                   </Col>
