@@ -1,8 +1,7 @@
 name: Deploy Frontend to Cloud Run
 
 on:
-  push:
-    branches: ["main"]
+  workflow_call:
   workflow_dispatch: {}
 
 permissions:
@@ -11,7 +10,7 @@ permissions:
 
 concurrency:
   group: deploy-frontend-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'moztech-main-db' }}

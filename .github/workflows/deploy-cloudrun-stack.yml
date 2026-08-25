@@ -1,0 +1,26 @@
+name: Deploy ERP Stack to Cloud Run
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+# Preserve commit order and never cancel a runner while Cloud Build or Cloud
+# Run may still be mutating remote state.
+concurrency:
+  group: deploy-stack-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  backend:
+    uses: ./.github/workflows/deploy-cloudrun-backend.yml
+    secrets: inherit
+
+  frontend:
+    needs: backend
+    uses: ./.github/workflows/deploy-cloudrun-frontend.yml
+    secrets: inherit
