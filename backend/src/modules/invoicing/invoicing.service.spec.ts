@@ -3,6 +3,7 @@ import { InvoicingService } from './invoicing.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotFoundException, ConflictException } from '@nestjs/common';
 import { EcpayEinvoiceAdapter } from './adapters/ecpay-einvoice.adapter';
+import { SalesOrderService } from '../sales/services/sales-order.service';
 
 describe('InvoicingService', () => {
   let service: InvoicingService;
@@ -35,6 +36,9 @@ describe('InvoicingService', () => {
     issueInvoice: jest.fn(),
     queryInvoiceStatus: jest.fn(),
   };
+  const mockSalesOrderService = {
+    importEcpayIssuedInvoices: jest.fn(),
+  };
 
   beforeEach(async () => {
     previousAllowLocalInvoiceStub = process.env.ALLOW_LOCAL_INVOICE_STUB;
@@ -49,6 +53,7 @@ describe('InvoicingService', () => {
           provide: EcpayEinvoiceAdapter,
           useValue: mockEcpayEinvoiceAdapter,
         },
+        { provide: SalesOrderService, useValue: mockSalesOrderService },
       ],
     }).compile();
 

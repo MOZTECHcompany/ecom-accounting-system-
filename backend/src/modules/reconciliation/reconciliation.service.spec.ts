@@ -1,6 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ReconciliationService } from '../reconciliation.service';
-import { PrismaService } from '../../../common/prisma/prisma.service';
+import { ConfigService } from '@nestjs/config';
+import { ReconciliationService } from './reconciliation.service';
+import { PrismaService } from '../../common/prisma/prisma.service';
+import { ArService } from '../ar/ar.service';
+import { ReportsService } from '../reports/reports.service';
+import { ShopifyService } from '../integration/shopify/shopify.service';
+import { OneShopService } from '../integration/one-shop/one-shop.service';
+import { EcpayShopifyPayoutService } from './ecpay-shopify-payout.service';
+import { SalesOrderService } from '../sales/services/sales-order.service';
+import { LinePayService } from './line-pay.service';
+import { ProviderPayoutReconciliationService } from './provider-payout-reconciliation.service';
 
 describe('ReconciliationService - autoMatchTransactions', () => {
   let service: ReconciliationService;
@@ -29,6 +38,15 @@ describe('ReconciliationService - autoMatchTransactions', () => {
       providers: [
         ReconciliationService,
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: ConfigService, useValue: { get: jest.fn() } },
+        { provide: ArService, useValue: {} },
+        { provide: ReportsService, useValue: {} },
+        { provide: ShopifyService, useValue: {} },
+        { provide: OneShopService, useValue: {} },
+        { provide: EcpayShopifyPayoutService, useValue: {} },
+        { provide: SalesOrderService, useValue: {} },
+        { provide: LinePayService, useValue: {} },
+        { provide: ProviderPayoutReconciliationService, useValue: {} },
       ],
     }).compile();
 
