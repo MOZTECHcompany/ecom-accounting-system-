@@ -710,7 +710,7 @@ Cloud Run 正式資料目前已經不是空系統，但核心治理缺口很大�
 - 生產容器啟動已移除 `prisma migrate deploy` 與 seed；Cloud Run 發布流程會先用同一個 image 執行單次 migration Job，成功後才建立無流量 candidate revision。應用程序也已開啟 Nest shutdown hooks 並轉送 `SIGTERM` / `SIGINT`。
 - ERP 導覽已改為桌面版固定側邊欄：收合時保留 80px 圖示軌道，不再整個消失；目前路由所在群組會保持展開。所有一般操作按鈕統一為 40px 高。
 - Dashboard 已移除浮動 AI 助手、昨日 AI 提示、中英雙標題、重複 KPI / 品牌 / 趨勢 / 通路 / 待辦區塊；設定與報表頁的未上線 AI 介面預留也不再顯示。
-- 銷售通路與品牌貢獻已拆成獲立維度：通路固定彙總為「官網」、「1Shop 團購」、「線下通路」、「其他通路」；品牌圖只使用廣告業績 API 的實際品牌營業額，不再把「團購」當成品牌。
+- 銷售通路與品牌貢獻已拆成獨立維度：通路固定彙總為「官網」、「1Shop 團購」、「線下通路」、「其他通路」；品牌圖只使用廣告業績 API 的實際品牌營業額，不再把「團購」當成品牌。
 - 採購收貨與銷售出貨已改為原子交易：單據狀態 claim、庫存異動、庫存快照、序號、移動平均成本、Shipment 與最終狀態同時成功或全數 rollback。重試已收貨 / 已出貨單據不會再次加扣庫存；若發現舊版留下的部分出庫異動，會中止並要求人工複核。
 - 採購 API 已改為必傳 `entityId` 並套用 purchasing entity access guard，不再依賴 JWT 中不存在的 `req.user.entityId`。採購頁已提供真實倉庫選擇與序號掃描收貨流程；銷售訂單側欄的出貨按鈕也已啟用相同倉庫 / 序號驗證。
 - 後端 build 通過，全部 7 個 test suites、33 個 tests 通過；新增 entity access service / guard 的 own-entity、cross-entity、unlinked-user、department-scope、public scheduler 與 malformed entityId 測試。
@@ -719,6 +719,7 @@ Cloud Run 正式資料目前已經不是空系統，但核心治理缺口很大�
 正式部署前仍需：
 
 - 只讀盤點正式環境所有 ADMIN / ACCOUNTANT 是否有正確 Employee 與 Entity 綁定，避免舊帳號因新 fail-closed 規則被擋；`SUPER_ADMIN` 不受此限制。
+- 2026-08-25 正式介面只讀盤點：3 個最高權限帳號均有 `SUPER_ADMIN`，不受 Employee 綁定限制；一般帳號另有 `admin@example.com`（ADMIN）與 `mozlemon@moztech.cc`（ACCOUNTANT），但員工名單目前只有 1 筆，因此兩者不可能都已完成 Employee / Entity 綁定。部署前需由負責人確認這兩個帳號各自對應哪位員工與公司，或確認停用不用的帳號；不得用「第一間公司」作為權限 fallback。
 - 完成 release quality gate、候選 revision 無流量驗證與登入後 smoke test，再切正式流量。
 
 ## 建議收斂順序
