@@ -777,7 +777,9 @@ Cloud Run 正式資料目前已經不是空系統，但核心治理缺口很大�
 - 補同步後的正式報表核對發現，新舊 connector 使用不同 `sourceId` 格式，造成同一 Google customer / date 被重複計入。`d0bc6d87` 改以 Google customer ID + 日期作為邏輯唯一鍵，保留標準列並清除 `42` 筆舊格式重複列。無快取報表驗證 2026-08-01 至 2026-08-27 Google Ads 為 `119` 筆、`NT$455,023.83`、最後日期 `2026-08-27`；Meta + Google Ads 合計 `NT$1,018,350.83`，會計口徑 ROAS `2.328`。
 - Dashboard 廣告品牌歸屬修正為優先使用 `brand`，`reportBrand=MOZTECH_TW / MOZTECH_US` 僅保留為市場報表維度，不再把 MOZTECH 營收與 MOZTECH_TW 廣告費拆成兩個品牌而產生錯誤 ROAS。
 - `ad-performance-summary` 新增 Meta / Google Ads 各來源的花費、筆數與最後資料日期；Dashboard 以精簡標籤顯示來源最後日期，避免排程仍存在但來源已停止更新時看不出來。
-- 因診斷輸出曾包含同步排程權杖，Shopify / 1Shop、Meta、Google Ads 權杖已全部輪替並寫入 Secret Manager。四條 Cloud Scheduler 正式排程均已回 HTTP 201：Shopify、1Shop、Meta Ads、Google Ads；正式後端最終流量已切至含 OAuth 與去重修正的 `ecom-accounting-backend-src-d0bc6d87`。
+- 因診斷輸出曾包含同步排程權杖，Shopify / 1Shop、Meta、Google Ads 權杖已全部輪替並寫入 Secret Manager。四條 Cloud Scheduler 正式排程均已回 HTTP 201：Shopify、1Shop、Meta Ads、Google Ads；含 OAuth 與去重修正的程式版本為 `d0bc6d87`。
+- 2026-08-27 同步韌性補強：Shopify 維持每 15 分鐘回刷最近 180 分鐘，1Shop 維持每 20 分鐘回刷最近 3 天；Meta Ads 改為每小時第 5 分鐘、Google Ads 改為每小時第 15 分鐘回刷最近 7 天。四條 Cloud Scheduler 均補上最多 5 次自動重試與退避時間，避免一次網路或平台失敗就形成資料洞。
+- 排程權杖再次輪替至 Secret Manager version 3，正式後端改由 `ecom-accounting-backend-token-v3` 100% 流量並載入 `latest` Secret。切換前的 401 / 400 已由新重試機制自動恢復；正式日誌再次確認 Shopify、1Shop、Meta Ads、Google Ads 全數回 HTTP 201。2026-08-01 至 2026-08-27 無快取報表為營收 `NT$2,370,748`、Meta `NT$563,558`、Google Ads `NT$455,145.06`、總廣告費 `NT$1,018,703.06`、ROAS `2.3272`，兩個廣告來源最後日期皆為 2026-08-27。
 
 ## 待使用者協助確認
 
