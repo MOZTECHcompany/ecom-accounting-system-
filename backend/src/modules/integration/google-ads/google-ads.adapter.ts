@@ -19,6 +19,9 @@ export type GoogleAdsAccountConfig = {
   entityId?: string;
   managerCustomerId?: string;
   loginCustomerId?: string;
+  refreshTokenEnv?: string;
+  clientIdEnv?: string;
+  clientSecretEnv?: string;
 };
 
 export type GoogleAdsInsight = {
@@ -122,6 +125,7 @@ export class GoogleAdsAdapter {
         channelCode: account.channelCode || null,
         currency: account.currency || null,
         entityId: account.entityId || null,
+        refreshTokenEnv: account.refreshTokenEnv || null,
       })),
       loginCustomerId: this.normalizeCustomerId(
         this.config.get<string>('GOOGLE_ADS_LOGIN_CUSTOMER_ID', '') || '',
@@ -191,6 +195,7 @@ export class GoogleAdsAdapter {
           query: this.buildSpendQuery(params.since, params.until, level),
           pageToken,
           loginCustomerId: account.loginCustomerId || account.managerCustomerId,
+          account,
         });
         const pageRows = Array.isArray(response.results) ? response.results : [];
         rows.push(
@@ -217,7 +222,10 @@ export class GoogleAdsAdapter {
     return rows;
   }
 
-  async listCustomerClients(customerId: string) {
+  async listCustomerClients(
+    customerId: string,
+    account?: GoogleAdsAccountConfig,
+  ) {
     const normalizedCustomerId = this.normalizeCustomerId(customerId);
     const response = await this.search(normalizedCustomerId, {
       query: [
@@ -234,6 +242,8 @@ export class GoogleAdsAdapter {
         "WHERE customer_client.status != 'CANCELED'",
         'ORDER BY customer_client.id',
       ].join(' '),
+      loginCustomerId: account?.loginCustomerId || account?.managerCustomerId,
+      account,
     });
 
     return (response.results || [])
@@ -300,15 +310,21 @@ export class GoogleAdsAdapter {
   }
 
   private resolveAccounts(customerIds?: string[]): GoogleAdsAccountConfig[] {
+    const configured = this.getConfiguredAccounts();
     const requested = (customerIds || [])
       .map((value) => this.normalizeCustomerId(value))
       .filter(Boolean)
-      .map((customerId) => ({ customerId }));
+      .map(
+        (customerId) =>
+          configured.find(
+            (account) =>
+              this.normalizeCustomerId(account.customerId) === customerId,
+          ) || { customerId },
+      );
     if (requested.length) {
       return requested;
     }
 
-    const configured = this.getConfiguredAccounts();
     if (!configured.length) {
       throw new BadRequestException(
         'GOOGLE_ADS_CUSTOMER_ID or GOOGLE_ADS_ACCOUNTS_JSON is required',
@@ -322,10 +338,18 @@ export class GoogleAdsAdapter {
 
   private async search(
     customerId: string,
-    body: { query: string; pageToken?: string; loginCustomerId?: string },
+    body: {
+      query: string;
+      pageToken?: string;
+      loginCustomerId?: string;
+      account?: GoogleAdsAccountConfig;
+    },
   ) {
-    const accessToken = await this.fetchAccessToken();
+    const accessToken = await this.fetchAccessToken(body.account);
     const url = `${this.apiBaseUrl.replace(/\/$/, '')}/${this.apiVersion}/customers/${this.normalizeCustomerId(customerId)}/googleAds:search`;
+    const loginCustomerId = body.account
+      ? this.normalizeCustomerId(body.loginCustomerId || '')
+      : this.resolveLoginCustomerId(body.loginCustomerId);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
@@ -336,11 +360,9 @@ export class GoogleAdsAdapter {
         headers: {
           Authorization: `Bearer ${accessToken}`,
           'developer-token': this.assertDeveloperToken(),
-          ...(this.resolveLoginCustomerId(body.loginCustomerId)
+          ...(loginCustomerId
             ? {
-                'login-customer-id': this.resolveLoginCustomerId(
-                  body.loginCustomerId,
-                ),
+                'login-customer-id': loginCustomerId,
               }
             : {}),
           'Content-Type': 'application/json',
@@ -386,7 +408,10 @@ export class GoogleAdsAdapter {
       };
       let clients: Awaited<ReturnType<typeof this.listCustomerClients>> = [];
       try {
-        clients = await this.listCustomerClients(normalizedAccount.customerId);
+        clients = await this.listCustomerClients(
+          normalizedAccount.customerId,
+          normalizedAccount,
+        );
       } catch {
         clients = [];
       }
@@ -427,10 +452,10 @@ export class GoogleAdsAdapter {
     return expanded;
   }
 
-  private async fetchAccessToken() {
-    const clientId = this.getClientId();
-    const clientSecret = this.getClientSecret();
-    const refreshToken = this.getRefreshToken();
+  private async fetchAccessToken(account?: GoogleAdsAccountConfig) {
+    const clientId = this.getClientId(account);
+    const clientSecret = this.getClientSecret(account);
+    const refreshToken = this.getRefreshToken(account);
     if (!clientId || !clientSecret || !refreshToken) {
       throw new UnauthorizedException(
         'GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET and GOOGLE_ADS_REFRESH_TOKEN are required',
@@ -502,18 +527,30 @@ export class GoogleAdsAdapter {
     ).trim();
   }
 
-  private getClientId() {
-    return (this.config.get<string>('GOOGLE_ADS_CLIENT_ID', '') || '').trim();
+  private getClientId(account?: GoogleAdsAccountConfig) {
+    return (
+      (account?.clientIdEnv
+        ? this.config.get<string>(account.clientIdEnv, '')
+        : '') ||
+      this.config.get<string>('GOOGLE_ADS_CLIENT_ID', '') ||
+      ''
+    ).trim();
   }
 
-  private getClientSecret() {
+  private getClientSecret(account?: GoogleAdsAccountConfig) {
     return (
+      (account?.clientSecretEnv
+        ? this.config.get<string>(account.clientSecretEnv, '')
+        : '') ||
       this.config.get<string>('GOOGLE_ADS_CLIENT_SECRET', '') || ''
     ).trim();
   }
 
-  private getRefreshToken() {
+  private getRefreshToken(account?: GoogleAdsAccountConfig) {
     return (
+      (account?.refreshTokenEnv
+        ? this.config.get<string>(account.refreshTokenEnv, '')
+        : '') ||
       this.config.get<string>('GOOGLE_ADS_REFRESH_TOKEN', '') || ''
     ).trim();
   }
@@ -578,6 +615,13 @@ export class GoogleAdsAdapter {
       ),
       loginCustomerId: this.optionalString(
         item.loginCustomerId || item.login_customer_id,
+      ),
+      refreshTokenEnv: this.optionalString(
+        item.refreshTokenEnv || item.refresh_token_env,
+      ),
+      clientIdEnv: this.optionalString(item.clientIdEnv || item.client_id_env),
+      clientSecretEnv: this.optionalString(
+        item.clientSecretEnv || item.client_secret_env,
       ),
     };
   }
