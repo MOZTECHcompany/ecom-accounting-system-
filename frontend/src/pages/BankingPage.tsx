@@ -670,7 +670,6 @@ const BankingPage: React.FC = () => {
     >
       <div>
         <Title level={2} className="!mb-1 !font-light">銀行與資金</Title>
-        <Text className="text-gray-500">管理銀行帳戶與資金流向</Text>
       </div>
 
       <Card className="glass-card" bordered={false}>

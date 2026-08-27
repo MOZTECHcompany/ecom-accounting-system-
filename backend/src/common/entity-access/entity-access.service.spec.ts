@@ -22,6 +22,7 @@ describe('EntityAccessService', () => {
       entityId: 'entity-1',
       departmentId: 'department-1',
     },
+    entityMemberships: [],
     roles: [{ role: { code: 'ADMIN', name: 'ADMIN' } }],
     ...overrides,
   });
@@ -55,6 +56,40 @@ describe('EntityAccessService', () => {
     ).resolves.toMatchObject({ entityId: 'entity-1', noAccess: false });
     await expect(
       service.assertAccess('user-1', 'accounting', 'entity-2'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('allows an entity-scoped operator to access every assigned company', async () => {
+    prisma.user.findUnique.mockResolvedValue(
+      user({
+        employee: null,
+        entityMemberships: [
+          { entityId: 'entity-1', isPrimary: true },
+          { entityId: 'entity-2', isPrimary: false },
+        ],
+      }),
+    );
+
+    await expect(
+      service.assertAccess('user-1', 'accounting', 'entity-2'),
+    ).resolves.toMatchObject({ entityId: 'entity-2', noAccess: false });
+    await expect(service.getAccessibleEntityIds('user-1')).resolves.toEqual([
+      'entity-1',
+      'entity-2',
+    ]);
+  });
+
+  it('still requires an employee anchor for self-scoped HR data', async () => {
+    prisma.user.findUnique.mockResolvedValue(
+      user({
+        employeeDataScope: 'SELF',
+        employee: null,
+        entityMemberships: [{ entityId: 'entity-1', isPrimary: true }],
+      }),
+    );
+
+    await expect(
+      service.assertAccess('user-1', 'employees', 'entity-1'),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 

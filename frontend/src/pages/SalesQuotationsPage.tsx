@@ -591,7 +591,6 @@ const SalesQuotationsPage: React.FC = () => {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <Title level={2} className="!mb-1 !font-light">銷售報價單</Title>
-          <Text className="text-slate-500">建立給客戶的正式報價，追蹤批准、有效期限與列印版內容。</Text>
         </div>
         <Space wrap>
           <Button icon={<ReloadOutlined />} onClick={() => void fetchData()}>

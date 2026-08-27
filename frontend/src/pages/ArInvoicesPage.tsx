@@ -8,7 +8,6 @@ import {
   Input,
   InputNumber,
   Modal,
-  Popover,
   Segmented,
   Space,
   Statistic,
@@ -23,7 +22,6 @@ import {
   DollarCircleOutlined,
   FileTextOutlined,
   PlusOutlined,
-  QuestionCircleOutlined,
   ReloadOutlined,
   SearchOutlined,
   SyncOutlined,
@@ -791,30 +789,9 @@ const ArInvoicesPage: React.FC = () => {
     >
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <div className="flex items-center gap-2">
-            <Title level={2} className="!mb-1 !font-light">
-              應收帳款
-            </Title>
-            <Popover
-              title="這頁怎麼用"
-              content={
-                <div className="max-w-xs text-sm leading-6 text-slate-600">
-                  <div>銷售訂單：按「同步銷售訂單」轉成應收。</div>
-                  <div>B2B 月結：按「新增 B2B 應收」建立追帳項目。</div>
-                  <div>收款後：按「記錄收款」沖銷應收並產生收款分錄。</div>
-                </div>
-              }
-              trigger="click"
-            >
-              <Button
-                type="text"
-                shape="circle"
-                icon={<QuestionCircleOutlined />}
-                className="text-slate-400"
-              />
-            </Popover>
-          </div>
-          <Text className="text-gray-500">建立應收、追蹤收款、確認入帳。</Text>
+          <Title level={2} className="!mb-1 !font-light">
+            應收帳款
+          </Title>
         </div>
         <Space wrap>
           <DatePicker.RangePicker

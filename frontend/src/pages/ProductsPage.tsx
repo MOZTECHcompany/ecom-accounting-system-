@@ -175,7 +175,6 @@ const ProductsPage: React.FC = () => {
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <Title level={2} className="!mb-0 !text-2xl sm:!text-3xl">產品與庫存管理</Title>
-          <p className="text-gray-500 mt-1">管理所有商品資料、庫存數量與成本結構</p>
         </div>
         <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:w-auto lg:flex lg:flex-wrap lg:justify-end">
           <Button className="w-full lg:w-auto" icon={<ReloadOutlined />} onClick={fetchProducts}>重新整理</Button>

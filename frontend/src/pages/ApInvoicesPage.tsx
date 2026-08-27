@@ -591,7 +591,6 @@ const ApInvoicesPage_Deprecated: React.FC = () => {
       <div className="flex flex-wrap justify-between gap-4">
         <div>
           <Title level={2} className="!mb-1 !font-light">應付帳款</Title>
-          <Text className="text-gray-500">管理供應商發票與付款排程</Text>
         </div>
         <Space>
           <Button icon={<CloudUploadOutlined />} onClick={() => {

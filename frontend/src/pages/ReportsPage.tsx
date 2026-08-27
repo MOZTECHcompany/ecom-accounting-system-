@@ -469,9 +469,6 @@ const ReportsPage: React.FC = () => {
           <Title level={2} className="!mb-1 !text-2xl font-light tracking-tight !text-gray-800 sm:!text-3xl">
             報表中心
           </Title>
-          <Text className="text-gray-500">
-            查看與分析您的財務狀況、銷售績效與營運指標。
-          </Text>
         </div>
         <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 xl:w-auto xl:flex xl:flex-wrap xl:justify-end">
           <RangePicker 

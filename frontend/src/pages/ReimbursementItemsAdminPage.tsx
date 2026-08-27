@@ -358,7 +358,6 @@ const ReimbursementItemsAdminPage: React.FC = () => {
       <div className="flex justify-between items-end">
         <div>
           <Title level={2} className="!mb-1 !font-light">報銷項目管理</Title>
-          <Text className="text-gray-500">設定費用報銷項目、審核政策與會計科目對應</Text>
         </div>
         <Space>
           <Button icon={<RobotOutlined />} onClick={handleSeedAiItems} loading={seeding}>

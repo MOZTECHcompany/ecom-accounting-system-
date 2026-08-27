@@ -123,9 +123,6 @@ const AccountsPage: React.FC = () => {
           <Title level={2} className="!text-gray-800 font-light tracking-tight !mb-1">
             會計科目表
           </Title>
-          <Text className="text-gray-500">
-            管理您的會計科目表與餘額
-          </Text>
         </div>
         <Space wrap>
           <Button icon={<ReloadOutlined />} onClick={loadAccounts} className="hover:bg-gray-50">

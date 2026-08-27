@@ -1,4 +1,6 @@
 import {
+  ArrayUnique,
+  IsArray,
   IsBoolean,
   IsIn,
   IsOptional,
@@ -27,6 +29,12 @@ export class UpdateUserDto {
   @IsOptional()
   @IsBoolean()
   readonly mustChangePassword?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsString({ each: true })
+  readonly entityIds?: string[];
 
   @IsOptional()
   @IsString()

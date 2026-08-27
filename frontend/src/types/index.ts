@@ -35,6 +35,18 @@ export interface UserRoleLink {
   role: Role;
 }
 
+export interface UserEntityMembership {
+  userId: string;
+  entityId: string;
+  isPrimary: boolean;
+  entity: {
+    id: string;
+    loginCode: string;
+    name: string;
+    isActive: boolean;
+  };
+}
+
 export interface ManagedUser {
   id: string;
   email: string;
@@ -52,6 +64,7 @@ export interface ManagedUser {
   createdAt?: string;
   updatedAt?: string;
   roles: UserRoleLink[];
+  entityMemberships?: UserEntityMembership[];
 }
 
 export interface PaginatedResult<T> {

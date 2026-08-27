@@ -147,7 +147,6 @@ const PurchaseOrdersPage: React.FC = () => {
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <Title level={2} className="!mb-0 !text-2xl sm:!text-3xl">採購訂單</Title>
-          <p className="text-gray-500 mt-1">管理向供應商的採購流程與進貨驗收</p>
         </div>
         <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:w-auto lg:flex lg:flex-wrap lg:justify-end">
           <Button className="w-full lg:w-auto" icon={<ReloadOutlined />} onClick={fetchOrders}>重新整理</Button>

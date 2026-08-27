@@ -75,6 +75,13 @@ export class EntityAccessService {
             departmentId: true,
           },
         },
+        entityMemberships: {
+          orderBy: [{ isPrimary: 'desc' }, { entityId: 'asc' }],
+          select: {
+            entityId: true,
+            isPrimary: true,
+          },
+        },
         roles: {
           select: {
             role: {
@@ -119,12 +126,22 @@ export class EntityAccessService {
     }
 
     const employee = user.employee;
-    const entityId = employee?.entityId || requestedId || '';
-    const wrongEntity = Boolean(
-      requestedId && requestedId !== employee?.entityId,
-    );
+    const allowedEntityIds = new Set([
+      ...(employee?.entityId ? [employee.entityId] : []),
+      ...user.entityMemberships.map(({ entityId }) => entityId),
+    ]);
+    const entityId =
+      requestedId ||
+      employee?.entityId ||
+      user.entityMemberships.find(({ isPrimary }) => isPrimary)?.entityId ||
+      user.entityMemberships[0]?.entityId ||
+      '';
+    const wrongEntity = !entityId || !allowedEntityIds.has(entityId);
     const missingScopeAnchor =
-      !employee?.id || (scope === 'DEPARTMENT' && !employee.departmentId);
+      scope !== 'ENTITY' &&
+      (!employee?.id ||
+        employee.entityId !== entityId ||
+        (scope === 'DEPARTMENT' && !employee.departmentId));
 
     return {
       scope,
@@ -156,11 +173,37 @@ export class EntityAccessService {
   }
 
   async getAccessibleEntityIds(userId: string): Promise<string[] | null> {
-    const context = await this.getContext(userId, 'employees');
-    if (context.isSuperAdmin) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        employee: { select: { entityId: true } },
+        entityMemberships: {
+          orderBy: [{ isPrimary: 'desc' }, { entityId: 'asc' }],
+          select: { entityId: true },
+        },
+        roles: {
+          select: { role: { select: { code: true, name: true } } },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    const isSuperAdmin = user.roles.some(
+      ({ role }) => role.code === 'SUPER_ADMIN' || role.name === 'SUPER_ADMIN',
+    );
+    if (isSuperAdmin) {
       return null;
     }
-    return context.noAccess || !context.entityId ? [] : [context.entityId];
+
+    return [
+      ...new Set([
+        ...(user.employee?.entityId ? [user.employee.entityId] : []),
+        ...user.entityMemberships.map(({ entityId }) => entityId),
+      ]),
+    ];
   }
 
   private normalizeScope(value?: string | null): DataAccessScope {

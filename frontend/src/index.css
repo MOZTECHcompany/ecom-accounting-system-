@@ -852,23 +852,23 @@ body.dark .glass-input {
 }
 
 /* ERP action controls use one consistent hit area across pages. */
-.ant-btn:not(.ant-btn-link):not(.ant-btn-text) {
-  min-height: 40px;
-  height: 40px;
+.ant-btn:not(.ant-btn-link) {
+  min-height: 40px !important;
+  height: 40px !important;
   padding-inline: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
-.ant-btn-sm:not(.ant-btn-link):not(.ant-btn-text),
-.ant-btn-lg:not(.ant-btn-link):not(.ant-btn-text) {
-  min-height: 40px;
-  height: 40px;
+.ant-btn-sm:not(.ant-btn-link),
+.ant-btn-lg:not(.ant-btn-link) {
+  min-height: 40px !important;
+  height: 40px !important;
 }
 
-.ant-btn-icon-only:not(.ant-btn-link):not(.ant-btn-text) {
-  width: 40px;
+.ant-btn-icon-only:not(.ant-btn-link) {
+  width: 40px !important;
   padding-inline: 0;
 }
 

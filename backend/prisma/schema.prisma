@@ -49,6 +49,7 @@ model User {
 
   // Relations
   roles                         UserRole[]
+  entityMemberships             UserEntityMembership[]
   createdJournalEntries         JournalEntry[]                 @relation("CreatedBy")
   approvedJournalEntries        JournalEntry[]                 @relation("ApprovedBy")
   createdExpenseRequests        ExpenseRequest[]               @relation("RequestedBy")
@@ -122,6 +123,20 @@ model UserRole {
   @@map("user_roles")
 }
 
+model UserEntityMembership {
+  userId    String   @map("user_id")
+  entityId  String   @map("entity_id")
+  isPrimary Boolean  @default(false) @map("is_primary")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entity Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@id([userId, entityId])
+  @@index([entityId])
+  @@map("user_entity_memberships")
+}
+
 model RolePermission {
   roleId       String @map("role_id")
   permissionId String @map("permission_id")
@@ -188,6 +203,7 @@ model Entity {
   bankAccounts          BankAccount[]
   departments           Department[]
   employees             Employee[]
+  userMemberships       UserEntityMembership[]
   payrollPolicy         PayrollPolicy?
   payrollRuns           PayrollRun[]
   expenseRequests       ExpenseRequest[]

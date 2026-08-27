@@ -300,9 +300,6 @@ const CustomersPage: React.FC = () => {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <Title level={2} className="!mb-0">客戶管理</Title>
-          <Text className="text-gray-500">
-            清楚歸戶每位顧客來自哪個品牌、通路與來源，方便你在 MOZTECH 官網、團購與 Shopline 間快速檢索。
-          </Text>
         </div>
         <Space wrap>
           <Input

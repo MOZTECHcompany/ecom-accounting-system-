@@ -19,6 +19,19 @@ import {
 } from '../../common/entity-access/entity-access.service';
 
 const USER_INCLUDE = {
+  entityMemberships: {
+    orderBy: [{ isPrimary: 'desc' }, { entityId: 'asc' }],
+    include: {
+      entity: {
+        select: {
+          id: true,
+          loginCode: true,
+          name: true,
+          isActive: true,
+        },
+      },
+    },
+  },
   roles: {
     include: {
       role: {
@@ -275,6 +288,7 @@ export class UsersService {
       password,
       name,
       roleIds = [],
+      entityIds = [],
       mustChangePassword,
       employeeDataScope,
       attendanceDataScope,
@@ -302,6 +316,7 @@ export class UsersService {
         if (roleIds.length > 0) {
           await this.ensureRoleIdsExist(roleIds, tx);
         }
+        await this.ensureEntityIdsExist(entityIds, tx);
 
         const user = await tx.user.create({
           data: {
@@ -323,6 +338,17 @@ export class UsersService {
         if (roleIds.length > 0) {
           await tx.userRole.createMany({
             data: roleIds.map((roleId) => ({ userId: user.id, roleId })),
+            skipDuplicates: true,
+          });
+        }
+
+        if (entityIds.length > 0) {
+          await tx.userEntityMembership.createMany({
+            data: entityIds.map((entityId, index) => ({
+              userId: user.id,
+              entityId,
+              isPrimary: index === 0,
+            })),
             skipDuplicates: true,
           });
         }
@@ -366,6 +392,7 @@ export class UsersService {
       salesDataScope,
       purchasingDataScope,
       bankingDataScope,
+      entityIds,
     } = dto;
 
     if (
@@ -380,7 +407,8 @@ export class UsersService {
       typeof inventoryDataScope === 'undefined' &&
       typeof salesDataScope === 'undefined' &&
       typeof purchasingDataScope === 'undefined' &&
-      typeof bankingDataScope === 'undefined'
+      typeof bankingDataScope === 'undefined' &&
+      typeof entityIds === 'undefined'
     ) {
       throw new BadRequestException('No updates provided');
     }
@@ -428,10 +456,30 @@ export class UsersService {
     }
 
     try {
-      const updated = await this.prisma.user.update({
-        where: { id },
-        data,
-        include: USER_INCLUDE,
+      const updated = await this.prisma.$transaction(async (tx) => {
+        if (typeof entityIds !== 'undefined') {
+          await this.ensureEntityIdsExist(entityIds, tx);
+        }
+
+        await tx.user.update({ where: { id }, data });
+
+        if (typeof entityIds !== 'undefined') {
+          await tx.userEntityMembership.deleteMany({ where: { userId: id } });
+          if (entityIds.length > 0) {
+            await tx.userEntityMembership.createMany({
+              data: entityIds.map((entityId, index) => ({
+                userId: id,
+                entityId,
+                isPrimary: index === 0,
+              })),
+            });
+          }
+        }
+
+        return tx.user.findUnique({
+          where: { id },
+          include: USER_INCLUDE,
+        });
       });
 
       this.logger.log(`Updated user ${id}`);
@@ -743,6 +791,29 @@ export class UsersService {
 
     if (missing.length > 0) {
       throw new BadRequestException(`Roles not found: ${missing.join(', ')}`);
+    }
+  }
+
+  private async ensureEntityIdsExist(
+    entityIds: string[],
+    db: PrismaClientOrTx,
+  ) {
+    if (!entityIds.length) {
+      return;
+    }
+
+    const uniqueEntityIds = Array.from(new Set(entityIds));
+    const entities = await db.entity.findMany({
+      where: { id: { in: uniqueEntityIds }, isActive: true },
+      select: { id: true },
+    });
+    const foundIds = new Set(entities.map((entity) => entity.id));
+    const missing = uniqueEntityIds.filter((id) => !foundIds.has(id));
+
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `Active companies not found: ${missing.join(', ')}`,
+      );
     }
   }
 
