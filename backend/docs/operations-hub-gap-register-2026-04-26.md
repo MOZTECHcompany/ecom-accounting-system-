@@ -773,10 +773,11 @@ Cloud Run 正式資料目前已經不是空系統，但核心治理缺口很大�
 
 - 正式環境實測 Shopify 與 1Shop health 均成功；2026-08-01 至 2026-08-27 已存在 Shopify `758` 筆、營業額 `NT$958,368.83`，1Shop `748` 筆、營業額 `NT$826,750`。來源沒有被刪除，Dashboard 原本預設「今日」使長區間貢獻不易看見，前端預設改為「近 30 天」。
 - Meta Ads readiness 與帳戶探測成功，2026-08-20 至 2026-08-27 live API 可讀 `24` 筆、花費 `NT$116,978`；手動正式同步已更新最近 7 天 `24` 筆 Expense。
-- Google Ads OAuth 最新 refresh token 對 manager `6215621647` 與所有已設定 client accounts 均回 `USER_PERMISSION_DENIED`。`GOOGLE_ADS_LOGIN_CUSTOMER_ID=6215621647` 已補回 Cloud Run，但仍需使用目前確實具備該 manager / client 權限的 Google 帳號重新 OAuth 授權；在完成前不可宣稱 Google Ads 已接通，也不可把 Meta 花費當成完整廣告費。
+- Google Ads 中斷根因確認為新版 connector 未讀取 `GOOGLE_ADS_ACCOUNTS_JSON` 內各帳戶的 `refreshTokenEnv`，誤用共用 refresh token 後回 `USER_PERMISSION_DENIED`；不是 Google 帳號失權，也不需要重新 OAuth。`c81813ca` 已恢復依帳戶選取 OAuth 憑證，候選 readiness 回 `ready=true`，2026-08-20 至 2026-08-27 live API 可讀 `16` 筆、花費 `NT$132,394.69`，包含 MOZTECH 與 BONSON，並已補同步至 Expense。
+- 補同步後的正式報表核對發現，新舊 connector 使用不同 `sourceId` 格式，造成同一 Google customer / date 被重複計入。`d0bc6d87` 改以 Google customer ID + 日期作為邏輯唯一鍵，保留標準列並清除 `42` 筆舊格式重複列。無快取報表驗證 2026-08-01 至 2026-08-27 Google Ads 為 `119` 筆、`NT$455,023.83`、最後日期 `2026-08-27`；Meta + Google Ads 合計 `NT$1,018,350.83`，會計口徑 ROAS `2.328`。
 - Dashboard 廣告品牌歸屬修正為優先使用 `brand`，`reportBrand=MOZTECH_TW / MOZTECH_US` 僅保留為市場報表維度，不再把 MOZTECH 營收與 MOZTECH_TW 廣告費拆成兩個品牌而產生錯誤 ROAS。
 - `ad-performance-summary` 新增 Meta / Google Ads 各來源的花費、筆數與最後資料日期；Dashboard 以精簡標籤顯示來源最後日期，避免排程仍存在但來源已停止更新時看不出來。
-- 因診斷輸出曾包含同步排程權杖，Shopify / 1Shop、Meta、Google Ads 權杖已全部輪替並寫入 Secret Manager；候選 revision 已驗證 Shopify、1Shop、Meta 同步請求成功，正式後端流量已切至 `ecom-accounting-backend-00460-86t`。
+- 因診斷輸出曾包含同步排程權杖，Shopify / 1Shop、Meta、Google Ads 權杖已全部輪替並寫入 Secret Manager。四條 Cloud Scheduler 正式排程均已回 HTTP 201：Shopify、1Shop、Meta Ads、Google Ads；正式後端最終流量已切至含 OAuth 與去重修正的 `ecom-accounting-backend-src-d0bc6d87`。
 
 ## 待使用者協助確認
 
