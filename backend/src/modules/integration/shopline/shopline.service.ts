@@ -14,6 +14,12 @@ import {
   UnifiedTransaction,
 } from '../interfaces/sales-channel-adapter.interface';
 import {
+  buildPaymentSourceTransactionKey,
+  resolveStoredGrossAmount,
+  resolveStoredNetAmount,
+  resolveStoredPaymentStatus,
+} from '../payment-integrity';
+import {
   ShoplineHttpAdapter,
   ShoplinePaymentBillingRecord,
   ShoplinePaymentPayout,
@@ -232,9 +238,9 @@ export class ShoplineService {
         readyForAttempt: missing.length === 0,
         missing,
         adminBaseUrl: store.handle
-          ? (explicitBase.trim()
-              ? explicitBase.trim().replace('{handle}', store.handle)
-              : `https://${store.handle}.myshopline.com/admin/openapi/${version}`)
+          ? explicitBase.trim()
+            ? explicitBase.trim().replace('{handle}', store.handle)
+            : `https://${store.handle}.myshopline.com/admin/openapi/${version}`
           : null,
       };
     });
@@ -971,6 +977,10 @@ export class ShoplineService {
     channelId: string,
     tx: UnifiedTransaction,
   ): Promise<'created' | 'updated'> {
+    const sourceTransactionKey = buildPaymentSourceTransactionKey(
+      channelId,
+      tx.externalId,
+    );
     const salesOrder = tx.orderId
       ? await this.prisma.salesOrder.findFirst({
           where: {
@@ -981,13 +991,24 @@ export class ShoplineService {
         })
       : null;
 
-    const existing = await this.prisma.payment.findFirst({
-      where: {
-        entityId,
-        channelId,
-        payoutBatchId: tx.externalId,
-      },
-    });
+    const existing =
+      (await this.prisma.payment.findUnique({
+        where: {
+          entityId_sourceTransactionKey: {
+            entityId,
+            sourceTransactionKey,
+          },
+        },
+      })) ||
+      (await this.prisma.payment.findFirst({
+        where: {
+          entityId,
+          channelId,
+          payoutBatchId: tx.externalId,
+          sourceTransactionKey: null,
+        },
+        orderBy: [{ reconciledFlag: 'desc' }, { createdAt: 'asc' }],
+      }));
 
     const currency = tx.currency || 'TWD';
     const fxRate = new Decimal(await this.getFxRate(currency));
@@ -996,9 +1017,11 @@ export class ShoplineService {
       existing?.notes,
     );
     const isPaymentCaptured = tx.status === 'success';
-    const capturedAmount = isPaymentCaptured ? tx.amount : zero;
+    const capturedAmount = isPaymentCaptured
+      ? resolveStoredGrossAmount(tx)
+      : zero;
     const capturedFee = isPaymentCaptured ? tx.fee : zero;
-    const capturedNet = isPaymentCaptured ? tx.net : zero;
+    const capturedNet = isPaymentCaptured ? resolveStoredNetAmount(tx) : zero;
     const paymentNotes = this.buildPaymentNotes(existing?.notes, tx);
 
     const data = {
@@ -1006,6 +1029,7 @@ export class ShoplineService {
       channelId,
       salesOrderId: salesOrder?.id ?? null,
       payoutBatchId: tx.externalId,
+      sourceTransactionKey,
       channel: SHOPLINE_CHANNEL_CODE,
       payoutDate: tx.date,
       amountGrossOriginal: hasLockedProviderPayout
@@ -1048,7 +1072,7 @@ export class ShoplineService {
         ? existing?.reconciledFlag || false
         : false,
       bankAccountId: null,
-      status: tx.status === 'success' ? 'completed' : tx.status,
+      status: resolveStoredPaymentStatus(tx),
       notes: paymentNotes,
     };
 
@@ -1060,7 +1084,16 @@ export class ShoplineService {
       return 'updated';
     }
 
-    await this.prisma.payment.create({ data });
+    await this.prisma.payment.upsert({
+      where: {
+        entityId_sourceTransactionKey: {
+          entityId,
+          sourceTransactionKey,
+        },
+      },
+      update: data,
+      create: data,
+    });
     return 'created';
   }
 

@@ -3,6 +3,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { ArRepository } from './ar.repository';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { JournalService } from '../accounting/services/journal.service';
+import { selectEffectiveReceivablePayments } from '../integration/payment-integrity';
 
 /**
  * 應收帳款服務
@@ -146,152 +147,169 @@ export class ArService {
       }
     }
 
-    const salesOrderItems = orders
-      .map((order) => {
-        const arInvoice = arMap.get(order.id) || null;
-        const journal = journalMap.get(order.id) || null;
-        const latestInvoice = order.invoices[0] || null;
-        const feeTelemetry = this.resolveFeeTelemetry(order.payments);
-        const paidAmount = this.sumAmount(order.payments, 'amountGrossOriginal');
-        const gatewayFeeAmount = this.sumAmount(
-          order.payments,
-          'feeGatewayOriginal',
-        );
-        const platformFeeAmount = this.sumAmount(
-          order.payments,
-          'feePlatformOriginal',
-        );
-        const netAmount = this.sumAmount(order.payments, 'amountNetOriginal');
-        const grossAmount = Number(order.totalGrossOriginal || 0);
-        const taxAmount = this.resolveTaxAmount(order);
-        const revenueAmount = Math.max(grossAmount - taxAmount, 0);
-        const outstandingAmount = Math.max(grossAmount - paidAmount, 0);
-        const overpaidAmount = Math.max(paidAmount - grossAmount, 0);
-        const orderMeta = this.extractMetadata(order.notes);
-        const termDays = this.resolvePaymentTermDays(order.customer, orderMeta, outstandingAmount);
-        const dueDate =
-          arInvoice?.dueDate ||
-          this.buildDueDate(order.orderDate, outstandingAmount, termDays);
-        const computedStatus = this.resolveReceivableStatus({
-          grossAmount,
-          paidAmount,
-          dueDate,
-        });
-        const source = this.resolveOrderSource(order.channel?.code, order.notes);
-        const classification = this.classifyReceivable({
-          customerId: order.customerId || null,
-          customerName: order.customer?.name || '散客',
-          customer: order.customer,
-          customerType: order.customer?.type || 'individual',
-          channelCode: order.channel?.code || null,
-          channelName: order.channel?.name || null,
-          source,
-          notes: order.notes,
-          payments: order.payments,
-          outstandingAmount,
-          paidAmount,
-          reconciledFlag: order.payments.some((payment) => payment.reconciledFlag),
-          dueDate,
-          termDays,
-        });
-        const invoiceStatus = latestInvoice?.status
-          ? latestInvoice.status
-          : order.hasInvoice
-            ? 'issued'
-            : 'pending';
-        const warningCodes: string[] = [];
-
-        if (paidAmount > 0 && gatewayFeeAmount + platformFeeAmount === 0) {
-          warningCodes.push('missing_fee');
-        }
-        if (paidAmount > 0 && !journal) {
-          warningCodes.push('missing_journal');
-        }
-        if (!arInvoice) {
-          warningCodes.push('missing_ar');
-        }
-        if (!latestInvoice && order.hasInvoice) {
-          warningCodes.push('missing_invoice_record');
-        }
-        if (!latestInvoice && paidAmount > 0) {
-          warningCodes.push('invoice_pending');
-        }
-        if ((latestInvoice?.invoiceNumber || arInvoice?.invoiceNo) && !journal) {
-          warningCodes.push('invoice_issued_unposted');
-        }
-        if ((latestInvoice?.invoiceNumber || arInvoice?.invoiceNo) && outstandingAmount > 0) {
-          warningCodes.push('invoice_issued_unpaid');
-        }
-        if (outstandingAmount > 0 && dueDate < new Date()) {
-          warningCodes.push('overdue_receivable');
-        }
-        if (overpaidAmount > 0.01) {
-          warningCodes.push('overpaid_receivable');
-        }
-
-        return {
-          orderId: order.id,
-          orderNumber: order.externalOrderId || order.id,
-          orderDate: order.orderDate.toISOString(),
-          customerId: order.customerId || null,
-          customerName: order.customer?.name || '散客',
-          customerEmail: order.customer?.email || null,
-          customerPhone: order.customer?.phone || null,
-          customerType: order.customer?.type || 'individual',
-          paymentTerms: order.customer?.paymentTerms || null,
-          paymentTermDays: order.customer?.paymentTermDays || 0,
-          isMonthlyBilling: order.customer?.isMonthlyBilling || false,
-          billingCycle: order.customer?.billingCycle || null,
-          statementEmail:
-            order.customer?.statementEmail || order.customer?.email || null,
-          collectionOwnerName: order.customer?.collectionOwner || null,
-          collectionNote: order.customer?.collectionNote || null,
-          creditLimit: Number(order.customer?.creditLimit || 0),
-          channelCode: order.channel?.code || null,
-          channelName: order.channel?.name || null,
-          sourceLabel: source.label,
-          sourceBrand: source.brand,
-          collectionType: classification.collectionType,
-          collectionTypeLabel: classification.collectionTypeLabel,
-          paymentMethodGroup: classification.paymentMethodGroup,
-          paymentMethodLabel: classification.paymentMethodLabel,
-          settlementPhase: classification.settlementPhase,
-          settlementPhaseLabel: classification.settlementPhaseLabel,
-          receivableGroupKey: classification.receivableGroupKey,
-          receivableGroupLabel: classification.receivableGroupLabel,
-          collectionOwner: classification.collectionOwner,
-          collectionOwnerLabel: classification.collectionOwnerLabel,
-          termDays: classification.termDays,
-          settlementDiagnostic: classification.settlementDiagnostic,
-          grossAmount,
-          revenueAmount,
-          taxAmount,
-          paidAmount,
-          outstandingAmount,
-          overpaidAmount,
-          gatewayFeeAmount,
-          platformFeeAmount,
-          feeTotal: gatewayFeeAmount + platformFeeAmount,
-          netAmount,
-          reconciledFlag: order.payments.some((payment) => payment.reconciledFlag),
-          payoutCount: order.payments.length,
-          feeStatus: feeTelemetry.status,
-          feeSource: feeTelemetry.source,
-          feeDiagnostic: feeTelemetry.diagnostic,
-          arInvoiceId: arInvoice?.id || null,
-          arStatus: arInvoice?.status || computedStatus,
-          dueDate: dueDate.toISOString(),
-          invoiceId: latestInvoice?.id || null,
-          invoiceNumber: latestInvoice?.invoiceNumber || arInvoice?.invoiceNo || null,
-          invoiceStatus,
-          invoiceIssuedAt: latestInvoice?.issuedAt?.toISOString() || null,
-          journalEntryId: journal?.id || null,
-          journalApprovedAt: journal?.approvedAt?.toISOString() || null,
-          accountingPosted: Boolean(journal),
-          warningCodes,
-          notes: order.notes || null,
-        };
+    const salesOrderItems = orders.map((order) => {
+      const arInvoice = arMap.get(order.id) || null;
+      const journal = journalMap.get(order.id) || null;
+      const latestInvoice = order.invoices[0] || null;
+      const effectivePayments = selectEffectiveReceivablePayments(
+        order.payments,
+      );
+      const feeTelemetry = this.resolveFeeTelemetry(effectivePayments);
+      const paidAmount = this.sumAmount(
+        effectivePayments,
+        'amountGrossOriginal',
+      );
+      const gatewayFeeAmount = this.sumAmount(
+        effectivePayments,
+        'feeGatewayOriginal',
+      );
+      const platformFeeAmount = this.sumAmount(
+        effectivePayments,
+        'feePlatformOriginal',
+      );
+      const netAmount = this.sumAmount(effectivePayments, 'amountNetOriginal');
+      const grossAmount = Number(order.totalGrossOriginal || 0);
+      const taxAmount = this.resolveTaxAmount(order);
+      const revenueAmount = Math.max(grossAmount - taxAmount, 0);
+      const outstandingAmount = Math.max(grossAmount - paidAmount, 0);
+      const overpaidAmount = Math.max(paidAmount - grossAmount, 0);
+      const orderMeta = this.extractMetadata(order.notes);
+      const termDays = this.resolvePaymentTermDays(
+        order.customer,
+        orderMeta,
+        outstandingAmount,
+      );
+      const dueDate =
+        arInvoice?.dueDate ||
+        this.buildDueDate(order.orderDate, outstandingAmount, termDays);
+      const computedStatus = this.resolveReceivableStatus({
+        grossAmount,
+        paidAmount,
+        dueDate,
       });
+      const source = this.resolveOrderSource(order.channel?.code, order.notes);
+      const classification = this.classifyReceivable({
+        customerId: order.customerId || null,
+        customerName: order.customer?.name || '散客',
+        customer: order.customer,
+        customerType: order.customer?.type || 'individual',
+        channelCode: order.channel?.code || null,
+        channelName: order.channel?.name || null,
+        source,
+        notes: order.notes,
+        payments: effectivePayments,
+        outstandingAmount,
+        paidAmount,
+        reconciledFlag: effectivePayments.some(
+          (payment) => payment.reconciledFlag,
+        ),
+        dueDate,
+        termDays,
+      });
+      const invoiceStatus = latestInvoice?.status
+        ? latestInvoice.status
+        : order.hasInvoice
+          ? 'issued'
+          : 'pending';
+      const warningCodes: string[] = [];
+
+      if (paidAmount > 0 && gatewayFeeAmount + platformFeeAmount === 0) {
+        warningCodes.push('missing_fee');
+      }
+      if (paidAmount > 0 && !journal) {
+        warningCodes.push('missing_journal');
+      }
+      if (!arInvoice) {
+        warningCodes.push('missing_ar');
+      }
+      if (!latestInvoice && order.hasInvoice) {
+        warningCodes.push('missing_invoice_record');
+      }
+      if (!latestInvoice && paidAmount > 0) {
+        warningCodes.push('invoice_pending');
+      }
+      if ((latestInvoice?.invoiceNumber || arInvoice?.invoiceNo) && !journal) {
+        warningCodes.push('invoice_issued_unposted');
+      }
+      if (
+        (latestInvoice?.invoiceNumber || arInvoice?.invoiceNo) &&
+        outstandingAmount > 0
+      ) {
+        warningCodes.push('invoice_issued_unpaid');
+      }
+      if (outstandingAmount > 0 && dueDate < new Date()) {
+        warningCodes.push('overdue_receivable');
+      }
+      if (overpaidAmount > 0.01) {
+        warningCodes.push('overpaid_receivable');
+      }
+
+      return {
+        orderId: order.id,
+        orderNumber: order.externalOrderId || order.id,
+        orderDate: order.orderDate.toISOString(),
+        customerId: order.customerId || null,
+        customerName: order.customer?.name || '散客',
+        customerEmail: order.customer?.email || null,
+        customerPhone: order.customer?.phone || null,
+        customerType: order.customer?.type || 'individual',
+        paymentTerms: order.customer?.paymentTerms || null,
+        paymentTermDays: order.customer?.paymentTermDays || 0,
+        isMonthlyBilling: order.customer?.isMonthlyBilling || false,
+        billingCycle: order.customer?.billingCycle || null,
+        statementEmail:
+          order.customer?.statementEmail || order.customer?.email || null,
+        collectionOwnerName: order.customer?.collectionOwner || null,
+        collectionNote: order.customer?.collectionNote || null,
+        creditLimit: Number(order.customer?.creditLimit || 0),
+        channelCode: order.channel?.code || null,
+        channelName: order.channel?.name || null,
+        sourceLabel: source.label,
+        sourceBrand: source.brand,
+        collectionType: classification.collectionType,
+        collectionTypeLabel: classification.collectionTypeLabel,
+        paymentMethodGroup: classification.paymentMethodGroup,
+        paymentMethodLabel: classification.paymentMethodLabel,
+        settlementPhase: classification.settlementPhase,
+        settlementPhaseLabel: classification.settlementPhaseLabel,
+        receivableGroupKey: classification.receivableGroupKey,
+        receivableGroupLabel: classification.receivableGroupLabel,
+        collectionOwner: classification.collectionOwner,
+        collectionOwnerLabel: classification.collectionOwnerLabel,
+        termDays: classification.termDays,
+        settlementDiagnostic: classification.settlementDiagnostic,
+        grossAmount,
+        revenueAmount,
+        taxAmount,
+        paidAmount,
+        outstandingAmount,
+        overpaidAmount,
+        gatewayFeeAmount,
+        platformFeeAmount,
+        feeTotal: gatewayFeeAmount + platformFeeAmount,
+        netAmount,
+        reconciledFlag: effectivePayments.some(
+          (payment) => payment.reconciledFlag,
+        ),
+        payoutCount: effectivePayments.length,
+        feeStatus: feeTelemetry.status,
+        feeSource: feeTelemetry.source,
+        feeDiagnostic: feeTelemetry.diagnostic,
+        arInvoiceId: arInvoice?.id || null,
+        arStatus: arInvoice?.status || computedStatus,
+        dueDate: dueDate.toISOString(),
+        invoiceId: latestInvoice?.id || null,
+        invoiceNumber:
+          latestInvoice?.invoiceNumber || arInvoice?.invoiceNo || null,
+        invoiceStatus,
+        invoiceIssuedAt: latestInvoice?.issuedAt?.toISOString() || null,
+        journalEntryId: journal?.id || null,
+        journalApprovedAt: journal?.approvedAt?.toISOString() || null,
+        accountingPosted: Boolean(journal),
+        warningCodes,
+        notes: order.notes || null,
+      };
+    });
 
     const standaloneItems = standaloneArInvoices.map((invoice) => {
       const journal = standaloneJournalMap.get(invoice.id) || null;
@@ -300,7 +318,9 @@ export class ArService {
       const outstandingAmount = Math.max(amount - paid, 0);
       const overpaidAmount = Math.max(paid - amount, 0);
       const notesMeta = this.extractMetadata(invoice.notes);
-      const dueDate = invoice.dueDate || this.buildDueDate(invoice.issueDate, outstandingAmount);
+      const dueDate =
+        invoice.dueDate ||
+        this.buildDueDate(invoice.issueDate, outstandingAmount);
       const customerName =
         invoice.customer?.name ||
         notesMeta.customerName ||
@@ -329,15 +349,22 @@ export class ArService {
         customerId: invoice.customerId || null,
         customerName,
         customerEmail:
-          invoice.customer?.statementEmail || invoice.customer?.email || notesMeta.customerEmail || null,
+          invoice.customer?.statementEmail ||
+          invoice.customer?.email ||
+          notesMeta.customerEmail ||
+          null,
         customerPhone: invoice.customer?.phone || null,
         customerType: invoice.customer?.type || 'company',
-        paymentTerms: invoice.customer?.paymentTerms || notesMeta.paymentTerms || 'net30',
+        paymentTerms:
+          invoice.customer?.paymentTerms || notesMeta.paymentTerms || 'net30',
         paymentTermDays: invoice.customer?.paymentTermDays || 30,
         isMonthlyBilling: invoice.customer?.isMonthlyBilling ?? true,
         billingCycle: invoice.customer?.billingCycle || 'monthly',
         statementEmail:
-          invoice.customer?.statementEmail || invoice.customer?.email || notesMeta.customerEmail || null,
+          invoice.customer?.statementEmail ||
+          invoice.customer?.email ||
+          notesMeta.customerEmail ||
+          null,
         collectionOwnerName: invoice.customer?.collectionOwner || null,
         collectionNote: invoice.customer?.collectionNote || null,
         creditLimit: Number(invoice.customer?.creditLimit || 0),
@@ -391,7 +418,8 @@ export class ArService {
       .filter((item) => (status ? item.arStatus === status : true))
       .sort(
         (left, right) =>
-          new Date(right.orderDate).getTime() - new Date(left.orderDate).getTime(),
+          new Date(right.orderDate).getTime() -
+          new Date(left.orderDate).getTime(),
       );
 
     const summary = items.reduce(
@@ -404,7 +432,9 @@ export class ArService {
         acc.netAmount += item.netAmount;
         acc.invoiceIssuedCount += item.invoiceNumber ? 1 : 0;
         acc.journalPostedCount += item.journalEntryId ? 1 : 0;
-        acc.missingFeeCount += item.warningCodes.includes('missing_fee') ? 1 : 0;
+        acc.missingFeeCount += item.warningCodes.includes('missing_fee')
+          ? 1
+          : 0;
         acc.missingJournalCount += item.warningCodes.includes('missing_journal')
           ? 1
           : 0;
@@ -412,10 +442,14 @@ export class ArService {
           ? 1
           : 0;
         acc.outstandingOrderCount += item.outstandingAmount > 0 ? 1 : 0;
-        acc.overdueReceivableCount += item.warningCodes.includes('overdue_receivable')
+        acc.overdueReceivableCount += item.warningCodes.includes(
+          'overdue_receivable',
+        )
           ? 1
           : 0;
-        acc.overdueReceivableAmount += item.warningCodes.includes('overdue_receivable')
+        acc.overdueReceivableAmount += item.warningCodes.includes(
+          'overdue_receivable',
+        )
           ? item.outstandingAmount
           : 0;
         acc.overpaidReceivableCount += item.warningCodes.includes(
@@ -433,7 +467,9 @@ export class ArService {
         )
           ? 1
           : 0;
-        acc.issuedUnpaidCount += item.warningCodes.includes('invoice_issued_unpaid')
+        acc.issuedUnpaidCount += item.warningCodes.includes(
+          'invoice_issued_unpaid',
+        )
           ? 1
           : 0;
         return acc;
@@ -464,35 +500,33 @@ export class ArService {
       items
         .reduce((map, item) => {
           const key = item.receivableGroupKey || 'unclassified';
-          const current =
-            map.get(key) ||
-            {
-              key,
-              label: item.receivableGroupLabel || '未分類應收',
-              collectionType: item.collectionType || 'unclassified',
-              collectionTypeLabel: item.collectionTypeLabel || '未分類',
-              paymentMethodGroup: item.paymentMethodGroup || 'other',
-              paymentMethodLabel: item.paymentMethodLabel || '其他應收',
-              settlementPhase: item.settlementPhase || 'unpaid',
-              settlementPhaseLabel: item.settlementPhaseLabel || '待收款',
-              collectionOwner: item.collectionOwner || 'unknown',
-              collectionOwnerLabel: item.collectionOwnerLabel || '待確認',
-              orderCount: 0,
-              grossAmount: 0,
-              paidAmount: 0,
-              outstandingAmount: 0,
-              gatewayFeeAmount: 0,
-              platformFeeAmount: 0,
-              feeTotal: 0,
-              netAmount: 0,
-              overdueCount: 0,
-              overdueAmount: 0,
-              overpaidCount: 0,
-              overpaidAmount: 0,
-              missingFeeCount: 0,
-              missingInvoiceCount: 0,
-              missingJournalCount: 0,
-            };
+          const current = map.get(key) || {
+            key,
+            label: item.receivableGroupLabel || '未分類應收',
+            collectionType: item.collectionType || 'unclassified',
+            collectionTypeLabel: item.collectionTypeLabel || '未分類',
+            paymentMethodGroup: item.paymentMethodGroup || 'other',
+            paymentMethodLabel: item.paymentMethodLabel || '其他應收',
+            settlementPhase: item.settlementPhase || 'unpaid',
+            settlementPhaseLabel: item.settlementPhaseLabel || '待收款',
+            collectionOwner: item.collectionOwner || 'unknown',
+            collectionOwnerLabel: item.collectionOwnerLabel || '待確認',
+            orderCount: 0,
+            grossAmount: 0,
+            paidAmount: 0,
+            outstandingAmount: 0,
+            gatewayFeeAmount: 0,
+            platformFeeAmount: 0,
+            feeTotal: 0,
+            netAmount: 0,
+            overdueCount: 0,
+            overdueAmount: 0,
+            overpaidCount: 0,
+            overpaidAmount: 0,
+            missingFeeCount: 0,
+            missingInvoiceCount: 0,
+            missingJournalCount: 0,
+          };
 
           current.orderCount += 1;
           current.grossAmount += item.grossAmount;
@@ -502,23 +536,37 @@ export class ArService {
           current.platformFeeAmount += item.platformFeeAmount;
           current.feeTotal += item.feeTotal;
           current.netAmount += item.netAmount;
-          current.overdueCount += item.warningCodes.includes('overdue_receivable')
+          current.overdueCount += item.warningCodes.includes(
+            'overdue_receivable',
+          )
             ? 1
             : 0;
-          current.overdueAmount += item.warningCodes.includes('overdue_receivable')
+          current.overdueAmount += item.warningCodes.includes(
+            'overdue_receivable',
+          )
             ? item.outstandingAmount
             : 0;
-          current.overpaidCount += item.warningCodes.includes('overpaid_receivable')
+          current.overpaidCount += item.warningCodes.includes(
+            'overpaid_receivable',
+          )
             ? 1
             : 0;
-          current.overpaidAmount += item.warningCodes.includes('overpaid_receivable')
+          current.overpaidAmount += item.warningCodes.includes(
+            'overpaid_receivable',
+          )
             ? item.overpaidAmount
             : 0;
-          current.missingFeeCount += item.warningCodes.includes('missing_fee') ? 1 : 0;
-          current.missingInvoiceCount += item.warningCodes.includes('invoice_pending')
+          current.missingFeeCount += item.warningCodes.includes('missing_fee')
             ? 1
             : 0;
-          current.missingJournalCount += item.warningCodes.includes('missing_journal')
+          current.missingInvoiceCount += item.warningCodes.includes(
+            'invoice_pending',
+          )
+            ? 1
+            : 0;
+          current.missingJournalCount += item.warningCodes.includes(
+            'missing_journal',
+          )
             ? 1
             : 0;
 
@@ -596,6 +644,7 @@ export class ArService {
           orderBy: [{ payoutDate: 'asc' }, { createdAt: 'asc' }],
           select: {
             id: true,
+            sourceTransactionKey: true,
             payoutBatchId: true,
             channel: true,
             payoutDate: true,
@@ -616,20 +665,25 @@ export class ArService {
     const allItems = orders
       .map((order) => {
         const grossAmount = Number(order.totalGrossOriginal || 0);
-        const paidAmount = this.sumAmount(order.payments, 'amountGrossOriginal');
+        const effectivePayments = selectEffectiveReceivablePayments(
+          order.payments,
+        );
+        const paidAmount = this.sumAmount(
+          effectivePayments,
+          'amountGrossOriginal',
+        );
         const overpaidAmount = Math.max(paidAmount - grossAmount, 0);
         if (overpaidAmount <= 0.01) {
           return null;
         }
 
-        const paymentAmountCounts = order.payments.reduce<Record<string, number>>(
-          (acc, payment) => {
-            const key = Number(payment.amountGrossOriginal || 0).toFixed(2);
-            acc[key] = (acc[key] || 0) + 1;
-            return acc;
-          },
-          {},
-        );
+        const paymentAmountCounts = effectivePayments.reduce<
+          Record<string, number>
+        >((acc, payment) => {
+          const key = Number(payment.amountGrossOriginal || 0).toFixed(2);
+          acc[key] = (acc[key] || 0) + 1;
+          return acc;
+        }, {});
         const duplicateAmountGroups = Object.entries(paymentAmountCounts)
           .filter(([, count]) => count > 1)
           .map(([amount, count]) => ({
@@ -638,15 +692,15 @@ export class ArService {
           }));
         const exactDoublePaid =
           grossAmount > 0 && Math.abs(paidAmount - grossAmount * 2) <= 1;
-        const allPaymentsUnreconciled = order.payments.every(
+        const allPaymentsUnreconciled = effectivePayments.every(
           (payment) => !payment.reconciledFlag,
         );
-        const hasDraftOrPendingPayment = order.payments.some(
+        const hasDraftOrPendingPayment = effectivePayments.some(
           (payment) =>
             payment.status === 'pending' ||
             (payment.payoutBatchId || '').startsWith('draft:'),
         );
-        const paymentDetails = order.payments.map((payment) => {
+        const paymentDetails = effectivePayments.map((payment) => {
           const meta = this.extractMetadata(payment.notes);
           return {
             paymentId: payment.id,
@@ -670,7 +724,7 @@ export class ArService {
           };
         });
         const diagnosis = this.resolveOverpaidDiagnosis({
-          paymentCount: order.payments.length,
+          paymentCount: effectivePayments.length,
           duplicateAmountGroups,
           exactDoublePaid,
           allPaymentsUnreconciled,
@@ -679,7 +733,7 @@ export class ArService {
         const resolution = this.resolveOverpaidResolution({
           grossAmount,
           paidAmount,
-          paymentCount: order.payments.length,
+          paymentCount: effectivePayments.length,
           duplicateAmountGroups,
           exactDoublePaid,
           allPaymentsUnreconciled,
@@ -696,7 +750,7 @@ export class ArService {
           grossAmount,
           paidAmount,
           overpaidAmount,
-          paymentCount: order.payments.length,
+          paymentCount: effectivePayments.length,
           duplicateAmountGroups,
           exactDoublePaid,
           allPaymentsUnreconciled,
@@ -711,7 +765,9 @@ export class ArService {
         };
       })
       .filter(Boolean)
-      .sort((left: any, right: any) => right.overpaidAmount - left.overpaidAmount);
+      .sort(
+        (left: any, right: any) => right.overpaidAmount - left.overpaidAmount,
+      );
 
     const filteredItems = resolutionCategory
       ? allItems.filter(
@@ -728,7 +784,9 @@ export class ArService {
         acc.overpaidAmount += item.overpaidAmount;
         acc.exactDoublePaidCount += item.exactDoublePaid ? 1 : 0;
         acc.unreconciledOverpaidCount += item.allPaymentsUnreconciled ? 1 : 0;
-        acc.duplicateAmountGroupCount += item.duplicateAmountGroups.length ? 1 : 0;
+        acc.duplicateAmountGroupCount += item.duplicateAmountGroups.length
+          ? 1
+          : 0;
         acc.duplicateImportCandidateCount +=
           item.resolutionCategory === 'duplicate_import_candidate' ? 1 : 0;
         acc.multiPaymentReviewCount +=
@@ -790,42 +848,40 @@ export class ArService {
       b2bItems
         .reduce((map, item: any) => {
           const key = item.customerId || item.customerName || 'unknown';
-          const current =
-            map.get(key) ||
-            {
-              customerId: item.customerId || null,
-              customerName: item.customerName || '未命名客戶',
-              customerEmail: item.customerEmail || null,
-              statementEmail: item.statementEmail || item.customerEmail || null,
-              customerPhone: item.customerPhone || null,
-              paymentTerms: item.paymentTerms || null,
-              paymentTermDays: item.paymentTermDays || item.termDays || 30,
-              isMonthlyBilling: Boolean(item.isMonthlyBilling),
-              billingCycle: item.billingCycle || 'monthly',
-              collectionOwner: item.collectionOwnerName || null,
-              collectionNote: item.collectionNote || null,
-              creditLimit: Number(item.creditLimit || 0),
-              orderCount: 0,
-              openOrderCount: 0,
-              grossAmount: 0,
-              paidAmount: 0,
-              outstandingAmount: 0,
-              overdueAmount: 0,
-              overdueCount: 0,
-              currentAmount: 0,
-              due1To30Amount: 0,
-              due31To60Amount: 0,
-              due61To90Amount: 0,
-              dueOver90Amount: 0,
-              missingInvoiceCount: 0,
-              missingJournalCount: 0,
-              missingFeeCount: 0,
-              lastOrderDate: null as string | null,
-              nextStatementDate: this.buildNextStatementDate(asOfDate),
-              riskLevel: 'normal',
-              recommendedAction: '可於月底產生對帳單。',
-              orders: [] as any[],
-            };
+          const current = map.get(key) || {
+            customerId: item.customerId || null,
+            customerName: item.customerName || '未命名客戶',
+            customerEmail: item.customerEmail || null,
+            statementEmail: item.statementEmail || item.customerEmail || null,
+            customerPhone: item.customerPhone || null,
+            paymentTerms: item.paymentTerms || null,
+            paymentTermDays: item.paymentTermDays || item.termDays || 30,
+            isMonthlyBilling: Boolean(item.isMonthlyBilling),
+            billingCycle: item.billingCycle || 'monthly',
+            collectionOwner: item.collectionOwnerName || null,
+            collectionNote: item.collectionNote || null,
+            creditLimit: Number(item.creditLimit || 0),
+            orderCount: 0,
+            openOrderCount: 0,
+            grossAmount: 0,
+            paidAmount: 0,
+            outstandingAmount: 0,
+            overdueAmount: 0,
+            overdueCount: 0,
+            currentAmount: 0,
+            due1To30Amount: 0,
+            due31To60Amount: 0,
+            due61To90Amount: 0,
+            dueOver90Amount: 0,
+            missingInvoiceCount: 0,
+            missingJournalCount: 0,
+            missingFeeCount: 0,
+            lastOrderDate: null as string | null,
+            nextStatementDate: this.buildNextStatementDate(asOfDate),
+            riskLevel: 'normal',
+            recommendedAction: '可於月底產生對帳單。',
+            orders: [] as any[],
+          };
 
           const outstandingAmount = Number(item.outstandingAmount || 0);
           const daysPastDue = this.daysPastDue(item.dueDate, asOfDate);
@@ -835,13 +891,19 @@ export class ArService {
           current.grossAmount += Number(item.grossAmount || 0);
           current.paidAmount += Number(item.paidAmount || 0);
           current.outstandingAmount += outstandingAmount;
-          current.missingInvoiceCount += item.warningCodes?.includes('invoice_pending')
+          current.missingInvoiceCount += item.warningCodes?.includes(
+            'invoice_pending',
+          )
             ? 1
             : 0;
-          current.missingJournalCount += item.warningCodes?.includes('missing_journal')
+          current.missingJournalCount += item.warningCodes?.includes(
+            'missing_journal',
+          )
             ? 1
             : 0;
-          current.missingFeeCount += item.warningCodes?.includes('missing_fee') ? 1 : 0;
+          current.missingFeeCount += item.warningCodes?.includes('missing_fee')
+            ? 1
+            : 0;
           current.lastOrderDate =
             !current.lastOrderDate || item.orderDate > current.lastOrderDate
               ? item.orderDate
@@ -887,7 +949,8 @@ export class ArService {
     )
       .map((customer: any) => {
         const overCredit =
-          customer.creditLimit > 0 && customer.outstandingAmount > customer.creditLimit;
+          customer.creditLimit > 0 &&
+          customer.outstandingAmount > customer.creditLimit;
         if (customer.dueOver90Amount > 0 || overCredit) {
           customer.riskLevel = 'critical';
           customer.recommendedAction = overCredit
@@ -914,7 +977,8 @@ export class ArService {
         acc.overdueAmount += customer.overdueAmount;
         acc.overdueCustomerCount += customer.overdueAmount > 0 ? 1 : 0;
         acc.overCreditCount +=
-          customer.creditLimit > 0 && customer.outstandingAmount > customer.creditLimit
+          customer.creditLimit > 0 &&
+          customer.outstandingAmount > customer.creditLimit
             ? 1
             : 0;
         acc.missingStatementEmailCount += customer.statementEmail ? 0 : 1;
@@ -1011,9 +1075,15 @@ export class ArService {
       }),
     ]);
 
-    const arMap = new Map(existingArInvoices.map((item) => [item.sourceId, item]));
-    const journalMap = new Map(existingJournals.map((item) => [item.sourceId, item]));
-    const accountMap = new Map(accounts.map((account) => [account.code, account]));
+    const arMap = new Map(
+      existingArInvoices.map((item) => [item.sourceId, item]),
+    );
+    const journalMap = new Map(
+      existingJournals.map((item) => [item.sourceId, item]),
+    );
+    const accountMap = new Map(
+      accounts.map((account) => [account.code, account]),
+    );
 
     const arAccount = accountMap.get('1191');
     const revenueAccount = accountMap.get('4111');
@@ -1040,14 +1110,18 @@ export class ArService {
       const latestInvoice = order.invoices[0] || null;
       const paidAmount = this.sumAmount(order.payments, 'amountGrossOriginal');
       const grossAmount = Number(order.totalGrossOriginal || 0);
-      const dueDate = this.buildDueDate(order.orderDate, grossAmount - paidAmount);
+      const dueDate = this.buildDueDate(
+        order.orderDate,
+        grossAmount - paidAmount,
+      );
       const status = this.resolveReceivableStatus({
         grossAmount,
         paidAmount,
         dueDate,
       });
       const existingAr = arMap.get(order.id) || null;
-      const invoiceNo = latestInvoice?.invoiceNumber || order.externalOrderId || null;
+      const invoiceNo =
+        latestInvoice?.invoiceNumber || order.externalOrderId || null;
 
       const arPayload = {
         entityId: order.entityId,
@@ -1068,7 +1142,10 @@ export class ArService {
           status === 'overdue' || status === 'partial' ? 'urgent' : 'normal',
         sourceModule: 'sales_order',
         sourceId: order.id,
-        notes: this.buildArNote(order.notes, latestInvoice?.invoiceNumber || null),
+        notes: this.buildArNote(
+          order.notes,
+          latestInvoice?.invoiceNumber || null,
+        ),
       };
 
       if (existingAr) {
@@ -1084,7 +1161,10 @@ export class ArService {
       arUpserted += 1;
 
       if (!journalMap.has(order.id)) {
-        const taxAmount = this.resolveTaxAmount(order, latestInvoice?.taxAmountOriginal);
+        const taxAmount = this.resolveTaxAmount(
+          order,
+          latestInvoice?.taxAmountOriginal,
+        );
         const revenueAmount = Math.max(grossAmount - taxAmount, 0);
         const lines = [
           {
@@ -1187,10 +1267,13 @@ export class ArService {
         Number(data.amountBase || (amountOriginal * fxRate).toFixed(2)),
       ),
       paidAmountOriginal: new Decimal(paidAmountOriginal),
-      paidAmountCurrency: data.paidAmountCurrency || data.amountCurrency || 'TWD',
+      paidAmountCurrency:
+        data.paidAmountCurrency || data.amountCurrency || 'TWD',
       paidAmountFxRate: new Decimal(paidFxRate),
       paidAmountBase: new Decimal(
-        Number(data.paidAmountBase || (paidAmountOriginal * paidFxRate).toFixed(2)),
+        Number(
+          data.paidAmountBase || (paidAmountOriginal * paidFxRate).toFixed(2),
+        ),
       ),
       issueDate: new Date(data.issueDate),
       dueDate,
@@ -1246,7 +1329,9 @@ export class ArService {
         isActive: true,
       },
     });
-    const accountMap = new Map(accounts.map((account) => [account.code, account]));
+    const accountMap = new Map(
+      accounts.map((account) => [account.code, account]),
+    );
     const bankAccount = accountMap.get('1113');
     const arAccount = accountMap.get('1191');
 
@@ -1377,7 +1462,10 @@ export class ArService {
       priority: status === 'overdue' ? 'urgent' : 'normal',
       sourceModule: 'sales_order',
       sourceId: order.id,
-      notes: this.buildArNote(order.notes, latestInvoice?.invoiceNumber || null),
+      notes: this.buildArNote(
+        order.notes,
+        latestInvoice?.invoiceNumber || null,
+      ),
     };
 
     if (existing) {
@@ -1490,7 +1578,8 @@ export class ArService {
     }
 
     const outstanding = Math.max(
-      Number(invoice.amountOriginal || 0) - Number(invoice.paidAmountOriginal || 0),
+      Number(invoice.amountOriginal || 0) -
+        Number(invoice.paidAmountOriginal || 0),
       0,
     );
     const writeOffAmount = Math.min(Math.max(amount, 0), outstanding);
@@ -1499,7 +1588,10 @@ export class ArService {
       where: { id: invoiceId },
       data: {
         status: 'written_off',
-        notes: [invoice.notes, `[write-off] amount=${writeOffAmount}; reason=${reason}`]
+        notes: [
+          invoice.notes,
+          `[write-off] amount=${writeOffAmount}; reason=${reason}`,
+        ]
           .filter(Boolean)
           .join('\n'),
       },
@@ -1512,7 +1604,9 @@ export class ArService {
         isActive: true,
       },
     });
-    const accountMap = new Map(accounts.map((account) => [account.code, account]));
+    const accountMap = new Map(
+      accounts.map((account) => [account.code, account]),
+    );
     const arAccount = accountMap.get('1191');
     const badDebtExpense = accountMap.get('6134');
 
@@ -1570,7 +1664,11 @@ export class ArService {
     return items.reduce((sum, item) => sum + Number(item[field] || 0), 0);
   }
 
-  private buildDueDate(orderDate: Date, outstandingAmount: number, termDays = 30) {
+  private buildDueDate(
+    orderDate: Date,
+    outstandingAmount: number,
+    termDays = 30,
+  ) {
     const dueDate = new Date(orderDate);
     dueDate.setDate(dueDate.getDate() + (outstandingAmount > 0 ? termDays : 0));
     return dueDate;
@@ -1674,7 +1772,10 @@ export class ArService {
     return 0;
   }
 
-  private resolveOrderSource(channelCode?: string | null, notes?: string | null) {
+  private resolveOrderSource(
+    channelCode?: string | null,
+    notes?: string | null,
+  ) {
     const meta = this.extractMetadata(notes);
     const normalizedChannel = (channelCode || '').trim().toUpperCase();
 
@@ -1686,7 +1787,8 @@ export class ArService {
     }
 
     if (normalizedChannel === '1SHOP') {
-      const storeName = meta.storeName || meta.storeAccount || '萬魔未來工學院團購';
+      const storeName =
+        meta.storeName || meta.storeAccount || '萬魔未來工學院團購';
       return {
         label: storeName,
         brand: this.resolveCommerceBrand(storeName),
@@ -1755,9 +1857,16 @@ export class ArService {
   }) {
     const channelCode = (params.channelCode || '').trim().toUpperCase();
     const meta = this.extractMetadata(params.notes);
-    const paymentMethodGroup = this.resolvePaymentMethodGroup(params.payments, meta);
+    const paymentMethodGroup = this.resolvePaymentMethodGroup(
+      params.payments,
+      meta,
+    );
     const paymentMethodLabel = this.paymentMethodLabel(paymentMethodGroup);
-    const isB2B = this.isB2BReceivable(params.customerType, meta, params.customer);
+    const isB2B = this.isB2BReceivable(
+      params.customerType,
+      meta,
+      params.customer,
+    );
     const isGroupBuy =
       channelCode === '1SHOP' ||
       params.source.label.includes('萬魔') ||
@@ -2005,7 +2114,11 @@ export class ArService {
     if (['cod', 'cvs_pickup_pay'].includes(params.paymentMethodGroup)) {
       return 'ecpay_logistics';
     }
-    if (['credit_card', 'atm', 'gateway_other'].includes(params.paymentMethodGroup)) {
+    if (
+      ['credit_card', 'atm', 'gateway_other'].includes(
+        params.paymentMethodGroup,
+      )
+    ) {
       return 'ecpay_gateway';
     }
     if (params.channelCode === 'SHOPIFY' || params.channelCode === 'SHOPLINE') {
@@ -2225,8 +2338,12 @@ export class ArService {
       .flatMap((group) =>
         [...group]
           .sort((left, right) => {
-            const leftTime = Date.parse(left.createdAt || left.payoutDate || '');
-            const rightTime = Date.parse(right.createdAt || right.payoutDate || '');
+            const leftTime = Date.parse(
+              left.createdAt || left.payoutDate || '',
+            );
+            const rightTime = Date.parse(
+              right.createdAt || right.payoutDate || '',
+            );
             return leftTime - rightTime;
           })
           .slice(1)
@@ -2268,8 +2385,9 @@ export class ArService {
           candidate.reconciledFlag || candidate.meta.feeStatus === 'actual',
       ) || null;
     const estimated =
-      candidates.find((candidate) => candidate.meta.feeStatus === 'estimated') ||
-      null;
+      candidates.find(
+        (candidate) => candidate.meta.feeStatus === 'estimated',
+      ) || null;
     const fallback = candidates[0] || null;
     const resolved = actual || estimated || fallback;
     const status = resolved?.meta.feeStatus || 'unavailable';
@@ -2295,7 +2413,8 @@ export class ArService {
       return {
         status,
         source,
-        diagnostic: '目前仍是暫估手續費，需等待綠界/平台撥款對帳後才會轉成實際值。',
+        diagnostic:
+          '目前仍是暫估手續費，需等待綠界/平台撥款對帳後才會轉成實際值。',
       };
     }
 
@@ -2307,7 +2426,10 @@ export class ArService {
     };
   }
 
-  private buildArNote(existingNotes?: string | null, invoiceNumber?: string | null) {
+  private buildArNote(
+    existingNotes?: string | null,
+    invoiceNumber?: string | null,
+  ) {
     const parts = ['source=sales-order-auto-sync'];
     if (invoiceNumber) {
       parts.push(`invoiceNumber=${invoiceNumber}`);

@@ -645,6 +645,17 @@ Cloud Run 正式資料目前已經不是空系統，但核心治理缺口很大�
 
 正式 AR 頁抽查時可看到部分訂單的已收金額高於訂單應收，例如同一訂單有多筆 Payment 疊加後，`paidAmount > grossAmount`。這類情境可能是重複匯入、同客戶合併收款未拆帳，或退款 / 折讓尚未反映；若只顯示「已收」而不標示風險，會讓會計誤以為該筆已完成。
 
+2026-08-27 底層修正：
+
+- 新增 `Payment.sourceTransactionKey` 與 entity 內唯一索引，來源交易以資料庫約束保證冪等；Shopify、Shopline、1Shop 改用原子 upsert，不再依賴 `findFirst` 後 `create` 的競態流程。
+- 共用付款完整性規則只讓 `completed` / `success` 影響應收；`pending`、`failed`、`ignored`、`superseded` 保留稽核資料但不計入已收。
+- Shopify 授權與 void 不再當成 sale，refund 以負向應收異動記錄；同步會正確寫入 Payment 狀態。
+- 1Shop 不再把物流第三方編號當成付款編號；待付款只保留零元草稿，正式付款進來後將草稿標記為 `superseded`，不刪除原始稽核軌跡。
+- 遷移只為每組歷史來源交易指定一筆 canonical source key；既有重複付款不刪除、不合併、不沖銷，正式清理仍須另行人工確認。
+- 本地驗證：Prisma schema validate 通過；backend 16 個 test suites、58 個測試全數通過；Nest backend build 通過。
+- 正式部署驗收：migration execution `ecom-accounting-db-migrate-cdj7x` 成功；Cloud Run revision `ecom-accounting-backend-00484-kib`（tag `pi-v2`）已承接 100% 流量。近 30 天正式 `/ar/overpaid` 由舊版 384 筆／NT$527,709.4 降為 0 筆／NT$0；重新整理正式 Dashboard 後，現金流風險顯示 0 元、超收 0 筆。
+- 正式來源回刷：Shopify 近 30 天依 5 天視窗完成 1,431 個交易事件更新、0 筆新增；Shopline 近 30 天完成 583 筆更新、0 筆新增；1Shop 已完成單日 35 筆更新、0 筆新增，並由既有每 20 分鐘排程持續回刷最近 3 天。三個通路排程均為 ENABLED；既有歷史重複列保留稽核，不列入會計有效收款。
+
 本地已新增：
 
 - `backend/src/modules/ar/ar.service.ts`：AR monitor 對銷售訂單與手動 AR 都計算 `overpaidAmount`，並以 `overpaid_receivable` warning 標示。

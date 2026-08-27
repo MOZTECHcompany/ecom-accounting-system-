@@ -889,13 +889,14 @@ model Shipment {
 
 // 收款紀錄（平台撥款／金流實收）
 model Payment {
-  id            String   @id @default(uuid())
-  entityId      String   @map("entity_id")
-  salesOrderId  String?  @map("sales_order_id")
-  channelId     String?  @map("channel_id")
-  payoutBatchId String?  @map("payout_batch_id") // 平台批次撥款 ID
-  channel       String // ECPAY, SHOPIFY_PAYOUT, MOMO_PAYOUT, BANK_TRANSFER, etc.
-  payoutDate    DateTime @map("payout_date")
+  id                   String   @id @default(uuid())
+  entityId             String   @map("entity_id")
+  salesOrderId         String?  @map("sales_order_id")
+  channelId            String?  @map("channel_id")
+  payoutBatchId        String?  @map("payout_batch_id") // 平台批次撥款 ID
+  sourceTransactionKey String?  @map("source_transaction_key") // entity 內唯一的來源交易識別
+  channel              String // ECPAY, SHOPIFY_PAYOUT, MOMO_PAYOUT, BANK_TRANSFER, etc.
+  payoutDate           DateTime @map("payout_date")
 
   // 總收款（符合四欄位標準）
   amountGrossOriginal Decimal @map("amount_gross_original") @db.Decimal(18, 2)
@@ -937,6 +938,7 @@ model Payment {
   salesChannel SalesChannel? @relation(fields: [channelId], references: [id])
   bankAccount  BankAccount?  @relation(fields: [bankAccountId], references: [id])
 
+  @@unique([entityId, sourceTransactionKey], map: "payments_entity_source_transaction_key_key")
   @@index([entityId, payoutDate])
   @@index([salesOrderId])
   @@map("payments")
@@ -1556,22 +1558,22 @@ model Department {
 
 // 員工
 model Employee {
-  id             String    @id @default(uuid())
-  entityId       String    @map("entity_id")
-  userId         String?   @unique @map("user_id")
-  employeeNo     String    @map("employee_no")
-  name           String
-  gender         String?
-  nationalId     String?   @map("national_id")
-  mailingAddress String?   @map("mailing_address")
-  emergencyContactName  String? @map("emergency_contact_name")
-  emergencyContactPhone String? @map("emergency_contact_phone")
-  country        String // TW, CN
-  location       String?
-  attendanceType String    @default("INTERNAL") @map("attendance_type") // INTERNAL, EXTERNAL
-  departmentId   String?   @map("department_id")
-  hireDate       DateTime  @map("hire_date")
-  terminateDate  DateTime? @map("terminate_date")
+  id                    String    @id @default(uuid())
+  entityId              String    @map("entity_id")
+  userId                String?   @unique @map("user_id")
+  employeeNo            String    @map("employee_no")
+  name                  String
+  gender                String?
+  nationalId            String?   @map("national_id")
+  mailingAddress        String?   @map("mailing_address")
+  emergencyContactName  String?   @map("emergency_contact_name")
+  emergencyContactPhone String?   @map("emergency_contact_phone")
+  country               String // TW, CN
+  location              String?
+  attendanceType        String    @default("INTERNAL") @map("attendance_type") // INTERNAL, EXTERNAL
+  departmentId          String?   @map("department_id")
+  hireDate              DateTime  @map("hire_date")
+  terminateDate         DateTime? @map("terminate_date")
 
   // 薪資基數（符合四欄位標準）
   salaryBaseOriginal Decimal @map("salary_base_original") @db.Decimal(18, 2)
