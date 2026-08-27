@@ -60,6 +60,8 @@ const DashboardLayout: React.FC = () => {
   // Determine if we are on a mobile screen (xs or sm, but not md or larger)
   // Note: screens.md is true for >= 768px. So !screens.md means < 768px.
   const isMobile = !screens.md
+  const isCompactDesktop = Boolean(screens.md && !screens.lg)
+  const desktopSidebarCollapsed = sidebarCollapsed || isCompactDesktop
   const canAccess = (permissions: string[] = []) =>
     permissions.length === 0 || hasAnyPermission(user, permissions)
   const searchValue = searchParams.get('q') ?? ''
@@ -406,11 +408,11 @@ const DashboardLayout: React.FC = () => {
         style={{ bottom: '-10%', left: '20%', background: '#FFDEE9' }}
       />
 
-      {!isMobile ? (
+      {!isMobile && (
         <Sider
           width={260}
           collapsedWidth={80}
-          collapsed={sidebarCollapsed}
+          collapsed={desktopSidebarCollapsed}
           trigger={null}
           className="floating-sidebar"
           style={{
@@ -424,12 +426,12 @@ const DashboardLayout: React.FC = () => {
           }}
         >
           <div className="flex flex-col h-full">
-            <div className={`shrink-0 h-16 flex items-center justify-center m-4 ${sidebarCollapsed ? 'mb-4' : 'mb-8'}`}>
+            <div className={`shrink-0 h-16 flex items-center justify-center m-4 ${desktopSidebarCollapsed ? 'mb-4' : 'mb-8'}`}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md border border-white/30 shadow-lg">
                   <BrandMark className="w-7 h-7" alt="System logo" />
                 </div>
-                {!sidebarCollapsed && (
+                {!desktopSidebarCollapsed && (
                   <div
                     className="max-w-[160px] text-sm font-semibold leading-tight tracking-wide"
                     style={{ color: 'var(--text-primary)' }}
@@ -450,23 +452,31 @@ const DashboardLayout: React.FC = () => {
                 openKeys={effectiveOpenMenuKeys}
                 onOpenChange={(keys) => setOpenMenuKeys(keys.map(String))}
                 items={visibleMenuItems}
-                inlineCollapsed={sidebarCollapsed}
+                inlineCollapsed={desktopSidebarCollapsed}
                 className="px-2 bg-transparent border-none"
               />
             </div>
             <Button
               type="text"
               className="!mx-2 !mb-2 !flex !w-auto shrink-0 items-center justify-center"
-              icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-              aria-label={sidebarCollapsed ? '展開側欄' : '收合側欄'}
-              title={sidebarCollapsed ? '展開側欄' : '收合側欄'}
-              onClick={() => setSidebarCollapsed((current) => !current)}
+              icon={desktopSidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              aria-label={desktopSidebarCollapsed ? '展開側欄' : '收合側欄'}
+              title={desktopSidebarCollapsed ? '展開側欄' : '收合側欄'}
+              onClick={() => {
+                if (isCompactDesktop) {
+                  setMobileMenuOpen(true)
+                  return
+                }
+                setSidebarCollapsed((current) => !current)
+              }}
             >
-              {!sidebarCollapsed && '收合側欄'}
+              {!desktopSidebarCollapsed && '收合側欄'}
             </Button>
           </div>
         </Sider>
-      ) : (
+      )}
+
+      {(isMobile || isCompactDesktop) && (
         <GlassDrawer
           placement="left"
           onClose={() => setMobileMenuOpen(false)}
@@ -501,7 +511,7 @@ const DashboardLayout: React.FC = () => {
 
       <Layout
         style={{
-          marginLeft: isMobile ? 0 : sidebarCollapsed ? 112 : 292,
+          marginLeft: isMobile ? 0 : desktopSidebarCollapsed ? 112 : 292,
           transition: 'all 0.2s',
           background: 'transparent',
         }}
@@ -526,11 +536,13 @@ const DashboardLayout: React.FC = () => {
                 fontWeight: 500,
                 color: 'var(--text-primary)',
                 fontSize: isMobile ? '1.1rem' : undefined,
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
               }}
             >
               {currentMenuLabel}
             </Title>
-            <div className="hidden md:block">
+            <div className="hidden lg:block">
               <Input
                 prefix={
                   <SearchOutlined
@@ -558,7 +570,7 @@ const DashboardLayout: React.FC = () => {
                   src={user?.avatar}
                   className="bg-gradient-to-br from-blue-500 to-purple-600"
                 />
-                {!isMobile && (
+                {screens.lg && (
                   <span
                     className="font-medium"
                     style={{ color: 'var(--text-primary)' }}
