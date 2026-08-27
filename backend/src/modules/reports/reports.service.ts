@@ -3677,6 +3677,14 @@ export class ReportsService {
       brandBucket.adSpend += amount;
     };
 
+    const getExpenseSpend = (expense: (typeof adExpenses)[number]) =>
+      expense.items.length > 0
+        ? expense.items.reduce(
+            (sum, item) => sum + Number(item.amountOriginal || 0),
+            0,
+          )
+        : Number(expense.totalAmountOriginal || 0);
+
     for (const order of orders) {
       const source = this.resolveSourceContext({
         channelCode: order.channel?.code,
@@ -3733,15 +3741,31 @@ export class ReportsService {
               this.extractMetaAdsAccountId(descriptionText),
               descriptionText,
             );
-      const spend =
-        expense.items.length > 0
-          ? expense.items.reduce(
-              (sum, item) => sum + Number(item.amountOriginal || 0),
-              0,
-            )
-          : Number(expense.totalAmountOriginal || 0);
+      const spend = getExpenseSpend(expense);
       addAdSpend(expense.expenseDate, brand, spend);
     }
+
+    const sources = AD_EXPENSE_SOURCE_MODULES.map((sourceModule) => {
+      const sourceExpenses = adExpenses.filter(
+        (expense) => expense.sourceModule === sourceModule,
+      );
+      const lastExpenseDate = sourceExpenses.reduce<Date | null>(
+        (latest, expense) =>
+          !latest || expense.expenseDate > latest ? expense.expenseDate : latest,
+        null,
+      );
+      return {
+        sourceModule,
+        label: sourceModule === 'meta_ads' ? 'Meta' : 'Google Ads',
+        adSpend: Number(
+          sourceExpenses
+            .reduce((sum, expense) => sum + getExpenseSpend(expense), 0)
+            .toFixed(2),
+        ),
+        expenseCount: sourceExpenses.length,
+        lastExpenseDate: lastExpenseDate?.toISOString() || null,
+      };
+    });
 
     const formatRoas = (revenue: number, adSpend: number) =>
       adSpend > 0 ? Number((revenue / adSpend).toFixed(4)) : null;
@@ -3807,6 +3831,7 @@ export class ReportsService {
         attributionNote:
           '這是會計口徑的 blended ROAS：電商品牌營收除以 Meta 與 Google Ads 每日花費，不等於廣告平台歸因 ROAS。',
       },
+      sources,
       brands,
       periods,
     };
@@ -4674,14 +4699,16 @@ export class ReportsService {
         const normalized = value.startsWith('act_') ? value : `act_${value}`;
         return normalized === accountId;
       });
+      const brand =
+        typeof matched?.brand === 'string' ? matched.brand.trim() : '';
+      if (brand) {
+        return this.resolveCommerceBrand(brand);
+      }
       const reportBrand =
         typeof matched?.reportBrand === 'string'
           ? matched.reportBrand.trim()
           : '';
-      if (reportBrand) {
-        return reportBrand;
-      }
-      return typeof matched?.brand === 'string' ? matched.brand.trim() : '';
+      return reportBrand ? this.resolveCommerceBrand(reportBrand) : '';
     } catch {
       return '';
     }
@@ -4709,14 +4736,16 @@ export class ReportsService {
         ).replace(/[^0-9]/g, '');
         return value === normalizedCustomerId;
       });
+      const brand =
+        typeof matched?.brand === 'string' ? matched.brand.trim() : '';
+      if (brand) {
+        return this.resolveCommerceBrand(brand);
+      }
       const reportBrand =
         typeof matched?.reportBrand === 'string'
           ? matched.reportBrand.trim()
           : '';
-      if (reportBrand) {
-        return reportBrand;
-      }
-      return typeof matched?.brand === 'string' ? matched.brand.trim() : '';
+      return reportBrand ? this.resolveCommerceBrand(reportBrand) : '';
     } catch {
       return '';
     }

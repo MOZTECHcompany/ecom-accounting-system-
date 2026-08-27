@@ -769,6 +769,15 @@ Cloud Run 正式資料目前已經不是空系統，但核心治理缺口很大�
 - 後端 build 通過，並已部署 Cloud Run backend revision `ecom-accounting-backend-00390-7jp`，100% 流量。
 - 正式報表 API 需要登入權限，終端機未帶瀏覽器登入 token 時會回 `401 Unauthorized`；畫面端重新整理後應使用新版後端計算。
 
+2026-08-27 電商與廣告來源復原盤點：
+
+- 正式環境實測 Shopify 與 1Shop health 均成功；2026-08-01 至 2026-08-27 已存在 Shopify `758` 筆、營業額 `NT$958,368.83`，1Shop `748` 筆、營業額 `NT$826,750`。來源沒有被刪除，Dashboard 原本預設「今日」使長區間貢獻不易看見，前端預設改為「近 30 天」。
+- Meta Ads readiness 與帳戶探測成功，2026-08-20 至 2026-08-27 live API 可讀 `24` 筆、花費 `NT$116,978`；手動正式同步已更新最近 7 天 `24` 筆 Expense。
+- Google Ads OAuth 最新 refresh token 對 manager `6215621647` 與所有已設定 client accounts 均回 `USER_PERMISSION_DENIED`。`GOOGLE_ADS_LOGIN_CUSTOMER_ID=6215621647` 已補回 Cloud Run，但仍需使用目前確實具備該 manager / client 權限的 Google 帳號重新 OAuth 授權；在完成前不可宣稱 Google Ads 已接通，也不可把 Meta 花費當成完整廣告費。
+- Dashboard 廣告品牌歸屬修正為優先使用 `brand`，`reportBrand=MOZTECH_TW / MOZTECH_US` 僅保留為市場報表維度，不再把 MOZTECH 營收與 MOZTECH_TW 廣告費拆成兩個品牌而產生錯誤 ROAS。
+- `ad-performance-summary` 新增 Meta / Google Ads 各來源的花費、筆數與最後資料日期；Dashboard 以精簡標籤顯示來源最後日期，避免排程仍存在但來源已停止更新時看不出來。
+- 因診斷輸出曾包含同步排程權杖，Shopify / 1Shop、Meta、Google Ads 權杖已全部輪替並寫入 Secret Manager；候選 revision 已驗證 Shopify、1Shop、Meta 同步請求成功，正式後端流量已切至 `ecom-accounting-backend-00460-86t`。
+
 ## 待使用者協助確認
 
 完整清單另存於 `backend/docs/user-input-needed-2026-04-27.md`，後續凡是缺外部 API 權限、正式報表、密鑰或高風險資料修正規則，都集中更新那份文件。

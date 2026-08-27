@@ -422,6 +422,13 @@ export type AdPerformanceSummary = {
     adSource: string;
     attributionNote: string;
   };
+  sources: Array<{
+    sourceModule: "meta_ads" | "google_ads";
+    label: string;
+    adSpend: number;
+    expenseCount: number;
+    lastExpenseDate: string | null;
+  }>;
   brands: AdPerformanceBrand[];
   periods: AdPerformancePeriod[];
 };

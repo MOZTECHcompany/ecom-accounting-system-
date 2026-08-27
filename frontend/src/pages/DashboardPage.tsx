@@ -266,7 +266,7 @@ const DashboardPage: React.FC = () => {
   const [failedSections, setFailedSections] = useState<string[]>([]);
   const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null);
   const [lastSuccessfulAt, setLastSuccessfulAt] = useState<Date | null>(null);
-  const [rangeMode, setRangeMode] = useState<RangeMode>("today");
+  const [rangeMode, setRangeMode] = useState<RangeMode>("last30d");
   const [customRange, setCustomRange] = useState<CustomRange>(null);
   const [refreshToken, setRefreshToken] = useState(0);
   const [syncing, setSyncing] = useState(false);
@@ -869,6 +869,12 @@ const DashboardPage: React.FC = () => {
     }))
     .sort((left, right) => right.adSpend - left.adSpend)
   const topAdPerformanceRows = adPerformanceRows.slice(0, 5)
+  const adSourceRows = (adPerformance?.sources || []).map((source) => ({
+    ...source,
+    lastDateLabel: source.lastExpenseDate
+      ? dayjs(source.lastExpenseDate).tz(DASHBOARD_TZ).format("MM/DD")
+      : "無資料",
+  }))
   const channelPieData = platformContribs
     .filter((item) => item.net > 0)
     .sort((left, right) => right.net - left.net)
@@ -1413,6 +1419,13 @@ const DashboardPage: React.FC = () => {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6">
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div className="text-lg font-semibold text-slate-900">營業額對照</div>
+            <div className="flex flex-wrap gap-2">
+              {adSourceRows.map((source) => (
+                <Tag key={source.sourceModule} className="rounded-full bg-slate-100 text-slate-500 border-slate-200 text-xs">
+                  {source.label} {source.lastDateLabel}
+                </Tag>
+              ))}
+            </div>
           </div>
 
           {topAdPerformanceRows.length > 0 ? (
