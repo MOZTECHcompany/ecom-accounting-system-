@@ -1101,10 +1101,10 @@ const DashboardPage: React.FC = () => {
   return (
     <div className="page-section-stack page-section-stack--compact">
       {/* ── 頁面標題 + 篩選控制 ── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <Title level={2} className="!text-gray-800 font-light tracking-tight !mb-0">
+            <Title level={2} className="!text-gray-800 font-light tracking-tight !mb-0 whitespace-nowrap">
               營運儀表板
             </Title>
             <div className={`flex items-center gap-2 rounded-full border px-3 py-1 ${dataStatusMeta.className}`}>
@@ -1113,8 +1113,8 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
         </div>
-        <div className="flex flex-col sm:items-end gap-3 w-full sm:w-auto">
-          <div className="flex flex-wrap justify-end gap-2 items-center">
+        <div className="flex flex-col xl:items-end gap-3 w-full xl:w-auto">
+          <div className="flex flex-wrap justify-start xl:justify-end gap-2 items-center">
             <Radio.Group value={rangeMode} onChange={(e) => {
               const nextMode = e.target.value as RangeMode;
               setRangeMode(nextMode);
