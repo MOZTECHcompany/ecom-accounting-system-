@@ -872,6 +872,33 @@ body.dark .glass-input {
   padding-inline: 0;
 }
 
+.ant-modal-close,
+.ant-drawer-close {
+  width: 40px !important;
+  min-width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ant-pagination .ant-pagination-item,
+.ant-pagination .ant-pagination-prev,
+.ant-pagination .ant-pagination-next,
+.ant-pagination .ant-pagination-jump-prev,
+.ant-pagination .ant-pagination-jump-next {
+  min-width: 40px !important;
+  height: 40px !important;
+  line-height: 38px !important;
+}
+
+.ant-pagination .ant-pagination-prev button,
+.ant-pagination .ant-pagination-next button {
+  width: 40px !important;
+  height: 40px !important;
+}
+
 .ant-radio-button-wrapper {
   min-height: 40px;
   height: 40px;

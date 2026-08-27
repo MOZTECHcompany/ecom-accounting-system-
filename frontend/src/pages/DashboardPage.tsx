@@ -105,7 +105,7 @@ const DASHBOARD_SECTION_LABELS = {
   trend: "30 天趨勢",
   rangeFinancial: "本期損益",
   todayFinancial: "今日損益",
-  ads: "廣告效益",
+  ads: "營業額對照",
   connectors: "串接狀態",
   payables: "應付帳款",
   banking: "銀行餘額",
@@ -907,12 +907,12 @@ const DashboardPage: React.FC = () => {
         ? "本區間 0"
         : "待串接";
   const adSpendHelper = adSpendTracked
-    ? `${adSpendCount} 筆廣告相關費用；Meta / Google 已可納入每日費用，TikTok 與扣款核銷可再補齊。`
+    ? `${adSpendCount} 筆廣告費`
     : adSpendNeedsSecretCheck
-      ? `系統已有 ${historicalAdSpendCount} 筆歷史廣告費，但目前 connector readiness 沒讀到完整 Meta / Google 憑證；請檢查 Cloud Run Secret 掛載。`
+      ? "Meta / Google 憑證異常"
     : adSpendCanSyncDaily
-      ? "Meta / Google 憑證已在系統設定內；目前選取區間尚未寫入廣告費，若要補歷史資料請執行同步。"
-      : adConnector?.nextAction || "請提供廣告平台 API、帳戶 mapping 與扣款來源。";
+      ? "本區間無廣告費"
+      : adConnector?.nextAction || "尚未串接廣告平台";
   const payableExposure = Math.max(
     Number(finance.apOutstanding || 0),
     Number(executive?.expenses?.approvedUnpaidAmount || 0),
@@ -933,7 +933,7 @@ const DashboardPage: React.FC = () => {
       key: "missing-invoices",
       title: "缺發票訂單",
       count: missingInvoiceCount,
-      helper: "已付款或已對帳但尚未完成正式發票流程。",
+      helper: "待完成發票",
       actionLabel: "處理缺發票",
       path: "/accounting/workbench?focus=missing-invoices",
       tone: missingInvoiceCount > 0 ? "warning" : "healthy",
@@ -942,7 +942,7 @@ const DashboardPage: React.FC = () => {
       key: "order-audit",
       title: "訂單對帳稽核異常",
       count: financialAuditIssueCount,
-      helper: "訂單、付款、發票、稅額或手續費口徑不一致的項目。",
+      helper: "帳務口徑不一致",
       actionLabel: "看報表稽核",
       path: "/reports",
       tone: financialAuditIssueCount > 0 ? "warning" : "healthy",
@@ -951,7 +951,7 @@ const DashboardPage: React.FC = () => {
       key: "overdue-ar",
       title: "逾期應收帳款",
       count: overdueAR,
-      helper: "影響現金流的逾期 AR，需財務或業務追款。",
+      helper: "逾期應收",
       actionLabel: "看應收帳款",
       path: "/sales/invoices",
       tone: overdueAR > 0 ? "critical" : "healthy",
@@ -960,7 +960,7 @@ const DashboardPage: React.FC = () => {
       key: "overpaid",
       title: "超收 / 重複收款",
       count: overpaidAR,
-      helper: "疑似重複匯入、合併收款未拆帳或退款折讓未反映。",
+      helper: "疑似重複收款",
       actionLabel: "核對超收",
       path: "/sales/invoices?focus=overpaid",
       tone: overpaidAR > 0 ? "critical" : "healthy",
@@ -980,42 +980,42 @@ const DashboardPage: React.FC = () => {
       label: "未核銷收款",
       count: Number(executive?.operations.pendingPayoutCount || 0),
       color: "#dc2626",
-      helper: "全歷史 Payment 尚未完成核銷，需分批補撥款、發票、手續費或分錄。",
+      helper: "收款待核銷",
       path: "/accounting/workbench?focus=data-completeness",
     },
     {
       label: "手續費待補",
       count: Number(executive?.operations.feeBackfillCount || 0),
       color: "#ea580c",
-      helper: "費率仍是預估或空白，會影響淨利判斷。",
+      helper: "手續費待確認",
       path: "/accounting/workbench",
     },
     {
       label: "缺發票",
       count: missingInvoiceCount,
       color: "#d97706",
-      helper: "成交後仍未完成發票流程。",
+      helper: "發票待處理",
       path: "/accounting/workbench?focus=missing-invoices",
     },
     {
       label: "稽核異常",
       count: financialAuditIssueCount,
       color: "#be123c",
-      helper: "訂單、付款、發票或稅額有落差。",
+      helper: "帳務資料有落差",
       path: "/reports",
     },
     {
       label: "庫存警示",
       count: inventoryAlerts.length,
       color: "#0f766e",
-      helper: "缺貨或低庫存會直接影響銷售。",
+      helper: "缺貨或低庫存",
       path: "/inventory/products",
     },
     {
       label: "廣告串接",
       count: adSpendNeedsAttention ? 1 : 0,
       color: "#4f46e5",
-      helper: adSpendNeedsSecretCheck ? "已有歷史廣告費，但目前正式環境憑證狀態需確認。" : "廣告費尚未形成自動對帳鏈。",
+      helper: adSpendNeedsSecretCheck ? "廣告憑證待確認" : "廣告費待串接",
       path: "/accounting/workbench?focus=connector-readiness",
     },
   ]
@@ -1096,6 +1096,7 @@ const DashboardPage: React.FC = () => {
   const financeWatchDataAvailable = Boolean(
     invoiceSummary && auditSummary && arSummary && rangeManagementSummary,
   );
+  const legacyDashboardVisible = false;
 
   return (
     <div className="page-section-stack page-section-stack--compact">
@@ -1111,14 +1112,6 @@ const DashboardPage: React.FC = () => {
               <span className="text-xs font-medium uppercase tracking-wider">{dataStatusMeta.label}</span>
             </div>
           </div>
-          <Text className="text-slate-400 text-sm">
-            營運、財務與庫存總覽
-          </Text>
-          {lastSuccessfulLabel && (
-            <div className="mt-1 text-xs text-slate-400">
-              最後成功取得核心資料：{lastSuccessfulLabel}
-            </div>
-          )}
         </div>
         <div className="flex flex-col sm:items-end gap-3 w-full sm:w-auto">
           <div className="flex flex-wrap justify-end gap-2 items-center">
@@ -1190,7 +1183,7 @@ const DashboardPage: React.FC = () => {
           className="rounded-2xl border border-red-200 bg-red-50/80 px-5 py-4 flex items-center gap-4">
           <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shrink-0" />
           <div className="flex-1 text-sm">
-            <span className="font-semibold text-red-700">需要立刻處理：</span>
+            <span className="font-semibold text-red-700">待處理：</span>
             <span className="ml-2 text-red-600">
               {criticalInventory > 0 && `${criticalInventory} 個商品斷貨；`}
               {overdueAR > 0 && `${overdueAR} 筆應收逾期；`}
@@ -1214,9 +1207,7 @@ const DashboardPage: React.FC = () => {
                   <span className="font-semibold text-slate-900">超收 / 疑似重複收款</span>
                   <Tag color="red">{overpaidAR} 筆待核對</Tag>
                 </div>
-                <div className="mt-1 text-sm leading-6 text-slate-600">
-                  本區間已收金額高於訂單應收，差額合計 {fmtMoney(overpaidARAmount)}。請到應收帳款頁查看付款列、payout batch 與 provider payment id。
-                </div>
+                <div className="mt-1 text-sm text-slate-600">差額 {fmtMoney(overpaidARAmount)}</div>
               </div>
             </div>
             <Button danger onClick={() => navigate("/sales/invoices?focus=overpaid")}>
@@ -1234,7 +1225,7 @@ const DashboardPage: React.FC = () => {
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="font-semibold text-slate-900">缺發票訂單處理入口</span>
+                <span className="font-semibold text-slate-900">缺發票訂單</span>
                 <Tag color={!invoiceSummary ? "default" : missingInvoiceCount > 0 ? "gold" : "green"}>
                   {!invoiceSummary
                     ? "資料未取得"
@@ -1242,9 +1233,6 @@ const DashboardPage: React.FC = () => {
                       ? `${missingInvoiceCount} 筆待處理`
                       : "目前無待處理"}
                 </Tag>
-              </div>
-              <div className="mt-1 text-sm leading-6 text-slate-600">
-                訂單明細仍在銷售訂單頁查看；補發票、同步綠界發票、匯入綠界銷項發票與後續入帳，統一到會計工作台處理。
               </div>
             </div>
           </div>
@@ -1352,7 +1340,7 @@ const DashboardPage: React.FC = () => {
             </div>
             <div className="mt-2 text-xs leading-5 text-slate-500">
               {cashRiskDataAvailable
-                ? `未結狀態，不完全跟日期切換：逾期 AR ${overdueAR} 筆 · 超收 ${overpaidAR} 筆 · 待付款費用 ${fmtMoney(payableExposure)}`
+                ? `逾期應收 ${overdueAR} 筆 · 超收 ${overpaidAR} 筆 · 待付款 ${fmtMoney(payableExposure)}`
                 : "應收或應付資料未成功載入"}
             </div>
           </div>
@@ -1381,7 +1369,7 @@ const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ── 平台營收與廣告效益：第一屏就能看到通路與投放是否對得上 ── */}
+      {/* ── 平台營收與營業額對照 ── */}
       <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6">
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -1424,7 +1412,7 @@ const DashboardPage: React.FC = () => {
 
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6">
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div className="text-lg font-semibold text-slate-900">廣告效益</div>
+            <div className="text-lg font-semibold text-slate-900">營業額對照</div>
           </div>
 
           {topAdPerformanceRows.length > 0 ? (
@@ -1461,7 +1449,7 @@ const DashboardPage: React.FC = () => {
             </div>
           ) : (
             <div className="flex h-[180px] items-center justify-center rounded-2xl border border-dashed border-slate-200 text-sm text-slate-400">
-              {adPerformance ? "目前區間尚無廣告效益資料" : "廣告效益資料未取得"}
+              {adPerformance ? "目前區間尚無資料" : "資料未取得"}
             </div>
           )}
         </motion.div>
@@ -1626,7 +1614,6 @@ const DashboardPage: React.FC = () => {
                       showInfo={false}
                       className="mt-2"
                     />
-                    <div className="mt-1 text-xs leading-5 text-slate-500">{item.helper}</div>
                   </button>
                 ))}
               </div>
@@ -1661,7 +1648,7 @@ const DashboardPage: React.FC = () => {
         </motion.div>
       </div>
 
-      {false && <>
+      {legacyDashboardVisible && <>
       {/* ── 舊版重複區塊：保留程式兼容，不再顯示 ── */}
       {/* ── 核心 KPI（4 張，全部真實資料）── */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -1913,7 +1900,7 @@ const DashboardPage: React.FC = () => {
         </motion.div>
       )}
 
-      {false && <>
+      {legacyDashboardVisible && <>
       {/* ── 舊版重複待辦：保留程式兼容，不再顯示 ── */}
       {/* ── CEO 決策清單 ── */}
       <div className="grid gap-4 lg:grid-cols-2">
