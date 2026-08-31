@@ -13,6 +13,7 @@ import { RedisModule } from './common/redis/redis.module'; // Added RedisModule
 import { GlobalQueueModule } from './common/queue/queue.module'; // Added QueueModule
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { GuardsModule } from './common/guards/guards.module';
+import { ConnectorSyncModule } from './common/sync/connector-sync.module';
 
 // Feature modules - 按照指定的 12 個模組順序
 import { AuthModule } from './modules/auth/auth.module';
@@ -80,6 +81,7 @@ import { AssemblyModule } from './modules/assembly/assembly.module';
     RedisModule, // Added logic
     GlobalQueueModule, // Global Queue
     GuardsModule,
+    ConnectorSyncModule,
     ScheduleModule.forRoot(),
 
     // Features

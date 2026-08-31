@@ -5,7 +5,6 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma/prisma.service';
@@ -19,6 +18,7 @@ import {
   resolveStoredNetAmount,
   resolveStoredPaymentStatus,
 } from '../payment-integrity';
+import { buildSalesOrderSourceKey } from '../sales-order-integrity';
 import {
   ShoplineHttpAdapter,
   ShoplinePaymentBillingRecord,
@@ -26,6 +26,7 @@ import {
   ShoplinePaymentStoreTransaction,
 } from './shopline.adapter';
 import { ProviderPayoutReconciliationService } from '../../reconciliation/provider-payout-reconciliation.service';
+import { ConnectorSyncCoordinatorService } from '../../../common/sync/connector-sync-coordinator.service';
 
 const SHOPLINE_CHANNEL_CODE = 'SHOPLINE';
 
@@ -57,6 +58,7 @@ export class ShoplineService {
     private readonly adapter: ShoplineHttpAdapter,
     private readonly config: ConfigService,
     private readonly providerPayoutService: ProviderPayoutReconciliationService,
+    private readonly syncCoordinator: ConnectorSyncCoordinatorService,
   ) {}
 
   onModuleInit() {
@@ -578,7 +580,12 @@ export class ShoplineService {
     };
   }
 
-  async autoSync(options?: { entityId?: string; since?: Date; until?: Date }) {
+  async autoSync(options?: {
+    entityId?: string;
+    since?: Date;
+    until?: Date;
+    trigger?: 'scheduler' | 'webhook' | 'manual';
+  }) {
     const enabled =
       this.config.get<string>('SHOPLINE_SYNC_ENABLED', 'false') === 'true';
 
@@ -598,32 +605,68 @@ export class ShoplineService {
     const since =
       options?.since || new Date(until.getTime() - lookbackMinutes * 60 * 1000);
 
-    const [orders, customers, transactions] = await Promise.all([
-      this.syncOrders({ entityId, since, until }),
-      this.syncCustomers({ entityId, since, until }),
-      this.syncTransactions({ entityId, since, until }),
-    ]);
-
-    const syncPayments =
-      this.config.get<string>('SHOPLINE_PAYMENTS_SYNC_ENABLED', 'false') ===
-      'true';
-    const payments = syncPayments
-      ? await this.syncPaymentBillingRecords({ entityId, since, until })
-      : {
-          skipped: true,
-          message: 'SHOPLINE_PAYMENTS_SYNC_ENABLED is false',
-        };
-
-    return {
-      success: true,
+    const acquired = await this.syncCoordinator.acquire({
       entityId,
-      since: since.toISOString(),
-      until: until.toISOString(),
-      orders,
-      customers,
-      transactions,
-      payments,
-    };
+      connector: 'shopline',
+      trigger: options?.trigger || 'manual',
+      windowStart: since,
+      windowEnd: until,
+      leaseMinutes: 30,
+    });
+
+    if (!('lease' in acquired)) {
+      return {
+        success: true,
+        skipped: true,
+        reason: 'already_running',
+        entityId,
+        since: since.toISOString(),
+        until: until.toISOString(),
+        runningSince: acquired.runningSince?.toISOString() || null,
+        leaseExpiresAt: acquired.leaseExpiresAt?.toISOString() || null,
+      };
+    }
+
+    try {
+      const [orders, customers, transactions] = await Promise.all([
+        this.syncOrders({ entityId, since, until }),
+        this.syncCustomers({ entityId, since, until }),
+        this.syncTransactions({ entityId, since, until }),
+      ]);
+
+      const syncPayments =
+        this.config.get<string>('SHOPLINE_PAYMENTS_SYNC_ENABLED', 'false') ===
+        'true';
+      const payments = syncPayments
+        ? await this.syncPaymentBillingRecords({ entityId, since, until })
+        : {
+            skipped: true,
+            message: 'SHOPLINE_PAYMENTS_SYNC_ENABLED is false',
+          };
+
+      const result = {
+        success: true,
+        entityId,
+        since: since.toISOString(),
+        until: until.toISOString(),
+        orders,
+        customers,
+        transactions,
+        payments,
+      };
+
+      await this.syncCoordinator.markSuccess(acquired.lease, {
+        orders,
+        customers,
+        transactions,
+        payments,
+      });
+
+      return result;
+    } catch (error) {
+      await this.syncCoordinator.markFailure(acquired.lease, error);
+      throw error;
+    }
   }
 
   async getSummary(params: { entityId: string; since?: Date; until?: Date }) {
@@ -727,6 +770,7 @@ export class ShoplineService {
         entityId: this.defaultEntityId,
         since,
         until,
+        trigger: 'webhook',
       });
     }
 
@@ -748,28 +792,6 @@ export class ShoplineService {
       resourceId:
         payload?.resource?.id || payload?.resource?._id || payload?.id || null,
     };
-  }
-
-  @Cron('0 */20 * * * *', {
-    name: 'shoplineAutoSync',
-    timeZone: 'Asia/Taipei',
-  })
-  async handleScheduledSync() {
-    const enabled =
-      this.config.get<string>('SHOPLINE_SYNC_ENABLED', 'false') === 'true';
-
-    if (!enabled) {
-      return;
-    }
-
-    try {
-      const result = await this.autoSync({ entityId: this.defaultEntityId });
-      this.logger.log(
-        `Scheduled SHOPLINE sync finished: orders=${result.orders.fetched}, customers=${result.customers.fetched}`,
-      );
-    } catch (error: any) {
-      this.logger.error(`Scheduled SHOPLINE sync failed: ${error.message}`);
-    }
   }
 
   private async ensureSalesChannel(entityId: string) {
@@ -807,12 +829,18 @@ export class ShoplineService {
     channelId: string,
     order: UnifiedOrder,
   ): Promise<'created' | 'updated'> {
-    const existing = await this.prisma.salesOrder.findFirst({
-      where: {
+    const sourceOrderKey = buildSalesOrderSourceKey(
+      channelId,
+      order.externalId,
+    );
+    const sourceIdentity = {
+      entityId_sourceOrderKey: {
         entityId,
-        channelId,
-        externalOrderId: order.externalId,
+        sourceOrderKey,
       },
+    };
+    const existing = await this.prisma.salesOrder.findUnique({
+      where: sourceIdentity,
     });
 
     const currency = order.totals.currency;
@@ -845,42 +873,27 @@ export class ShoplineService {
       notes: this.buildOrderNotes(order),
     };
 
-    if (existing) {
-      const updated = await this.prisma.salesOrder.update({
-        where: { id: existing.id },
-        data: {
-          ...data,
-          hasInvoice: existing.hasInvoice,
-        },
-      });
-      await this.syncSalesOrderItems(
-        updated.id,
-        entityId,
-        order,
-        currency,
-        fxRate,
-      );
-      return 'updated';
-    }
-
-    const created = await this.prisma.salesOrder.create({
-      data: {
+    const stored = await this.prisma.salesOrder.upsert({
+      where: sourceIdentity,
+      update: data,
+      create: {
         entityId,
         channelId,
         externalOrderId: order.externalId,
+        sourceOrderKey,
         hasInvoice: false,
         ...data,
       },
     });
     await this.syncSalesOrderItems(
-      created.id,
+      stored.id,
       entityId,
       order,
       currency,
       fxRate,
     );
 
-    return 'created';
+    return existing ? 'updated' : 'created';
   }
 
   private async syncSalesOrderItems(
@@ -982,11 +995,12 @@ export class ShoplineService {
       tx.externalId,
     );
     const salesOrder = tx.orderId
-      ? await this.prisma.salesOrder.findFirst({
+      ? await this.prisma.salesOrder.findUnique({
           where: {
-            entityId,
-            channelId,
-            externalOrderId: tx.orderId,
+            entityId_sourceOrderKey: {
+              entityId,
+              sourceOrderKey: buildSalesOrderSourceKey(channelId, tx.orderId),
+            },
           },
         })
       : null;

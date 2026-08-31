@@ -21,6 +21,7 @@ import { EcpayShopifyPayoutService } from './ecpay-shopify-payout.service';
 import { SalesOrderService } from '../sales/services/sales-order.service';
 import { LinePayService } from './line-pay.service';
 import { ProviderPayoutReconciliationService } from './provider-payout-reconciliation.service';
+import { canonicalSalesOrderWhere } from '../integration/sales-order-integrity';
 
 /**
  * ReconciliationService
@@ -1045,11 +1046,11 @@ export class ReconciliationService {
     const statusFilter = params.status?.trim();
 
     const orders = await this.prisma.salesOrder.findMany({
-      where: {
+      where: canonicalSalesOrderWhere({
         entityId,
         orderDate: { lte: cutoff },
         status: { notIn: ['cancelled', 'refunded'] },
-      },
+      }),
       include: {
         customer: true,
         channel: true,
@@ -2333,11 +2334,11 @@ export class ReconciliationService {
    */
   async getMissingInvoices(entityId: string) {
     const orders = await this.prisma.salesOrder.findMany({
-      where: {
+      where: canonicalSalesOrderWhere({
         entityId,
         hasInvoice: false,
         status: { in: ['paid', 'fulfilled', 'completed'] },
-      },
+      }),
       include: {
         channel: { select: { name: true, code: true } },
       },

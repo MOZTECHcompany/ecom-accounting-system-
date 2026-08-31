@@ -224,6 +224,7 @@ model Entity {
   approvalPolicies      ApprovalPolicy[]
   paymentTasks          PaymentTask[]
   classifierFeedbacks   AccountingClassifierFeedback[] @relation("EntityClassifierFeedback")
+  connectorSyncStates   ConnectorSyncState[]
 
   // Attendance Relations
   attendancePolicies     AttendancePolicy[]
@@ -781,6 +782,7 @@ model SalesOrder {
   channelId       String   @map("channel_id")
   customerId      String?  @map("customer_id")
   externalOrderId String?  @map("external_order_id") // 平台訂單編號
+  sourceOrderKey  String?  @map("source_order_key") // entity 內唯一的來源訂單識別
   orderDate       DateTime @map("order_date")
 
   // 訂單總額（符合四欄位標準）
@@ -829,6 +831,7 @@ model SalesOrder {
   invoices        Invoice[]
   afterSalesCases AfterSalesCase[]
 
+  @@unique([entityId, sourceOrderKey], map: "sales_orders_entity_source_order_key_key")
   @@index([entityId, orderDate])
   @@index([channelId])
   @@index([status])
@@ -1939,6 +1942,35 @@ model ReconciliationResult {
   @@index([matchedType, matchedId])
   @@index([confidence])
   @@map("reconciliation_results")
+}
+
+// 外部 connector 的唯一執行租約與最近同步結果。
+// 排程、webhook 與人工重跑都透過同一列競爭，避免多 instance 重複匯入。
+model ConnectorSyncState {
+  id             String    @id @default(uuid())
+  entityId       String    @map("entity_id")
+  connector      String
+  status         String    @default("never") // never, running, success, failed
+  trigger        String?
+  lockToken      String?   @map("lock_token")
+  leaseExpiresAt DateTime? @map("lease_expires_at")
+  windowStart    DateTime? @map("window_start")
+  windowEnd      DateTime? @map("window_end")
+  lastStartedAt  DateTime? @map("last_started_at")
+  lastFinishedAt DateTime? @map("last_finished_at")
+  lastSuccessAt  DateTime? @map("last_success_at")
+  lastFailureAt  DateTime? @map("last_failure_at")
+  lastError      String?   @map("last_error")
+  lastMetrics    Json?     @map("last_metrics")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  entity Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([entityId, connector], map: "connector_sync_states_entity_connector_key")
+  @@index([entityId, status])
+  @@index([connector, lastSuccessAt])
+  @@map("connector_sync_states")
 }
 
 model Notification {

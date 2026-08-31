@@ -800,8 +800,7 @@ const DashboardPage: React.FC = () => {
       ? `${customRange[0].format("MM/DD")} - ${customRange[1].format("MM/DD")}`
       : rangeLabel;
   const adConnector = connectorReadiness?.connectors.find((item) => item.key === "ad-spend") || null;
-  const missingInvoiceCount =
-    Number(invoiceSummary?.pendingCount || 0) + Number(invoiceSummary?.eligibleCount || 0);
+  const missingInvoiceCount = Number(invoiceSummary?.pendingCount || 0);
 
   // ─── 品牌業績歸因（從通路 bucket 近似推算）───────────────
   const sumBuckets = (arr: typeof performanceBuckets) => ({

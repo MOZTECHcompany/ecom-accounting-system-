@@ -4,6 +4,7 @@ import { ArRepository } from './ar.repository';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { JournalService } from '../accounting/services/journal.service';
 import { selectEffectiveReceivablePayments } from '../integration/payment-integrity';
+import { canonicalSalesOrderWhere } from '../integration/sales-order-integrity';
 
 /**
  * 應收帳款服務
@@ -39,7 +40,7 @@ export class ArService {
     endDate?: Date,
   ) {
     const orders = await this.prisma.salesOrder.findMany({
-      where: {
+      where: canonicalSalesOrderWhere({
         entityId,
         status: {
           notIn: ['cancelled', 'refunded'],
@@ -52,7 +53,7 @@ export class ArService {
               },
             }
           : {}),
-      },
+      }),
       include: {
         customer: true,
         channel: true,
@@ -626,13 +627,13 @@ export class ArService {
         : undefined;
 
     const orders = await this.prisma.salesOrder.findMany({
-      where: {
+      where: canonicalSalesOrderWhere({
         entityId,
         status: {
           notIn: ['cancelled', 'refunded'],
         },
         ...(orderDate ? { orderDate } : {}),
-      },
+      }),
       include: {
         channel: {
           select: {
@@ -1026,13 +1027,13 @@ export class ArService {
       : undefined;
 
     const orders = await this.prisma.salesOrder.findMany({
-      where: {
+      where: canonicalSalesOrderWhere({
         entityId,
         status: {
           notIn: ['cancelled', 'refunded'],
         },
         ...(orderDate ? { orderDate } : {}),
-      },
+      }),
       include: {
         customer: true,
         channel: true,

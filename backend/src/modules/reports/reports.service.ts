@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { canonicalSalesOrderWhere } from '../integration/sales-order-integrity';
 
 type ManagementSummaryGroupBy = 'year' | 'quarter' | 'month' | 'week' | 'day';
 type CommerceSourceBrandRule = {
@@ -146,10 +147,10 @@ export class ReportsService {
 
     const [orders, payments] = await Promise.all([
       this.prisma.salesOrder.findMany({
-        where: {
+        where: canonicalSalesOrderWhere({
           entityId,
           ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
-        },
+        }),
         select: {
           id: true,
           notes: true,
@@ -458,14 +459,14 @@ export class ReportsService {
         },
       }),
       this.prisma.salesOrder.aggregate({
-        where: {
+        where: canonicalSalesOrderWhere({
           entityId,
           hasInvoice: false,
           status: {
             notIn: ['cancelled', 'refunded'],
           },
           ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
-        },
+        }),
         _count: {
           id: true,
         },
@@ -474,14 +475,14 @@ export class ReportsService {
         },
       }),
       this.prisma.salesOrder.count({
-        where: {
+        where: canonicalSalesOrderWhere({
           entityId,
           hasInvoice: false,
           status: {
             notIn: ['cancelled', 'refunded'],
           },
           ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
-        },
+        }),
       }),
       this.prisma.inventorySnapshot.findMany({
         where: {
@@ -952,11 +953,11 @@ export class ReportsService {
       select: { id: true, code: true, name: true },
     });
 
-    const orderWhere = {
+    const orderWhere = canonicalSalesOrderWhere({
       entityId,
       ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
       status: { notIn: ['cancelled', 'refunded'] },
-    };
+    });
     const paymentWhere = {
       entityId,
       ...(paymentDateFilter ? { payoutDate: paymentDateFilter } : {}),
@@ -1015,7 +1016,9 @@ export class ReportsService {
           entityId,
           isActive: true,
           salesOrders: {
-            some: orderDateFilter ? { orderDate: orderDateFilter } : {},
+            some: canonicalSalesOrderWhere(
+              orderDateFilter ? { orderDate: orderDateFilter } : {},
+            ),
           },
         },
       }),
@@ -1386,7 +1389,7 @@ export class ReportsService {
   }
 
   async getConnectorReadiness(entityId: string) {
-    const connectors = [
+    const connectorDefinitions = [
       this.buildConnectorReadiness({
         key: 'shopify',
         label: 'Shopify / MOZTECH 官網',
@@ -1583,10 +1586,90 @@ export class ReportsService {
       }),
     ];
 
+    const syncStates = await this.prisma.connectorSyncState.findMany({
+      where: { entityId },
+      orderBy: { connector: 'asc' },
+    });
+    const syncStateByConnector = new Map(
+      syncStates.map((state) => [state.connector, state]),
+    );
+    const now = Date.now();
+    const staleAfterMinutes: Record<string, number> = {
+      shopline: 60,
+      shopify: 60,
+      oneshop: 60,
+      'ecpay-einvoice': 60,
+      'ecpay-payout': 24 * 60,
+      'ad-spend': 36 * 60,
+    };
+
+    const connectors = connectorDefinitions.map((connector) => {
+      const state = syncStateByConnector.get(connector.key);
+      if (!state) {
+        return {
+          ...connector,
+          syncHealth: {
+            status: 'untracked',
+            lastStartedAt: null,
+            lastFinishedAt: null,
+            lastSuccessAt: null,
+            lastFailureAt: null,
+            lastError: null,
+            trigger: null,
+            metrics: null,
+          },
+        };
+      }
+
+      const leaseExpired = Boolean(
+        state.status === 'running' &&
+          state.leaseExpiresAt &&
+          state.leaseExpiresAt.getTime() <= now,
+      );
+      const staleThreshold =
+        (staleAfterMinutes[connector.key] || 24 * 60) * 60 * 1000;
+      const successStale = Boolean(
+        state.status === 'success' &&
+          state.lastSuccessAt &&
+          now - state.lastSuccessAt.getTime() > staleThreshold,
+      );
+      const healthStatus = leaseExpired || successStale
+        ? 'stale'
+        : state.status === 'running'
+          ? 'running'
+          : state.status === 'failed'
+            ? 'failed'
+            : state.status === 'success'
+              ? 'healthy'
+              : 'untracked';
+
+      return {
+        ...connector,
+        syncHealth: {
+          status: healthStatus,
+          lastStartedAt: state.lastStartedAt?.toISOString() || null,
+          lastFinishedAt: state.lastFinishedAt?.toISOString() || null,
+          lastSuccessAt: state.lastSuccessAt?.toISOString() || null,
+          lastFailureAt: state.lastFailureAt?.toISOString() || null,
+          lastError: state.lastError,
+          trigger: state.trigger,
+          metrics: state.lastMetrics,
+        },
+      };
+    });
+
     const summary = connectors.reduce(
       (acc, connector) => {
         acc.total += 1;
         acc[connector.status] += 1;
+        if (connector.syncHealth.status === 'healthy') acc.syncHealthy += 1;
+        if (connector.syncHealth.status === 'running') acc.syncRunning += 1;
+        if (
+          connector.syncHealth.status === 'failed' ||
+          connector.syncHealth.status === 'stale'
+        ) {
+          acc.syncIssues += 1;
+        }
         return acc;
       },
       {
@@ -1594,6 +1677,9 @@ export class ReportsService {
         ready: 0,
         partial: 0,
         blocked: 0,
+        syncHealthy: 0,
+        syncRunning: 0,
+        syncIssues: 0,
       },
     );
 
@@ -2073,14 +2159,14 @@ export class ReportsService {
         },
       }),
       this.prisma.salesOrder.aggregate({
-        where: {
+        where: canonicalSalesOrderWhere({
           entityId,
           hasInvoice: false,
           status: {
             notIn: ['cancelled', 'refunded'],
           },
           ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
-        },
+        }),
         _count: {
           id: true,
         },
@@ -2201,10 +2287,10 @@ export class ReportsService {
 
     const [orders, payments, payoutLines] = await Promise.all([
       this.prisma.salesOrder.findMany({
-        where: {
+        where: canonicalSalesOrderWhere({
           entityId,
           ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
-        },
+        }),
         select: {
           id: true,
           externalOrderId: true,
@@ -2421,13 +2507,13 @@ export class ReportsService {
     const tolerance = 1;
 
     const orders = await this.prisma.salesOrder.findMany({
-      where: {
+      where: canonicalSalesOrderWhere({
         entityId,
         ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
         status: {
           notIn: ['cancelled'],
         },
-      },
+      }),
       orderBy: {
         orderDate: 'desc',
       },
@@ -2829,13 +2915,13 @@ export class ReportsService {
     const [orders, payments, expenses, expenseRequests, arInvoices] =
       await Promise.all([
         this.prisma.salesOrder.findMany({
-          where: {
+          where: canonicalSalesOrderWhere({
             entityId,
             status: {
               notIn: ['cancelled', 'refunded'],
             },
             ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
-          },
+          }),
           select: {
             id: true,
             orderDate: true,
@@ -3249,13 +3335,13 @@ export class ReportsService {
     const orderDateFilter = this.buildDateFilter(startDate, endDate);
 
     const orders = await this.prisma.salesOrder.findMany({
-      where: {
+      where: canonicalSalesOrderWhere({
         entityId,
         status: {
           notIn: ['cancelled', 'refunded'],
         },
         ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
-      },
+      }),
       orderBy: {
         orderDate: 'asc',
       },
@@ -3515,13 +3601,13 @@ export class ReportsService {
 
     const [orders, adExpenses] = await Promise.all([
       this.prisma.salesOrder.findMany({
-        where: {
+        where: canonicalSalesOrderWhere({
           entityId,
           status: {
             notIn: ['cancelled', 'refunded'],
           },
           ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
-        },
+        }),
         orderBy: {
           orderDate: 'asc',
         },
@@ -3751,7 +3837,9 @@ export class ReportsService {
       );
       const lastExpenseDate = sourceExpenses.reduce<Date | null>(
         (latest, expense) =>
-          !latest || expense.expenseDate > latest ? expense.expenseDate : latest,
+          !latest || expense.expenseDate > latest
+            ? expense.expenseDate
+            : latest,
         null,
       );
       return {

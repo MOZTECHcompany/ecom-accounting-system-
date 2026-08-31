@@ -1,10 +1,19 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { JournalService } from '../../accounting/services/journal.service';
 import { Decimal } from '@prisma/client/runtime/library';
 import { InventoryService } from '../../inventory/inventory.service';
 import { ProductType } from '@prisma/client';
 import { ApService } from '../../ap/ap.service';
+import {
+  buildSalesOrderSourceKey,
+  canonicalSalesOrderWhere,
+} from '../../integration/sales-order-integrity';
 
 /**
  * SalesOrderService
@@ -77,6 +86,9 @@ export class SalesOrderService {
         channelId: data.channelId,
         customerId: data.customerId,
         externalOrderId: data.externalOrderId,
+        sourceOrderKey: data.externalOrderId
+          ? buildSalesOrderSourceKey(data.channelId, data.externalOrderId)
+          : undefined,
         orderDate: data.orderDate,
         totalGrossOriginal: new Decimal(totalGross),
         totalGrossCurrency: data.currency || 'TWD',
@@ -163,7 +175,9 @@ export class SalesOrderService {
       });
 
       if (bom.length === 0) {
-        this.logger.warn(`Bundle product ${product.sku} has no BOM components defined.`);
+        this.logger.warn(
+          `Bundle product ${product.sku} has no BOM components defined.`,
+        );
         return;
       }
 
@@ -190,8 +204,6 @@ export class SalesOrderService {
       });
     }
   }
-
-
 
   /**
    * 完成訂單並產生收入分錄
@@ -293,7 +305,7 @@ export class SalesOrderService {
     const limit = Math.max(1, Math.min(filters?.limit || 300, 500));
 
     const orders = await this.prisma.salesOrder.findMany({
-      where: {
+      where: canonicalSalesOrderWhere({
         entityId,
         ...(filters?.channelId && { channelId: filters.channelId }),
         ...(filters?.status && { status: filters.status }),
@@ -303,7 +315,7 @@ export class SalesOrderService {
             ...(filters?.endDate && { lte: filters.endDate }),
           },
         }),
-      },
+      }),
       include: {
         channel: true,
         customer: true,
@@ -397,7 +409,8 @@ export class SalesOrderService {
         feePlatformOriginal: platformFeeAmount,
         amountNetOriginal: netAmount,
         invoiceNumber: latestInvoice?.invoiceNumber || null,
-        invoiceStatus: latestInvoice?.status || (order.hasInvoice ? 'issued' : 'pending'),
+        invoiceStatus:
+          latestInvoice?.status || (order.hasInvoice ? 'issued' : 'pending'),
         arStatus: arInvoice?.status || null,
         arDueDate: arInvoice?.dueDate || null,
         journalEntryId: journal?.id || null,
@@ -423,7 +436,10 @@ export class SalesOrderService {
       throw new NotFoundException(`Sales order ${orderId} not found`);
     }
 
-    const invoiceCandidate = this.resolveInvoiceCandidate(order.notes, order.invoices?.[0]);
+    const invoiceCandidate = this.resolveInvoiceCandidate(
+      order.notes,
+      order.invoices?.[0],
+    );
     if (!invoiceCandidate.invoiceNumber || !invoiceCandidate.invoiceDate) {
       return {
         success: false,
@@ -436,7 +452,9 @@ export class SalesOrderService {
       };
     }
 
-    const merchantProfile = this.resolveEcpayMerchantProfile(order.channel?.code || '');
+    const merchantProfile = this.resolveEcpayMerchantProfile(
+      order.channel?.code || '',
+    );
     const result = await this.apService.queryEcpayServiceFeeInvoiceStatus({
       merchantKey: merchantProfile.merchantKey,
       merchantId: merchantProfile.merchantId,
@@ -447,19 +465,24 @@ export class SalesOrderService {
     const mergedNotes = this.mergeInvoiceMetadataIntoNotes(order.notes, {
       invoiceNumber: invoiceCandidate.invoiceNumber,
       invoiceDate: invoiceCandidate.invoiceDate,
-      invoiceStatus: result.invoiceIssuedStatus || (result.success ? 'issued' : 'unknown'),
+      invoiceStatus:
+        result.invoiceIssuedStatus || (result.success ? 'issued' : 'unknown'),
       merchantKey: merchantProfile.merchantKey,
       merchantId: merchantProfile.merchantId,
       verificationMessage: result.rawMessage || null,
       verifiedAt: new Date().toISOString(),
     });
 
-    const invoiceRecord = await this.materializeInvoiceCandidate(order, invoiceCandidate, {
-      externalPlatform: 'ecpay',
-      externalPayload: result.raw || undefined,
-      verificationMessage: result.rawMessage || null,
-      issued: result.success,
-    });
+    const invoiceRecord = await this.materializeInvoiceCandidate(
+      order,
+      invoiceCandidate,
+      {
+        externalPlatform: 'ecpay',
+        externalPayload: result.raw || undefined,
+        verificationMessage: result.rawMessage || null,
+        issued: result.success,
+      },
+    );
 
     await this.prisma.salesOrder.update({
       where: { id: order.id },
@@ -494,7 +517,7 @@ export class SalesOrderService {
   }) {
     const limit = Math.max(1, Math.min(params.limit || 50, 200));
     const orders = await this.prisma.salesOrder.findMany({
-      where: {
+      where: canonicalSalesOrderWhere({
         entityId: params.entityId,
         ...(params.channelId && { channelId: params.channelId }),
         ...(params.status && { status: params.status }),
@@ -504,7 +527,7 @@ export class SalesOrderService {
             ...(params.endDate && { lte: params.endDate }),
           },
         }),
-      },
+      }),
       include: {
         channel: true,
         invoices: {
@@ -522,7 +545,10 @@ export class SalesOrderService {
 
     for (const order of orders) {
       try {
-        const invoiceCandidate = this.resolveInvoiceCandidate(order.notes, order.invoices?.[0]);
+        const invoiceCandidate = this.resolveInvoiceCandidate(
+          order.notes,
+          order.invoices?.[0],
+        );
         if (!invoiceCandidate.invoiceNumber || !invoiceCandidate.invoiceDate) {
           skipped += 1;
           results.push({
@@ -572,7 +598,9 @@ export class SalesOrderService {
   }) {
     const merchantKey =
       params.merchantKey?.trim() ||
-      (params.merchantId?.trim() === '3150241' ? 'groupbuy-main' : 'shopify-main');
+      (params.merchantId?.trim() === '3150241'
+        ? 'groupbuy-main'
+        : 'shopify-main');
     const merchantId =
       params.merchantId?.trim() ||
       (merchantKey === 'groupbuy-main' ? '3150241' : '3290494');
@@ -604,7 +632,10 @@ export class SalesOrderService {
     }> = [];
 
     for (const row of params.rows || []) {
-      const normalized = this.normalizeEcpayIssuedInvoiceRow(row, params.mapping);
+      const normalized = this.normalizeEcpayIssuedInvoiceRow(
+        row,
+        params.mapping,
+      );
       if (!normalized.invoiceNumber || !normalized.invoiceDate) {
         invalid += 1;
         results.push({
@@ -712,7 +743,9 @@ export class SalesOrderService {
         orderId: order.id,
         orderNumber: order.externalOrderId || order.id,
         status: existingInvoice ? 'updated' : 'created',
-        message: existingInvoice ? '已更新既有發票並回填訂單' : '已建立發票並回填訂單',
+        message: existingInvoice
+          ? '已更新既有發票並回填訂單'
+          : '已建立發票並回填訂單',
       });
     }
 
@@ -806,7 +839,9 @@ export class SalesOrderService {
         isActive: true,
       },
     });
-    const accountMap = new Map(accounts.map((account) => [account.code, account]));
+    const accountMap = new Map(
+      accounts.map((account) => [account.code, account]),
+    );
     const bankAccount = accountMap.get('1113');
     const arAccount = accountMap.get('1191');
     const revenueAccount = accountMap.get('4111');
@@ -906,7 +941,9 @@ export class SalesOrderService {
               status: 'void',
               voidAt: refundDate,
               voidReason: reason || '售後退款',
-              notes: [latestInvoice.notes, refundNote].filter(Boolean).join('\n'),
+              notes: [latestInvoice.notes, refundNote]
+                .filter(Boolean)
+                .join('\n'),
             },
           });
           await tx.invoiceLog.create({
@@ -1055,11 +1092,11 @@ export class SalesOrderService {
   ) {
     const metadata = this.extractMetadata(existingNotes);
     const invoiceNumber =
-      invoice?.invoiceNumber?.trim() ||
-      metadata.invoiceNumber ||
-      null;
+      invoice?.invoiceNumber?.trim() || metadata.invoiceNumber || null;
     const invoiceDate =
-      (invoice?.issuedAt ? invoice.issuedAt.toISOString().slice(0, 10) : null) ||
+      (invoice?.issuedAt
+        ? invoice.issuedAt.toISOString().slice(0, 10)
+        : null) ||
       metadata.invoiceDate ||
       null;
 
@@ -1085,7 +1122,9 @@ export class SalesOrderService {
       };
     }
 
-    throw new BadRequestException(`Unsupported channel for ECPay invoice sync: ${channelCode}`);
+    throw new BadRequestException(
+      `Unsupported channel for ECPay invoice sync: ${channelCode}`,
+    );
   }
 
   private normalizeEcpayIssuedInvoiceRow(
@@ -1189,10 +1228,11 @@ export class SalesOrderService {
         ? ['1SHOP', 'SHOPLINE']
         : ['SHOPIFY'];
     const relateNumber = params.relateNumber?.trim();
-    const relateNumberMatchers = this.buildEcpayRelateNumberMatchers(relateNumber);
+    const relateNumberMatchers =
+      this.buildEcpayRelateNumberMatchers(relateNumber);
 
     return this.prisma.salesOrder.findFirst({
-      where: {
+      where: canonicalSalesOrderWhere({
         entityId: params.entityId,
         channel: {
           code: {
@@ -1204,7 +1244,7 @@ export class SalesOrderService {
           { notes: { contains: `invoiceNumber=${params.invoiceNumber}` } },
           ...relateNumberMatchers,
         ],
-      },
+      }),
       include: {
         customer: true,
       },
@@ -1235,6 +1275,14 @@ export class SalesOrderService {
     const withoutHash = raw.replace(/^#/, '');
     const withoutOneShopSuffix = raw.replace(/a\d+$/, '');
     const withoutHashAndOneShopSuffix = withoutHash.replace(/a\d+$/, '');
+    const withoutOneShopOpaqueSuffix = raw.replace(
+      /ai[A-Za-z0-9]{6}$/,
+      '',
+    );
+    const withoutHashAndOneShopOpaqueSuffix = withoutHash.replace(
+      /ai[A-Za-z0-9]{6}$/,
+      '',
+    );
 
     return Array.from(
       new Set(
@@ -1243,6 +1291,8 @@ export class SalesOrderService {
           withoutHash,
           withoutOneShopSuffix,
           withoutHashAndOneShopSuffix,
+          withoutOneShopOpaqueSuffix,
+          withoutHashAndOneShopOpaqueSuffix,
         ].filter(Boolean),
       ),
     );
@@ -1276,10 +1326,10 @@ export class SalesOrderService {
       ...this.buildEcpayRelateNumberMatchers(relateNumber),
     ];
     const candidates = await this.prisma.salesOrder.findMany({
-      where: {
+      where: canonicalSalesOrderWhere({
         entityId: params.entityId,
         OR: broadMatchers,
-      },
+      }),
       select: {
         externalOrderId: true,
         orderDate: true,
@@ -1323,16 +1373,24 @@ export class SalesOrderService {
         candidateOrderNumbers: [],
       };
     }
-    if (/^[A-Z]+[0-9]+a[0-9]+$/.test(relateNumber)) {
+    if (
+      /^[A-Z]+[0-9]+(?:a[0-9]+|ai[A-Za-z0-9]{6})$/.test(relateNumber)
+    ) {
       return {
-        reasonCode: variants.length > 1 ? 'oneshop_suffix_order_not_found' : 'oneshop_order_not_found',
+        reasonCode:
+          variants.length > 1
+            ? 'oneshop_suffix_order_not_found'
+            : 'oneshop_order_not_found',
         reason:
           '綠界關聯號像 1Shop 訂單衍生碼，但系統內找不到原始 1Shop 訂單；需確認 1Shop 該期間訂單是否已同步或需用匯出檔回補。',
         candidateCount: 0,
         candidateOrderNumbers: [],
       };
     }
-    if (/^[0-9]{8}U[0-9]+$/.test(relateNumber) || /^[0-9]{8}-[0-9]+$/.test(relateNumber)) {
+    if (
+      /^[0-9]{8}U[0-9]+$/.test(relateNumber) ||
+      /^[0-9]{8}-[0-9]+$/.test(relateNumber)
+    ) {
       return {
         reasonCode: 'manual_or_batch_invoice_mapping_required',
         reason:
@@ -1367,7 +1425,10 @@ export class SalesOrderService {
         address?: string | null;
       } | null;
     },
-    invoiceCandidate: { invoiceNumber: string | null; invoiceDate: string | null },
+    invoiceCandidate: {
+      invoiceNumber: string | null;
+      invoiceDate: string | null;
+    },
     options?: {
       externalPlatform?: string | null;
       externalPayload?: unknown;
@@ -1386,7 +1447,9 @@ export class SalesOrderService {
         : null;
     const taxRate = new Decimal(0.05);
     const fxRate = new Decimal(order.totalGrossFxRate || 1);
-    const totalAmountOriginal = new Decimal(order.totalGrossOriginal || 0).toDecimalPlaces(2);
+    const totalAmountOriginal = new Decimal(
+      order.totalGrossOriginal || 0,
+    ).toDecimalPlaces(2);
     const amountOriginal = totalAmountOriginal
       .div(new Decimal(1).plus(taxRate))
       .toDecimalPlaces(2);

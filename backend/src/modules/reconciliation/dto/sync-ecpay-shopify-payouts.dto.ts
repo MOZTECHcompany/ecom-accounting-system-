@@ -21,7 +21,7 @@ export class SyncEcpayShopifyPayoutsDto {
 
   @ApiPropertyOptional({
     description:
-      '綠界 Shopify PaymentID。提供後會改走單筆查詢，不再使用日期區間。',
+      '綠界 Shopify PaymentID。只有 Shopify 專用 profile 支援；提供後不再使用日期區間。',
     example: 'ASDFshopifyPaymentId123',
   })
   @IsOptional()
@@ -55,10 +55,10 @@ export class SyncEcpayShopifyPayoutsDto {
 
   @ApiPropertyOptional({
     description:
-      '付款方式過濾。01=信用卡，02=網路ATM，03=ATM櫃員機，11=圓夢彈性分期。',
-    enum: ['01', '02', '03', '11'],
+      '付款方式過濾。01=信用卡，02=網路ATM，03=ATM櫃員機，04=超商代碼，05=超商條碼，11=圓夢彈性分期。',
+    enum: ['01', '02', '03', '04', '05', '11'],
   })
   @IsOptional()
-  @IsIn(['01', '02', '03', '11'])
-  paymentType?: '01' | '02' | '03' | '11';
+  @IsIn(['01', '02', '03', '04', '05', '11'])
+  paymentType?: '01' | '02' | '03' | '04' | '05' | '11';
 }

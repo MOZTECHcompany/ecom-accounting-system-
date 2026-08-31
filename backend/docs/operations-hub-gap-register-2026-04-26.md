@@ -149,6 +149,29 @@
 - MPOS：實體、展場、快閃、電話刷卡或現場刷卡收款，需獨立標記通路 / 據點 / 活動，並回到同一套 Payment / payout / bank reconciliation。
 - Secret 管理：金流、物流、電子收據、MPOS 後續若接 API，應各自放 Secret Manager 或 service profile，不可把金鑰寫入 repo 或文件。
 
+2026-08-28 雙帳號撥款 API 盤點與底層修正：
+
+- 綠界後台唯讀確認 `3150241` 為團購 / 1Shop，`3290494` 為萬博創意科技加開商代；兩者都已將 Cloud Run 固定出口 `104.199.246.28` 加入允許 IP，且該 IP 仍由正式 GCP 專案的 Cloud NAT 使用。
+- 依撥款入帳日期查詢 `2026-07-28` 至 `2026-08-28`：`3150241` 共 357 筆、交易 495,150 元、服務費 9,893 元、淨撥 485,257 元；`3290494` 共 126 筆、交易 155,763 元、服務費 3,156 元、淨撥 152,607 元。
+- 問題不在綠界缺資料，而是 profile 名稱被誤當成協定來源：`3290494` 的 Shopify 專用 API 可連線但同區間回 0 筆；兩個帳號呼叫新版 AES `QueryTradeMedia` 都回 `128 System exception`。
+- 介接頁實際提供的是既有特店 `PaymentMedia/TradeNoAio` 文件。`EcpayShopifyPayoutService` 已新增明確 `apiKind=trade-media|general|shopify`，由帳號實際開通協定決定，不再依 profile 名稱推測。
+- 新增 `POST /reconciliation/payouts/ecpay/preview`：只讀取、正規化、加總與回傳樣本，不寫入 Payment、匯入批次或會計分錄。
+- 修正欄位語意：一般綠界支援特店交易編號、金流 / 平台 / 處理費與應收淨額；Trade Media V3 以交易金額減退款及應收淨額反推總費用，避免手續費、處理費、交易手續費與平台手續費重複計算；Shopify 的「手續費」視為含處理費總額；負數退刷費用不再被當成 0。
+- Trade Media V3 的未加引號儲存格會以 `=790` 形式傳輸；共用 CSV 清理層已統一移除 `=` 包裝，避免金額全被解析為空值，也避免訂單編號保留多餘前綴。
+- `TradeNoAio` 不保證包含全部信用卡退款；系統會再查 `CreditDetail/FundingReconDetail`，只合併主媒體檔未出現的負數退款。`3150241` 同區間信用卡補檔有 5 筆退款；`3290494` 有 6 筆，其中預期 2 筆已存在主媒體檔，最終仍以 357 / 126 筆及後台總額作驗收。
+- 日期切片改為連續最多一個月，不再因跨自然月把 `7/28~8/28` 拆成兩個即時 API 呼叫。
+- 驗證：官方 SHA-256 CheckMacValue 範例、Trade Media 表單、三種費用語意及既有對帳邏輯共 8/8 測試通過；前一版 `npm run build` 通過，Trade Media 版待重新建置與 Cloud Run 唯讀查核。
+- 尚未啟用正式匯入：必須先以 Cloud Run preview 對照同區間後台總額，並完成 provider payout 與 bank reconciliation 狀態分離。
+
+2026-09-01 Shopline 排程責任與同步健康修正：
+
+- 正式 Cloud Scheduler 連續回傳 `401`，但同分鐘 Cloud Run 內建 `@Cron` 仍完成訂單 / 顧客同步。根因是 Shopline 同時存在 Cloud Scheduler 與 application cron 兩個固定觸發來源，而且 Scheduler header 與目前 Cloud Run 使用的同步 Secret 失配；不能把 application log 的成功當成 Cloud Scheduler 健康。
+- 已將 Shopline 固定輪詢收斂為單一 Cloud Scheduler，移除 service 內每 20 分鐘的重複 `@Cron`。Webhook 仍可觸發增量回刷，但與 Scheduler 共用同一個資料庫租約。
+- 新增 `ConnectorSyncState`：以 `entityId + connector` 唯一列原子取得有期限的執行租約，避免 Cloud Run 多 instance、Scheduler、Webhook 或人工重跑同時打上游；只有同一個 lock token 能寫回成功或失敗，舊 worker 不會誤解除新 worker 的鎖。
+- `GET /reports/connector-readiness` 會回傳 connector 最近開始、完成、成功、失敗、錯誤與精簡 metrics；會計工作台直接標示同步正常、同步中、同步失敗、同步逾時或尚無紀錄，不再只顯示「憑證有設定」。
+- Scheduler token 對齊既有 Secret 後，原本的 `401` 已排除，並暴露第二個底層問題：Scheduler 沒有 request body 時 controller 直接讀 `body.entityId` 造成 `500`。Controller 已改成接受空 body 並使用 default entity，不要求排程傳入假欄位。
+- 本機驗證：Prisma schema validate / generate、backend build、22 suites / 79 tests、frontend production build 均通過。正式 migration、candidate revision、Scheduler 2xx 與登入後 UI smoke 仍是獨立發布 gate。
+
 ### 4. Dashboard 還不是完整總控台
 
 Dashboard 最終不應只是展示業績，而是要主動揭露營運風險。
@@ -791,6 +814,45 @@ Cloud Run 正式資料目前已經不是空系統，但核心治理缺口很大�
 - 因診斷輸出曾包含同步排程權杖，Shopify / 1Shop、Meta、Google Ads 權杖已全部輪替並寫入 Secret Manager。四條 Cloud Scheduler 正式排程均已回 HTTP 201：Shopify、1Shop、Meta Ads、Google Ads；含 OAuth 與去重修正的程式版本為 `d0bc6d87`。
 - 2026-08-27 同步韌性補強：Shopify 維持每 15 分鐘回刷最近 180 分鐘，1Shop 維持每 20 分鐘回刷最近 3 天；Meta Ads 改為每小時第 5 分鐘、Google Ads 改為每小時第 15 分鐘回刷最近 7 天。四條 Cloud Scheduler 均補上最多 5 次自動重試與退避時間，避免一次網路或平台失敗就形成資料洞。
 - 排程權杖再次輪替至 Secret Manager version 3，正式後端改由 `ecom-accounting-backend-token-v3` 100% 流量並載入 `latest` Secret。切換前的 401 / 400 已由新重試機制自動恢復；正式日誌再次確認 Shopify、1Shop、Meta Ads、Google Ads 全數回 HTTP 201。2026-08-01 至 2026-08-27 無快取報表為營收 `NT$2,370,748`、Meta `NT$563,558`、Google Ads `NT$455,145.06`、總廣告費 `NT$1,018,703.06`、ROAS `2.3272`，兩個廣告來源最後日期皆為 2026-08-27。
+
+2026-08-28 綠界撥款 API 串接：
+
+- 兩個商店均確認使用 `PaymentMedia/TradeNoAio`，並以信用卡 `FundingReconDetail` 補齊退款；Cloud Run 固定出口 `104.199.246.28` 已在兩帳號白名單。商店 profile 仍為 `syncEnabled=false`，只開放唯讀預覽，不自動寫入會計資料。
+- 找到綠界信用卡 CSV 會混入沒有訂單號、授權單號與交易日期的「每日小計」列；底層解析現在只接受追溯欄位齊全的負數退款，避免把彙總金額誤當交易。
+- 2026-07-28 至 2026-08-28 唯讀核對：1SHOP `3150241` 為 `357` 筆、交易額 `NT$495,150.00`、手續費 `NT$9,893.25`、實撥 `NT$485,256.75`；MOZTECH `3290494` 為 `126` 筆、交易額 `NT$155,763.00`、手續費 `NT$3,155.85`、實撥 `NT$152,607.15`，均與後台一致。
+- Backend 測試 `2` suites / `8` tests 與 build 通過。Cloud Run revision `ecom-accounting-backend-00486-vis` 先以零流量通過 readiness `200` 與未登入 `401` 保護測試，再切至正式 `100%` 流量；正式 readiness 仍為 `200`。
+- 對帳中心新增精簡「綠界撥款」入口，沿用頁面日期一次唯讀查詢兩個商店，只顯示筆數、交易額、手續費與實撥。Frontend production build 通過；revision `ecom-accounting-frontend-00254-yak` 的根頁、runtime config 與候選 bundle 驗證通過後切至正式 `100%` 流量。
+
+### S. 發票待辦與來源訂單完整性必須使用同一底層口徑
+
+2026-08-28 本地修正（尚未部署）：
+
+- Dashboard 的缺發票數原本把 `pendingCount + eligibleCount` 相加，但後端 `pendingCount` 已包含 eligible，造成 65 筆 pending 與 41 筆 eligible 被顯示成 106 筆。前端現只讀後端 `pendingCount`。
+- 發票隊列原本只載入 `limit * 4` 筆訂單後計算摘要；Dashboard `limit=24` 時，摘要實際只涵蓋最新 96 筆，不是完整日期區間。現在 `completed / eligible / waiting_payment` 由資料庫對完整區間做三個互斥 count，明細 limit 不再影響摘要。
+- 已開票完成改以 `Invoice.status=issued` 為正式來源，不再只信任可能漂移的 `SalesOrder.hasInvoice`；可開票只接受 `Payment.status=completed/success`，單純 `reconciledFlag` 不會把未完成付款提升成可開票。
+- 批次開票目標改為直接查詢完整 eligible 集合並套用自身 limit，不再從 Dashboard 明細頁的 `queue.items` 篩選，避免頁面分頁造成漏處理。
+- 新增 `SalesOrder.sourceOrderKey` 與 entity 內唯一索引。Shopify、1Shop、Shopline 及人工建立訂單均以 `channelId + externalOrderId` 建立來源鍵；三個 connector 改用資料庫原子 upsert，付款回連訂單也使用同一來源鍵，不再使用競態式 `findFirst -> create`。
+- 遷移不刪除或合併歷史訂單。每個重複群組只選一筆具有正式發票、`hasInvoice`、Payment、items 等下游資料較完整的 canonical 取得來源鍵，其餘舊列保留稽核且不再進入 Dashboard、管理報表、廣告業績、AR、對帳中心及一般訂單列表。
+- 正式 Cloud SQL 一次性唯讀 Job `ecom-accounting-sales-order-audit-2fjn5` 已成功：46,729 筆來源訂單列、46,235 個唯一來源訂單、494 個重複群組 / 494 筆額外列；近 30 天有 142 組。最新樣本均為 SHOPLINE，包含畫面抽查的 `20260827035046324`。Job 只執行 SELECT，未修改資料。
+- 自動綠界發票回填新增受 `x-sync-token` 保護的排程入口，並以 `ECPAY_EINVOICE_SYNC_ENABLED=false` 預設關閉。啟用後只讀綠界既有發票並回填內部 Invoice / SalesOrder，不會開票、作廢或折讓；正式啟用前仍需雙帳號同區間 dry-run 核對。
+- 驗證：Prisma schema validate / generate 通過；backend 18 個 suites、70 個 tests 全數通過；backend build 與 frontend production build 通過。
+
+正式發布關卡：
+
+- 先執行單次 migration Job，再建立零流量 backend candidate；確認 494 組只被 canonical 化、沒有刪除 SalesOrder / Payment / Invoice。
+- candidate 登入後核對同一 30 天區間的發票互斥式：`pendingCount = eligibleCount + waitingPaymentCount`，且三類總和等於 canonical 非取消 / 非退款訂單數。
+- 分別以 `3290494 / shopify-main` 與 `3150241 / groupbuy-main` 執行同區間 dry-run；matched / unmatched / invalid 樣本核對完成後，才開啟內部回填與 Cloud Scheduler。
+- 自動同步啟用後仍保持 `ECPAY_EINVOICE_ISSUING_ENABLED=false`，避免「同步既有發票」被誤解成允許系統自動開票。
+
+2026-08-28 正式發布與 1SHOP 發票來源回補：
+
+- 兩個 1SHOP 正式帳號 `0978072278`、`0938970369` 連線成功；1SHOP 訂單 detail API 會回傳 `receipt.invoice_number` / `invoice_date`，既有 connector 可將訂單、付款與內嵌發票寫入同一來源鍵。
+- 歷史大量回補曾使用 `includeDetails=false`，所以只建立訂單 / 付款而沒有抓 detail 內的 receipt。2026-08-22 至 2026-08-24 已用含 detail 的單日安全窗重拉：訂單分別更新 168、7、12 筆，沒有新增重複訂單。
+- 綠界 `3150241` 最近 7 天在重拉前為 354 張、240 張匹配、114 張未匹配。未匹配中的 102 張使用 `原始 1SHOP 訂單號 + ai + 6 碼英數簽章` 關聯號；底層訂單號正規化新增這個正式格式，沒有用模糊金額或客戶資料猜測配對。
+- 候選 revision `ecom-accounting-backend-00493-pig` 驗證：總計 464 張綠界發票、452 張匹配、102 張建立、12 張未匹配、0 張 invalid；其中 `3150241` 為 342 / 354 匹配，`3290494` 為 110 / 110 匹配。候選通過後切至正式 100% 流量，正式再次執行為 created=0 / updated=452，證明同步冪等。
+- 同一 2026-07-29 至 2026-08-28 發票隊列口徑，含 1SHOP detail receipt 與新關聯號回填後，pending 從 888 降至 645、issued 從 1,674 增至 1,917；共補回 243 張可追溯發票。
+- Cloud Build `847011e2-2468-4396-800b-622b865ba400` 成功；backend 19 suites / 72 tests 與 build 通過。自動發票同步仍維持每 20 分鐘，且 `ECPAY_EINVOICE_ISSUING_ENABLED=false`。
+- 剩餘 12 張不是可由現有 1SHOP 訂單號確定配對的格式：10 張 `CASE-*`、1 張 `FU*`、1 張 `U*-*`。必須追另一個上游來源或取得明確對照表，系統保持 unmatched，不做猜測回填。
 
 ## 待使用者協助確認
 

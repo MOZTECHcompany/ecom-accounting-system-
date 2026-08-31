@@ -20,6 +20,7 @@ import {
   resolveStoredNetAmount,
   resolveStoredPaymentStatus,
 } from '../payment-integrity';
+import { buildSalesOrderSourceKey } from '../sales-order-integrity';
 
 const ONESHOP_CHANNEL_CODE = '1SHOP';
 
@@ -531,6 +532,9 @@ export class OneShopService implements OnModuleInit {
     const uniqueOrderIds = [
       ...new Set(orders.map((order) => order.externalId)),
     ];
+    const uniqueOrderSourceKeys = uniqueOrderIds.map((externalOrderId) =>
+      buildSalesOrderSourceKey(channelId, externalOrderId),
+    );
     const uniquePaymentIds = [
       ...new Set(transactions.map((tx) => tx.externalId).filter(Boolean)),
     ];
@@ -555,12 +559,11 @@ export class OneShopService implements OnModuleInit {
       customersByEmail,
       customersByPhone,
     ] = await Promise.all([
-      uniqueOrderIds.length
+      uniqueOrderSourceKeys.length
         ? this.prisma.salesOrder.findMany({
             where: {
               entityId,
-              channelId,
-              externalOrderId: { in: uniqueOrderIds },
+              sourceOrderKey: { in: uniqueOrderSourceKeys },
             },
           })
         : Promise.resolve([]),
@@ -685,14 +688,20 @@ export class OneShopService implements OnModuleInit {
     order: UnifiedOrder,
     caches?: ReturnType<OneShopService['createSyncWindowCaches']>,
   ): Promise<'created' | 'updated'> {
+    const sourceOrderKey = buildSalesOrderSourceKey(
+      channelId,
+      order.externalId,
+    );
+    const sourceIdentity = {
+      entityId_sourceOrderKey: {
+        entityId,
+        sourceOrderKey,
+      },
+    };
     const existing =
       caches?.salesOrdersByExternalId.get(order.externalId) ||
-      (await this.prisma.salesOrder.findFirst({
-        where: {
-          entityId,
-          channelId,
-          externalOrderId: order.externalId,
-        },
+      (await this.prisma.salesOrder.findUnique({
+        where: sourceIdentity,
       }));
 
     const currency = order.totals.currency;
@@ -726,74 +735,47 @@ export class OneShopService implements OnModuleInit {
       notes: this.buildOrderNotes(order),
     };
 
-    if (existing) {
-      const updated = await this.prisma.salesOrder.update({
-        where: { id: existing.id },
-        data: {
-          ...data,
-          hasInvoice: existing.hasInvoice || this.hasEmbeddedInvoice(order),
-        },
-      });
-      await this.syncSalesOrderItems(
-        updated.id,
-        entityId,
-        order,
-        currency,
-        fxRate,
-      );
-      await this.syncEmbeddedInvoice(
-        updated.id,
-        entityId,
-        order,
-        currency,
-        fxRate,
-      );
-      await this.syncPendingPaymentDraft(
-        updated.id,
-        entityId,
-        channelId,
-        order,
-        currency,
-        fxRate,
-      );
-      caches?.salesOrdersByExternalId.set(order.externalId, updated);
-      return 'updated';
-    }
-
-    const created = await this.prisma.salesOrder.create({
-      data: {
+    const embeddedInvoice = this.hasEmbeddedInvoice(order);
+    const stored = await this.prisma.salesOrder.upsert({
+      where: sourceIdentity,
+      update: {
+        ...data,
+        ...(embeddedInvoice ? { hasInvoice: true } : {}),
+      },
+      create: {
         entityId,
         channelId,
         externalOrderId: order.externalId,
-        hasInvoice: this.hasEmbeddedInvoice(order),
+        sourceOrderKey,
+        hasInvoice: embeddedInvoice,
         ...data,
       },
     });
     await this.syncSalesOrderItems(
-      created.id,
+      stored.id,
       entityId,
       order,
       currency,
       fxRate,
     );
     await this.syncEmbeddedInvoice(
-      created.id,
+      stored.id,
       entityId,
       order,
       currency,
       fxRate,
     );
     await this.syncPendingPaymentDraft(
-      created.id,
+      stored.id,
       entityId,
       channelId,
       order,
       currency,
       fxRate,
     );
-    caches?.salesOrdersByExternalId.set(order.externalId, created);
+    caches?.salesOrdersByExternalId.set(order.externalId, stored);
 
-    return 'created';
+    return existing ? 'updated' : 'created';
   }
 
   private async syncSalesOrderItems(
@@ -1110,11 +1092,12 @@ export class OneShopService implements OnModuleInit {
     );
     const salesOrder = tx.orderId
       ? caches?.salesOrdersByExternalId.get(tx.orderId) ||
-        (await this.prisma.salesOrder.findFirst({
+        (await this.prisma.salesOrder.findUnique({
           where: {
-            entityId,
-            channelId,
-            externalOrderId: tx.orderId,
+            entityId_sourceOrderKey: {
+              entityId,
+              sourceOrderKey: buildSalesOrderSourceKey(channelId, tx.orderId),
+            },
           },
         }))
       : null;

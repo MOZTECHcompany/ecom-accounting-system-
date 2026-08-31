@@ -47,6 +47,16 @@ export type ConnectorReadinessItem = {
   } | null;
   externalNeeds: string[];
   nextAction: string;
+  syncHealth?: {
+    status: "healthy" | "running" | "failed" | "stale" | "untracked";
+    lastStartedAt: string | null;
+    lastFinishedAt: string | null;
+    lastSuccessAt: string | null;
+    lastFailureAt: string | null;
+    lastError: string | null;
+    trigger: string | null;
+    metrics?: unknown;
+  };
 };
 
 export type ConnectorReadiness = {
@@ -57,6 +67,9 @@ export type ConnectorReadiness = {
     ready: number;
     partial: number;
     blocked: number;
+    syncHealthy?: number;
+    syncRunning?: number;
+    syncIssues?: number;
   };
   connectors: ConnectorReadinessItem[];
   inputDocument: string;

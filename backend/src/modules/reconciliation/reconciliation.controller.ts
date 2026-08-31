@@ -69,8 +69,8 @@ class BackfillEcpayShopifyHistoryDto {
   dateType?: '1' | '2';
 
   @IsOptional()
-  @IsIn(['01', '02', '03', '11'])
-  paymentType?: '01' | '02' | '03' | '11';
+  @IsIn(['01', '02', '03', '04', '05', '11'])
+  paymentType?: '01' | '02' | '03' | '04' | '05' | '11';
 
   @IsOptional()
   @IsInt()
@@ -757,6 +757,35 @@ export class ReconciliationController {
     @CurrentUser('id') userId: string,
   ) {
     return this.ecpayShopifyPayoutService.syncShopifyPayouts(dto, userId);
+  }
+
+  @Post('payouts/ecpay/preview')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'ACCOUNTANT')
+  @ApiOperation({
+    summary: '唯讀預覽綠界撥款對帳資料',
+    description:
+      '依 merchant profile 選擇一般綠界或 Shopify 專用 API，只回傳筆數、加總與樣本，不寫入 Payment、對帳批次或會計分錄。',
+  })
+  @ApiResponse({ status: 201, description: '唯讀查詢成功' })
+  async previewEcpayPayouts(@Body() dto: SyncEcpayShopifyPayoutsDto) {
+    return this.ecpayShopifyPayoutService.previewPayouts(dto);
+  }
+
+  @Post('payouts/ecpay/sync')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  @ApiOperation({
+    summary: '同步指定綠界 merchant profile 的撥款資料',
+    description:
+      '依 profile 的 apiKind 使用一般綠界或 Shopify 專用 API。正式匯入前應先呼叫 preview 驗證來源、欄位與金額。',
+  })
+  @ApiResponse({ status: 201, description: '同步成功' })
+  async syncEcpayPayouts(
+    @Body() dto: SyncEcpayShopifyPayoutsDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.ecpayShopifyPayoutService.syncPayouts(dto, userId);
   }
 
   @Post('payouts/ecpay-shopify/backfill')

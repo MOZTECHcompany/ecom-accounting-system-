@@ -18,6 +18,7 @@ import {
   resolveStoredNetAmount,
   resolveStoredPaymentStatus,
 } from '../payment-integrity';
+import { buildSalesOrderSourceKey } from '../sales-order-integrity';
 
 const SHOPIFY_CHANNEL_CODE = 'SHOPIFY';
 
@@ -568,12 +569,18 @@ export class ShopifyService {
     channelId: string,
     order: UnifiedOrder,
   ): Promise<'created' | 'updated'> {
-    const existing = await this.prisma.salesOrder.findFirst({
-      where: {
+    const sourceOrderKey = buildSalesOrderSourceKey(
+      channelId,
+      order.externalId,
+    );
+    const sourceIdentity = {
+      entityId_sourceOrderKey: {
         entityId,
-        channelId,
-        externalOrderId: order.externalId,
+        sourceOrderKey,
       },
+    };
+    const existing = await this.prisma.salesOrder.findUnique({
+      where: sourceIdentity,
     });
 
     // FX Rate is already handled in Adapter, so here we just use it?
@@ -626,44 +633,31 @@ export class ShopifyService {
       notes: this.mergeShopifyOrderMetadataIntoNotes(existing?.notes, order),
     };
 
-    if (existing) {
-      const updated = await this.prisma.salesOrder.update({
-        where: { id: existing.id },
-        data: {
-          ...data,
-          hasInvoice: existing.hasInvoice, // Preserve
-        },
-      });
-      await this.syncSalesOrderItems(
-        updated.id,
-        entityId,
-        order,
-        currency,
-        fxRate,
-      );
-      return 'updated';
-    }
-
-    const created = await this.prisma.salesOrder.create({
-      data: {
+    const customerId =
+      !existing && order.customer
+        ? await this.ensureCustomer(entityId, order.customer)
+        : undefined;
+    const stored = await this.prisma.salesOrder.upsert({
+      where: sourceIdentity,
+      update: data,
+      create: {
         entityId,
         channelId,
         externalOrderId: order.externalId,
+        sourceOrderKey,
         hasInvoice: false,
         ...data,
-        customerId: order.customer
-          ? await this.ensureCustomer(entityId, order.customer)
-          : undefined,
+        customerId,
       },
     });
     await this.syncSalesOrderItems(
-      created.id,
+      stored.id,
       entityId,
       order,
       currency,
       fxRate,
     );
-    return 'created';
+    return existing ? 'updated' : 'created';
   }
 
   private async syncSalesOrderItems(
@@ -793,11 +787,12 @@ export class ShopifyService {
       }));
 
     const salesOrder = tx.orderId
-      ? await this.prisma.salesOrder.findFirst({
+      ? await this.prisma.salesOrder.findUnique({
           where: {
-            entityId,
-            channelId,
-            externalOrderId: tx.orderId,
+            entityId_sourceOrderKey: {
+              entityId,
+              sourceOrderKey: buildSalesOrderSourceKey(channelId, tx.orderId),
+            },
           },
         })
       : null;

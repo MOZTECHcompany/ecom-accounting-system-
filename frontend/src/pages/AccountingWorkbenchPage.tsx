@@ -126,6 +126,16 @@ const connectorStatusMeta = (status: ConnectorReadinessItem['status']) => {
   return { color: 'red' as const, label: '缺設定' }
 }
 
+const connectorSyncMeta = (
+  status?: NonNullable<ConnectorReadinessItem['syncHealth']>['status'],
+) => {
+  if (status === 'healthy') return { color: 'green' as const, label: '同步正常' }
+  if (status === 'running') return { color: 'blue' as const, label: '同步中' }
+  if (status === 'failed') return { color: 'red' as const, label: '同步失敗' }
+  if (status === 'stale') return { color: 'orange' as const, label: '同步逾時' }
+  return { color: 'default' as const, label: '尚無紀錄' }
+}
+
 const csvEscape = (value: unknown) => {
   const text = String(value ?? '')
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
@@ -1429,13 +1439,25 @@ const AccountingWorkbenchPage: React.FC = () => {
       width: 260,
       render: (_, record) => {
         const meta = connectorStatusMeta(record.status)
+        const syncMeta = connectorSyncMeta(record.syncHealth?.status)
         return (
           <div>
             <div className="flex items-center gap-2">
               <span className="font-semibold text-slate-900">{record.label}</span>
               <Tag color={meta.color}>{meta.label}</Tag>
+              <Tag color={syncMeta.color}>{syncMeta.label}</Tag>
             </div>
             <div className="mt-1 text-xs text-slate-400">{record.category}</div>
+            {record.syncHealth?.lastSuccessAt ? (
+              <div className="mt-1 text-xs text-slate-500">
+                最後成功：{dayjs(record.syncHealth.lastSuccessAt).format('YYYY/MM/DD HH:mm')}
+              </div>
+            ) : null}
+            {record.syncHealth?.lastError ? (
+              <div className="mt-1 line-clamp-2 text-xs text-red-600">
+                {record.syncHealth.lastError}
+              </div>
+            ) : null}
             {record.jsonSummary?.present ? (
               <div className="mt-1 text-xs text-slate-500">
                 {record.jsonSummary.name}：
@@ -1956,9 +1978,10 @@ const AccountingWorkbenchPage: React.FC = () => {
                 <Col span={24}>
                   <Alert
                     showIcon
-                    type={(connectorSummary?.blocked || 0) > 0 ? 'warning' : 'info'}
-                    message="外部 API / 報表 / 密鑰缺口集中在這裡"
-                    description={`完整補資料清單已寫入 ${connectorReadiness?.inputDocument || 'backend/docs/user-input-needed-2026-04-27.md'}。這裡只顯示設定是否具備與下一步，不會顯示任何密鑰內容。`}
+                    type={(connectorSummary?.syncIssues || connectorSummary?.blocked || 0) > 0 ? 'warning' : 'info'}
+                    message={(connectorSummary?.syncIssues || 0) > 0
+                      ? `同步異常 ${connectorSummary?.syncIssues} 項`
+                      : '串接狀態'}
                     action={
                       <Space wrap>
                         <Button
