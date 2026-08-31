@@ -133,14 +133,6 @@ jobs:
             exit 1
           fi
 
-          curl --fail --silent --show-error \
-            --connect-timeout 10 \
-            --max-time 60 \
-            --retry 5 \
-            --retry-delay 3 \
-            --retry-all-errors \
-            "${CANDIDATE_URL}/healthz" >/dev/null
-
           CONFIG_JS="$(curl --fail --silent --show-error \
             --connect-timeout 10 \
             --max-time 60 \
@@ -172,13 +164,17 @@ jobs:
             --region="${GCP_REGION}" \
             --format='value(status.url)')"
 
-          curl --fail --silent --show-error \
+          PRODUCTION_CONFIG_JS="$(curl --fail --silent --show-error \
             --connect-timeout 10 \
             --max-time 60 \
             --retry 5 \
             --retry-delay 3 \
             --retry-all-errors \
-            "${URL}/healthz" >/dev/null
+            "${URL}/config.js")"
+          if [[ "${PRODUCTION_CONFIG_JS}" != *"${EXPECTED_CONFIG}"* ]]; then
+            echo "::error::Production frontend did not expose the expected API URL."
+            exit 1
+          fi
 
           echo "url=${URL}" >> "${GITHUB_OUTPUT}"
 

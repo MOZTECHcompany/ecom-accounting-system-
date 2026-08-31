@@ -854,6 +854,17 @@ Cloud Run 正式資料目前已經不是空系統，但核心治理缺口很大�
 - Cloud Build `847011e2-2468-4396-800b-622b865ba400` 成功；backend 19 suites / 72 tests 與 build 通過。自動發票同步仍維持每 20 分鐘，且 `ECPAY_EINVOICE_ISSUING_ENABLED=false`。
 - 剩餘 12 張不是可由現有 1SHOP 訂單號確定配對的格式：10 張 `CASE-*`、1 張 `FU*`、1 張 `U*-*`。必須追另一個上游來源或取得明確對照表，系統保持 unmatched，不做猜測回填。
 
+2026-09-01 電商同步責任與執行紀錄收斂：
+
+- Shopline 原本同時由應用程式內部排程與 Cloud Scheduler 啟動，且正式 Scheduler 權杖與 Secret 不一致而回 `401`。目前已移除內部固定排程，正式固定輪詢由 Cloud Scheduler 單一負責；webhook 只負責事件增量同步。
+- 修正 Cloud Scheduler 未傳 JSON body 時同步入口讀取 `body.entityId` 造成的 `500`；入口現在接受空 body 並安全使用預設 entity。
+- 新增資料庫層 `ConnectorSyncState` 與原子 lease，同一 entity / connector 同時間只能有一個有效同步執行。Scheduler、webhook 與人工觸發共用相同協調器，並記錄觸發來源、執行窗、最近成功／失敗、錯誤與同步筆數；過期 lease 可安全接手。
+- `GET /reports/connector-readiness` 與會計工作台「串接準備」新增同步健康度，區分正常、執行中、失敗、過期與尚未追蹤，不顯示密鑰內容。
+- Prisma validate / generate、backend build、frontend production build 通過；backend `22` suites / `79` tests 全數通過。
+- 正式 migration Job `ecom-accounting-db-migrate-29hc2` 成功。Backend revision `ecom-accounting-backend-00496-net` 先以零流量通過 readiness 與空 body Shopline 真實同步，再切至 `100%`；該次同步更新 3 筆訂單、3 筆付款草稿、166 筆客戶及 3 筆交易，沒有新增重複資料。正式 Shopline Scheduler 隨後回 HTTP `201`，先前 `401` / `500` 已排除。
+- Frontend revision `ecom-accounting-frontend-00262-cim` 的根頁與 runtime `config.js` 候選驗證通過後切至 `100%`。Cloud Run 對 `/healthz` 於應用程式前回 Google `404`，發布流程因此改用動態 `config.js` 作為前端存活與後端指向的單一驗證端點，候選與切流後都必須匹配正式 API URL。
+- 正式入口固定為 `https://ecom-accounting-frontend-sp5g377smq-de.a.run.app`；舊的 revision tag 網址不再作為日常入口。
+
 ## 待使用者協助確認
 
 完整清單另存於 `backend/docs/user-input-needed-2026-04-27.md`，後續凡是缺外部 API 權限、正式報表、密鑰或高風險資料修正規則，都集中更新那份文件。
