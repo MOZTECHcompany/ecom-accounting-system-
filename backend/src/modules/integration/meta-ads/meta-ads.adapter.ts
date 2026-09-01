@@ -46,6 +46,7 @@ export type MetaAdsInsight = {
   date_stop?: string;
   purchase_roas?: unknown;
   actions?: unknown;
+  action_values?: unknown;
   rawAccount?: MetaAdsAccountConfig | null;
 };
 
@@ -153,6 +154,16 @@ export class MetaAdsAdapter {
     return Array.isArray(response.data) ? response.data : [];
   }
 
+  async fetchAdAccount(accountId: string) {
+    this.assertTokenConfigured();
+    return this.request<MetaAdsAdAccount>(
+      `/${this.normalizeAccountId(accountId)}`,
+      {
+        fields: 'id,account_id,name,currency,account_status,business{id,name}',
+      },
+    );
+  }
+
   async fetchInsights(params: {
     since: Date;
     until: Date;
@@ -180,6 +191,7 @@ export class MetaAdsAdapter {
       'cpm',
       'purchase_roas',
       'actions',
+      'action_values',
       'date_start',
       'date_stop',
     ]
@@ -230,27 +242,42 @@ export class MetaAdsAdapter {
   }
 
   private async resolveAccounts(accountIds?: string[]) {
+    const configured = this.getConfiguredAccounts();
     const requested = (accountIds || [])
       .map((value) => value.trim())
       .filter(Boolean)
-      .map((accountId) => ({ accountId: this.normalizeAccountId(accountId) }));
+      .map((accountId) => {
+        const normalizedAccountId = this.normalizeAccountId(accountId);
+        return (
+          configured.find(
+            (item) =>
+              this.normalizeAccountId(item.accountId) === normalizedAccountId,
+          ) || { accountId: normalizedAccountId }
+        );
+      });
     if (requested.length) {
-      return requested;
+      return this.enrichAccountMetadata(requested);
     }
 
-    const configured = this.getConfiguredAccounts();
     if (configured.length) {
-      return configured.map((item) => ({
-        ...item,
-        accountId: this.normalizeAccountId(item.accountId),
-      }));
+      return this.enrichAccountMetadata(
+        configured.map((item) => ({
+          ...item,
+          accountId: this.normalizeAccountId(item.accountId),
+        })),
+      );
     }
 
     const apiAccounts = await this.fetchAdAccounts();
     const accounts = apiAccounts
-      .map((account) => account.id || account.account_id || '')
-      .filter(Boolean)
-      .map((accountId) => ({ accountId: this.normalizeAccountId(accountId) }));
+      .map((account) => ({
+        accountId: this.normalizeAccountId(
+          account.id || account.account_id || '',
+        ),
+        name: account.name,
+        currency: account.currency,
+      }))
+      .filter((account) => Boolean(account.accountId));
 
     if (!accounts.length) {
       throw new BadRequestException(
@@ -259,6 +286,26 @@ export class MetaAdsAdapter {
     }
 
     return accounts;
+  }
+
+  private async enrichAccountMetadata(accounts: MetaAdsAccountConfig[]) {
+    return Promise.all(
+      accounts.map(async (account) => {
+        const metadata = await this.fetchAdAccount(account.accountId);
+        const currency = this.optionalString(metadata.currency);
+        if (!currency) {
+          throw new BadGatewayException(
+            `Meta Ads account currency is unavailable for ${this.normalizeAccountId(account.accountId)}`,
+          );
+        }
+        return {
+          ...account,
+          accountId: this.normalizeAccountId(account.accountId),
+          name: account.name || this.optionalString(metadata.name),
+          currency,
+        };
+      }),
+    );
   }
 
   private async request<T>(path: string, params: Record<string, string>) {

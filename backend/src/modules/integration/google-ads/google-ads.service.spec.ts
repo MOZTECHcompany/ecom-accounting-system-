@@ -93,4 +93,35 @@ describe('GoogleAdsService expense identity', () => {
       where: { id: { in: ['legacy-expense'] } },
     });
   });
+
+  it('preserves authoritative currency and conversion value in insight previews', async () => {
+    const adapter = {
+      fetchInsights: jest.fn().mockResolvedValue([
+        {
+          ...insight,
+          conversionsValue: 96_500,
+          rawAccount: {
+            ...insight.rawAccount,
+            currency: 'TWD',
+          },
+        },
+      ]),
+    };
+    const service = new GoogleAdsService(
+      {} as never,
+      adapter as unknown as GoogleAdsAdapter,
+      { get: jest.fn().mockReturnValue('') } as unknown as ConfigService,
+    );
+
+    const result = await service.previewInsights({
+      since: new Date('2026-08-26T00:00:00Z'),
+      until: new Date('2026-08-26T23:59:59Z'),
+    });
+
+    expect(result.sample[0]).toMatchObject({
+      currency: 'TWD',
+      conversions: 44,
+      conversionsValue: 96_500,
+    });
+  });
 });

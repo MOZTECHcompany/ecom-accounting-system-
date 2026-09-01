@@ -390,10 +390,12 @@ export class GoogleAdsService {
       businessUnit: row.rawAccount?.businessUnit || null,
       channelCode: row.rawAccount?.channelCode || null,
       date: row.date,
+      currency: row.rawAccount?.currency || null,
       spend: this.costMicrosToAmount(row.costMicros),
       impressions: this.toNumber(row.impressions),
       clicks: this.toNumber(row.clicks),
       conversions: this.toNumber(row.conversions),
+      conversionsValue: this.toNumber(row.conversionsValue),
     };
   }
 

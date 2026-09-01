@@ -22,6 +22,11 @@ describe('GoogleAdsAdapter account credentials', () => {
   ) as unknown as {
     getConfiguredAccounts: () => GoogleAdsAccountConfig[];
     getRefreshToken: (account?: GoogleAdsAccountConfig) => string;
+    buildSpendQuery: (
+      since: Date,
+      until: Date,
+      level: 'account' | 'campaign',
+    ) => string;
   };
 
   it('preserves per-account credential environment names', () => {
@@ -37,5 +42,17 @@ describe('GoogleAdsAdapter account credentials', () => {
       'moztech-refresh',
     );
     expect(adapter.getRefreshToken()).toBe('default-refresh');
+  });
+
+  it('requests authoritative currency and conversion value metrics', () => {
+    const query = adapter.buildSpendQuery(
+      new Date('2026-08-25T00:00:00Z'),
+      new Date('2026-08-26T00:00:00Z'),
+      'campaign',
+    );
+
+    expect(query).toContain('customer.currency_code');
+    expect(query).toContain('metrics.conversions');
+    expect(query).toContain('metrics.conversions_value');
   });
 });

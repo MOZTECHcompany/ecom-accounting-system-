@@ -34,6 +34,7 @@ export type GoogleAdsInsight = {
   impressions?: string | number | null;
   clicks?: string | number | null;
   conversions?: string | number | null;
+  conversionsValue?: string | number | null;
   rawAccount?: GoogleAdsAccountConfig | null;
 };
 
@@ -42,6 +43,7 @@ type GoogleAdsSearchResponse = {
     customer?: {
       id?: string;
       descriptiveName?: string;
+      currencyCode?: string;
     };
     campaign?: {
       id?: string;
@@ -63,6 +65,7 @@ type GoogleAdsSearchResponse = {
       impressions?: string | number;
       clicks?: string | number;
       conversions?: string | number;
+      conversionsValue?: string | number;
     };
   }>;
   nextPageToken?: string;
@@ -211,7 +214,11 @@ export class GoogleAdsAdapter {
             impressions: row.metrics?.impressions || 0,
             clicks: row.metrics?.clicks || 0,
             conversions: row.metrics?.conversions || 0,
-            rawAccount: account,
+            conversionsValue: row.metrics?.conversionsValue || 0,
+            rawAccount: {
+              ...account,
+              currency: row.customer?.currencyCode || account.currency,
+            },
           })),
         );
         page += 1;
@@ -493,6 +500,7 @@ export class GoogleAdsAdapter {
     const fields = [
       'customer.id',
       'customer.descriptive_name',
+      'customer.currency_code',
       level === 'campaign' ? 'campaign.id' : null,
       level === 'campaign' ? 'campaign.name' : null,
       'segments.date',
@@ -500,6 +508,7 @@ export class GoogleAdsAdapter {
       'metrics.impressions',
       'metrics.clicks',
       'metrics.conversions',
+      'metrics.conversions_value',
     ]
       .filter(Boolean)
       .join(', ');
