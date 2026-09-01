@@ -1406,6 +1406,16 @@ const AccountingWorkbenchPage: React.FC = () => {
                   等綠界發票回填 {record.reasonBreakdown.missingInvoiceEcpayBackfillCandidates} 筆。
                 </div>
               ) : null}
+              {record.reasonBreakdown.missingInvoiceNonIssuedRecordCandidates ? (
+                <div>
+                  已有發票紀錄但狀態不是已開立 {record.reasonBreakdown.missingInvoiceNonIssuedRecordCandidates} 筆。
+                </div>
+              ) : null}
+              {record.reasonBreakdown.missingInvoiceLegacyFlagMismatches ? (
+                <div>
+                  舊狀態標記與正式發票紀錄不一致 {record.reasonBreakdown.missingInvoiceLegacyFlagMismatches} 筆。
+                </div>
+              ) : null}
               {record.reasonBreakdown.feeMissingPayoutBackfillCandidates ? (
                 <div>
                   等綠界撥款 / 手續費回填 {record.reasonBreakdown.feeMissingPayoutBackfillCandidates} 筆。

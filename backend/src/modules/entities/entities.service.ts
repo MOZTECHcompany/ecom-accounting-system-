@@ -73,16 +73,7 @@ export class EntitiesService {
    */
   async update(id: string, updateEntityDto: UpdateEntityDto) {
     await this.findOne(id); // 確認存在
-    const entity = await this.entitiesRepository.update(id, updateEntityDto);
-    const initialAdmin = await this.createInitialCompanyAdmin(
-      id,
-      updateEntityDto,
-    );
-
-    return {
-      ...entity,
-      initialAdmin,
-    };
+    return this.entitiesRepository.update(id, updateEntityDto);
   }
 
   /**

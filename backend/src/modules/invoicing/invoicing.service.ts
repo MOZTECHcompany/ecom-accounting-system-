@@ -16,6 +16,7 @@ import { EcpayEinvoiceAdapter } from './adapters/ecpay-einvoice.adapter';
 import { SalesOrderService } from '../sales/services/sales-order.service';
 import { isReceivedPaymentStatus } from '../integration/payment-integrity';
 import { canonicalSalesOrderWhere } from '../integration/sales-order-integrity';
+import { buildInvoiceOrderStateWhere } from './invoice-order-state';
 
 /**
  * InvoicingService
@@ -972,7 +973,7 @@ export class InvoicingService {
           }
         : undefined;
 
-    const stateWhere = this.buildInvoiceOrderStateWhere(entityId, orderDate);
+    const stateWhere = buildInvoiceOrderStateWhere(entityId, orderDate);
     const orderInclude = this.getInvoiceQueueOrderInclude();
 
     const [
@@ -1087,7 +1088,7 @@ export class InvoicingService {
             ...(options?.endDate ? { lte: options.endDate } : {}),
           }
         : undefined;
-    const stateWhere = this.buildInvoiceOrderStateWhere(entityId, orderDate);
+    const stateWhere = buildInvoiceOrderStateWhere(entityId, orderDate);
     const orders = await this.prisma.salesOrder.findMany({
       where: stateWhere.eligible,
       select: {
@@ -1155,59 +1156,6 @@ export class InvoicingService {
       failedCount: failed.length,
       issued,
       failed,
-    };
-  }
-
-  private buildInvoiceOrderStateWhere(
-    entityId: string,
-    orderDate?: Prisma.DateTimeFilter,
-  ) {
-    const base: Prisma.SalesOrderWhereInput = canonicalSalesOrderWhere({
-      entityId,
-      status: {
-        notIn: ['cancelled', 'refunded'],
-      },
-      ...(orderDate ? { orderDate } : {}),
-    });
-    const hasIssuedInvoice: Prisma.SalesOrderWhereInput = {
-      invoices: {
-        some: {
-          status: {
-            equals: 'issued',
-            mode: 'insensitive',
-          },
-        },
-      },
-    };
-    const hasReceivedPayment: Prisma.SalesOrderWhereInput = {
-      payments: {
-        some: {
-          status: {
-            in: ['completed', 'success'],
-            mode: 'insensitive',
-          },
-        },
-      },
-    };
-
-    return {
-      completed: {
-        AND: [base, hasIssuedInvoice],
-      } satisfies Prisma.SalesOrderWhereInput,
-      eligible: {
-        AND: [
-          base,
-          { invoices: { none: hasIssuedInvoice.invoices.some } },
-          hasReceivedPayment,
-        ],
-      } satisfies Prisma.SalesOrderWhereInput,
-      waitingPayment: {
-        AND: [
-          base,
-          { invoices: { none: hasIssuedInvoice.invoices.some } },
-          { payments: { none: hasReceivedPayment.payments.some } },
-        ],
-      } satisfies Prisma.SalesOrderWhereInput,
     };
   }
 

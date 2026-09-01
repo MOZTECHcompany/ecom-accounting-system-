@@ -7,18 +7,15 @@ describe('SalesOrderService ECPay invoice matching', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
     );
 
   it('normalizes the opaque suffix used by 1SHOP ECPay relate numbers', () => {
     const service = createService();
 
     expect(
-      (service as any).buildEcpayRelateNumberVariants(
-        'DI1234567890aiLmJm12',
-      ),
-    ).toEqual(
-      expect.arrayContaining(['DI1234567890aiLmJm12', 'DI1234567890']),
-    );
+      (service as any).buildEcpayRelateNumberVariants('DI1234567890aiLmJm12'),
+    ).toEqual(expect.arrayContaining(['DI1234567890aiLmJm12', 'DI1234567890']));
   });
 
   it('only matches the canonical source order', async () => {

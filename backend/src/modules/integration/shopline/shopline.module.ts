@@ -2,12 +2,18 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from '../../../common/prisma/prisma.module';
 import { ReconciliationModule } from '../../reconciliation/reconciliation.module';
+import { ExternalInvoiceIngestionModule } from '../../../common/invoice/external-invoice-ingestion.module';
 import { ShoplineHttpAdapter } from './shopline.adapter';
 import { ShoplineController } from './shopline.controller';
 import { ShoplineService } from './shopline.service';
 
 @Module({
-  imports: [ConfigModule, PrismaModule, ReconciliationModule],
+  imports: [
+    ConfigModule,
+    PrismaModule,
+    ReconciliationModule,
+    ExternalInvoiceIngestionModule,
+  ],
   controllers: [ShoplineController],
   providers: [ShoplineService, ShoplineHttpAdapter],
   exports: [ShoplineService],

@@ -10,6 +10,7 @@ import { PrismaModule } from '../../common/prisma/prisma.module';
 import { AccountingModule } from '../accounting/accounting.module'; // 依賴：產生會計分錄
 import { InventoryModule } from '../inventory/inventory.module';
 import { ApModule } from '../ap/ap.module';
+import { ExternalInvoiceIngestionModule } from '../../common/invoice/external-invoice-ingestion.module';
 
 /**
  * SalesModule
@@ -32,7 +33,13 @@ import { ApModule } from '../ap/ap.module';
  * - 退款時：沖回收入與費用
  */
 @Module({
-  imports: [PrismaModule, AccountingModule, InventoryModule, ApModule],
+  imports: [
+    PrismaModule,
+    AccountingModule,
+    InventoryModule,
+    ApModule,
+    ExternalInvoiceIngestionModule,
+  ],
   controllers: [SalesController, CustomerController],
   providers: [
     SalesService,
@@ -41,6 +48,11 @@ import { ApModule } from '../ap/ap.module';
     AfterSalesCaseService,
     CustomerService,
   ],
-  exports: [SalesService, SalesOrderService, SalesQuotationService, AfterSalesCaseService],
+  exports: [
+    SalesService,
+    SalesOrderService,
+    SalesQuotationService,
+    AfterSalesCaseService,
+  ],
 })
 export class SalesModule {}

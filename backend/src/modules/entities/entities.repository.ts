@@ -47,16 +47,9 @@ export class EntitiesRepository {
   }
 
   async update(id: string, data: UpdateEntityDto) {
-    const {
-      adminName,
-      adminEmail,
-      adminEmployeeNo,
-      adminPassword,
-      ...entityData
-    } = data;
     return this.prisma.entity.update({
       where: { id },
-      data: entityData,
+      data,
     });
   }
 

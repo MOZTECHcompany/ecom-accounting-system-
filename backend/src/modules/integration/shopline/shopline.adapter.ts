@@ -114,6 +114,8 @@ type ShoplineOrderPayload = {
   invoice?: {
     invoice_number?: string;
     invoice_status?: string;
+    invoice_date?: string | null;
+    invoice_cancelled_at?: string | null;
   };
   order_payment?: {
     id?: string;

@@ -14,6 +14,7 @@ import {
   buildSalesOrderSourceKey,
   canonicalSalesOrderWhere,
 } from '../../integration/sales-order-integrity';
+import { ExternalInvoiceIngestionService } from '../../../common/invoice/external-invoice-ingestion.service';
 
 /**
  * SalesOrderService
@@ -47,6 +48,7 @@ export class SalesOrderService {
     private readonly journalService: JournalService,
     private readonly inventoryService: InventoryService,
     private readonly apService: ApService,
+    private readonly externalInvoiceIngestion: ExternalInvoiceIngestionService,
   ) {}
 
   /**
@@ -1275,10 +1277,7 @@ export class SalesOrderService {
     const withoutHash = raw.replace(/^#/, '');
     const withoutOneShopSuffix = raw.replace(/a\d+$/, '');
     const withoutHashAndOneShopSuffix = withoutHash.replace(/a\d+$/, '');
-    const withoutOneShopOpaqueSuffix = raw.replace(
-      /ai[A-Za-z0-9]{6}$/,
-      '',
-    );
+    const withoutOneShopOpaqueSuffix = raw.replace(/ai[A-Za-z0-9]{6}$/, '');
     const withoutHashAndOneShopOpaqueSuffix = withoutHash.replace(
       /ai[A-Za-z0-9]{6}$/,
       '',
@@ -1373,9 +1372,7 @@ export class SalesOrderService {
         candidateOrderNumbers: [],
       };
     }
-    if (
-      /^[A-Z]+[0-9]+(?:a[0-9]+|ai[A-Za-z0-9]{6})$/.test(relateNumber)
-    ) {
+    if (/^[A-Z]+[0-9]+(?:a[0-9]+|ai[A-Za-z0-9]{6})$/.test(relateNumber)) {
       return {
         reasonCode:
           variants.length > 1
@@ -1445,61 +1442,13 @@ export class SalesOrderService {
       !Number.isNaN(new Date(invoiceCandidate.invoiceDate).getTime())
         ? new Date(`${invoiceCandidate.invoiceDate}T00:00:00+08:00`)
         : null;
-    const taxRate = new Decimal(0.05);
-    const fxRate = new Decimal(order.totalGrossFxRate || 1);
-    const totalAmountOriginal = new Decimal(
-      order.totalGrossOriginal || 0,
-    ).toDecimalPlaces(2);
-    const amountOriginal = totalAmountOriginal
-      .div(new Decimal(1).plus(taxRate))
-      .toDecimalPlaces(2);
-    const taxAmountOriginal = totalAmountOriginal
-      .sub(amountOriginal)
-      .toDecimalPlaces(2);
-    const amountBase = amountOriginal.mul(fxRate).toDecimalPlaces(2);
-    const taxAmountBase = taxAmountOriginal.mul(fxRate).toDecimalPlaces(2);
-    const totalAmountBase = totalAmountOriginal.mul(fxRate).toDecimalPlaces(2);
-
-    return this.prisma.invoice.upsert({
-      where: { invoiceNumber: invoiceCandidate.invoiceNumber },
-      create: {
-        entityId: order.entityId,
-        orderId: order.id,
-        invoiceNumber: invoiceCandidate.invoiceNumber,
-        status: options?.issued === false ? 'draft' : 'issued',
-        invoiceType: order.customer?.taxId ? 'B2B' : 'B2C',
-        issuedAt,
-        buyerName: order.customer?.companyName || order.customer?.name || null,
-        buyerTaxId: order.customer?.taxId || null,
-        buyerEmail: order.customer?.email || null,
-        buyerPhone: order.customer?.phone || null,
-        buyerAddress: order.customer?.address || null,
-        amountOriginal,
-        currency: order.totalGrossCurrency || 'TWD',
-        fxRate,
-        amountBase,
-        taxAmountOriginal,
-        taxAmountCurrency: order.totalGrossCurrency || 'TWD',
-        taxAmountFxRate: fxRate,
-        taxAmountBase,
-        totalAmountOriginal,
-        totalAmountCurrency: order.totalGrossCurrency || 'TWD',
-        totalAmountFxRate: fxRate,
-        totalAmountBase,
-        externalInvoiceId: invoiceCandidate.invoiceNumber,
-        externalPlatform: options?.externalPlatform || null,
-        externalPayload: (options?.externalPayload as any) || undefined,
-        notes: options?.verificationMessage || null,
-      },
-      update: {
-        orderId: order.id,
-        status: options?.issued === false ? 'draft' : 'issued',
-        issuedAt,
-        externalInvoiceId: invoiceCandidate.invoiceNumber,
-        externalPlatform: options?.externalPlatform || null,
-        externalPayload: (options?.externalPayload as any) || undefined,
-        notes: options?.verificationMessage || null,
-      },
+    return this.externalInvoiceIngestion.ingest(order, {
+      invoiceNumber: invoiceCandidate.invoiceNumber,
+      status: options?.issued === false ? 'draft' : 'issued',
+      issuedAt,
+      externalPlatform: options?.externalPlatform || null,
+      externalPayload: options?.externalPayload,
+      notes: options?.verificationMessage || null,
     });
   }
 

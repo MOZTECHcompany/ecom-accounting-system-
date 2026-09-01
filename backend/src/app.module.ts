@@ -47,6 +47,7 @@ import { GoogleAdsIntegrationModule } from './modules/integration/google-ads/goo
 import { Ga4IntegrationModule } from './modules/integration/ga4/ga4.module';
 import { PurchaseModule } from './modules/purchase/purchase.module';
 import { AssemblyModule } from './modules/assembly/assembly.module';
+import { InvoiceSyncModule } from './modules/invoice-sync/invoice-sync.module';
 
 /**
  * AppModule
@@ -112,6 +113,7 @@ import { AssemblyModule } from './modules/assembly/assembly.module';
 
     // 5. 整合模組（外部服務整合）
     InvoicingModule, // → SalesModule, ArModule (電子發票)
+    InvoiceSyncModule,
     ReconciliationModule, // → BankingModule, AccountingModule (銀行對帳)
     ShopifyIntegrationModule,
     OneShopIntegrationModule,

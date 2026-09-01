@@ -877,3 +877,26 @@ Cloud Run 正式資料目前已經不是空系統，但核心治理缺口很大�
 - 綠界電子發票 API 權限、HashKey / HashIV、字軌設定是否已開通
 - `3150241` 是否確定只給 1Shop / 團購 / 未來 Shopline 使用
 - 各平台是否有 API、還是只能先用匯出報表
+
+### T. 進項信箱與 ECOUNT 電子發票必須先經過標準化待審層
+
+2026-09-01 已部署並完成正式環境驗收：
+
+- ECOUNT 現場唯讀盤點確認，電子發票模組分為銷項、進項與折讓；目前登入公司的近兩個月銷項有資料，進項清單為 0 筆，進項報表可匯出 Excel。
+- ECOUNT 固定 IP 白名單已登錄 Cloud Run 出口 IP `104.199.246.28`，並已簽發測試 API 金鑰；金鑰內容未讀取或輸出。官方公開的 Open API 清單未列出電子發票查詢，且目前尚無已驗證 API，因此不可先假設能直接用 API 拉電子發票。
+- 目前 Gmail 連線帳號為 `info@moztech.cc`，可看見部分轉寄到其他收件信箱的郵件，但六個收件信箱並非全部完整覆蓋；正式同步必須採每個信箱獨立 OAuth / 授權與獨立 cursor，不能只靠單一轉寄信箱。
+- 新增 `InvoiceSource`、`ExternalInvoiceRecord`、`InvoiceSourceEvidence` 三層模型：來源設定不保存密鑰；標準化發票與原始信箱 / ECOUNT 證據分離；同一發票可保留多個來源證據但只形成一筆 canonical record。
+- 新增 `/invoice-sync` readiness、來源登錄、候選查詢與證據 ingestion API。外部資料只先進 staging，不直接建立 AP / AR，也不會開立、作廢或折讓發票。
+- 進項發票必須核對收件公司統編；統編不符、缺發票號碼 / 日期 / 含稅金額、或未稅加稅額不等於含稅金額時，一律標記 `needs_review`。已匹配或已匯入的 record 不會因重跑被降級。
+- 證據 metadata 會移除 access token、refresh token、Authorization、password、secret、HashKey / HashIV、API key、cookie 等欄位，且限制最大 64 KB，避免把憑證或整封郵件無界寫入資料庫。
+- 同一來源的 `externalRecordId` 冪等；同一發票被不同信箱轉寄時，以法人、方向、單據類型、買賣方統編、發票號碼與日期形成 canonical key，不會重複建立候選。
+- ECOUNT 與自建 ERP `900324` 已確認為同一法律實體；自建 ERP 主檔已更新並重新讀回統編 `85030997`。
+- 公司主檔建立與編輯契約已從前端、DTO、service 三層分離；編輯不再顯示或傳送首位管理員欄位，後端也拒絕更新 API 夾帶管理員欄位，避免密碼管理器自動填入造成儲存失敗。
+- Prisma schema validate / generate、backend 26 個 test suites / 91 個 tests、backend build 與 frontend production build 已通過。
+- migration job `ecom-accounting-db-migrate-r6fmv` 成功；backend revision `ecom-accounting-backend-00498-fom` 與 frontend revision `ecom-accounting-frontend-00264-zul` 已各承接 100% 正式流量，健康檢查與登入後公司主檔 smoke test 通過，發布後 20 分鐘 error log 均為 0。
+
+正式啟用前關卡：
+
+- 每個 Gmail / Google Workspace 帳號分別完成唯讀 OAuth，token 只放 Secret Manager；先做歷史 dry-run 與各信箱筆數 / 日期範圍核對。
+- ECOUNT 先確認電子發票是否有正式查詢 API；若沒有，先用進項 / 銷項 Excel 匯出做歷史回補，再評估受控的唯讀自動匯出流程。
+- staging 對照供應商、採購單、收貨單與付款後，才允許人工批准轉 AP；銷項則對照 SalesOrder / Invoice。正式切換前 ECOUNT 維持來源系統，不啟用雙向寫入。

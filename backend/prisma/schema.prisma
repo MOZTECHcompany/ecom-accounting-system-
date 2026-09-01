@@ -187,44 +187,46 @@ model Entity {
   contactPhone String? @map("contact_phone")
 
   // Relations
-  accounts              Account[]
-  journalEntries        JournalEntry[]
-  periods               Period[]
-  customers             Customer[]
-  vendors               Vendor[]
-  products              Product[]
-  salesChannels         SalesChannel[]
-  salesOrders           SalesOrder[]
-  salesQuotations       SalesQuotation[]
-  afterSalesCases       AfterSalesCase[]
-  afterSalesCaseItems   AfterSalesCaseItem[]
-  arInvoices            ArInvoice[]
-  apInvoices            ApInvoice[]
-  bankAccounts          BankAccount[]
-  departments           Department[]
-  employees             Employee[]
-  userMemberships       UserEntityMembership[]
-  payrollPolicy         PayrollPolicy?
-  payrollRuns           PayrollRun[]
-  expenseRequests       ExpenseRequest[]
-  expenses              Expense[]
-  purchaseOrders        PurchaseOrder[]
-  productBatches        ProductBatch[]
-  devCosts              DevCost[]
-  shipments             Shipment[]
-  payments              Payment[]
-  approvalRequests      ApprovalRequest[]
-  invoices              Invoice[]
-  bankImportBatches     BankImportBatch[]
-  payoutImportBatches   PayoutImportBatch[]
-  warehouses            Warehouse[]
-  inventorySnapshots    InventorySnapshot[]
-  inventoryTransactions InventoryTransaction[]
-  reimbursementItems    ReimbursementItem[]
-  approvalPolicies      ApprovalPolicy[]
-  paymentTasks          PaymentTask[]
-  classifierFeedbacks   AccountingClassifierFeedback[] @relation("EntityClassifierFeedback")
-  connectorSyncStates   ConnectorSyncState[]
+  accounts               Account[]
+  journalEntries         JournalEntry[]
+  periods                Period[]
+  customers              Customer[]
+  vendors                Vendor[]
+  products               Product[]
+  salesChannels          SalesChannel[]
+  salesOrders            SalesOrder[]
+  salesQuotations        SalesQuotation[]
+  afterSalesCases        AfterSalesCase[]
+  afterSalesCaseItems    AfterSalesCaseItem[]
+  arInvoices             ArInvoice[]
+  apInvoices             ApInvoice[]
+  bankAccounts           BankAccount[]
+  departments            Department[]
+  employees              Employee[]
+  userMemberships        UserEntityMembership[]
+  payrollPolicy          PayrollPolicy?
+  payrollRuns            PayrollRun[]
+  expenseRequests        ExpenseRequest[]
+  expenses               Expense[]
+  purchaseOrders         PurchaseOrder[]
+  productBatches         ProductBatch[]
+  devCosts               DevCost[]
+  shipments              Shipment[]
+  payments               Payment[]
+  approvalRequests       ApprovalRequest[]
+  invoices               Invoice[]
+  bankImportBatches      BankImportBatch[]
+  payoutImportBatches    PayoutImportBatch[]
+  warehouses             Warehouse[]
+  inventorySnapshots     InventorySnapshot[]
+  inventoryTransactions  InventoryTransaction[]
+  reimbursementItems     ReimbursementItem[]
+  approvalPolicies       ApprovalPolicy[]
+  paymentTasks           PaymentTask[]
+  classifierFeedbacks    AccountingClassifierFeedback[] @relation("EntityClassifierFeedback")
+  connectorSyncStates    ConnectorSyncState[]
+  invoiceSources         InvoiceSource[]
+  externalInvoiceRecords ExternalInvoiceRecord[]
 
   // Attendance Relations
   attendancePolicies     AttendancePolicy[]
@@ -1971,6 +1973,90 @@ model ConnectorSyncState {
   @@index([entityId, status])
   @@index([connector, lastSuccessAt])
   @@map("connector_sync_states")
+}
+
+// 外部發票來源只保存連線識別與非機密設定；OAuth token / API key 必須放在 Secret Manager。
+model InvoiceSource {
+  id            String    @id @default(uuid())
+  entityId      String    @map("entity_id")
+  connector     String // gmail, ecount, manual_export
+  sourceKey     String    @map("source_key") // mailbox email or ECOUNT company code
+  direction     String // incoming, outgoing, both
+  displayName   String?   @map("display_name")
+  status        String    @default("authorization_required") // authorization_required, ready, disabled, error
+  syncMode      String    @default("read_only") @map("sync_mode") // read_only, staged_import
+  credentialRef String?   @map("credential_ref") // Secret Manager reference only, never a secret value
+  cursor        String?
+  config        Json?
+  lastSyncAt    DateTime? @map("last_sync_at")
+  lastSuccessAt DateTime? @map("last_success_at")
+  lastFailureAt DateTime? @map("last_failure_at")
+  lastError     String?   @map("last_error")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  entity    Entity                  @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  evidences InvoiceSourceEvidence[]
+
+  @@unique([entityId, connector, sourceKey, direction], map: "invoice_sources_identity_key")
+  @@index([entityId, status])
+  @@map("invoice_sources")
+}
+
+// 標準化後的發票候選。此表是 AP / AR 入帳前的 fail-closed staging layer。
+model ExternalInvoiceRecord {
+  id              String    @id @default(uuid())
+  entityId        String    @map("entity_id")
+  direction       String // incoming, outgoing
+  documentType    String    @default("invoice") @map("document_type") // invoice, allowance, void
+  canonicalKey    String    @map("canonical_key")
+  invoiceNumber   String?   @map("invoice_number")
+  invoiceDate     DateTime? @map("invoice_date")
+  sellerTaxId     String?   @map("seller_tax_id")
+  buyerTaxId      String?   @map("buyer_tax_id")
+  amountNet       Decimal?  @map("amount_net") @db.Decimal(18, 2)
+  amountTax       Decimal?  @map("amount_tax") @db.Decimal(18, 2)
+  amountGross     Decimal?  @map("amount_gross") @db.Decimal(18, 2)
+  amountCurrency  String    @default("TWD") @map("amount_currency")
+  sourceStatus    String?   @map("source_status")
+  ingestionStatus String    @default("discovered") @map("ingestion_status") // discovered, needs_review, ready, matched, imported, rejected
+  reviewReason    String?   @map("review_reason")
+  matchedType     String?   @map("matched_type") // ap_invoice, invoice, purchase_order, sales_order
+  matchedId       String?   @map("matched_id")
+  firstSeenAt     DateTime  @default(now()) @map("first_seen_at")
+  lastSeenAt      DateTime  @default(now()) @map("last_seen_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  entity    Entity                  @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  evidences InvoiceSourceEvidence[]
+
+  @@unique([entityId, direction, canonicalKey], map: "external_invoice_records_canonical_key")
+  @@index([entityId, direction, ingestionStatus])
+  @@index([entityId, invoiceNumber])
+  @@index([matchedType, matchedId])
+  @@map("external_invoice_records")
+}
+
+// 每個信箱訊息、附件或 ECOUNT 單據都是一份獨立證據，可多對一指向標準化發票。
+model InvoiceSourceEvidence {
+  id               String    @id @default(uuid())
+  sourceId         String    @map("source_id")
+  recordId         String    @map("record_id")
+  externalRecordId String    @map("external_record_id")
+  evidenceHash     String?   @map("evidence_hash")
+  sourceUpdatedAt  DateTime? @map("source_updated_at")
+  rawMetadata      Json?     @map("raw_metadata")
+  firstSeenAt      DateTime  @default(now()) @map("first_seen_at")
+  lastSeenAt       DateTime  @default(now()) @map("last_seen_at")
+
+  source InvoiceSource         @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  record ExternalInvoiceRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, externalRecordId], map: "invoice_source_evidences_external_key")
+  @@index([recordId])
+  @@index([evidenceHash])
+  @@map("invoice_source_evidences")
 }
 
 model Notification {

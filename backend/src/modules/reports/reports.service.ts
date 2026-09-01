@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { canonicalSalesOrderWhere } from '../integration/sales-order-integrity';
+import { missingIssuedInvoiceWhere } from '../invoicing/invoice-order-state';
 
 type ManagementSummaryGroupBy = 'year' | 'quarter' | 'month' | 'week' | 'day';
 type CommerceSourceBrandRule = {
@@ -996,7 +997,7 @@ export class ReportsService {
         where: { ...orderWhere, payments: { none: {} } },
       }),
       this.prisma.salesOrder.count({
-        where: { ...orderWhere, hasInvoice: false, invoices: { none: {} } },
+        where: { ...orderWhere, ...missingIssuedInvoiceWhere() },
       }),
       this.prisma.salesOrder.count({
         where: {
@@ -1133,6 +1134,8 @@ export class ReportsService {
           missingPaymentPendingCandidates,
           missingInvoiceEmbeddedCandidates,
           missingInvoiceEcpayBackfillCandidates,
+          missingInvoiceNonIssuedRecordCandidates,
+          missingInvoiceLegacyFlagMismatches,
           feeMissingPayoutBackfillCandidates,
         ] = await Promise.all([
           this.prisma.salesOrder.count({ where: channelOrderWhere }),
@@ -1145,8 +1148,7 @@ export class ReportsService {
           this.prisma.salesOrder.count({
             where: {
               ...channelOrderWhere,
-              hasInvoice: false,
-              invoices: { none: {} },
+              ...missingIssuedInvoiceWhere(),
             },
           }),
           this.prisma.salesOrder.aggregate({
@@ -1198,17 +1200,31 @@ export class ReportsService {
           this.prisma.salesOrder.count({
             where: {
               ...channelOrderWhere,
-              hasInvoice: false,
-              invoices: { none: {} },
+              ...missingIssuedInvoiceWhere(),
               notes: { contains: 'invoiceNumber=' },
             },
           }),
           this.prisma.salesOrder.count({
             where: {
               ...channelOrderWhere,
-              hasInvoice: false,
-              invoices: { none: {} },
-              notes: { not: { contains: 'invoiceNumber=' } },
+              ...missingIssuedInvoiceWhere(),
+              OR: [
+                { notes: null },
+                { notes: { not: { contains: 'invoiceNumber=' } } },
+              ],
+            },
+          }),
+          this.prisma.salesOrder.count({
+            where: {
+              ...channelOrderWhere,
+              AND: [missingIssuedInvoiceWhere(), { invoices: { some: {} } }],
+            },
+          }),
+          this.prisma.salesOrder.count({
+            where: {
+              ...channelOrderWhere,
+              ...missingIssuedInvoiceWhere(),
+              hasInvoice: true,
             },
           }),
           this.prisma.payment.count({
@@ -1255,6 +1271,8 @@ export class ReportsService {
             missingPaymentPendingCandidates,
             missingInvoiceEmbeddedCandidates,
             missingInvoiceEcpayBackfillCandidates,
+            missingInvoiceNonIssuedRecordCandidates,
+            missingInvoiceLegacyFlagMismatches,
             feeMissingPayoutBackfillCandidates,
           },
           firstOrder: firstOrder
@@ -1623,25 +1641,26 @@ export class ReportsService {
 
       const leaseExpired = Boolean(
         state.status === 'running' &&
-          state.leaseExpiresAt &&
-          state.leaseExpiresAt.getTime() <= now,
+        state.leaseExpiresAt &&
+        state.leaseExpiresAt.getTime() <= now,
       );
       const staleThreshold =
         (staleAfterMinutes[connector.key] || 24 * 60) * 60 * 1000;
       const successStale = Boolean(
         state.status === 'success' &&
-          state.lastSuccessAt &&
-          now - state.lastSuccessAt.getTime() > staleThreshold,
+        state.lastSuccessAt &&
+        now - state.lastSuccessAt.getTime() > staleThreshold,
       );
-      const healthStatus = leaseExpired || successStale
-        ? 'stale'
-        : state.status === 'running'
-          ? 'running'
-          : state.status === 'failed'
-            ? 'failed'
-            : state.status === 'success'
-              ? 'healthy'
-              : 'untracked';
+      const healthStatus =
+        leaseExpired || successStale
+          ? 'stale'
+          : state.status === 'running'
+            ? 'running'
+            : state.status === 'failed'
+              ? 'failed'
+              : state.status === 'success'
+                ? 'healthy'
+                : 'untracked';
 
       return {
         ...connector,
@@ -1809,8 +1828,8 @@ export class ReportsService {
       const directLine = directByPaymentId.get(payment.id) || null;
       const hasProviderId = Boolean(
         metadata.providerPaymentId ||
-          metadata.providerTradeNo ||
-          metadata.authorization,
+        metadata.providerTradeNo ||
+        metadata.authorization,
       );
       const feeActual = (payment.notes || '').includes('feeStatus=actual');
 

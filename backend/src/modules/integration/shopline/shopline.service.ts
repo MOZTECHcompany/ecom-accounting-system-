@@ -27,6 +27,7 @@ import {
 } from './shopline.adapter';
 import { ProviderPayoutReconciliationService } from '../../reconciliation/provider-payout-reconciliation.service';
 import { ConnectorSyncCoordinatorService } from '../../../common/sync/connector-sync-coordinator.service';
+import { ExternalInvoiceIngestionService } from '../../../common/invoice/external-invoice-ingestion.service';
 
 const SHOPLINE_CHANNEL_CODE = 'SHOPLINE';
 
@@ -59,6 +60,7 @@ export class ShoplineService {
     private readonly config: ConfigService,
     private readonly providerPayoutService: ProviderPayoutReconciliationService,
     private readonly syncCoordinator: ConnectorSyncCoordinatorService,
+    private readonly externalInvoiceIngestion: ExternalInvoiceIngestionService,
   ) {}
 
   onModuleInit() {
@@ -143,8 +145,8 @@ export class ShoplineService {
         itemCount: order.items.length,
         customerLinked: Boolean(
           order.customer?.externalId ||
-            order.customer?.email ||
-            order.customer?.phone,
+          order.customer?.email ||
+          order.customer?.phone,
         ),
         paymentStatus: this.pickRawString(order.raw, 'order_payment', 'status'),
         paymentType:
@@ -190,7 +192,7 @@ export class ShoplineService {
         emailPresent: Boolean(customer.email),
         phonePresent: Boolean(
           customer.mobile_phone ||
-            (Array.isArray(customer.phones) && customer.phones.length),
+          (Array.isArray(customer.phones) && customer.phones.length),
         ),
         orderCount:
           typeof customer.order_count === 'number'
@@ -892,6 +894,7 @@ export class ShoplineService {
       currency,
       fxRate,
     );
+    await this.syncEmbeddedInvoice(stored, order);
 
     return existing ? 'updated' : 'created';
   }
@@ -979,10 +982,52 @@ export class ShoplineService {
       `deliveryStatus=${raw.order_delivery?.delivery_status || ''}`,
       `invoiceStatus=${raw.invoice?.invoice_status || ''}`,
       `invoiceNumber=${raw.invoice?.invoice_number || ''}`,
+      `invoiceDate=${raw.invoice?.invoice_date || ''}`,
+      `invoiceCancelledAt=${raw.invoice?.invoice_cancelled_at || ''}`,
       `trackingNumber=${raw.delivery_data?.tracking_number || ''}`,
     ].filter((part) => !part.endsWith('='));
 
     return notes.join('; ');
+  }
+
+  private async syncEmbeddedInvoice(
+    stored: {
+      id: string;
+      entityId: string;
+      totalGrossOriginal: Decimal;
+      totalGrossCurrency: string;
+      totalGrossFxRate: Decimal;
+    },
+    order: UnifiedOrder,
+  ) {
+    const invoice = order.raw?.invoice;
+    const invoiceNumber =
+      typeof invoice?.invoice_number === 'string'
+        ? invoice.invoice_number.trim().toUpperCase()
+        : '';
+    const upstreamStatus =
+      typeof invoice?.invoice_status === 'string'
+        ? invoice.invoice_status.trim().toLowerCase()
+        : '';
+    if (!invoiceNumber || !['active', 'cancel'].includes(upstreamStatus)) {
+      return null;
+    }
+
+    const parseDate = (value: unknown) => {
+      if (typeof value !== 'string' || !value.trim()) return null;
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    };
+
+    return this.externalInvoiceIngestion.ingest(stored, {
+      invoiceNumber,
+      status: upstreamStatus === 'cancel' ? 'void' : 'issued',
+      issuedAt: parseDate(invoice.invoice_date),
+      voidAt: parseDate(invoice.invoice_cancelled_at),
+      externalPlatform: 'shopline',
+      externalPayload: invoice,
+      notes: 'SHOPLINE order invoice source',
+    });
   }
 
   private async upsertPayment(
@@ -1392,11 +1437,11 @@ export class ShoplineService {
     const type = this.toCleanString(record.type).toUpperCase();
     const hasOrderKey = Boolean(
       this.toCleanString(record.source_order_id) ||
-        this.toCleanString(record.source_order_transaction_id),
+      this.toCleanString(record.source_order_transaction_id),
     );
     const hasAmountContext = Boolean(
       this.toCleanString(record.transaction_amount || record.amount) ||
-        this.toCleanString(record.net),
+      this.toCleanString(record.net),
     );
 
     if (!hasOrderKey || !hasAmountContext) {

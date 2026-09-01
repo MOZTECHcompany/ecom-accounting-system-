@@ -17,6 +17,7 @@ describe('ShoplineService automatic sync coordination', () => {
       }),
       {} as never,
       coordinator as never,
+      { ingest: jest.fn() } as never,
     );
 
     return { service, coordinator };
@@ -58,13 +59,28 @@ describe('ShoplineService automatic sync coordination', () => {
     });
     jest
       .spyOn(service, 'syncOrders')
-      .mockResolvedValue({ success: true, fetched: 3, created: 1, updated: 2 } as never);
+      .mockResolvedValue({
+        success: true,
+        fetched: 3,
+        created: 1,
+        updated: 2,
+      } as never);
     jest
       .spyOn(service, 'syncCustomers')
-      .mockResolvedValue({ success: true, fetched: 4, created: 0, updated: 4 } as never);
+      .mockResolvedValue({
+        success: true,
+        fetched: 4,
+        created: 0,
+        updated: 4,
+      } as never);
     jest
       .spyOn(service, 'syncTransactions')
-      .mockResolvedValue({ success: true, fetched: 2, created: 1, updated: 1 } as never);
+      .mockResolvedValue({
+        success: true,
+        fetched: 2,
+        created: 1,
+        updated: 1,
+      } as never);
 
     const result = await service.autoSync({ trigger: 'scheduler' });
 
@@ -79,5 +95,81 @@ describe('ShoplineService automatic sync coordination', () => {
         transactions: expect.objectContaining({ fetched: 2 }),
       }),
     );
+  });
+
+  it('persists an active SHOPLINE invoice from the authoritative order payload', async () => {
+    const ingestion = {
+      ingest: jest.fn().mockResolvedValue({ id: 'invoice-1' }),
+    };
+    const service = new ShoplineService(
+      {} as never,
+      {} as never,
+      new ConfigService(),
+      {} as never,
+      {} as never,
+      ingestion as never,
+    );
+
+    await (service as any).syncEmbeddedInvoice(
+      {
+        id: 'order-1',
+        entityId: 'entity-1',
+        totalGrossOriginal: '1050',
+        totalGrossCurrency: 'TWD',
+        totalGrossFxRate: '1',
+      },
+      {
+        raw: {
+          invoice: {
+            invoice_number: 'fw65846504',
+            invoice_status: 'active',
+            invoice_date: '2026-09-01',
+          },
+        },
+      },
+    );
+
+    expect(ingestion.ingest).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'order-1', entityId: 'entity-1' }),
+      expect.objectContaining({
+        invoiceNumber: 'FW65846504',
+        status: 'issued',
+        issuedAt: new Date('2026-09-01'),
+        externalPlatform: 'shopline',
+      }),
+    );
+  });
+
+  it('fails closed when SHOPLINE does not provide an authoritative invoice status', async () => {
+    const ingestion = { ingest: jest.fn() };
+    const service = new ShoplineService(
+      {} as never,
+      {} as never,
+      new ConfigService(),
+      {} as never,
+      {} as never,
+      ingestion as never,
+    );
+
+    const result = await (service as any).syncEmbeddedInvoice(
+      {
+        id: 'order-1',
+        entityId: 'entity-1',
+        totalGrossOriginal: '1050',
+        totalGrossCurrency: 'TWD',
+        totalGrossFxRate: '1',
+      },
+      {
+        raw: {
+          invoice: {
+            invoice_number: 'FW65846504',
+            invoice_status: 'pending',
+          },
+        },
+      },
+    );
+
+    expect(result).toBeNull();
+    expect(ingestion.ingest).not.toHaveBeenCalled();
   });
 });

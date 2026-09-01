@@ -523,6 +523,8 @@ export type DataCompletenessChannelBreakdown = {
     missingPaymentPendingCandidates: number;
     missingInvoiceEmbeddedCandidates: number;
     missingInvoiceEcpayBackfillCandidates: number;
+    missingInvoiceNonIssuedRecordCandidates?: number;
+    missingInvoiceLegacyFlagMismatches?: number;
     feeMissingPayoutBackfillCandidates: number;
   };
   firstOrder: {

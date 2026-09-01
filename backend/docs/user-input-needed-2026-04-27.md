@@ -272,3 +272,18 @@
 - 建立新的 API key、OAuth app、訂閱、付費資源。
 - 大批量修改正式訂單、發票、AR、AP、Journal。
 - 匯入會改變正式財務結果的報表前，若欄位或來源不明，需要先確認格式與測試小批量。
+
+## 進項發票信箱 / ECOUNT（2026-09-01）
+
+- 已確認以下六個收件信箱均屬於自建 ERP `900324` 萬博公司（統編 `85030997`）：
+  - `service@omfuture.co`
+  - `arsha1996studio@gmail.com`
+  - `wanbotechnology@gmail.com`
+  - `info@moztech.cc`
+  - `info@moritek.co`
+  - `wanbofinance@gmail.com`
+- 目前只連線 `info@moztech.cc`，可讀到部分轉寄郵件，但不是六個信箱的完整歷史；後續需要每個實際信箱各自完成唯讀 Gmail OAuth，不需要提供密碼。
+- ECOUNT 同名公司與自建 ERP `900324` 已確認為同一法律實體；自建 ERP 公司主檔已更新並讀回確認為 `85030997`。
+- ECOUNT 已登錄 Cloud Run 固定出口 IP `104.199.246.28`，並由公司 `ADMIN` 簽發測試 API 金鑰。測試金鑰內容未讀取或輸出；正式金鑰仍受「已驗證 API」關卡限制。
+- ECOUNT 官方公開 Open API 清單目前未列電子發票查詢，只有應收／應付憑證輸入；不可用庫存或採購查詢 API 冒充電子發票同步。
+- 若 ECOUNT 電子發票沒有查詢 API，請先提供或允許唯讀匯出一份銷項發票明細與一份進項發票明細 Excel，作為 parser / 欄位 mapping 的第一批 dry-run 樣本。
