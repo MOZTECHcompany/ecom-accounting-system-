@@ -49,6 +49,9 @@ export class ReportService {
             gte: startDate,
             lte: endDate,
           },
+          approvedAt: {
+            not: null,
+          },
         },
         account: {
           type: {
@@ -141,6 +144,9 @@ export class ReportService {
           date: {
             lte: asOfDate,
           },
+          approvedAt: {
+            not: null,
+          },
         },
         account: {
           type: {
@@ -209,6 +215,11 @@ export class ReportService {
       (sum, item: any) => sum + item.amount,
       0,
     );
+    const difference =
+      Math.round(
+        (totalAssets - (totalLiabilities + totalEquity) + Number.EPSILON) *
+          100,
+      ) / 100;
 
     return {
       entityId,
@@ -219,7 +230,12 @@ export class ReportService {
       totalAssets,
       totalLiabilities,
       totalEquity,
-      difference: totalAssets - (totalLiabilities + totalEquity),
+      difference,
+      balanced: Math.abs(difference) <= 0.01,
+      // Revenue and expense accounts are intentionally excluded from this
+      // query. Until period-closing entries are implemented, the service must
+      // not disguise the resulting gap as calculated retained earnings.
+      calculatedRetainedEarnings: null,
     };
   }
 }

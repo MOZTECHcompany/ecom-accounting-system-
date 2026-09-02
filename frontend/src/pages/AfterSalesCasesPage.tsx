@@ -369,7 +369,7 @@ const AfterSalesCasesPage: React.FC = () => {
                 onClick={() =>
                   refreshAfterAction(
                     salesService.markAfterSalesPaid(record.id),
-                    '已確認付款，發票已自動開立並送會計',
+                    '已確認付款，轉會計處理',
                   )
                 }
               >

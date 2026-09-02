@@ -208,24 +208,27 @@ export class AfterSalesCaseService {
 
   async markPaid(entityId: string, caseId: string) {
     const afterSalesCase = await this.ensureCase(entityId, caseId);
+
+    if (afterSalesCase.paymentStatus === 'paid') {
+      return this.serializeCase(afterSalesCase);
+    }
+
+    if (afterSalesCase.status !== 'awaiting_payment') {
+      throw new BadRequestException('案件目前不在待付款狀態');
+    }
+
+    const paymentAmount = this.sumPaymentAmount(afterSalesCase.items || []);
+    if (paymentAmount <= 0) {
+      throw new BadRequestException('此案件沒有需要確認的付款金額');
+    }
+
     const now = new Date();
-    const invoice = afterSalesCase.invoiceId
-      ? null
-      : await this.createIssuedInvoiceForCase(entityId, afterSalesCase, now);
     const updated = await this.prisma.afterSalesCase.update({
       where: { id: caseId },
       data: {
         paymentStatus: 'paid',
         status: 'accounting_invoice',
         paidAt: now,
-        accountingReceivedAt: now,
-        ...(invoice
-          ? {
-              invoiceId: invoice.id,
-              invoiceNumber: invoice.invoiceNumber,
-            }
-          : {}),
-        invoiceIssuedAt: now,
       },
       include: this.includeGraph(),
     });
@@ -233,7 +236,16 @@ export class AfterSalesCaseService {
   }
 
   async confirmAccounting(entityId: string, caseId: string) {
-    await this.ensureCase(entityId, caseId);
+    const afterSalesCase = await this.ensureCase(entityId, caseId);
+
+    if (afterSalesCase.status !== 'accounting_invoice') {
+      throw new BadRequestException('案件目前不在會計確認階段');
+    }
+
+    if (afterSalesCase.paymentStatus === 'pending') {
+      throw new BadRequestException('付款尚未確認');
+    }
+
     const updated = await this.prisma.afterSalesCase.update({
       where: { id: caseId },
       data: {
@@ -246,7 +258,12 @@ export class AfterSalesCaseService {
   }
 
   async confirmWarehouseReceived(entityId: string, caseId: string) {
-    await this.ensureCase(entityId, caseId);
+    const afterSalesCase = await this.ensureCase(entityId, caseId);
+
+    if (afterSalesCase.status !== 'warehouse_receiving') {
+      throw new BadRequestException('案件目前不在倉儲收件階段');
+    }
+
     const updated = await this.prisma.afterSalesCase.update({
       where: { id: caseId },
       data: {
@@ -259,7 +276,16 @@ export class AfterSalesCaseService {
   }
 
   async ship(entityId: string, caseId: string, data: { trackingNo?: string }) {
-    await this.ensureCase(entityId, caseId);
+    const afterSalesCase = await this.ensureCase(entityId, caseId);
+
+    if (afterSalesCase.status !== 'customer_service_shipping') {
+      throw new BadRequestException('案件目前不在客服寄出階段');
+    }
+
+    if (afterSalesCase.paymentStatus === 'pending') {
+      throw new BadRequestException('付款尚未確認');
+    }
+
     const updated = await this.prisma.afterSalesCase.update({
       where: { id: caseId },
       data: {
@@ -347,94 +373,6 @@ export class AfterSalesCaseService {
       },
     });
     return `${prefix}-${String(count + 1).padStart(3, '0')}`;
-  }
-
-  private async createIssuedInvoiceForCase(entityId: string, afterSalesCase: any, issuedAt: Date) {
-    const paymentItems = (afterSalesCase.items || []).filter((item) => item.paymentRequired);
-    if (!paymentItems.length) return null;
-
-    const invoiceLines = paymentItems.map((item) => {
-      const total = Number(item.paymentAmountOriginal || 0);
-      const amount = Math.round((total / 1.05) * 100) / 100;
-      const tax = Math.round((total - amount) * 100) / 100;
-      const qty = Number(item.quantity || 1);
-      const unitPrice = qty ? amount / qty : amount;
-
-      return {
-        productId: item.productId || undefined,
-        description: item.itemName,
-        qty: new Decimal(qty),
-        unitPriceOriginal: new Decimal(unitPrice),
-        unitPriceCurrency: afterSalesCase.currency || 'TWD',
-        unitPriceFxRate: new Decimal(1),
-        unitPriceBase: new Decimal(unitPrice),
-        amountOriginal: new Decimal(amount),
-        currency: afterSalesCase.currency || 'TWD',
-        fxRate: new Decimal(1),
-        amountBase: new Decimal(amount),
-        taxAmountOriginal: new Decimal(tax),
-        taxAmountCurrency: afterSalesCase.currency || 'TWD',
-        taxAmountFxRate: new Decimal(1),
-        taxAmountBase: new Decimal(tax),
-      };
-    });
-
-    const amountOriginal = invoiceLines.reduce(
-      (sum, line) => sum + Number(line.amountOriginal),
-      0,
-    );
-    const taxAmountOriginal = invoiceLines.reduce(
-      (sum, line) => sum + Number(line.taxAmountOriginal),
-      0,
-    );
-    const totalAmountOriginal = amountOriginal + taxAmountOriginal;
-    const invoiceNumber = await this.nextAfterSalesInvoiceNumber(entityId);
-
-    return this.prisma.invoice.create({
-      data: {
-        entityId,
-        invoiceNumber,
-        status: 'issued',
-        invoiceType: afterSalesCase.customer?.taxId ? 'B2B' : 'B2C',
-        issuedAt,
-        buyerName:
-          afterSalesCase.customer?.companyName ||
-          afterSalesCase.customer?.name ||
-          null,
-        buyerTaxId: afterSalesCase.customer?.taxId || null,
-        buyerEmail: afterSalesCase.customer?.email || null,
-        buyerPhone: afterSalesCase.customer?.phone || afterSalesCase.customer?.mobile || null,
-        buyerAddress: afterSalesCase.customer?.address || null,
-        amountOriginal: new Decimal(amountOriginal),
-        currency: afterSalesCase.currency || 'TWD',
-        fxRate: new Decimal(1),
-        amountBase: new Decimal(amountOriginal),
-        taxAmountOriginal: new Decimal(taxAmountOriginal),
-        taxAmountCurrency: afterSalesCase.currency || 'TWD',
-        taxAmountFxRate: new Decimal(1),
-        taxAmountBase: new Decimal(taxAmountOriginal),
-        totalAmountOriginal: new Decimal(totalAmountOriginal),
-        totalAmountCurrency: afterSalesCase.currency || 'TWD',
-        totalAmountFxRate: new Decimal(1),
-        totalAmountBase: new Decimal(totalAmountOriginal),
-        externalPlatform: 'after_sales',
-        notes: `售後來回件 ${afterSalesCase.caseNo} 自動開立`,
-        invoiceLines: {
-          create: invoiceLines,
-        },
-      },
-    });
-  }
-
-  private async nextAfterSalesInvoiceNumber(entityId: string) {
-    const prefix = `ASINV${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
-    const count = await this.prisma.invoice.count({
-      where: {
-        entityId,
-        invoiceNumber: { startsWith: prefix },
-      },
-    });
-    return `${prefix}${String(count + 1).padStart(3, '0')}`;
   }
 
   private sumPaymentAmount(items: Array<any>) {

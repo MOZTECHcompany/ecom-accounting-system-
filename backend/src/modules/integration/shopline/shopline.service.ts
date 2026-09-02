@@ -5,7 +5,6 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../../common/prisma/prisma.service';
@@ -14,12 +13,21 @@ import {
   UnifiedTransaction,
 } from '../interfaces/sales-channel-adapter.interface';
 import {
+  buildPaymentSourceTransactionKey,
+  resolveStoredGrossAmount,
+  resolveStoredNetAmount,
+  resolveStoredPaymentStatus,
+} from '../payment-integrity';
+import { buildSalesOrderSourceKey } from '../sales-order-integrity';
+import {
   ShoplineHttpAdapter,
   ShoplinePaymentBillingRecord,
   ShoplinePaymentPayout,
   ShoplinePaymentStoreTransaction,
 } from './shopline.adapter';
 import { ProviderPayoutReconciliationService } from '../../reconciliation/provider-payout-reconciliation.service';
+import { ConnectorSyncCoordinatorService } from '../../../common/sync/connector-sync-coordinator.service';
+import { ExternalInvoiceIngestionService } from '../../../common/invoice/external-invoice-ingestion.service';
 
 const SHOPLINE_CHANNEL_CODE = 'SHOPLINE';
 
@@ -51,6 +59,8 @@ export class ShoplineService {
     private readonly adapter: ShoplineHttpAdapter,
     private readonly config: ConfigService,
     private readonly providerPayoutService: ProviderPayoutReconciliationService,
+    private readonly syncCoordinator: ConnectorSyncCoordinatorService,
+    private readonly externalInvoiceIngestion: ExternalInvoiceIngestionService,
   ) {}
 
   onModuleInit() {
@@ -135,8 +145,8 @@ export class ShoplineService {
         itemCount: order.items.length,
         customerLinked: Boolean(
           order.customer?.externalId ||
-            order.customer?.email ||
-            order.customer?.phone,
+          order.customer?.email ||
+          order.customer?.phone,
         ),
         paymentStatus: this.pickRawString(order.raw, 'order_payment', 'status'),
         paymentType:
@@ -182,7 +192,7 @@ export class ShoplineService {
         emailPresent: Boolean(customer.email),
         phonePresent: Boolean(
           customer.mobile_phone ||
-            (Array.isArray(customer.phones) && customer.phones.length),
+          (Array.isArray(customer.phones) && customer.phones.length),
         ),
         orderCount:
           typeof customer.order_count === 'number'
@@ -232,9 +242,9 @@ export class ShoplineService {
         readyForAttempt: missing.length === 0,
         missing,
         adminBaseUrl: store.handle
-          ? (explicitBase.trim()
-              ? explicitBase.trim().replace('{handle}', store.handle)
-              : `https://${store.handle}.myshopline.com/admin/openapi/${version}`)
+          ? explicitBase.trim()
+            ? explicitBase.trim().replace('{handle}', store.handle)
+            : `https://${store.handle}.myshopline.com/admin/openapi/${version}`
           : null,
       };
     });
@@ -572,7 +582,12 @@ export class ShoplineService {
     };
   }
 
-  async autoSync(options?: { entityId?: string; since?: Date; until?: Date }) {
+  async autoSync(options?: {
+    entityId?: string;
+    since?: Date;
+    until?: Date;
+    trigger?: 'scheduler' | 'webhook' | 'manual';
+  }) {
     const enabled =
       this.config.get<string>('SHOPLINE_SYNC_ENABLED', 'false') === 'true';
 
@@ -592,32 +607,68 @@ export class ShoplineService {
     const since =
       options?.since || new Date(until.getTime() - lookbackMinutes * 60 * 1000);
 
-    const [orders, customers, transactions] = await Promise.all([
-      this.syncOrders({ entityId, since, until }),
-      this.syncCustomers({ entityId, since, until }),
-      this.syncTransactions({ entityId, since, until }),
-    ]);
-
-    const syncPayments =
-      this.config.get<string>('SHOPLINE_PAYMENTS_SYNC_ENABLED', 'false') ===
-      'true';
-    const payments = syncPayments
-      ? await this.syncPaymentBillingRecords({ entityId, since, until })
-      : {
-          skipped: true,
-          message: 'SHOPLINE_PAYMENTS_SYNC_ENABLED is false',
-        };
-
-    return {
-      success: true,
+    const acquired = await this.syncCoordinator.acquire({
       entityId,
-      since: since.toISOString(),
-      until: until.toISOString(),
-      orders,
-      customers,
-      transactions,
-      payments,
-    };
+      connector: 'shopline',
+      trigger: options?.trigger || 'manual',
+      windowStart: since,
+      windowEnd: until,
+      leaseMinutes: 30,
+    });
+
+    if (!('lease' in acquired)) {
+      return {
+        success: true,
+        skipped: true,
+        reason: 'already_running',
+        entityId,
+        since: since.toISOString(),
+        until: until.toISOString(),
+        runningSince: acquired.runningSince?.toISOString() || null,
+        leaseExpiresAt: acquired.leaseExpiresAt?.toISOString() || null,
+      };
+    }
+
+    try {
+      const [orders, customers, transactions] = await Promise.all([
+        this.syncOrders({ entityId, since, until }),
+        this.syncCustomers({ entityId, since, until }),
+        this.syncTransactions({ entityId, since, until }),
+      ]);
+
+      const syncPayments =
+        this.config.get<string>('SHOPLINE_PAYMENTS_SYNC_ENABLED', 'false') ===
+        'true';
+      const payments = syncPayments
+        ? await this.syncPaymentBillingRecords({ entityId, since, until })
+        : {
+            skipped: true,
+            message: 'SHOPLINE_PAYMENTS_SYNC_ENABLED is false',
+          };
+
+      const result = {
+        success: true,
+        entityId,
+        since: since.toISOString(),
+        until: until.toISOString(),
+        orders,
+        customers,
+        transactions,
+        payments,
+      };
+
+      await this.syncCoordinator.markSuccess(acquired.lease, {
+        orders,
+        customers,
+        transactions,
+        payments,
+      });
+
+      return result;
+    } catch (error) {
+      await this.syncCoordinator.markFailure(acquired.lease, error);
+      throw error;
+    }
   }
 
   async getSummary(params: { entityId: string; since?: Date; until?: Date }) {
@@ -721,6 +772,7 @@ export class ShoplineService {
         entityId: this.defaultEntityId,
         since,
         until,
+        trigger: 'webhook',
       });
     }
 
@@ -742,28 +794,6 @@ export class ShoplineService {
       resourceId:
         payload?.resource?.id || payload?.resource?._id || payload?.id || null,
     };
-  }
-
-  @Cron('0 */20 * * * *', {
-    name: 'shoplineAutoSync',
-    timeZone: 'Asia/Taipei',
-  })
-  async handleScheduledSync() {
-    const enabled =
-      this.config.get<string>('SHOPLINE_SYNC_ENABLED', 'false') === 'true';
-
-    if (!enabled) {
-      return;
-    }
-
-    try {
-      const result = await this.autoSync({ entityId: this.defaultEntityId });
-      this.logger.log(
-        `Scheduled SHOPLINE sync finished: orders=${result.orders.fetched}, customers=${result.customers.fetched}`,
-      );
-    } catch (error: any) {
-      this.logger.error(`Scheduled SHOPLINE sync failed: ${error.message}`);
-    }
   }
 
   private async ensureSalesChannel(entityId: string) {
@@ -801,12 +831,18 @@ export class ShoplineService {
     channelId: string,
     order: UnifiedOrder,
   ): Promise<'created' | 'updated'> {
-    const existing = await this.prisma.salesOrder.findFirst({
-      where: {
+    const sourceOrderKey = buildSalesOrderSourceKey(
+      channelId,
+      order.externalId,
+    );
+    const sourceIdentity = {
+      entityId_sourceOrderKey: {
         entityId,
-        channelId,
-        externalOrderId: order.externalId,
+        sourceOrderKey,
       },
+    };
+    const existing = await this.prisma.salesOrder.findUnique({
+      where: sourceIdentity,
     });
 
     const currency = order.totals.currency;
@@ -839,42 +875,28 @@ export class ShoplineService {
       notes: this.buildOrderNotes(order),
     };
 
-    if (existing) {
-      const updated = await this.prisma.salesOrder.update({
-        where: { id: existing.id },
-        data: {
-          ...data,
-          hasInvoice: existing.hasInvoice,
-        },
-      });
-      await this.syncSalesOrderItems(
-        updated.id,
-        entityId,
-        order,
-        currency,
-        fxRate,
-      );
-      return 'updated';
-    }
-
-    const created = await this.prisma.salesOrder.create({
-      data: {
+    const stored = await this.prisma.salesOrder.upsert({
+      where: sourceIdentity,
+      update: data,
+      create: {
         entityId,
         channelId,
         externalOrderId: order.externalId,
+        sourceOrderKey,
         hasInvoice: false,
         ...data,
       },
     });
     await this.syncSalesOrderItems(
-      created.id,
+      stored.id,
       entityId,
       order,
       currency,
       fxRate,
     );
+    await this.syncEmbeddedInvoice(stored, order);
 
-    return 'created';
+    return existing ? 'updated' : 'created';
   }
 
   private async syncSalesOrderItems(
@@ -960,10 +982,52 @@ export class ShoplineService {
       `deliveryStatus=${raw.order_delivery?.delivery_status || ''}`,
       `invoiceStatus=${raw.invoice?.invoice_status || ''}`,
       `invoiceNumber=${raw.invoice?.invoice_number || ''}`,
+      `invoiceDate=${raw.invoice?.invoice_date || ''}`,
+      `invoiceCancelledAt=${raw.invoice?.invoice_cancelled_at || ''}`,
       `trackingNumber=${raw.delivery_data?.tracking_number || ''}`,
     ].filter((part) => !part.endsWith('='));
 
     return notes.join('; ');
+  }
+
+  private async syncEmbeddedInvoice(
+    stored: {
+      id: string;
+      entityId: string;
+      totalGrossOriginal: Decimal;
+      totalGrossCurrency: string;
+      totalGrossFxRate: Decimal;
+    },
+    order: UnifiedOrder,
+  ) {
+    const invoice = order.raw?.invoice;
+    const invoiceNumber =
+      typeof invoice?.invoice_number === 'string'
+        ? invoice.invoice_number.trim().toUpperCase()
+        : '';
+    const upstreamStatus =
+      typeof invoice?.invoice_status === 'string'
+        ? invoice.invoice_status.trim().toLowerCase()
+        : '';
+    if (!invoiceNumber || !['active', 'cancel'].includes(upstreamStatus)) {
+      return null;
+    }
+
+    const parseDate = (value: unknown) => {
+      if (typeof value !== 'string' || !value.trim()) return null;
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    };
+
+    return this.externalInvoiceIngestion.ingest(stored, {
+      invoiceNumber,
+      status: upstreamStatus === 'cancel' ? 'void' : 'issued',
+      issuedAt: parseDate(invoice.invoice_date),
+      voidAt: parseDate(invoice.invoice_cancelled_at),
+      externalPlatform: 'shopline',
+      externalPayload: invoice,
+      notes: 'SHOPLINE order invoice source',
+    });
   }
 
   private async upsertPayment(
@@ -971,23 +1035,39 @@ export class ShoplineService {
     channelId: string,
     tx: UnifiedTransaction,
   ): Promise<'created' | 'updated'> {
+    const sourceTransactionKey = buildPaymentSourceTransactionKey(
+      channelId,
+      tx.externalId,
+    );
     const salesOrder = tx.orderId
-      ? await this.prisma.salesOrder.findFirst({
+      ? await this.prisma.salesOrder.findUnique({
           where: {
-            entityId,
-            channelId,
-            externalOrderId: tx.orderId,
+            entityId_sourceOrderKey: {
+              entityId,
+              sourceOrderKey: buildSalesOrderSourceKey(channelId, tx.orderId),
+            },
           },
         })
       : null;
 
-    const existing = await this.prisma.payment.findFirst({
-      where: {
-        entityId,
-        channelId,
-        payoutBatchId: tx.externalId,
-      },
-    });
+    const existing =
+      (await this.prisma.payment.findUnique({
+        where: {
+          entityId_sourceTransactionKey: {
+            entityId,
+            sourceTransactionKey,
+          },
+        },
+      })) ||
+      (await this.prisma.payment.findFirst({
+        where: {
+          entityId,
+          channelId,
+          payoutBatchId: tx.externalId,
+          sourceTransactionKey: null,
+        },
+        orderBy: [{ reconciledFlag: 'desc' }, { createdAt: 'asc' }],
+      }));
 
     const currency = tx.currency || 'TWD';
     const fxRate = new Decimal(await this.getFxRate(currency));
@@ -996,9 +1076,11 @@ export class ShoplineService {
       existing?.notes,
     );
     const isPaymentCaptured = tx.status === 'success';
-    const capturedAmount = isPaymentCaptured ? tx.amount : zero;
+    const capturedAmount = isPaymentCaptured
+      ? resolveStoredGrossAmount(tx)
+      : zero;
     const capturedFee = isPaymentCaptured ? tx.fee : zero;
-    const capturedNet = isPaymentCaptured ? tx.net : zero;
+    const capturedNet = isPaymentCaptured ? resolveStoredNetAmount(tx) : zero;
     const paymentNotes = this.buildPaymentNotes(existing?.notes, tx);
 
     const data = {
@@ -1006,6 +1088,7 @@ export class ShoplineService {
       channelId,
       salesOrderId: salesOrder?.id ?? null,
       payoutBatchId: tx.externalId,
+      sourceTransactionKey,
       channel: SHOPLINE_CHANNEL_CODE,
       payoutDate: tx.date,
       amountGrossOriginal: hasLockedProviderPayout
@@ -1048,7 +1131,7 @@ export class ShoplineService {
         ? existing?.reconciledFlag || false
         : false,
       bankAccountId: null,
-      status: tx.status === 'success' ? 'completed' : tx.status,
+      status: resolveStoredPaymentStatus(tx),
       notes: paymentNotes,
     };
 
@@ -1060,7 +1143,16 @@ export class ShoplineService {
       return 'updated';
     }
 
-    await this.prisma.payment.create({ data });
+    await this.prisma.payment.upsert({
+      where: {
+        entityId_sourceTransactionKey: {
+          entityId,
+          sourceTransactionKey,
+        },
+      },
+      update: data,
+      create: data,
+    });
     return 'created';
   }
 
@@ -1345,11 +1437,11 @@ export class ShoplineService {
     const type = this.toCleanString(record.type).toUpperCase();
     const hasOrderKey = Boolean(
       this.toCleanString(record.source_order_id) ||
-        this.toCleanString(record.source_order_transaction_id),
+      this.toCleanString(record.source_order_transaction_id),
     );
     const hasAmountContext = Boolean(
       this.toCleanString(record.transaction_amount || record.amount) ||
-        this.toCleanString(record.net),
+      this.toCleanString(record.net),
     );
 
     if (!hasOrderKey || !hasAmountContext) {

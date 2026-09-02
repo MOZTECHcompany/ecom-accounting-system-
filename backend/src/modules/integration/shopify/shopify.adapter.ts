@@ -281,12 +281,23 @@ export class ShopifyHttpAdapter implements ISalesChannelAdapter {
     const currency = raw.currency;
     const amount = new Decimal(raw.amount);
     const feeResolution = this.resolveTransactionFee(raw, amount);
+    const transactionKind = String(raw.kind || 'sale')
+      .trim()
+      .toLowerCase();
+    const type: UnifiedTransaction['type'] =
+      transactionKind === 'refund'
+        ? 'refund'
+        : transactionKind === 'authorization'
+          ? 'authorization'
+          : transactionKind === 'void'
+            ? 'void'
+            : 'sale';
 
     return {
       externalId: raw.id.toString(),
       orderId: order.externalId,
       date: new Date(raw.processed_at || raw.created_at),
-      type: raw.kind === 'refund' ? 'refund' : 'sale',
+      type,
       amount,
       fee: feeResolution.fee,
       net: amount.sub(feeResolution.fee),

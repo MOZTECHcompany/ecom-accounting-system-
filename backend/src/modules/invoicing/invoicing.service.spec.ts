@@ -3,22 +3,28 @@ import { InvoicingService } from './invoicing.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotFoundException, ConflictException } from '@nestjs/common';
 import { EcpayEinvoiceAdapter } from './adapters/ecpay-einvoice.adapter';
+import { SalesOrderService } from '../sales/services/sales-order.service';
 
 describe('InvoicingService', () => {
   let service: InvoicingService;
   let prismaService: PrismaService;
   let previousAllowLocalInvoiceStub: string | undefined;
   let previousNodeEnv: string | undefined;
+  let previousInvoiceSyncEnabled: string | undefined;
+  let previousInvoiceSyncToken: string | undefined;
 
   const mockPrismaService = {
     salesOrder: {
       findUnique: jest.fn(),
+      findMany: jest.fn(),
+      count: jest.fn(),
       update: jest.fn(),
     },
     invoice: {
       create: jest.fn(),
       findUnique: jest.fn(),
       findMany: jest.fn(),
+      aggregate: jest.fn(),
       update: jest.fn(),
     },
     invoiceLine: {
@@ -35,10 +41,15 @@ describe('InvoicingService', () => {
     issueInvoice: jest.fn(),
     queryInvoiceStatus: jest.fn(),
   };
+  const mockSalesOrderService = {
+    importEcpayIssuedInvoices: jest.fn(),
+  };
 
   beforeEach(async () => {
     previousAllowLocalInvoiceStub = process.env.ALLOW_LOCAL_INVOICE_STUB;
     previousNodeEnv = process.env.NODE_ENV;
+    previousInvoiceSyncEnabled = process.env.ECPAY_EINVOICE_SYNC_ENABLED;
+    previousInvoiceSyncToken = process.env.ECPAY_EINVOICE_SYNC_JOB_TOKEN;
     process.env.ALLOW_LOCAL_INVOICE_STUB = 'true';
 
     const module: TestingModule = await Test.createTestingModule({
@@ -49,6 +60,7 @@ describe('InvoicingService', () => {
           provide: EcpayEinvoiceAdapter,
           useValue: mockEcpayEinvoiceAdapter,
         },
+        { provide: SalesOrderService, useValue: mockSalesOrderService },
       ],
     }).compile();
 
@@ -67,6 +79,16 @@ describe('InvoicingService', () => {
       delete process.env.NODE_ENV;
     } else {
       process.env.NODE_ENV = previousNodeEnv;
+    }
+    if (previousInvoiceSyncEnabled === undefined) {
+      delete process.env.ECPAY_EINVOICE_SYNC_ENABLED;
+    } else {
+      process.env.ECPAY_EINVOICE_SYNC_ENABLED = previousInvoiceSyncEnabled;
+    }
+    if (previousInvoiceSyncToken === undefined) {
+      delete process.env.ECPAY_EINVOICE_SYNC_JOB_TOKEN;
+    } else {
+      process.env.ECPAY_EINVOICE_SYNC_JOB_TOKEN = previousInvoiceSyncToken;
     }
   });
 
@@ -304,7 +326,9 @@ describe('InvoicingService', () => {
       await expect(service.queryProviderStatus('invoice-123')).rejects.toThrow(
         '找不到可查詢綠界狀態的商店代號',
       );
-      expect(mockEcpayEinvoiceAdapter.queryInvoiceStatus).not.toHaveBeenCalled();
+      expect(
+        mockEcpayEinvoiceAdapter.queryInvoiceStatus,
+      ).not.toHaveBeenCalled();
     });
   });
 
@@ -372,7 +396,166 @@ describe('InvoicingService', () => {
       expect(result.items[0].queryReady).toBe(true);
       expect(result.items[0].invoiceDate).toBe('2026-04-01');
       expect(result.items[1].queryReady).toBe(false);
-      expect(mockEcpayEinvoiceAdapter.queryInvoiceStatus).not.toHaveBeenCalled();
+      expect(
+        mockEcpayEinvoiceAdapter.queryInvoiceStatus,
+      ).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('invoice queue integrity', () => {
+    const makeQueueOrder = (overrides: Record<string, unknown>) => ({
+      id: 'order-1',
+      externalOrderId: 'external-1',
+      orderDate: new Date('2026-08-01T00:00:00.000Z'),
+      totalGrossOriginal: '1000',
+      hasInvoice: false,
+      customer: { id: 'customer-1', name: '測試客戶', email: null },
+      channel: { code: 'SHOPIFY', name: 'Shopify' },
+      payments: [],
+      invoices: [],
+      ...overrides,
+    });
+
+    it('摘要使用完整區間互斥計數，不受明細 limit 影響', async () => {
+      mockPrismaService.salesOrder.findMany
+        .mockResolvedValueOnce([
+          makeQueueOrder({
+            id: 'eligible-order',
+            payments: [
+              {
+                id: 'payment-1',
+                payoutDate: new Date('2026-08-02T00:00:00.000Z'),
+                status: 'completed',
+                reconciledFlag: false,
+                amountNetOriginal: '1000',
+                notes: null,
+              },
+            ],
+          }),
+        ])
+        .mockResolvedValueOnce([
+          makeQueueOrder({
+            id: 'waiting-order',
+            externalOrderId: 'external-2',
+          }),
+        ])
+        .mockResolvedValueOnce([
+          makeQueueOrder({
+            id: 'completed-order',
+            externalOrderId: 'external-3',
+            hasInvoice: false,
+            invoices: [
+              {
+                id: 'invoice-1',
+                invoiceNumber: 'AA12345678',
+                status: 'issued',
+                issuedAt: new Date('2026-08-03T00:00:00.000Z'),
+              },
+            ],
+          }),
+        ]);
+      mockPrismaService.salesOrder.count
+        .mockResolvedValueOnce(7)
+        .mockResolvedValueOnce(13)
+        .mockResolvedValueOnce(29);
+      mockPrismaService.invoice.aggregate
+        .mockResolvedValueOnce({
+          _count: { id: 9 },
+          _sum: { totalAmountOriginal: '9000' },
+        })
+        .mockResolvedValueOnce({ _count: { id: 2 } });
+
+      const result = await service.getInvoiceQueue('entity-1', { limit: 5 });
+
+      expect(result.summary).toEqual({
+        issuedCount: 9,
+        issuedAmount: 9000,
+        voidCount: 2,
+        pendingCount: 42,
+        eligibleCount: 13,
+        waitingPaymentCount: 29,
+        completedOrderCount: 7,
+      });
+      expect(result.items).toHaveLength(3);
+      expect(result.items[2]).toEqual(
+        expect.objectContaining({
+          orderId: 'completed-order',
+          invoiceStatus: 'completed',
+          invoiceNumber: 'AA12345678',
+        }),
+      );
+    });
+
+    it('批次開票直接查可開票集合，不依賴畫面佇列分頁', async () => {
+      mockPrismaService.salesOrder.findMany.mockResolvedValueOnce([
+        {
+          id: 'eligible-1',
+          externalOrderId: 'external-1',
+          customer: { name: '客戶一', email: 'one@example.com' },
+        },
+        {
+          id: 'eligible-2',
+          externalOrderId: 'external-2',
+          customer: { name: '客戶二', email: null },
+        },
+      ]);
+      jest
+        .spyOn(service, 'issueInvoice')
+        .mockResolvedValueOnce({
+          success: true,
+          invoiceId: 'invoice-1',
+          invoiceNumber: 'AA12345678',
+        } as any)
+        .mockResolvedValueOnce({
+          success: true,
+          invoiceId: 'invoice-2',
+          invoiceNumber: 'AA12345679',
+        } as any);
+
+      const result = await service.issueEligibleInvoices('entity-1', 'user-1', {
+        limit: 2,
+      });
+
+      expect(mockPrismaService.salesOrder.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 2 }),
+      );
+      expect(mockPrismaService.salesOrder.count).not.toHaveBeenCalled();
+      expect(mockPrismaService.invoice.aggregate).not.toHaveBeenCalled();
+      expect(result).toEqual(
+        expect.objectContaining({
+          scannedCount: 2,
+          eligibleCount: 2,
+          issuedCount: 2,
+          failedCount: 0,
+        }),
+      );
+    });
+  });
+
+  describe('automatic ECPay invoice sync', () => {
+    it('stays fail-closed while the sync switch is disabled', async () => {
+      process.env.ECPAY_EINVOICE_SYNC_ENABLED = 'false';
+      const syncSpy = jest.spyOn(service, 'syncEcpayInvoiceListToOrders');
+
+      const result = await service.autoSyncRecentEcpayInvoices();
+
+      expect(result).toEqual({
+        success: true,
+        skipped: true,
+        reason: 'ECPAY_EINVOICE_SYNC_ENABLED is false',
+      });
+      expect(syncSpy).not.toHaveBeenCalled();
+    });
+
+    it('requires the scheduler token before an automatic sync can run', () => {
+      process.env.ECPAY_EINVOICE_SYNC_JOB_TOKEN = 'expected-token';
+
+      expect(() => service.assertEcpayInvoiceSyncToken('wrong-token')).toThrow(
+        'Invalid invoice sync token',
+      );
+      expect(() =>
+        service.assertEcpayInvoiceSyncToken('expected-token'),
+      ).not.toThrow();
     });
   });
 });

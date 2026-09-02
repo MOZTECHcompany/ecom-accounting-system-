@@ -6,7 +6,6 @@ import {
   LoginOutlined,
   LogoutOutlined,
   ClockCircleOutlined,
-  WarningOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -14,9 +13,11 @@ import "dayjs/locale/zh-tw";
 import { attendanceService } from "../../services/attendance.service";
 import {
   AttendanceMethod,
+  LeaveStatus,
   OvertimeRequest,
   OvertimeRequestStatus,
 } from "../../types/attendance";
+import { payrollService } from "../../services/payroll.service";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { GlassButton } from "../../components/ui/GlassButton";
 import { GlassModal } from "../../components/ui/GlassModal";
@@ -25,6 +26,18 @@ import { GlassTextarea } from "../../components/ui/GlassTextarea";
 
 dayjs.locale("zh-tw");
 
+const getBackendMessage = (error: unknown) => {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof (error as any).response?.data?.message === "string"
+  ) {
+    return (error as any).response.data.message as string;
+  }
+  return "";
+};
+
 const EmployeeDashboardPage: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(dayjs());
   const [loading, setLoading] = useState(false);
@@ -32,6 +45,12 @@ const EmployeeDashboardPage: React.FC = () => {
     null,
   );
   const [employeeLinkMissing, setEmployeeLinkMissing] = useState(false);
+  const [employeeProfileLoading, setEmployeeProfileLoading] = useState(true);
+  const [employeeProfileReady, setEmployeeProfileReady] = useState(false);
+  const [employeeProfileError, setEmployeeProfileError] = useState<string | null>(null);
+  const [annualLeaveHours, setAnnualLeaveHours] = useState<number | null>(null);
+  const [monthLeaveHours, setMonthLeaveHours] = useState<number | null>(null);
+  const [attendanceLoadIssues, setAttendanceLoadIssues] = useState<string[]>([]);
   const [lastAction, setLastAction] = useState<{
     type: string;
     time: string;
@@ -55,8 +74,80 @@ const EmployeeDashboardPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    void loadOvertimeRequests();
+    void loadDashboardData();
   }, []);
+
+  const loadDashboardData = async () => {
+    setEmployeeProfileLoading(true);
+    setEmployeeProfileReady(false);
+    setEmployeeProfileError(null);
+    setEmployeeLinkMissing(false);
+    setOvertimeRequests([]);
+    setAnnualLeaveHours(null);
+    setMonthLeaveHours(null);
+    setAttendanceLoadIssues([]);
+    try {
+      await payrollService.getMyEmployeeProfile();
+      setEmployeeLinkMissing(false);
+      setEmployeeProfileReady(true);
+
+      const [overtimeResult, balancesResult, leaveRequestsResult] =
+        await Promise.allSettled([
+          attendanceService.getMyOvertimeRequests(),
+          attendanceService.getLeaveBalances(currentTime.year()),
+          attendanceService.getLeaveRequests(),
+        ]);
+      const nextLoadIssues: string[] = [];
+
+      if (overtimeResult.status === "fulfilled") {
+        setOvertimeRequests(overtimeResult.value);
+      } else {
+        nextLoadIssues.push("加班申請");
+      }
+
+      if (balancesResult.status === "fulfilled") {
+        const annualHours = balancesResult.value
+          .filter((balance) => balance.leaveType?.code === "ANNUAL")
+          .reduce((sum, balance) => sum + Number(balance.remainingHours || 0), 0);
+        setAnnualLeaveHours(annualHours);
+      } else {
+        nextLoadIssues.push("特休餘額");
+      }
+
+      if (leaveRequestsResult.status === "fulfilled") {
+        const currentMonth = currentTime.format("YYYY-MM");
+        const approvedHours = leaveRequestsResult.value
+          .filter(
+            (request) =>
+              request.status === LeaveStatus.APPROVED &&
+              dayjs(request.startAt).format("YYYY-MM") === currentMonth,
+          )
+          .reduce((sum, request) => sum + Number(request.hours || 0), 0);
+        setMonthLeaveHours(approvedHours);
+      } else {
+        nextLoadIssues.push("請假紀錄");
+      }
+      setAttendanceLoadIssues(nextLoadIssues);
+    } catch (error) {
+      console.error(error);
+      const backendMessage = getBackendMessage(error);
+      if (
+        backendMessage.includes("Employee record not found") ||
+        (typeof error === "object" &&
+          error !== null &&
+          "response" in error &&
+          (error as any).response?.status === 404)
+      ) {
+        setEmployeeLinkMissing(true);
+      } else {
+        const fallbackMessage = backendMessage || "載入個人出勤資料失敗";
+        setEmployeeProfileError(fallbackMessage);
+        message.error(fallbackMessage);
+      }
+    } finally {
+      setEmployeeProfileLoading(false);
+    }
+  };
 
   const loadOvertimeRequests = async () => {
     try {
@@ -132,13 +223,7 @@ const EmployeeDashboardPage: React.FC = () => {
       void loadOvertimeRequests();
     } catch (error) {
       console.error(error);
-      const backendMessage =
-        typeof error === "object" &&
-        error !== null &&
-        "response" in error &&
-        typeof (error as any).response?.data?.message === "string"
-          ? (error as any).response.data.message
-          : "";
+      const backendMessage = getBackendMessage(error);
 
       if (backendMessage.includes("Employee record not found")) {
         setEmployeeLinkMissing(true);
@@ -170,13 +255,7 @@ const EmployeeDashboardPage: React.FC = () => {
       void loadOvertimeRequests();
     } catch (error) {
       console.error(error);
-      const backendMessage =
-        typeof error === "object" &&
-        error !== null &&
-        "response" in error &&
-        typeof (error as any).response?.data?.message === "string"
-          ? (error as any).response.data.message
-          : "";
+      const backendMessage = getBackendMessage(error);
 
       if (backendMessage.includes("Employee record not found")) {
         setEmployeeLinkMissing(true);
@@ -192,7 +271,7 @@ const EmployeeDashboardPage: React.FC = () => {
   return (
     <div className="space-y-8 animate-[fadeInUp_0.4s_ease-out]">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-end gap-4">
+      <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900 mb-1">
             打卡儀表板
@@ -214,41 +293,47 @@ const EmployeeDashboardPage: React.FC = () => {
         />
       ) : null}
 
-      {/* Stats Grid - Moved to top like AP page */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 w-full">
-        <GlassCard className="relative overflow-hidden group h-full">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <ClockCircleOutlined className="text-6xl text-blue-500" />
-          </div>
-          <div className="text-sm text-slate-500 mb-2 font-medium">
-            累積工時
-          </div>
-          <div className="text-3xl font-semibold text-slate-800 mb-1">
-            0 <span className="text-sm font-normal text-slate-400">小時</span>
-          </div>
-        </GlassCard>
+      {employeeProfileError ? (
+        <Alert
+          type="error"
+          showIcon
+          message="無法確認目前登入帳號的員工身分，打卡功能已停用"
+          description={employeeProfileError}
+          action={(
+            <GlassButton
+              variant="secondary"
+              onClick={() => void loadDashboardData()}
+              disabled={employeeProfileLoading}
+            >
+              重新載入
+            </GlassButton>
+          )}
+        />
+      ) : null}
 
-        <GlassCard className="relative overflow-hidden group h-full">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <WarningOutlined className="text-6xl text-red-500" />
-          </div>
-          <div className="text-sm text-slate-500 mb-2 font-medium">
-            遲到次數
-          </div>
-          <div className="text-3xl font-semibold text-slate-800 mb-1">
-            0 <span className="text-sm font-normal text-slate-400">次</span>
-          </div>
-        </GlassCard>
+      {attendanceLoadIssues.length ? (
+        <Alert
+          type="warning"
+          showIcon
+          message="部分個人出勤資料未能載入"
+          description={`未取得：${attendanceLoadIssues.join("、")}。缺少的區塊不會以 0 假裝有資料。`}
+        />
+      ) : null}
+
+      <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:gap-6">
 
         <GlassCard className="relative overflow-hidden group h-full">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <EnvironmentOutlined className="text-6xl text-purple-500" />
           </div>
           <div className="text-sm text-slate-500 mb-2 font-medium">
-            特休餘額
+            特休可用
           </div>
-          <div className="text-3xl font-semibold text-slate-800 mb-1">
-            10 <span className="text-sm font-normal text-slate-400">天</span>
+          <div className="mb-1 text-2xl font-semibold text-slate-800 sm:text-3xl">
+            {annualLeaveHours === null ? "—" : annualLeaveHours}
+            {annualLeaveHours !== null ? (
+              <span className="text-sm font-normal text-slate-400"> 小時</span>
+            ) : null}
           </div>
         </GlassCard>
 
@@ -257,10 +342,13 @@ const EmployeeDashboardPage: React.FC = () => {
             <LogoutOutlined className="text-6xl text-orange-500" />
           </div>
           <div className="text-sm text-slate-500 mb-2 font-medium">
-            本月請假
+            本月開始的請假
           </div>
-          <div className="text-3xl font-semibold text-slate-800 mb-1">
-            0 <span className="text-sm font-normal text-slate-400">小時</span>
+          <div className="mb-1 text-2xl font-semibold text-slate-800 sm:text-3xl">
+            {monthLeaveHours === null ? "—" : monthLeaveHours}
+            {monthLeaveHours !== null ? (
+              <span className="text-sm font-normal text-slate-400"> 小時</span>
+            ) : null}
           </div>
         </GlassCard>
       </div>
@@ -285,7 +373,7 @@ const EmployeeDashboardPage: React.FC = () => {
               size="lg"
               className="flex h-20 items-center justify-center gap-3 transition-transform hover:scale-[1.02]"
               onClick={handleClockIn}
-              disabled={loading}
+              disabled={loading || employeeProfileLoading || !employeeProfileReady}
             >
               <LoginOutlined className="text-2xl" />
               <span className="text-xl font-medium">上班打卡</span>
@@ -296,7 +384,7 @@ const EmployeeDashboardPage: React.FC = () => {
               size="lg"
               className="flex h-20 items-center justify-center gap-3 transition-transform hover:scale-[1.02]"
               onClick={handleClockOut}
-              disabled={loading}
+              disabled={loading || employeeProfileLoading || !employeeProfileReady}
             >
               <LogoutOutlined className="text-2xl" />
               <span className="text-xl font-medium">下班打卡</span>
@@ -308,6 +396,7 @@ const EmployeeDashboardPage: React.FC = () => {
             size="lg"
             className="h-14 flex items-center justify-center gap-3 !text-slate-700"
             onClick={openOvertimeModal}
+            disabled={employeeProfileLoading || !employeeProfileReady}
           >
             <PlusOutlined className="text-xl text-slate-600" />
             <span className="text-lg font-medium text-slate-700">
@@ -343,7 +432,7 @@ const EmployeeDashboardPage: React.FC = () => {
           <GlassCard className="flex-1 w-full">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-slate-900">
-                今日打卡紀錄
+                本次登入打卡紀錄
               </h3>
               <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
                 {todayRecords.length} 筆紀錄
@@ -384,7 +473,7 @@ const EmployeeDashboardPage: React.FC = () => {
             ) : (
               <div className="h-48 flex flex-col items-center justify-center text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
                 <ClockCircleOutlined className="text-3xl mb-2 opacity-50" />
-                <span>尚無打卡紀錄</span>
+                <span>本次登入後尚無打卡紀錄</span>
               </div>
             )}
           </GlassCard>
@@ -425,7 +514,9 @@ const EmployeeDashboardPage: React.FC = () => {
               </div>
             ) : (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 px-4 py-6 text-center text-sm text-slate-400">
-                目前尚無加班申請
+                {attendanceLoadIssues.includes("加班申請")
+                  ? "加班申請資料未取得"
+                  : "目前尚無加班申請"}
               </div>
             )}
           </GlassCard>

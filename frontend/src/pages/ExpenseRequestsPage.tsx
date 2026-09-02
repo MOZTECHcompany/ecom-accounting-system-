@@ -575,7 +575,7 @@ const ExpenseRequestsPage: React.FC = () => {
   const handlePredictCategory = async () => {
     const description = form.getFieldValue("description");
     if (!description || !description.trim()) {
-      message.warning("請先輸入備註說明，AI 才能進行分析");
+      message.warning("請先輸入備註說明，系統才能提供建議");
       return;
     }
 
@@ -614,7 +614,7 @@ const ExpenseRequestsPage: React.FC = () => {
             content: (
               <div className="flex flex-col">
                 <span>
-                  AI 建議：<span className="font-bold">{item.name}</span>{" "}
+                  系統建議：<span className="font-bold">{item.name}</span>{" "}
                   (信心度 {(result.confidence * 100).toFixed(0)}%)
                 </span>
                 {result.amount && (
@@ -683,7 +683,7 @@ const ExpenseRequestsPage: React.FC = () => {
               content: (
                 <div className="flex flex-col">
                   <span>
-                    AI 建議：
+                    系統建議：
                     <span className="font-bold">{refreshedItem.name}</span>{" "}
                     (信心度 {(result.confidence * 100).toFixed(0)}%)
                   </span>
@@ -714,18 +714,18 @@ const ExpenseRequestsPage: React.FC = () => {
               duration: 4,
             });
           } else {
-            message.info("AI 建議的項目目前不可用");
+            message.info("建議項目目前不可用");
           }
         }
       } else {
         message.info(
-          "AI 無法判斷合適的報銷項目，可能尚未設定報銷項目庫，請聯繫管理員",
+          "無法判斷合適的報銷項目，可能尚未設定報銷項目庫，請聯繫管理員",
         );
       }
     } catch (error) {
       console.error(error);
       const apiMessage = extractApiMessage(error);
-      message.error(apiMessage || "AI 分析失敗，請稍後再試");
+      message.error(apiMessage || "系統分析失敗，請稍後再試");
     } finally {
       setPredicting(false);
     }
@@ -775,7 +775,7 @@ const ExpenseRequestsPage: React.FC = () => {
       },
     },
     {
-      title: "智能建議",
+      title: "系統建議",
       key: "suggestedAccount",
       responsive: ["lg"],
       render: (_: unknown, record) => {
@@ -1188,7 +1188,7 @@ const ExpenseRequestsPage: React.FC = () => {
                 <Checkbox className="text-red-600 font-medium">
                   <Space>
                     <ExclamationCircleOutlined />
-                    標記為急件 (Urgent)
+                    標記為急件
                   </Space>
                 </Checkbox>
               </Form.Item>
@@ -1319,7 +1319,7 @@ const ExpenseRequestsPage: React.FC = () => {
               className="mb-4"
             >
               <Select
-                placeholder="請選擇報銷項目（可使用上方 AI 建議）"
+                placeholder="請選擇報銷項目（可使用上方系統建議）"
                 onChange={handleReimbursementItemChange}
                 loading={listLoading}
                 showSearch

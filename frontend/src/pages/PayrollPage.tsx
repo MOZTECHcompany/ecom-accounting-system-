@@ -1176,9 +1176,6 @@ const PayrollPage: React.FC = () => {
       <div className="flex justify-between items-end">
         <div>
           <Title level={2} className="!mb-1 !font-light">薪資管理</Title>
-          <Text className="text-gray-500">
-            {canReviewPayroll ? '每月薪資結算、確定、會計憑證與個人薪資查詢' : '查看個人薪資單與每期薪資明細'}
-          </Text>
         </div>
         {canManagePayroll ? (
           <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => setDrawerOpen(true)}>

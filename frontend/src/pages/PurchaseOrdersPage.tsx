@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Typography, Table, Button, Tag, Space, message, Modal, Form, Input } from 'antd'
-import { FileTextOutlined, PlusOutlined, ReloadOutlined, ScanOutlined } from '@ant-design/icons'
+import { Card, Typography, Table, Button, Tag, message, Modal, Form, Select } from 'antd'
+import { FileTextOutlined, ReloadOutlined, ScanOutlined } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { purchaseService, PurchaseOrder } from '../services/purchase.service'
+import { inventoryService } from '../services/inventory.service'
+import { resolveEntityId } from '../services/entities.service'
 
 const { Title } = Typography
 
@@ -11,9 +13,10 @@ const PurchaseOrdersPage: React.FC = () => {
   const navigate = useNavigate()
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
   const [loading, setLoading] = useState(false)
-  const [receiveModalVisible, setReceiveModalVisible] = useState(false)
-  const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null)
-  const [snForm] = Form.useForm()
+  const [receivingOrder, setReceivingOrder] = useState<PurchaseOrder | null>(null)
+  const [warehouses, setWarehouses] = useState<Array<{ id: string; code: string; name: string }>>([])
+  const [receiving, setReceiving] = useState(false)
+  const [receiveForm] = Form.useForm()
 
   const fetchOrders = async () => {
     setLoading(true)
@@ -31,34 +34,59 @@ const PurchaseOrdersPage: React.FC = () => {
     fetchOrders()
   }, [])
 
-  const onReceiveClick = async (order: PurchaseOrder) => {
-    try {
-      const fullOrder = await purchaseService.findOne(order.id)
-      setSelectedOrder(fullOrder)
-      setReceiveModalVisible(true)
-      snForm.resetFields()
-    } catch (error) {
-      message.error('無法載入訂單詳情')
-    }
-  }
-
-  const handleReceiveSubmit = async () => {
-    try {
-      const values = await snForm.validateFields()
-      const serialNumbers = Object.keys(values).map(key => ({
-        productId: key,
-        serialNumbers: values[key]
-      }))
-
-      if (selectedOrder) {
-        await purchaseService.receive(selectedOrder.id, 'default-warehouse', serialNumbers)
-        message.success('收貨成功')
-        setReceiveModalVisible(false)
-        fetchOrders()
+  useEffect(() => {
+    if (!receivingOrder) return
+    receiveForm.resetFields()
+    void (async () => {
+      try {
+        const entityId = await resolveEntityId()
+        const rows = await inventoryService.getWarehouses(entityId)
+        setWarehouses(rows)
+        if (rows.length > 0) receiveForm.setFieldValue('warehouseId', rows[0].id)
+      } catch {
+        setWarehouses([])
+        message.error('無法載入收貨倉庫')
       }
+    })()
+  }, [receiveForm, receivingOrder])
+
+  const serialRequirements = (() => {
+    const requirements = new Map<string, { productId: string; name: string; sku: string; quantity: number }>()
+    for (const item of receivingOrder?.items || []) {
+      if (!item.product.hasSerialNumbers) continue
+      const current = requirements.get(item.productId) || {
+        productId: item.productId,
+        name: item.product.name,
+        sku: item.product.sku,
+        quantity: 0,
+      }
+      current.quantity += Number(item.qty)
+      requirements.set(item.productId, current)
+    }
+    return [...requirements.values()]
+  })()
+
+  const handleReceive = async () => {
+    if (!receivingOrder) return
+    try {
+      const values = await receiveForm.validateFields()
+      setReceiving(true)
+      await purchaseService.receive(
+        receivingOrder.id,
+        values.warehouseId,
+        serialRequirements.map((item) => ({
+          productId: item.productId,
+          serialNumbers: values.serialNumbers?.[item.productId] || [],
+        })),
+      )
+      message.success('採購單已完成收貨入庫')
+      setReceivingOrder(null)
+      await fetchOrders()
     } catch (error) {
-      console.error(error)
-      message.error('收貨失敗')
+      if ((error as { errorFields?: unknown[] })?.errorFields) return
+      message.error('收貨失敗，庫存未變更')
+    } finally {
+      setReceiving(false)
     }
   }
 
@@ -82,29 +110,30 @@ const PurchaseOrdersPage: React.FC = () => {
       render: (status: string) => {
         const colors: Record<string, string> = {
           'pending': 'blue',
+          'receiving': 'gold',
           'received': 'green',
           'completed': 'green',
           'cancelled': 'red'
         }
-        return <Tag color={colors[status] || 'default'}>{status.toUpperCase()}</Tag>
+        const labels: Record<string, string> = {
+          pending: '待收貨', receiving: '收貨中', received: '已收貨', completed: '已完成', cancelled: '已取消',
+        }
+        return <Tag color={colors[status] || 'default'}>{labels[status] || status}</Tag>
       }
     },
     { 
       title: '總金額', 
       dataIndex: 'totalAmountOriginal', 
       key: 'totalAmountOriginal',
-      render: (val: number) => `$${Number(val).toFixed(2)}`
+      render: (val: number, record: PurchaseOrder) =>
+        new Intl.NumberFormat('zh-TW', { style: 'currency', currency: record.totalAmountCurrency || 'TWD' }).format(Number(val))
     },
     {
       title: '操作',
       key: 'action',
-      render: (_: any, record: PurchaseOrder) => (
-        <Space>
-          {record.status === 'pending' && (
-             <Button type="primary" size="small" icon={<ScanOutlined />} onClick={() => onReceiveClick(record)}>收貨</Button>
-          )}
-        </Space>
-      )
+      render: (_: unknown, record: PurchaseOrder) => record.status === 'pending' ? (
+        <Button type="primary" icon={<ScanOutlined />} onClick={() => setReceivingOrder(record)}>收貨入庫</Button>
+      ) : null
     }
   ]
 
@@ -113,80 +142,68 @@ const PurchaseOrdersPage: React.FC = () => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="p-6"
+      className="px-2 py-4 sm:p-6"
     >
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <Title level={2} className="!mb-0">採購訂單 (PO)</Title>
-          <p className="text-gray-500 mt-1">管理向供應商的採購流程與進貨驗收</p>
+      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <Title level={2} className="!mb-0 !text-2xl sm:!text-3xl">採購訂單</Title>
         </div>
-        <Space>
-          <Button icon={<ReloadOutlined />} onClick={fetchOrders}>重新整理</Button>
-          <Button icon={<FileTextOutlined />} onClick={() => navigate('/sales/quotations')}>
+        <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:w-auto lg:flex lg:flex-wrap lg:justify-end">
+          <Button className="w-full lg:w-auto" icon={<ReloadOutlined />} onClick={fetchOrders}>重新整理</Button>
+          <Button className="w-full lg:w-auto" icon={<FileTextOutlined />} onClick={() => navigate('/sales/quotations')}>
             客戶報價單
           </Button>
-          <Button type="primary" icon={<PlusOutlined />} size="large">
-            建立採購單
-          </Button>
-        </Space>
+        </div>
       </div>
 
-      <Card className="shadow-sm rounded-xl border-0">
+      <Card className="overflow-hidden shadow-sm rounded-xl border-0">
         <Table 
           columns={columns} 
           dataSource={orders} 
           rowKey="id"
           loading={loading}
+          scroll={{ x: 760 }}
         />
       </Card>
 
       <Modal
-        title="採購收貨 (Inbound Receive)"
-        open={receiveModalVisible}
-        onCancel={() => setReceiveModalVisible(false)}
-        onOk={handleReceiveSubmit}
-        width={600}
-        okText="確認收貨"
+        title="收貨入庫"
+        open={Boolean(receivingOrder)}
+        onCancel={() => setReceivingOrder(null)}
+        onOk={handleReceive}
+        okText="確認入庫"
         cancelText="取消"
+        confirmLoading={receiving}
+        okButtonProps={{ disabled: warehouses.length === 0 }}
       >
-        <Form form={snForm} layout="vertical">
-          {selectedOrder?.items.map(item => {
-            if (!item.product?.hasSerialNumbers) return null;
-            
-            return (
-              <div key={item.id} className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="mb-3">
-                  <Typography.Text strong className="text-lg">{item.product.name}</Typography.Text>
-                  <br />
-                  <Typography.Text type="secondary">SKU: {item.product.sku} | 需輸入 {Number(item.qty)} 個序號</Typography.Text>
-                </div>
-                
-                <Form.List name={item.productId} initialValue={Array(Number(item.qty)).fill('')}>
-                  {(fields) => (
-                    <div className="grid grid-cols-1 gap-2">
-                      {fields.map((field, index) => (
-                        <Form.Item
-                          {...field}
-                          key={field.key}
-                          rules={[{ required: true, message: '請輸入序號' }]}
-                          label={`序號 ${index + 1}`}
-                          className="!mb-2"
-                        >
-                          <Input placeholder="掃描或輸入 SN" prefix={<ScanOutlined />} autoFocus={index === 0} />
-                        </Form.Item>
-                      ))}
-                    </div>
-                  )}
-                </Form.List>
-              </div>
-            )
-          })}
-          {selectedOrder && !selectedOrder.items.some(i => i.product.hasSerialNumbers) && (
-            <div className="text-center py-8">
-              <Typography.Title level={4}>確認收貨？</Typography.Title>
-              <p className="text-gray-500">此訂單商品無須輸入序號，點擊確認即可完成入庫。</p>
-            </div>
-          )}
+        <Form form={receiveForm} layout="vertical" className="pt-3">
+          <Form.Item name="warehouseId" label="收貨倉庫" rules={[{ required: true, message: '請選擇收貨倉庫' }]}>
+            <Select
+              placeholder="選擇倉庫"
+              options={warehouses.map((warehouse) => ({
+                value: warehouse.id,
+                label: `${warehouse.code} · ${warehouse.name}`,
+              }))}
+            />
+          </Form.Item>
+          {serialRequirements.map((item) => (
+            <Form.Item
+              key={item.productId}
+              name={['serialNumbers', item.productId]}
+              label={`${item.name}（${item.sku}）序號 · ${item.quantity} 組`}
+              rules={[
+                { required: true, message: '請掃描或輸入完整序號' },
+                {
+                  validator: (_, value?: string[]) =>
+                    value?.length === item.quantity && new Set(value.map((serial) => serial.trim())).size === item.quantity
+                      ? Promise.resolve()
+                      : Promise.reject(new Error(`必須輸入 ${item.quantity} 組不重複序號`)),
+                },
+              ]}
+            >
+              <Select mode="tags" tokenSeparators={[',', ' ', '\n']} placeholder="掃描或輸入序號" />
+            </Form.Item>
+          ))}
         </Form>
       </Modal>
     </motion.div>

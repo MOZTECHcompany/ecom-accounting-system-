@@ -294,7 +294,10 @@ export class OneShopHttpAdapter implements ISalesChannelAdapter {
     const detailCart = detail?.data?.cart;
     const receipts = this.normalizeReceipts(detail?.data?.receipt);
     const gross = new Decimal(
-      detailCart?.total_price ?? detailOrder?.total_price ?? raw.total_price ?? 0,
+      detailCart?.total_price ??
+        detailOrder?.total_price ??
+        raw.total_price ??
+        0,
     );
     const tax = new Decimal(0);
     const discount = new Decimal(detailCart?.refund ?? 0);
@@ -309,7 +312,9 @@ export class OneShopHttpAdapter implements ISalesChannelAdapter {
 
     return {
       externalId: `${externalStoreId}:${externalOrderId}`,
-      orderDate: this.parseOneShopDate(detailOrder?.create_date || raw.create_date),
+      orderDate: this.parseOneShopDate(
+        detailOrder?.create_date || raw.create_date,
+      ),
       status,
       customer: {
         externalId: `${externalStoreId}:${externalOrderId}`,
@@ -367,18 +372,23 @@ export class OneShopHttpAdapter implements ISalesChannelAdapter {
       raw.payment,
       raw.receipt?.[0]?.third_party,
     );
-    const providerPaymentId = this.pickFirstString(
-      raw.payment_third_party_no,
-      raw.logistics_third_party_no,
-    );
+    const providerPaymentId = this.pickFirstString(raw.payment_third_party_no);
     const gross = new Decimal(raw.cart?.total_price ?? order.totals.gross ?? 0);
     const fee = new Decimal(raw.cart?.payment_fee ?? 0);
     const net = gross.sub(fee).toDecimalPlaces(2);
     const paymentStatus = this.pickFirstString(raw.payment_status);
-    const paymentDate = this.parseOneShopDate(raw.payment_date || raw.create_date);
-    const transactionId = providerPaymentId || order.externalId;
+    const paymentDate = this.parseOneShopDate(
+      raw.payment_date || raw.create_date,
+    );
+    const normalizedPaymentStatus = paymentStatus.trim().toLowerCase();
+    const transactionId = providerPaymentId || `payment:${order.externalId}`;
 
-    if (!payment && !providerPaymentId && paymentStatus === 'pending') {
+    // Logistics identifiers describe fulfilment, not received money. A pending
+    // 1Shop order is represented by the zero-value draft maintained by the
+    // service and must not become a full-value Payment row.
+    if (
+      ['pending', 'unpaid', 'waiting', ''].includes(normalizedPaymentStatus)
+    ) {
       return null;
     }
 
@@ -519,7 +529,10 @@ export class OneShopHttpAdapter implements ISalesChannelAdapter {
 
     this.requestQueues.set(
       rateKey,
-      current.then(() => undefined, () => undefined),
+      current.then(
+        () => undefined,
+        () => undefined,
+      ),
     );
 
     return current;
@@ -571,13 +584,17 @@ export class OneShopHttpAdapter implements ISalesChannelAdapter {
     }
 
     if (!this.stores.length) {
-      throw new Error('1Shop configuration missing: ONESHOP stores are required');
+      throw new Error(
+        '1Shop configuration missing: ONESHOP stores are required',
+      );
     }
   }
 
   private assertStoreConfig(store: OneShopStoreConfig) {
     if (!store.appId || !store.secret) {
-      throw new Error('1Shop store configuration missing: appId and secret are required');
+      throw new Error(
+        '1Shop store configuration missing: appId and secret are required',
+      );
     }
   }
 
@@ -604,14 +621,15 @@ export class OneShopHttpAdapter implements ISalesChannelAdapter {
             .filter((store) => store.appId && store.secret);
         }
       } catch (error: any) {
-        this.logger.error(`Invalid ONESHOP_STORES_JSON config: ${error.message}`);
+        this.logger.error(
+          `Invalid ONESHOP_STORES_JSON config: ${error.message}`,
+        );
       }
     }
 
     const appId = this.configService.get<string>('ONESHOP_APP_ID', '') || '';
     const secret = this.configService.get<string>('ONESHOP_SECRET', '') || '';
-    const account =
-      this.configService.get<string>('ONESHOP_ACCOUNT', '') || '';
+    const account = this.configService.get<string>('ONESHOP_ACCOUNT', '') || '';
     const storeName =
       this.configService.get<string>('ONESHOP_STORE_NAME', '') || '';
 

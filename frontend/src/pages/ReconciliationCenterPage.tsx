@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   Alert,
   Button,
@@ -30,18 +30,29 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   reconciliationService,
   ClearReadyPaymentsResponse,
+  EcpayPayoutPreviewResponse,
   ReconciliationBucketKey,
   ReconciliationCenterItem,
   ReconciliationCenterResponse,
 } from '../services/reconciliation.service'
+import { resolveEntityId } from '../services/entities.service'
 
 const { Title, Text } = Typography
 const { RangePicker } = DatePicker
 
-const DEFAULT_ENTITY_ID = import.meta.env.VITE_DEFAULT_ENTITY_ID?.trim() || 'tw-entity-001'
-
 const money = (value?: number | null) =>
   `NT$ ${Number(value || 0).toLocaleString('zh-TW', { maximumFractionDigits: 0 })}`
+
+const exactMoney = (value?: number | null) =>
+  `NT$ ${Number(value || 0).toLocaleString('zh-TW', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`
+
+const ecpayMerchantLabels: Record<string, string> = {
+  'groupbuy-main': '1SHOP 團購',
+  'shopify-main': 'MOZTECH 官網',
+}
 
 const bucketMeta: Record<
   ReconciliationBucketKey,
@@ -131,8 +142,10 @@ const ReconciliationCenterPage: React.FC = () => {
   const [clearPreview, setClearPreview] = useState<ClearReadyPaymentsResponse | null>(null)
   const [center, setCenter] = useState<ReconciliationCenterResponse | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [ecpayLoading, setEcpayLoading] = useState(false)
+  const [ecpayError, setEcpayError] = useState<string | null>(null)
+  const [ecpayPayouts, setEcpayPayouts] = useState<EcpayPayoutPreviewResponse[]>([])
 
-  const entityId = localStorage.getItem('entityId')?.trim() || DEFAULT_ENTITY_ID
   const startDate = dateRange[0].startOf('day').toISOString()
   const endDate = dateRange[1].endOf('day').toISOString()
 
@@ -140,6 +153,7 @@ const ReconciliationCenterPage: React.FC = () => {
     setLoading(true)
     setErrorMessage(null)
     try {
+      const entityId = await resolveEntityId()
       const centerData = await reconciliationService.getCenter({
         entityId,
         startDate,
@@ -161,6 +175,8 @@ const ReconciliationCenterPage: React.FC = () => {
   }
 
   useEffect(() => {
+    setEcpayPayouts([])
+    setEcpayError(null)
     fetchData()
   }, [dateRange[0].valueOf(), dateRange[1].valueOf()])
 
@@ -194,6 +210,7 @@ const ReconciliationCenterPage: React.FC = () => {
   const handleSyncCore = async () => {
     setSyncing(true)
     try {
+      const entityId = await resolveEntityId()
       const result = await reconciliationService.runCore({
         entityId,
         startDate,
@@ -220,9 +237,40 @@ const ReconciliationCenterPage: React.FC = () => {
     }
   }
 
+  const handlePreviewEcpayPayouts = async () => {
+    setEcpayLoading(true)
+    setEcpayError(null)
+    try {
+      const entityId = await resolveEntityId()
+      const range = {
+        entityId,
+        beginDate: dateRange[0].format('YYYY-MM-DD'),
+        endDate: dateRange[1].format('YYYY-MM-DD'),
+      }
+      const result = await Promise.all([
+        reconciliationService.previewEcpayPayouts({
+          ...range,
+          merchantKey: 'groupbuy-main',
+        }),
+        reconciliationService.previewEcpayPayouts({
+          ...range,
+          merchantKey: 'shopify-main',
+        }),
+      ])
+      setEcpayPayouts(result)
+    } catch (error: any) {
+      const nextMessage = error?.response?.data?.message || '讀取綠界撥款失敗'
+      setEcpayError(nextMessage)
+      message.error(nextMessage)
+    } finally {
+      setEcpayLoading(false)
+    }
+  }
+
   const handlePreviewClearReady = async () => {
     setClearing(true)
     try {
+      const entityId = await resolveEntityId()
       const result = await reconciliationService.clearReady({
         entityId,
         startDate,
@@ -252,6 +300,7 @@ const ReconciliationCenterPage: React.FC = () => {
   const handleConfirmClearReady = async () => {
     setClearing(true)
     try {
+      const entityId = await resolveEntityId()
       const result = await reconciliationService.clearReady({
         entityId,
         startDate,
@@ -337,47 +386,107 @@ const ReconciliationCenterPage: React.FC = () => {
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45 }}
-      className="page-section-stack page-section-stack--roomy p-6"
+      className="page-section-stack page-section-stack--roomy p-3 sm:p-6"
     >
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.26em] text-slate-400">
-            Reconciliation Center
-          </div>
           <Title level={2} className="!mb-1 !font-light">對帳中心</Title>
           <Text type="secondary">
-            只看核對狀態：每筆訂單是否完成訂單、撥款、手續費與發票的閉環，不在這裡做會計補件。
+            訂單、撥款、手續費與發票核對
           </Text>
         </div>
-        <Space wrap>
+        <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 xl:w-auto xl:flex xl:flex-wrap xl:justify-end">
           <RangePicker
+            className="w-full sm:col-span-2 xl:w-[260px]"
             value={dateRange}
             onChange={(value) => {
               if (value?.[0] && value?.[1]) setDateRange([value[0], value[1]])
             }}
             allowClear={false}
           />
-          <Button icon={<ReloadOutlined />} loading={loading} onClick={fetchData}>
+          <Button className="w-full xl:w-auto" icon={<ReloadOutlined />} loading={loading} onClick={fetchData}>
             重新整理
           </Button>
           <Button
+            className="w-full bg-slate-950 hover:!bg-slate-800 xl:w-auto"
             type="primary"
             icon={<SafetyCertificateOutlined />}
             loading={syncing}
             onClick={handleSyncCore}
-            className="bg-slate-950 hover:!bg-slate-800"
           >
             跑核心同步
           </Button>
           <Button
+            className="w-full xl:w-auto"
             icon={<CheckCircleOutlined />}
             loading={clearing}
             onClick={handlePreviewClearReady}
           >
             預覽可核銷
           </Button>
-        </Space>
+        </div>
       </div>
+
+      <Card className="rounded-3xl border-0 shadow-sm" bodyStyle={{ padding: '22px 24px' }}>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-slate-900">綠界撥款</div>
+            <div className="mt-1 text-xs text-slate-400">
+              {dateRange[0].format('YYYY/MM/DD')}–{dateRange[1].format('YYYY/MM/DD')}
+            </div>
+          </div>
+          <Button
+            icon={<BankOutlined />}
+            loading={ecpayLoading}
+            onClick={handlePreviewEcpayPayouts}
+          >
+            查詢撥款
+          </Button>
+        </div>
+
+        {ecpayError ? <div className="mt-4 text-sm text-rose-600">{ecpayError}</div> : null}
+
+        {ecpayPayouts.length ? (
+          <div className="mt-5 grid gap-3 xl:grid-cols-2">
+            {ecpayPayouts.map((payout) => (
+              <div
+                key={payout.merchantKey}
+                className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">
+                      {ecpayMerchantLabels[payout.merchantKey] || payout.merchantKey}
+                    </div>
+                    <div className="mt-0.5 text-xs text-slate-400">{payout.merchantId}</div>
+                  </div>
+                  <Tag>{payout.recordCount} 筆</Tag>
+                </div>
+                <div className="mt-4 grid grid-cols-3 gap-3 border-t border-slate-200 pt-4">
+                  <div>
+                    <div className="text-xs text-slate-400">交易額</div>
+                    <div className="mt-1 text-sm font-semibold tabular-nums text-slate-900">
+                      {exactMoney(payout.totals.grossAmount)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-400">手續費</div>
+                    <div className="mt-1 text-sm font-semibold tabular-nums text-amber-700">
+                      {exactMoney(payout.totals.feeAmount)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-400">實撥</div>
+                    <div className="mt-1 text-sm font-semibold tabular-nums text-emerald-700">
+                      {exactMoney(payout.totals.netAmount)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </Card>
 
       <Alert
         showIcon
@@ -549,7 +658,7 @@ const ReconciliationCenterPage: React.FC = () => {
             value: key,
           }))}
         />
-        <Space>
+        <Space wrap className="w-full lg:w-auto">
           <Button onClick={() => navigate('/accounting/workbench?focus=missing-invoices')}>
             缺發票處理
           </Button>
@@ -569,6 +678,7 @@ const ReconciliationCenterPage: React.FC = () => {
         dataSource={visibleItems}
         pagination={{ pageSize: 12 }}
         className="rounded-3xl bg-white/60"
+        scroll={{ x: 760 }}
       />
 
       <Modal
@@ -628,6 +738,7 @@ const ReconciliationCenterPage: React.FC = () => {
               rowKey={(record) => record.paymentId}
               dataSource={clearPreview.results.slice(0, 20)}
               pagination={false}
+              scroll={{ x: 560 }}
               columns={[
                 {
                   title: 'Payment',

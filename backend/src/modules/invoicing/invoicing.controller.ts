@@ -5,6 +5,7 @@ import {
   Param,
   Body,
   Query,
+  Headers,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -21,6 +22,7 @@ import { IssueInvoiceDto } from './dto/issue-invoice.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 
 /**
  * InvoicingController
@@ -171,6 +173,26 @@ export class InvoicingController {
     },
   ) {
     return this.invoicingService.syncEcpayInvoiceListToOrders(body);
+  }
+
+  @Public()
+  @Post('ecpay/invoices/sync/auto')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: '排程同步最近綠界銷項發票',
+    description:
+      '供 Cloud Scheduler 使用。必須帶 x-sync-token，且 ECPAY_EINVOICE_SYNC_ENABLED=true 才會回填 Invoice；不會開立、作廢或折讓發票。',
+  })
+  async autoSyncRecentEcpayInvoices(
+    @Headers('x-sync-token') syncToken: string | undefined,
+    @Body()
+    body: {
+      entityId?: string;
+      lookbackDays?: number;
+    },
+  ) {
+    this.invoicingService.assertEcpayInvoiceSyncToken(syncToken);
+    return this.invoicingService.autoSyncRecentEcpayInvoices(body);
   }
 
   @Get('ecpay/word-settings')

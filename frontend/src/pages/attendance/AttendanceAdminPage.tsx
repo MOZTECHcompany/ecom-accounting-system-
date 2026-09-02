@@ -12,7 +12,6 @@ import {
   PaperClipOutlined,
   ReloadOutlined,
   RightOutlined,
-  TeamOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -940,20 +939,8 @@ const AttendanceAdminPage: React.FC = () => {
   return (
     <div className="space-y-8 animate-[fadeInUp_0.4s_ease-out]">
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <GlassCard className="relative overflow-hidden border-white/35 bg-white/40">
-          <div className="absolute inset-y-0 right-0 w-56 bg-[radial-gradient(circle_at_center,rgba(96,165,250,0.24),transparent_72%)]" />
-          <div className="relative">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/35 px-4 py-2 text-xs font-semibold tracking-[0.25em] text-slate-500 uppercase">
-              <TeamOutlined />
-              Attendance Control Deck
-            </div>
-            <h1 className="mt-4 text-3xl font-semibold text-slate-900">
-              考勤後臺
-            </h1>
-            <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-500">
-              這個工作台把每日出勤、假單審核、加班審核、班表政策與統一放假整合在一起。主管與人資可以在同一個後臺快速切換日常巡檢與審核流程。
-            </p>
-          </div>
+        <GlassCard className="border-white/35 bg-white/40">
+          <h1 className="text-3xl font-semibold text-slate-900">考勤管理</h1>
         </GlassCard>
 
         <GlassCard className="border-white/35 bg-white/45 p-5">
@@ -993,11 +980,7 @@ const AttendanceAdminPage: React.FC = () => {
                 {primaryAction.icon}
                 {primaryAction.label}
               </GlassButton>
-            ) : (
-              <GlassCard className="flex h-12 items-center justify-center border border-white/25 bg-white/20 text-xs text-slate-500">
-                此頁以清單檢視與審核操作為主
-              </GlassCard>
-            )}
+            ) : null}
           </div>
         </GlassCard>
       </div>
@@ -1689,14 +1672,9 @@ const AttendanceAdminPage: React.FC = () => {
           {(activeTab === "closures" || activeTab === "policies") && (
             <div className="space-y-5">
               <GlassCard className="border border-cyan-100/70 bg-cyan-50/70">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <div className="text-sm font-semibold text-cyan-900">
-                      特殊統一放假宣告
-                    </div>
-                    <div className="mt-2 text-sm leading-6 text-cyan-800">
-                      國定假日補放、颱風停班、天然災害或公司統一公告放假，都建議在這裡建立一次宣告。系統會依範圍建立出勤摘要，並在薪資計算時套用不扣薪、不支薪或部分支薪政策，不需要每位員工逐一送假單。
-                    </div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="text-sm font-semibold text-cyan-900">
+                    統一放假宣告
                   </div>
                   <GlassButton
                     className="shrink-0 gap-2 px-5 py-3 text-sm"
@@ -2115,13 +2093,6 @@ const AttendanceAdminPage: React.FC = () => {
         }
       >
         <div className="space-y-5">
-          <GlassCard className="border border-amber-100/70 bg-amber-50/70">
-            <div className="text-sm font-semibold text-amber-900">建議用法</div>
-            <div className="mt-2 text-sm leading-6 text-amber-800">
-              遇到國定假日補放、政府公告停班，或公司決定統一放假時，在這裡建立一筆宣告並選擇適用範圍。員工不用送假單；薪資會依你設定的不扣薪、不支薪或部分支薪規則自動帶入。
-            </div>
-          </GlassCard>
-
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <GlassInput
               label="宣告名稱"

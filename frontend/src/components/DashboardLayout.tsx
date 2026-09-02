@@ -20,8 +20,8 @@ import {
   UserOutlined,
   SearchOutlined,
   MenuOutlined,
-  DownOutlined,
-  UpOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
   ClockCircleOutlined,
 } from '@ant-design/icons'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -29,7 +29,6 @@ import { GlassDrawer } from './ui/GlassDrawer'
 import { useAuth } from '../contexts/AuthContext'
 import BrandMark from './BrandMark'
 import CommandPalette from './CommandPalette'
-import AICopilotWidget from './AICopilotWidget'
 import NotificationCenter from './NotificationCenter'
 import SettingsDrawer from './SettingsDrawer'
 import { hasAnyPermission, hasPermission, isAdminUser } from '../utils/access'
@@ -38,10 +37,20 @@ const { Header, Sider, Content } = Layout
 const { Title } = Typography
 const { useBreakpoint } = Grid
 
+type ErpMenuItem = {
+  key: string
+  icon?: React.ReactNode
+  label: string
+  hidden?: boolean
+  onClick?: () => void
+  children?: ErpMenuItem[]
+}
+
 const DashboardLayout: React.FC = () => {
   const [openMenuKeys, setOpenMenuKeys] = useState<string[]>([])
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -51,6 +60,8 @@ const DashboardLayout: React.FC = () => {
   // Determine if we are on a mobile screen (xs or sm, but not md or larger)
   // Note: screens.md is true for >= 768px. So !screens.md means < 768px.
   const isMobile = !screens.md
+  const isCompactDesktop = Boolean(screens.md && !screens.lg)
+  const desktopSidebarCollapsed = sidebarCollapsed || isCompactDesktop
   const canAccess = (permissions: string[] = []) =>
     permissions.length === 0 || hasAnyPermission(user, permissions)
   const searchValue = searchParams.get('q') ?? ''
@@ -71,7 +82,7 @@ const DashboardLayout: React.FC = () => {
     )
   }
 
-  const menuItems = [
+  const menuItems: ErpMenuItem[] = [
     {
       key: '/dashboard',
       icon: <DashboardOutlined />,
@@ -298,7 +309,7 @@ const DashboardLayout: React.FC = () => {
     },
   ]
 
-  const filterMenuItems = (items: any[]): any[] =>
+  const filterMenuItems = (items: ErpMenuItem[]): ErpMenuItem[] =>
     items
       .filter((item) => !item.hidden)
       .map((item) => {
@@ -314,17 +325,23 @@ const DashboardLayout: React.FC = () => {
           children,
         }
       })
-      .filter(Boolean)
+      .filter((item): item is ErpMenuItem => item !== null)
 
   const visibleMenuItems = filterMenuItems(menuItems)
-  const expandableMenuKeys = visibleMenuItems
-    .filter((item) => item.children?.length)
-    .map((item) => String(item.key))
-  const allMenuGroupsOpen =
-    expandableMenuKeys.length > 0 &&
-    expandableMenuKeys.every((key) => openMenuKeys.includes(key))
+  const resolveParentMenuKey = (items: ErpMenuItem[], path: string): string | null => {
+    for (const item of items) {
+      if (item.children?.some((child) => child.key.split('?')[0] === path)) {
+        return String(item.key)
+      }
+    }
+    return null
+  }
+  const routeParentMenuKey = resolveParentMenuKey(visibleMenuItems, location.pathname)
+  const effectiveOpenMenuKeys = routeParentMenuKey && !openMenuKeys.includes(routeParentMenuKey)
+    ? [...openMenuKeys, routeParentMenuKey]
+    : openMenuKeys
 
-  const resolveMenuLabel = (items: any[], path: string): string | undefined => {
+  const resolveMenuLabel = (items: ErpMenuItem[], path: string): string | undefined => {
     for (const item of items) {
       if (item?.key === path) {
         return typeof item.label === 'string' ? item.label : undefined
@@ -372,7 +389,6 @@ const DashboardLayout: React.FC = () => {
   return (
     <Layout style={{ minHeight: '100vh', background: 'transparent' }}>
       <CommandPalette />
-      <AICopilotWidget />
       <SettingsDrawer
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
@@ -392,9 +408,11 @@ const DashboardLayout: React.FC = () => {
         style={{ bottom: '-10%', left: '20%', background: '#FFDEE9' }}
       />
 
-      {!isMobile ? (
+      {!isMobile && (
         <Sider
           width={260}
+          collapsedWidth={80}
+          collapsed={desktopSidebarCollapsed}
           trigger={null}
           className="floating-sidebar"
           style={{
@@ -408,17 +426,19 @@ const DashboardLayout: React.FC = () => {
           }}
         >
           <div className="flex flex-col h-full">
-            <div className="shrink-0 h-16 flex items-center justify-center m-4 mb-8">
+            <div className={`shrink-0 h-16 flex items-center justify-center m-4 ${desktopSidebarCollapsed ? 'mb-4' : 'mb-8'}`}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md border border-white/30 shadow-lg">
                   <BrandMark className="w-7 h-7" alt="System logo" />
                 </div>
-                <div
-                  className="max-w-[160px] text-sm font-semibold leading-tight tracking-wide"
-                  style={{ color: 'var(--text-primary)' }}
-                >
-                  AI 電子商務營運中樞
-                </div>
+                {!desktopSidebarCollapsed && (
+                  <div
+                    className="max-w-[160px] text-sm font-semibold leading-tight tracking-wide"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    電子商務 ERP
+                  </div>
+                )}
               </div>
             </div>
             <div
@@ -429,30 +449,34 @@ const DashboardLayout: React.FC = () => {
                 theme="light"
                 mode="inline"
                 selectedKeys={[location.pathname]}
-                openKeys={openMenuKeys}
+                openKeys={effectiveOpenMenuKeys}
                 onOpenChange={(keys) => setOpenMenuKeys(keys.map(String))}
                 items={visibleMenuItems}
+                inlineCollapsed={desktopSidebarCollapsed}
                 className="px-2 bg-transparent border-none"
               />
             </div>
-            <div
-              className="shrink-0 h-12 flex items-center justify-center cursor-pointer transition-colors hover:bg-black/5"
-              style={{
-                borderTop: '1px solid rgba(0, 0, 0, 0.06)',
-                color: 'var(--text-primary)',
+            <Button
+              type="text"
+              className="!mx-2 !mb-2 !flex !w-auto shrink-0 items-center justify-center"
+              icon={desktopSidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              aria-label={desktopSidebarCollapsed ? '展開側欄' : '收合側欄'}
+              title={desktopSidebarCollapsed ? '展開側欄' : '收合側欄'}
+              onClick={() => {
+                if (isCompactDesktop) {
+                  setMobileMenuOpen(true)
+                  return
+                }
+                setSidebarCollapsed((current) => !current)
               }}
-              onClick={() =>
-                setOpenMenuKeys(allMenuGroupsOpen ? [] : expandableMenuKeys)
-              }
             >
-              <span className="flex items-center gap-2 text-sm font-medium">
-                {allMenuGroupsOpen ? <UpOutlined /> : <DownOutlined />}
-                {allMenuGroupsOpen ? '收合選單' : '展開選單'}
-              </span>
-            </div>
+              {!desktopSidebarCollapsed && '收合側欄'}
+            </Button>
           </div>
         </Sider>
-      ) : (
+      )}
+
+      {(isMobile || isCompactDesktop) && (
         <GlassDrawer
           placement="left"
           onClose={() => setMobileMenuOpen(false)}
@@ -468,7 +492,7 @@ const DashboardLayout: React.FC = () => {
                 className="max-w-[180px] text-sm font-semibold leading-tight tracking-wide"
                 style={{ color: 'var(--text-primary)' }}
               >
-                AI 電子商務營運中樞
+                電子商務 ERP
               </div>
             </div>
           </div>
@@ -476,7 +500,7 @@ const DashboardLayout: React.FC = () => {
             theme="light"
             mode="inline"
             selectedKeys={[location.pathname]}
-            openKeys={openMenuKeys}
+            openKeys={effectiveOpenMenuKeys}
             onOpenChange={(keys) => setOpenMenuKeys(keys.map(String))}
             items={visibleMenuItems}
             className="px-2 bg-transparent border-none"
@@ -487,7 +511,7 @@ const DashboardLayout: React.FC = () => {
 
       <Layout
         style={{
-          marginLeft: isMobile ? 0 : 292,
+          marginLeft: isMobile ? 0 : desktopSidebarCollapsed ? 112 : 292,
           transition: 'all 0.2s',
           background: 'transparent',
         }}
@@ -512,11 +536,13 @@ const DashboardLayout: React.FC = () => {
                 fontWeight: 500,
                 color: 'var(--text-primary)',
                 fontSize: isMobile ? '1.1rem' : undefined,
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
               }}
             >
               {currentMenuLabel}
             </Title>
-            <div className="hidden md:block">
+            <div className="hidden lg:block">
               <Input
                 prefix={
                   <SearchOutlined
@@ -544,7 +570,7 @@ const DashboardLayout: React.FC = () => {
                   src={user?.avatar}
                   className="bg-gradient-to-br from-blue-500 to-purple-600"
                 />
-                {!isMobile && (
+                {screens.lg && (
                   <span
                     className="font-medium"
                     style={{ color: 'var(--text-primary)' }}

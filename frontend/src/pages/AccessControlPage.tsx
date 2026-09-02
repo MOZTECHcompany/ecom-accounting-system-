@@ -44,6 +44,7 @@ import {
   UpdateRolePayload,
 } from '../services/roles.service'
 import { permissionsService } from '../services/permissions.service'
+import { Entity, listEntities } from '../services/entities.service'
 import {
   ManagedUser,
   PaginatedResult,
@@ -184,6 +185,21 @@ const DataScopeFormGrid = () => (
   </div>
 )
 
+const CompanyAccessField = ({ entities }: { entities: Entity[] }) => (
+  <Form.Item name="entityIds" label="可存取公司" className="mb-0">
+    <Select
+      mode="multiple"
+      placeholder="選擇公司"
+      options={entities.map((entity) => ({
+        label: entity.name,
+        value: entity.id,
+      }))}
+      optionFilterProp="label"
+      className="rounded-md"
+    />
+  </Form.Item>
+)
+
 type UsersTabProps = {
   availableRoles: Role[]
   canManageDataScopes: boolean
@@ -254,6 +270,7 @@ const UsersTab = ({
   const [assignOpen, setAssignOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null)
+  const [entities, setEntities] = useState<Entity[]>([])
 
   const [createForm] = Form.useForm<CreateUserPayload>()
   const [assignForm] = Form.useForm<{ roleIds: string[] }>()
@@ -262,6 +279,14 @@ const UsersTab = ({
     () => availableRoles.filter((role) => role.code !== 'SUPER_ADMIN'),
     [availableRoles],
   )
+
+  useEffect(() => {
+    if (!canManageDataScopes) return
+
+    listEntities({ isActive: true })
+      .then(setEntities)
+      .catch((error) => message.error(getErrorMessage(error)))
+  }, [canManageDataScopes])
 
   const fetchUsers = useCallback(
     async (page = 1, limit = meta.limit) => {
@@ -369,6 +394,7 @@ const UsersTab = ({
               {} as Pick<UpdateUserPayload, DataScopeKey>,
             )
           : {}),
+        ...(canManageDataScopes ? { entityIds: values.entityIds ?? [] } : {}),
       }
 
       if (values.password) {
@@ -400,6 +426,21 @@ const UsersTab = ({
   const columns: TableColumn<ManagedUser>[] = [
     { title: '姓名', dataIndex: 'name', key: 'name' },
     { title: '電子郵件', dataIndex: 'email', key: 'email' },
+    ...(canManageDataScopes
+      ? [
+          {
+            title: '公司',
+            key: 'entities',
+            render: (_value: any, record: ManagedUser) => (
+              <Space wrap>
+                {record.entityMemberships?.map((membership) => (
+                  <Tag key={membership.entityId}>{membership.entity.name}</Tag>
+                ))}
+              </Space>
+            ),
+          },
+        ]
+      : []),
     {
       title: '角色',
       key: 'roles',
@@ -485,6 +526,10 @@ const UsersTab = ({
                   name: record.name,
                   isActive: record.isActive,
                   password: undefined,
+                  entityIds:
+                    record.entityMemberships?.map(
+                      (membership) => membership.entityId,
+                    ) ?? [],
                   ...getUserDataScopeValues(record),
                 })
                 setEditOpen(true)
@@ -569,7 +614,6 @@ const UsersTab = ({
           <Title level={4} className="!mb-1 !font-light">
             使用者管理
           </Title>
-          <Text className="text-gray-500">新增、停用或調整使用者角色</Text>
         </div>
         <GlassButton variant="primary" onClick={() => setCreateOpen(true)}>
           <PlusOutlined className="mr-2" />
@@ -580,13 +624,8 @@ const UsersTab = ({
       {canManageDataScopes ? (
         <div className="mb-4 rounded-2xl border border-slate-200/70 bg-white/55 p-4">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold text-slate-800">
-                最高權限與資料範圍
-              </div>
-              <Text className="text-xs text-slate-500">
-                一般使用者列表不顯示最高權限帳號；資料範圍可用每列箭頭展開，也可以一次展開或收合所有使用者。
-              </Text>
+            <div className="text-sm font-semibold text-slate-800">
+              資料範圍
             </div>
             <Space wrap>
               <Button
@@ -663,6 +702,7 @@ const UsersTab = ({
           form={createForm}
           initialValues={{
             roleIds: [],
+            entityIds: [],
             ...(canManageDataScopes ? DEFAULT_DATA_SCOPE_VALUES : {}),
           }}
           className="pt-4"
@@ -716,6 +756,11 @@ const UsersTab = ({
                 className="rounded-md"
               />
             </Form.Item>
+            {canManageDataScopes ? (
+              <div className="mt-4">
+                <CompanyAccessField entities={entities} />
+              </div>
+            ) : null}
             {canManageDataScopes ? <DataScopeFormGrid /> : null}
           </div>
         </Form>
@@ -785,6 +830,11 @@ const UsersTab = ({
                 className="rounded-md"
               />
             </Form.Item>
+            {canManageDataScopes ? (
+              <div className="mt-4">
+                <CompanyAccessField entities={entities} />
+              </div>
+            ) : null}
             {canManageDataScopes ? <DataScopeFormGrid /> : null}
           </div>
         </Form>
@@ -972,7 +1022,6 @@ const RolesTab = ({
           <Title level={4} className="!mb-1 !font-light">
             角色管理
           </Title>
-          <Text className="text-gray-500">建立角色並維護對應權限</Text>
         </div>
         <GlassButton variant="primary" onClick={() => setCreateOpen(true)}>
           <PlusOutlined className="mr-2" />
@@ -1242,7 +1291,6 @@ const PermissionsTab = ({
           <Title level={4} className="!mb-1 !font-light">
             權限管理
           </Title>
-          <Text className="text-gray-500">維護資源／操作清單</Text>
         </div>
         <GlassButton variant="primary" onClick={() => setCreateOpen(true)}>
           <PlusOutlined className="mr-2" />
@@ -1399,7 +1447,6 @@ const AccessControlPage: React.FC = () => {
         <Title level={2} className="!mb-1 !font-light">
           帳號與權限管理
         </Title>
-        <Text className="text-gray-500">管理系統使用者、角色與權限設定</Text>
       </div>
 
       <Tabs

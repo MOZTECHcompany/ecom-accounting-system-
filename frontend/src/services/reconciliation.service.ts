@@ -191,6 +191,27 @@ export type ImportProviderPayoutsResponse = {
   invalidCount: number
 }
 
+export type EcpayPayoutPreviewResponse = {
+  success: boolean
+  dryRun: true
+  imported: false
+  source: string
+  apiKind: 'trade-media' | 'general' | 'shopify'
+  merchantKey: string
+  merchantId: string
+  recordCount: number
+  totals: {
+    grossAmount: number
+    feeAmount: number
+    gatewayFeeAmount: number
+    processingFeeAmount: number
+    platformFeeAmount: number
+    refundAmount: number
+    netAmount: number
+    negativeRowCount: number
+  }
+}
+
 export type BackfillOneShopGroupbuyClosureResponse = {
   success: boolean
   entityId: string
@@ -466,6 +487,31 @@ export const reconciliationService = {
       },
       {
         timeout: 180000,
+      },
+    )
+    return response.data
+  },
+
+  previewEcpayPayouts: async (params: {
+    merchantKey: 'groupbuy-main' | 'shopify-main'
+    entityId?: string
+    beginDate: string
+    endDate: string
+  }) => {
+    const entityId =
+      params.entityId?.trim() || localStorage.getItem('entityId')?.trim() || DEFAULT_ENTITY_ID
+
+    const response = await api.post<EcpayPayoutPreviewResponse>(
+      '/reconciliation/payouts/ecpay/preview',
+      {
+        merchantKey: params.merchantKey,
+        entityId,
+        beginDate: params.beginDate,
+        endDate: params.endDate,
+        dateType: '2',
+      },
+      {
+        timeout: 120000,
       },
     )
     return response.data

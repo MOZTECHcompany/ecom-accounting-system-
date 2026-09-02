@@ -65,8 +65,8 @@ const AssemblyPage: React.FC = () => {
     >
       <div className="flex justify-between items-center mb-6">
         <div>
-          <Title level={2} className="!mb-0">組裝與製造 (Assembly)</Title>
-          <p className="text-gray-500 mt-1">管理產品組裝工單 (Work Orders) 與 BOM 表</p>
+          <Title level={2} className="!mb-0">組裝與製造</Title>
+          <p className="text-gray-500 mt-1">管理組裝工單與物料清單</p>
         </div>
         <Space>
           <Button icon={<ReloadOutlined />} onClick={fetchOrders}>重新整理</Button>

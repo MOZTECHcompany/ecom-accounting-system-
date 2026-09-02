@@ -31,6 +31,10 @@ interface ReserveStockInput {
   referenceId: string;
 }
 
+interface ShipStockInput extends ReserveStockInput {
+  reason?: string;
+}
+
 type ImportRow = {
   barcode: string;
   name: string;
@@ -725,7 +729,10 @@ export class InventoryService {
   /**
    * 通用庫存異動（進貨入庫、出貨出庫、盤點調整等）
    */
-  async adjustStock(input: AdjustStockInput) {
+  async adjustStock(
+    input: AdjustStockInput,
+    transactionClient?: Prisma.TransactionClient,
+  ) {
     const {
       entityId,
       warehouseId,
@@ -738,26 +745,29 @@ export class InventoryService {
       occurredAt,
     } = input;
 
-    // 確保倉庫與商品存在
-    const [warehouse, product] = await Promise.all([
-      this.prisma.warehouse.findFirst({
+    const execute = async (tx: Prisma.TransactionClient) => {
+      // 確保倉庫與商品屬於同一公司且仍啟用。
+      const [warehouse, product] = await Promise.all([
+        tx.warehouse.findFirst({
         where: { id: warehouseId, entityId, isActive: true },
       }),
-      this.prisma.product.findFirst({
+        tx.product.findFirst({
         where: { id: productId, entityId, isActive: true },
       }),
-    ]);
+      ]);
 
-    if (!warehouse) {
-      throw new NotFoundException('Warehouse not found or inactive');
-    }
-    if (!product) {
-      throw new NotFoundException('Product not found or inactive');
-    }
+      if (!warehouse) {
+        throw new NotFoundException('Warehouse not found or inactive');
+      }
+      if (!product) {
+        throw new NotFoundException('Product not found or inactive');
+      }
 
-    const qty = new Prisma.Decimal(quantity as any);
+      const qty = new Prisma.Decimal(quantity as any);
+      if (qty.lte(0)) {
+        throw new BadRequestException('Inventory quantity must be greater than zero');
+      }
 
-    return this.prisma.$transaction(async (tx) => {
       // 1. 建立異動紀錄
       const movement = await tx.inventoryTransaction.create({
         data: {
@@ -807,7 +817,129 @@ export class InventoryService {
       });
 
       return { movement, snapshot };
-    });
+    };
+
+    return transactionClient
+      ? execute(transactionClient)
+      : this.prisma.$transaction(execute);
+  }
+
+  /**
+   * 出貨扣庫。如果這張訂單已有預留量，只釋放屬於該訂單的部分，
+   * 再扣減實際現有與可用庫存。全程可共用上層 transaction。
+   */
+  async shipStock(
+    input: ShipStockInput,
+    transactionClient?: Prisma.TransactionClient,
+  ) {
+    const execute = async (tx: Prisma.TransactionClient) => {
+      const qty = new Prisma.Decimal(input.quantity as any);
+      if (qty.lte(0)) {
+        throw new BadRequestException('Shipment quantity must be greater than zero');
+      }
+
+      const [warehouse, product, snapshot, reservationMovements] = await Promise.all([
+        tx.warehouse.findFirst({
+          where: { id: input.warehouseId, entityId: input.entityId, isActive: true },
+        }),
+        tx.product.findFirst({
+          where: { id: input.productId, entityId: input.entityId, isActive: true },
+        }),
+        tx.inventorySnapshot.findUnique({
+          where: {
+            entityId_warehouseId_productId: {
+              entityId: input.entityId,
+              warehouseId: input.warehouseId,
+              productId: input.productId,
+            },
+          },
+        }),
+        tx.inventoryTransaction.findMany({
+          where: {
+            entityId: input.entityId,
+            warehouseId: input.warehouseId,
+            productId: input.productId,
+            referenceType: input.referenceType,
+            referenceId: input.referenceId,
+            direction: { in: ['RESERVE', 'RELEASE'] },
+          },
+          select: { direction: true, quantity: true },
+        }),
+      ]);
+
+      if (!warehouse) throw new NotFoundException('Warehouse not found or inactive');
+      if (!product) throw new NotFoundException('Product not found or inactive');
+      if (!snapshot || snapshot.qtyOnHand.lt(qty)) {
+        throw new BadRequestException(`Insufficient stock for product ${product.sku}`);
+      }
+
+      const reservedForOrder = reservationMovements.reduce(
+        (total, movement) =>
+          movement.direction === 'RESERVE'
+            ? total.add(movement.quantity)
+            : total.sub(movement.quantity),
+        new Prisma.Decimal(0),
+      );
+      const releasable = Prisma.Decimal.max(
+        0,
+        Prisma.Decimal.min(reservedForOrder, snapshot.qtyAllocated, qty),
+      );
+      const availableAfterRelease = snapshot.qtyAvailable.add(releasable);
+      if (availableAfterRelease.lt(qty)) {
+        throw new BadRequestException(`Insufficient available stock for product ${product.sku}`);
+      }
+
+      if (releasable.gt(0)) {
+        await tx.inventoryTransaction.create({
+          data: {
+            entityId: input.entityId,
+            warehouseId: input.warehouseId,
+            productId: input.productId,
+            direction: 'RELEASE',
+            quantity: releasable,
+            referenceType: input.referenceType,
+            referenceId: input.referenceId,
+            reason: 'Release reservation for shipment',
+            occurredAt: new Date(),
+          },
+        });
+      }
+
+      const movement = await tx.inventoryTransaction.create({
+        data: {
+          entityId: input.entityId,
+          warehouseId: input.warehouseId,
+          productId: input.productId,
+          direction: 'OUT',
+          quantity: qty,
+          referenceType: input.referenceType,
+          referenceId: input.referenceId,
+          reason: input.reason || 'Sales order shipment',
+          occurredAt: new Date(),
+        },
+      });
+
+      const updatedSnapshot = await tx.inventorySnapshot.update({
+        where: {
+          entityId_warehouseId_productId: {
+            entityId: input.entityId,
+            warehouseId: input.warehouseId,
+            productId: input.productId,
+          },
+        },
+        data: {
+          qtyOnHand: { decrement: qty },
+          qtyAllocated: releasable.gt(0) ? { decrement: releasable } : undefined,
+          qtyAvailable: { decrement: qty.sub(releasable) },
+        },
+      });
+
+      return { movement, snapshot: updatedSnapshot, releasedQuantity: releasable };
+    };
+
+    return transactionClient
+      ? execute(transactionClient)
+      : this.prisma.$transaction(execute);
   }
 
   /**
@@ -943,6 +1075,7 @@ export class InventoryService {
     serialNumbers: string[],
     inboundRefType: string,
     inboundRefId: string,
+    transactionClient?: Prisma.TransactionClient,
   ) {
     if (!serialNumbers || serialNumbers.length === 0) return;
 
@@ -956,9 +1089,17 @@ export class InventoryService {
       inboundRefId,
     }));
 
-    await this.prisma.inventorySerialNumber.createMany({
-      data,
-      skipDuplicates: true, 
+    const db = transactionClient || this.prisma;
+    const uniqueSerialNumbers = [...new Set(serialNumbers.map((serial) => serial.trim()))];
+    if (uniqueSerialNumbers.length !== serialNumbers.length || uniqueSerialNumbers.some((serial) => !serial)) {
+      throw new BadRequestException('Serial numbers must be unique and non-empty');
+    }
+
+    await db.inventorySerialNumber.createMany({
+      data: data.map((entry, index) => ({
+        ...entry,
+        serialNumber: uniqueSerialNumbers[index],
+      })),
     });
   }
 
@@ -972,7 +1113,7 @@ export class InventoryService {
     serialNumbers: string[];
     outboundRefType: string;
     outboundRefId: string;
-  }) {
+  }, transactionClient?: Prisma.TransactionClient) {
     const {
       entityId,
       warehouseId,
@@ -987,31 +1128,36 @@ export class InventoryService {
     }
 
     // 1. 驗證所有序號是否存在且狀態為 AVAILABLE
-    const existingSNs = await this.prisma.inventorySerialNumber.findMany({
+    const uniqueSerialNumbers = [...new Set(serialNumbers.map((serial) => serial.trim()))];
+    if (uniqueSerialNumbers.length !== serialNumbers.length || uniqueSerialNumbers.some((serial) => !serial)) {
+      throw new BadRequestException('Serial numbers must be unique and non-empty');
+    }
+    const db = transactionClient || this.prisma;
+    const existingSNs = await db.inventorySerialNumber.findMany({
       where: {
         entityId,
         productId,
         warehouseId,
-        serialNumber: { in: serialNumbers },
+        serialNumber: { in: uniqueSerialNumbers },
         status: 'AVAILABLE',
       },
     });
 
     if (existingSNs.length !== serialNumbers.length) {
       const foundSNs = existingSNs.map((sn) => sn.serialNumber);
-      const missingSNs = serialNumbers.filter((sn) => !foundSNs.includes(sn));
+      const missingSNs = uniqueSerialNumbers.filter((sn) => !foundSNs.includes(sn));
       throw new Error(
         `Some serial numbers are invalid or not available: ${missingSNs.join(', ')}`,
       );
     }
 
     // 2. 更新狀態
-    await this.prisma.inventorySerialNumber.updateMany({
+    await db.inventorySerialNumber.updateMany({
       where: {
         entityId,
         productId,
         warehouseId,
-        serialNumber: { in: serialNumbers },
+        serialNumber: { in: uniqueSerialNumbers },
       },
       data: {
         status: 'SOLD',

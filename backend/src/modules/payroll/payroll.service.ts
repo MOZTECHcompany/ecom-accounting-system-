@@ -15,6 +15,7 @@ import { AuditLogService } from '../../common/audit/audit-log.service';
 import { UsersService } from '../users/users.service';
 import { CreateEmployeeLoginAccountDto } from './dto/create-employee-login-account.dto';
 import { Prisma } from '@prisma/client';
+import { randomBytes } from 'crypto';
 import PDFDocument = require('pdfkit');
 
 const DEFAULT_PAYROLL_POLICY = {
@@ -24,8 +25,6 @@ const DEFAULT_PAYROLL_POLICY = {
   twHealthInsuranceRate: 0.015,
   cnSocialInsuranceRate: 0.105,
 } as const;
-
-const DEFAULT_EMPLOYEE_INITIAL_PASSWORD = 'qwer1234';
 
 const EMPLOYEE_ONBOARDING_DOC_TYPES = [
   'ID_FRONT',
@@ -319,7 +318,7 @@ export class PayrollService {
   }
 
   private generateTemporaryPassword() {
-    return DEFAULT_EMPLOYEE_INITIAL_PASSWORD;
+    return randomBytes(18).toString('base64url');
   }
 
   private normalizeLoginEmail(value?: string | null, required = false) {

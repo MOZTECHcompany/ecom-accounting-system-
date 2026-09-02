@@ -13,6 +13,7 @@ async function bootstrap() {
   });
 
   const configService = app.get(ConfigService);
+  app.enableShutdownHooks();
   const prefix = configService.get('API_PREFIX') || '/api/v1';
   const corsOriginRaw = configService.get<string>('CORS_ORIGIN') || '*';
   const corsOrigins =

@@ -1,13 +1,16 @@
 name: Deploy Frontend to Cloud Run
 
 on:
-  push:
-    branches: ["main"]
+  workflow_call:
   workflow_dispatch: {}
 
 permissions:
   contents: read
   id-token: write
+
+concurrency:
+  group: deploy-frontend-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'moztech-main-db' }}
@@ -18,10 +21,16 @@ env:
   FRONTEND_SERVICE: ${{ secrets.CLOUD_RUN_FRONTEND_SERVICE || 'ecom-accounting-frontend' }}
   FRONTEND_API_URL: ${{ vars.FRONTEND_API_URL || secrets.FRONTEND_API_URL || '' }}
   FRONTEND_WS_URL: ${{ vars.FRONTEND_WS_URL || secrets.FRONTEND_WS_URL || '' }}
+  ERP_PUBLIC_FRONTEND_URL: ${{ vars.ERP_PUBLIC_FRONTEND_URL || 'https://erp.corely.cc' }}
+  ERP_PUBLIC_API_URL: ${{ vars.ERP_PUBLIC_API_URL || 'https://api.erp.corely.cc' }}
   DEFAULT_ENTITY_ID: ${{ vars.DEFAULT_ENTITY_ID || 'tw-entity-001' }}
 
 jobs:
+  quality:
+    uses: ./.github/workflows/release-quality-gate.yml
+
   deploy:
+    needs: quality
     runs-on: ubuntu-latest
 
     steps:
@@ -34,6 +43,22 @@ jobs:
           set -euo pipefail
           if [[ -z "${GCP_WIF_PROVIDER}" || -z "${GCP_WIF_SERVICE_ACCOUNT}" ]]; then
             echo "::error::Missing GCP_WIF_PROVIDER or GCP_WIF_SERVICE_ACCOUNT. Add them to GitHub Actions Secrets or Variables."
+            exit 1
+          fi
+          API_BASE="${FRONTEND_API_URL%/}"
+          WS_BASE="${FRONTEND_WS_URL:-${ERP_PUBLIC_API_URL}}"
+          WS_BASE="${WS_BASE%/}"
+          EXPECTED_API_BASE="${ERP_PUBLIC_API_URL%/}/api/v1"
+          if [[ ! "${API_BASE}" =~ ^https://.+/api/v1$ ]]; then
+            echo "::error::FRONTEND_API_URL must be a non-empty HTTPS URL ending in /api/v1."
+            exit 1
+          fi
+          if [[ "${API_BASE}" != "${EXPECTED_API_BASE}" ]]; then
+            echo "::error::FRONTEND_API_URL must use the ERP public API domain: ${EXPECTED_API_BASE}."
+            exit 1
+          fi
+          if [[ "${WS_BASE}" != "${ERP_PUBLIC_API_URL%/}" ]]; then
+            echo "::error::FRONTEND_WS_URL must use the ERP public API domain: ${ERP_PUBLIC_API_URL%/}."
             exit 1
           fi
 
@@ -54,15 +79,26 @@ jobs:
           set -euo pipefail
 
           IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPOSITORY}/${FRONTEND_SERVICE}:${GITHUB_SHA}"
+          CANDIDATE_TAG="c-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if (( ${#FRONTEND_SERVICE} + ${#CANDIDATE_TAG} + 1 > 46 )); then
+            echo "::error::Cloud Run service name and candidate traffic tag exceed the 46-character platform limit."
+            exit 1
+          fi
+          API_BASE="${FRONTEND_API_URL%/}"
+          PUBLIC_FRONTEND_URL="${ERP_PUBLIC_FRONTEND_URL%/}"
 
-          gcloud artifacts repositories describe "${ARTIFACT_REPOSITORY}" \
+          if ! gcloud artifacts repositories describe "${ARTIFACT_REPOSITORY}" \
             --project="${GCP_PROJECT_ID}" \
-            --location="${GCP_REGION}" >/dev/null 2>&1 || \
-          gcloud artifacts repositories create "${ARTIFACT_REPOSITORY}" \
-            --project="${GCP_PROJECT_ID}" \
-            --repository-format=docker \
-            --location="${GCP_REGION}" \
-            --description="Cloud Run containers for ecom-accounting-system"
+            --location="${GCP_REGION}" >/dev/null 2>&1; then
+            gcloud artifacts repositories create "${ARTIFACT_REPOSITORY}" \
+              --project="${GCP_PROJECT_ID}" \
+              --repository-format=docker \
+              --location="${GCP_REGION}" \
+              --description="Cloud Run containers for ecom-accounting-system" || \
+            gcloud artifacts repositories describe "${ARTIFACT_REPOSITORY}" \
+              --project="${GCP_PROJECT_ID}" \
+              --location="${GCP_REGION}" >/dev/null
+          fi
 
           cat > /tmp/cloudbuild.frontend.yaml <<EOF
           steps:
@@ -82,7 +118,7 @@ jobs:
 
           gcloud builds submit frontend \
             --project="${GCP_PROJECT_ID}" \
-            --substitutions="_VITE_API_URL=${FRONTEND_API_URL},_VITE_DEFAULT_ENTITY_ID=${DEFAULT_ENTITY_ID}" \
+            --substitutions="_VITE_API_URL=${API_BASE},_VITE_DEFAULT_ENTITY_ID=${DEFAULT_ENTITY_ID}" \
             --config=/tmp/cloudbuild.frontend.yaml
 
           deploy_args=(
@@ -91,23 +127,75 @@ jobs:
             --region="${GCP_REGION}"
             --image="${IMAGE}"
             --allow-unauthenticated
+            --no-traffic
+            --tag="${CANDIDATE_TAG}"
             --port=8080
           )
 
-          if [[ -n "${FRONTEND_API_URL}" ]]; then
-            runtime_ws_url="${FRONTEND_WS_URL:-${FRONTEND_API_URL%/api/v1}}"
-            deploy_args+=(
-              --update-env-vars="API_URL=${FRONTEND_API_URL},WS_URL=${runtime_ws_url},DEFAULT_ENTITY_ID=${DEFAULT_ENTITY_ID}"
-            )
-          fi
+          runtime_ws_url="${FRONTEND_WS_URL:-${API_BASE%/api/v1}}"
+          deploy_args+=(
+            --update-env-vars="API_URL=${API_BASE},WS_URL=${runtime_ws_url},DEFAULT_ENTITY_ID=${DEFAULT_ENTITY_ID}"
+          )
 
           gcloud "${deploy_args[@]}"
+
+          SERVICE_JSON="$(gcloud run services describe "${FRONTEND_SERVICE}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --format=json)"
+          CANDIDATE_URL="$(jq -r --arg tag "${CANDIDATE_TAG}" \
+            '.status.traffic[] | select(.tag == $tag) | .url' <<<"${SERVICE_JSON}")"
+
+          if [[ -z "${CANDIDATE_URL}" || "${CANDIDATE_URL}" == "null" ]]; then
+            echo "::error::Unable to resolve the candidate Cloud Run URL."
+            exit 1
+          fi
+
+          CONFIG_JS="$(curl --fail --silent --show-error \
+            --connect-timeout 10 \
+            --max-time 60 \
+            --retry 5 \
+            --retry-delay 3 \
+            --retry-all-errors \
+            "${CANDIDATE_URL}/config.js")"
+          EXPECTED_CONFIG="\"apiUrl\":\"${API_BASE}\""
+          if [[ "${CONFIG_JS}" != *"${EXPECTED_CONFIG}"* ]]; then
+            echo "::error::Candidate frontend did not expose the expected API URL."
+            exit 1
+          fi
+
+          curl --fail --silent --show-error \
+            --connect-timeout 10 \
+            --max-time 60 \
+            --retry 5 \
+            --retry-delay 3 \
+            --retry-all-errors \
+            "${API_BASE}/health/ready" >/dev/null
+
+          gcloud run services update-traffic "${FRONTEND_SERVICE}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --to-tags="${CANDIDATE_TAG}=100"
 
           URL="$(gcloud run services describe "${FRONTEND_SERVICE}" \
             --project="${GCP_PROJECT_ID}" \
             --region="${GCP_REGION}" \
             --format='value(status.url)')"
-          echo "url=${URL}" >> "${GITHUB_OUTPUT}"
+
+          PRODUCTION_CONFIG_JS="$(curl --fail --silent --show-error \
+            --connect-timeout 10 \
+            --max-time 60 \
+            --retry 5 \
+            --retry-delay 3 \
+            --retry-all-errors \
+            "${PUBLIC_FRONTEND_URL}/config.js")"
+          if [[ "${PRODUCTION_CONFIG_JS}" != *"${EXPECTED_CONFIG}"* ]]; then
+            echo "::error::Production frontend did not expose the expected API URL."
+            exit 1
+          fi
+
+          echo "url=${PUBLIC_FRONTEND_URL}" >> "${GITHUB_OUTPUT}"
+          echo "cloud_run_url=${URL}" >> "${GITHUB_OUTPUT}"
 
       - name: Show service URL
         run: echo "Deployed to ${{ steps.deploy.outputs.url }}"

@@ -1,10 +1,8 @@
 import React, { useState } from 'react'
-import { Descriptions, Steps, Button, Tag, Divider, List, Avatar, Typography, Space, message, Modal, Form, Input, InputNumber, DatePicker } from 'antd'
+import { Descriptions, Steps, Button, Tag, Divider, List, Avatar, Typography, message, Modal, Form, Input, InputNumber, DatePicker } from 'antd'
+import { isAxiosError } from 'axios'
 import { GlassDrawer, GlassDrawerSection } from './ui/GlassDrawer'
 import { 
-  PrinterOutlined, 
-  MailOutlined, 
-  DownloadOutlined,
   UserOutlined,
   CreditCardOutlined,
   CarOutlined,
@@ -13,24 +11,36 @@ import {
   SendOutlined,
   SyncOutlined
 } from '@ant-design/icons'
-import FulfillOrderModal from './FulfillOrderModal'
 import { salesService } from '../services/sales.service'
-import type { SalesOrderItem } from '../services/sales.service'
+import type { SalesOrder, SalesOrderItem } from '../services/sales.service'
+import FulfillOrderModal from './FulfillOrderModal'
 
 const { Title, Text } = Typography
 
 interface OrderDetailsDrawerProps {
   open: boolean
   onClose: () => void
-  order: any
+  order: SalesOrder | null
   onUpdate?: () => void
 }
 
+const isFormValidationError = (
+  error: unknown,
+): error is { errorFields: unknown[] } =>
+  typeof error === 'object' && error !== null && 'errorFields' in error
+
+const getApiErrorMessage = (error: unknown, fallback: string) => {
+  if (isAxiosError<{ message?: string }>(error)) {
+    return error.response?.data?.message || fallback
+  }
+  return fallback
+}
+
 const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, order, onUpdate }) => {
-  const [fulfillModalOpen, setFulfillModalOpen] = useState(false)
   const [syncingInvoice, setSyncingInvoice] = useState(false)
   const [refundModalOpen, setRefundModalOpen] = useState(false)
   const [refunding, setRefunding] = useState(false)
+  const [fulfillOpen, setFulfillOpen] = useState(false)
   const [refundForm] = Form.useForm()
 
   if (!order) return null
@@ -49,6 +59,10 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
             currency: order.currency || 'TWD',
           },
         ]
+  const orderTaxAmount = orderItems.reduce(
+    (sum, item) => sum + Number(item.taxAmount || 0),
+    0,
+  )
 
   const resolveItemBrand = (productName?: string) => {
     const normalizedName = (productName || '').trim()
@@ -81,7 +95,7 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
         message.warning(result?.message || '目前找不到可查詢的發票資料')
       }
       onUpdate?.()
-    } catch (error) {
+    } catch {
       message.error('同步綠界發票狀態失敗')
     } finally {
       setSyncingInvoice(false)
@@ -103,9 +117,9 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
       setRefundModalOpen(false)
       refundForm.resetFields()
       onUpdate?.()
-    } catch (error: any) {
-      if (error?.errorFields) return
-      message.error(error?.response?.data?.message || '建立退款失敗')
+    } catch (error: unknown) {
+      if (isFormValidationError(error)) return
+      message.error(getApiErrorMessage(error, '建立退款失敗'))
     } finally {
       setRefunding(false)
     }
@@ -121,8 +135,6 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
               <Tag color="blue" className="max-w-full truncate">{order.id}</Tag>
             </div>
             <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
-              <Button size="small" icon={<PrinterOutlined />} className="rounded-full whitespace-nowrap">列印</Button>
-              <Button size="small" icon={<MailOutlined />} className="rounded-full whitespace-nowrap">寄送發票</Button>
               <Button
                 size="small"
                 icon={<SyncOutlined spin={syncingInvoice} />}
@@ -132,13 +144,13 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
               >
                 同步發票狀態
               </Button>
-              {order.status !== 'completed' && (
-                <Button 
+              {!['shipped', 'completed', 'cancelled', 'refunded'].includes(order.status) && (
+                <Button
                   size="small"
-                  type="primary" 
+                  type="primary"
                   icon={<SendOutlined />}
-                  className="rounded-full bg-green-600 hover:bg-green-500 border-none shadow-lg shadow-green-200 whitespace-nowrap"
-                  onClick={() => setFulfillModalOpen(true)}
+                  className="rounded-full whitespace-nowrap"
+                  onClick={() => setFulfillOpen(true)}
                 >
                   出貨
                 </Button>
@@ -171,9 +183,9 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
             <Steps
               current={order.status === 'completed' ? 3 : 1}
               items={[
-                { title: '訂單建立', description: order.date, icon: <FileTextOutlined /> },
-                { title: '付款確認', description: 'Credit Card', icon: <CreditCardOutlined /> },
-                { title: '出貨配送', description: 'Processing', icon: <CarOutlined /> },
+                { title: '訂單建立', description: new Date(order.createdAt).toLocaleString('zh-TW'), icon: <FileTextOutlined /> },
+                { title: '付款確認', description: order.paymentStatus || '待確認', icon: <CreditCardOutlined /> },
+                { title: '出貨配送', description: order.fulfillmentStatus || '待處理', icon: <CarOutlined /> },
                 { title: '訂單完成', icon: <CheckCircleOutlined /> },
               ]}
             />
@@ -184,13 +196,12 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
             <GlassDrawerSection>
               <div className="flex justify-between items-center mb-4">
                 <div className="font-semibold text-slate-800">客戶資訊</div>
-                <Button type="link" className="p-0 h-auto">查看歷史</Button>
               </div>
               <div className="flex items-center gap-4 mb-6">
                 <Avatar size={64} icon={<UserOutlined />} className="bg-blue-100 text-blue-600" />
                 <div>
                   <Title level={4} className="!mb-0">{order.customerName || 'Guest'}</Title>
-                  <Text type="secondary">VIP 會員</Text>
+                  <Text type="secondary">{order.customerType === 'company' ? '企業客戶' : '一般客戶'}</Text>
                 </div>
               </div>
               <Descriptions column={1} size="small" labelStyle={{ background: 'transparent' }} contentStyle={{ background: 'transparent' }}>
@@ -209,14 +220,14 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
               <div className="mb-4 font-semibold text-slate-800">付款詳情</div>
               <div className="flex flex-col h-full justify-center">
                 <div className="flex justify-between items-center mb-4">
-                  <Text type="secondary">付款方式</Text>
+                  <Text type="secondary">訂單付款狀態</Text>
                   <div className="flex items-center gap-2">
                     <CreditCardOutlined className="text-xl" />
                     <Text strong>{order.paymentStatus || 'pending'}</Text>
                   </div>
                 </div>
                 <div className="flex justify-between items-center mb-4">
-                  <Text type="secondary">付款狀態</Text>
+                  <Text type="secondary">會計入帳狀態</Text>
                   <Tag color={order.accountingPosted ? 'success' : 'processing'} className="rounded-full px-2 border-none">
                     {order.accountingPosted ? '已入帳' : '待入帳'}
                   </Tag>
@@ -286,8 +297,12 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
                   <Text>NT$ {Number(order.totalAmount || 0).toLocaleString()}</Text>
                 </div>
                 <div className="flex justify-between mb-2">
-                  <Text>稅額 (5%)</Text>
-                  <Text>NT$ {(Number(order.totalAmount || 0) - Number(order.totalAmount || 0) / 1.05).toFixed(0)}</Text>
+                  <Text>品項稅額（來源資料）</Text>
+                  <Text>
+                    {orderTaxAmount > 0
+                      ? `NT$ ${orderTaxAmount.toLocaleString()}`
+                      : '—'}
+                  </Text>
                 </div>
                 <div className="flex justify-between mb-2">
                   <Text>發票 / 會計</Text>
@@ -305,15 +320,6 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
           </GlassDrawerSection>
         </div>
       </GlassDrawer>
-      <FulfillOrderModal 
-        open={fulfillModalOpen} 
-        onClose={() => setFulfillModalOpen(false)} 
-        onSuccess={() => {
-          setFulfillModalOpen(false)
-          onUpdate?.()
-        }}
-        order={order}
-      />
       <Modal
         open={refundModalOpen}
         title="建立退款 / 售後沖銷"
@@ -358,6 +364,12 @@ const OrderDetailsDrawer: React.FC<OrderDetailsDrawerProps> = ({ open, onClose, 
           </Form.Item>
         </Form>
       </Modal>
+      <FulfillOrderModal
+        open={fulfillOpen}
+        onClose={() => setFulfillOpen(false)}
+        onSuccess={() => onUpdate?.()}
+        order={order}
+      />
     </>
   )
 }

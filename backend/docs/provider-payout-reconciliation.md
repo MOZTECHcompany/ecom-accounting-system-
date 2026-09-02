@@ -82,9 +82,27 @@
 
 這樣自動匹配成功率最高。
 
-## 直接串綠界 Shopify API
+## 直接串綠界撥款 API
 
-如果你的 Shopify 付款走的是綠界 Shopify Payment，不一定要先從後台手動匯出報表。後端已經支援直接呼叫綠界 Shopify 專用 API：
+系統依 merchant profile 的 `apiKind` 選擇綠界已開通的對帳協定：
+
+- `trade-media`：既有特店的 `PaymentMedia/TradeNoAio`，以 `CheckMacValue` 驗證。
+- `general`：新版 AES `QueryTradeMedia`。
+- `shopify`：Shopify 專用媒體檔；不能用來代表一般 ATM、超商或其他通路撥款。
+
+日常查帳不需要先從後台手動匯出報表，也不能只依 profile 名稱猜測協定。
+`trade-media` 會同時查詢信用卡撥款補檔，只合併主媒體檔未出現的負數退款；正向信用卡交易不重複匯入。Trade Media V3 的 `=數值` 儲存格會先在共用 CSV 清理層正規化。
+信用卡補檔會混入「每日小計」列；這類列雖可能帶負金額，但沒有訂單號、授權單號與交易日期。系統只接受三項追溯欄位齊全的負數退款，小計與其他彙總列一律 fail closed 排除。
+
+先使用不寫資料庫的唯讀預覽：
+
+`POST /api/v1/reconciliation/payouts/ecpay/preview`
+
+確認筆數、交易金額、手續費、退款與淨撥款都和綠界後台一致後，才可使用正式同步：
+
+`POST /api/v1/reconciliation/payouts/ecpay/sync`
+
+舊的 Shopify 相容入口仍保留：
 
 `POST /api/v1/reconciliation/payouts/ecpay-shopify/sync`
 
@@ -123,22 +141,28 @@ ECPAY_MERCHANTS_JSON='[
     "merchantId": "3290494",
     "hashKey": "replace-me",
     "hashIv": "replace-me",
+    "apiKind": "trade-media",
+    "apiUrl": "https://vendor.ecpay.com.tw/PaymentMedia/TradeNoAio",
+    "creditApiUrl": "https://payment.ecpay.com.tw/CreditDetail/FundingReconDetail",
     "entityId": "tw-entity-001",
-    "syncEnabled": true,
+    "syncEnabled": false,
     "lookbackDays": 90,
     "dateType": "2",
-    "description": "MOZTECH 官方網站 / Shopify"
+    "description": "MOZTECH 官網金流；使用一般特店對帳媒體"
   },
   {
     "key": "groupbuy-main",
     "merchantId": "3150241",
     "hashKey": "replace-me",
     "hashIv": "replace-me",
+    "apiKind": "trade-media",
+    "apiUrl": "https://vendor.ecpay.com.tw/PaymentMedia/TradeNoAio",
+    "creditApiUrl": "https://payment.ecpay.com.tw/CreditDetail/FundingReconDetail",
     "entityId": "tw-entity-001",
     "syncEnabled": false,
     "lookbackDays": 90,
     "dateType": "2",
-    "description": "團購 / 1Shop / 未來 Shopline"
+    "description": "團購 / 1Shop"
   }
 ]'
 ```
@@ -159,5 +183,6 @@ ECPAY_SHOPIFY_QUERY_DATE_TYPE="2"
 
 1. 綠界 API 會檢查來源 IP，Cloud Run 需要固定對外靜態 IP，並把該 IP 加到綠界後台白名單。
 2. 若未提供日期區間，系統會用 merchant profile 的 `lookbackDays` 自動補查；若仍沿用舊設定，則使用 `ECPAY_SHOPIFY_SYNC_LOOKBACK_DAYS`。
-3. 綠界回來的欄位會先轉成既有的 `payout import` 格式，再回填到 `Payment`；因此同一套批次查詢頁就能看到 API 與手動匯入結果。
-4. `HashKey / HashIV` 不應寫死在 repo，正式環境建議放在 `GCP Secret Manager`，再由 Cloud Run 注入 `ECPAY_MERCHANTS_JSON`。
+3. `preview` 只查詢與加總，不建立 payout batch、不更新 `Payment`、不建立會計分錄。
+4. 正式同步會把綠界欄位轉成既有的 `payout import` 格式；啟用前必須先完成「provider payout」與「bank reconciliation」狀態分離，不能只因綠界已撥款就視為銀行已入帳。
+5. `HashKey / HashIV` 不應寫死在 repo，正式環境建議放在 `GCP Secret Manager`，再由 Cloud Run 注入 `ECPAY_MERCHANTS_JSON`。

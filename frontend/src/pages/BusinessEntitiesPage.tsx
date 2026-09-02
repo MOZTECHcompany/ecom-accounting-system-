@@ -7,7 +7,8 @@ import {
   createEntity,
   deactivateEntity,
   Entity,
-  EntityPayload,
+  EntityCreatePayload,
+  EntityUpdatePayload,
   listEntities,
   updateEntity,
 } from '../services/entities.service'
@@ -26,9 +27,11 @@ const COUNTRY_OPTIONS = [
   { label: 'SG 新加坡', value: 'SG' },
 ]
 
+type EntityFormValues = EntityCreatePayload
+
 const BusinessEntitiesPage: React.FC = () => {
   const { user } = useAuth()
-  const [form] = Form.useForm<EntityPayload>()
+  const [form] = Form.useForm<EntityFormValues>()
   const [entities, setEntities] = React.useState<Entity[]>([])
   const [loading, setLoading] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
@@ -55,6 +58,7 @@ const BusinessEntitiesPage: React.FC = () => {
 
   const openCreateModal = () => {
     setEditingEntity(null)
+    form.resetFields()
     form.setFieldsValue({
       loginCode: '',
       name: '',
@@ -75,6 +79,7 @@ const BusinessEntitiesPage: React.FC = () => {
 
   const openEditModal = (entity: Entity) => {
     setEditingEntity(entity)
+    form.resetFields()
     form.setFieldsValue({
       loginCode: entity.loginCode,
       name: entity.name,
@@ -85,10 +90,6 @@ const BusinessEntitiesPage: React.FC = () => {
       contactEmail: entity.contactEmail || '',
       contactPhone: entity.contactPhone || '',
       isActive: entity.isActive ?? true,
-      adminName: '',
-      adminEmail: '',
-      adminEmployeeNo: '',
-      adminPassword: '',
     })
     setModalOpen(true)
   }
@@ -96,8 +97,7 @@ const BusinessEntitiesPage: React.FC = () => {
   const handleSave = async () => {
     try {
       const values = await form.validateFields()
-      const payload: EntityPayload = {
-        ...values,
+      const entityPayload: EntityUpdatePayload = {
         loginCode: values.loginCode.trim(),
         name: values.name.trim(),
         country: values.country.trim().toUpperCase(),
@@ -107,18 +107,20 @@ const BusinessEntitiesPage: React.FC = () => {
         contactEmail: values.contactEmail?.trim() || undefined,
         contactPhone: values.contactPhone?.trim() || undefined,
         isActive: values.isActive ?? true,
-        adminName: values.adminName?.trim() || undefined,
-        adminEmail: values.adminEmail?.trim().toLowerCase() || undefined,
-        adminEmployeeNo: values.adminEmployeeNo?.trim() || undefined,
-        adminPassword: values.adminPassword?.trim() || undefined,
       }
 
       setSaving(true)
       if (editingEntity) {
-        await updateEntity(editingEntity.id, payload)
+        await updateEntity(editingEntity.id, entityPayload)
         message.success('事業代號已更新')
       } else {
-        await createEntity(payload)
+        await createEntity({
+          ...entityPayload,
+          adminName: values.adminName?.trim() || undefined,
+          adminEmail: values.adminEmail?.trim().toLowerCase() || undefined,
+          adminEmployeeNo: values.adminEmployeeNo?.trim() || undefined,
+          adminPassword: values.adminPassword?.trim() || undefined,
+        })
         message.success('事業代號已新增')
       }
       setModalOpen(false)
@@ -277,36 +279,38 @@ const BusinessEntitiesPage: React.FC = () => {
           <Form.Item label="地址" name="address">
             <Input placeholder="選填" />
           </Form.Item>
-          <div className="mt-6 rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
-            <div className="mb-3">
-              <div className="font-semibold text-slate-900">首位公司管理員</div>
-              <div className="text-sm text-slate-500">
-                填寫後會建立該公司的 ADMIN 帳號並自動綁定員工資料；對方首次登入後即可維護員工與部門。
+          {!editingEntity && (
+            <div className="mt-6 rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+              <div className="mb-3">
+                <div className="font-semibold text-slate-900">首位公司管理員</div>
+                <div className="text-sm text-slate-500">
+                  填寫後會建立該公司的 ADMIN 帳號並自動綁定員工資料；對方首次登入後即可維護員工與部門。
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Form.Item label="管理員姓名" name="adminName">
+                  <Input placeholder="例如 王小明" autoComplete="name" />
+                </Form.Item>
+                <Form.Item
+                  label="管理員信箱"
+                  name="adminEmail"
+                  rules={[{ type: 'email', message: '請輸入有效信箱' }]}
+                >
+                  <Input placeholder="例如 admin@example.com" autoComplete="email" />
+                </Form.Item>
+                <Form.Item label="管理員員工代號" name="adminEmployeeNo">
+                  <Input placeholder="例如 0001" autoComplete="off" />
+                </Form.Item>
+                <Form.Item
+                  label="初始密碼"
+                  name="adminPassword"
+                  rules={[{ min: 8, message: '密碼至少 8 碼' }]}
+                >
+                  <Input.Password placeholder="至少 8 碼，首次登入會要求更改" autoComplete="new-password" />
+                </Form.Item>
               </div>
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <Form.Item label="管理員姓名" name="adminName">
-                <Input placeholder="例如 王小明" />
-              </Form.Item>
-              <Form.Item
-                label="管理員信箱"
-                name="adminEmail"
-                rules={[{ type: 'email', message: '請輸入有效信箱' }]}
-              >
-                <Input placeholder="例如 admin@example.com" />
-              </Form.Item>
-              <Form.Item label="管理員員工代號" name="adminEmployeeNo">
-                <Input placeholder="例如 0001" />
-              </Form.Item>
-              <Form.Item
-                label="初始密碼"
-                name="adminPassword"
-                rules={[{ min: 8, message: '密碼至少 8 碼' }]}
-              >
-                <Input.Password placeholder="至少 8 碼，首次登入會要求更改" />
-              </Form.Item>
-            </div>
-          </div>
+          )}
         </Form>
       </Modal>
     </div>

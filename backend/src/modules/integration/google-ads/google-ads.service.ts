@@ -168,11 +168,13 @@ export class GoogleAdsService {
     );
     let created = 0;
     let updated = 0;
+    let deduplicated = 0;
 
     for (const row of syncableRows) {
       const result = await this.upsertExpense(entityId, row);
-      if (result === 'created') created += 1;
-      if (result === 'updated') updated += 1;
+      if (result.status === 'created') created += 1;
+      if (result.status === 'updated') updated += 1;
+      deduplicated += result.deduplicated;
     }
 
     return {
@@ -186,6 +188,7 @@ export class GoogleAdsService {
       synced: syncableRows.length,
       created,
       updated,
+      deduplicated,
       skippedZeroSpend: rows.length - syncableRows.length,
       expenseSourceModule: GOOGLE_ADS_SOURCE_MODULE,
       dashboardEffect:
@@ -224,7 +227,7 @@ export class GoogleAdsService {
 
   private async upsertExpense(entityId: string, row: GoogleAdsInsight) {
     if (!row.date || !row.customerId) {
-      return 'skipped';
+      return { status: 'skipped' as const, deduplicated: 0 };
     }
 
     const amount = new Decimal(this.costMicrosToAmount(row.costMicros));
@@ -233,28 +236,64 @@ export class GoogleAdsService {
       this.config.get<string>('GOOGLE_ADS_DEFAULT_CURRENCY', '') ||
       'TWD';
     const sourceId = `${row.customerId}:${row.date}`;
+    const expenseDate = new Date(`${row.date}T00:00:00.000Z`);
+    const nextExpenseDate = new Date(expenseDate);
+    nextExpenseDate.setUTCDate(nextExpenseDate.getUTCDate() + 1);
     const description = this.buildExpenseDescription(row);
     const itemDescription = this.buildExpenseItemDescription(row);
-    const existing = await this.prisma.expense.findFirst({
+    const sameDayExpenses = await this.prisma.expense.findMany({
       where: {
         entityId,
         sourceModule: GOOGLE_ADS_SOURCE_MODULE,
-        sourceId,
+        expenseDate: {
+          gte: expenseDate,
+          lt: nextExpenseDate,
+        },
       },
-      select: { id: true },
+      select: {
+        id: true,
+        sourceId: true,
+        description: true,
+        createdAt: true,
+        items: {
+          select: { description: true },
+        },
+      },
     });
+    const customerId = this.normalizeCustomerId(row.customerId);
+    const matchingExpenses = sameDayExpenses.filter((expense) => {
+      const identityText = [
+        expense.sourceId,
+        expense.description,
+        ...expense.items.map((item) => item.description),
+      ]
+        .filter(Boolean)
+        .join(' ');
+      return this.containsCustomerId(identityText, customerId);
+    });
+    const existing =
+      matchingExpenses.find((expense) => expense.sourceId === sourceId) ||
+      matchingExpenses.sort(
+        (left, right) => left.createdAt.getTime() - right.createdAt.getTime(),
+      )[0];
+    const duplicateIds = existing
+      ? matchingExpenses
+          .filter((expense) => expense.id !== existing.id)
+          .map((expense) => expense.id)
+      : [];
 
     if (existing) {
-      await this.prisma.$transaction([
+      const operations = [
         this.prisma.expense.update({
           where: { id: existing.id },
           data: {
-            expenseDate: new Date(`${row.date}T00:00:00.000Z`),
+            expenseDate,
             totalAmountOriginal: amount,
             totalAmountCurrency: currency,
             totalAmountFxRate: new Decimal(1),
             totalAmountBase: amount,
             description,
+            sourceId,
           },
         }),
         this.prisma.expenseItem.deleteMany({
@@ -271,14 +310,25 @@ export class GoogleAdsService {
             description: itemDescription,
           },
         }),
-      ]);
-      return 'updated';
+        ...(duplicateIds.length
+          ? [
+              this.prisma.expense.deleteMany({
+                where: { id: { in: duplicateIds } },
+              }),
+            ]
+          : []),
+      ];
+      await this.prisma.$transaction(operations);
+      return {
+        status: 'updated' as const,
+        deduplicated: duplicateIds.length,
+      };
     }
 
     await this.prisma.expense.create({
       data: {
         entityId,
-        expenseDate: new Date(`${row.date}T00:00:00.000Z`),
+        expenseDate,
         totalAmountOriginal: amount,
         totalAmountCurrency: currency,
         totalAmountFxRate: new Decimal(1),
@@ -298,7 +348,21 @@ export class GoogleAdsService {
         },
       },
     });
-    return 'created';
+    return { status: 'created' as const, deduplicated: 0 };
+  }
+
+  private normalizeCustomerId(value: string) {
+    return String(value || '').replace(/\D/g, '');
+  }
+
+  private containsCustomerId(text: string, customerId: string) {
+    if (!customerId) {
+      return false;
+    }
+    const digitGroups = String(text || '').match(/[\d-]{6,}/g) || [];
+    return digitGroups.some(
+      (candidate) => this.normalizeCustomerId(candidate) === customerId,
+    );
   }
 
   private resolveRange(since?: Date, until?: Date) {
@@ -326,10 +390,12 @@ export class GoogleAdsService {
       businessUnit: row.rawAccount?.businessUnit || null,
       channelCode: row.rawAccount?.channelCode || null,
       date: row.date,
+      currency: row.rawAccount?.currency || null,
       spend: this.costMicrosToAmount(row.costMicros),
       impressions: this.toNumber(row.impressions),
       clicks: this.toNumber(row.clicks),
       conversions: this.toNumber(row.conversions),
+      conversionsValue: this.toNumber(row.conversionsValue),
     };
   }
 

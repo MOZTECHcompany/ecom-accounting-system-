@@ -45,7 +45,7 @@ export interface UnifiedTransaction {
   orderId?: string; // External Order ID
   payoutId?: string;
   date: Date;
-  type: 'sale' | 'refund' | 'payout';
+  type: 'sale' | 'refund' | 'payout' | 'authorization' | 'void';
   amount: Decimal;
   fee: Decimal; // Platform fee
   net: Decimal; // Amount - Fee

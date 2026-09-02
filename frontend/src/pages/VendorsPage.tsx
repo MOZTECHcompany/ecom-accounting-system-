@@ -192,7 +192,6 @@ const VendorsPage: React.FC = () => {
       <div className="flex justify-between items-end">
         <div>
           <Title level={2} className="!mb-1 !font-light">供應商管理</Title>
-          <Text className="text-gray-500">管理所有供應商資料與聯絡資訊</Text>
         </div>
         <Space>
           <Button icon={<ReloadOutlined />} onClick={loadVendors}>重新整理</Button>

@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { canonicalSalesOrderWhere } from '../integration/sales-order-integrity';
+import { missingIssuedInvoiceWhere } from '../invoicing/invoice-order-state';
 
 type ManagementSummaryGroupBy = 'year' | 'quarter' | 'month' | 'week' | 'day';
 type CommerceSourceBrandRule = {
@@ -33,6 +35,89 @@ export class ReportsService {
     private readonly configService: ConfigService,
   ) {}
 
+  async getJournalApprovalReadiness(
+    entityId: string,
+    startDate?: Date,
+    endDate?: Date,
+  ) {
+    const dateFilter = this.buildDateFilter(startDate, endDate);
+    const baseWhere = {
+      entityId,
+      ...(dateFilter ? { date: dateFilter } : {}),
+    };
+    const approvedWhere = { ...baseWhere, approvedAt: { not: null } };
+    const unapprovedWhere = { ...baseWhere, approvedAt: null };
+
+    const [
+      totalCount,
+      approvedCount,
+      unapprovedCount,
+      approvedAmounts,
+      unapprovedAmounts,
+      unapprovedSamples,
+    ] = await Promise.all([
+      this.prisma.journalEntry.count({ where: baseWhere }),
+      this.prisma.journalEntry.count({ where: approvedWhere }),
+      this.prisma.journalEntry.count({ where: unapprovedWhere }),
+      this.prisma.journalLine.aggregate({
+        where: { journalEntry: approvedWhere },
+        _sum: { debit: true, credit: true, amountBase: true },
+      }),
+      this.prisma.journalLine.aggregate({
+        where: { journalEntry: unapprovedWhere },
+        _sum: { debit: true, credit: true, amountBase: true },
+      }),
+      this.prisma.journalEntry.findMany({
+        where: unapprovedWhere,
+        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+        take: 20,
+        select: {
+          id: true,
+          date: true,
+          description: true,
+          sourceModule: true,
+          sourceId: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+
+    const amounts = (value: typeof approvedAmounts) => ({
+      debit: Number(value._sum.debit || 0),
+      credit: Number(value._sum.credit || 0),
+      amountBase: Number(value._sum.amountBase || 0),
+    });
+    const status = unapprovedCount > 0 ? 'blocked' : 'ready';
+
+    return {
+      entityId,
+      generatedAt: new Date().toISOString(),
+      range: {
+        startDate: startDate?.toISOString() || null,
+        endDate: endDate?.toISOString() || null,
+      },
+      counts: {
+        total: totalCount,
+        approved: approvedCount,
+        unapproved: unapprovedCount,
+      },
+      amounts: {
+        approved: amounts(approvedAmounts),
+        unapproved: amounts(unapprovedAmounts),
+      },
+      releaseGate: {
+        status,
+        financialReportsUseApprovedOnly: true,
+        canPublishFinancialStatements: status === 'ready',
+        reason:
+          status === 'ready'
+            ? '所選區間沒有未審核分錄。'
+            : `所選區間仍有 ${unapprovedCount} 筆未審核分錄；正式財務報表只納入已審核分錄，發布前必須完成審核或確認排除。`,
+      },
+      unapprovedSamples,
+    };
+  }
+
   async getDashboardSalesOverview(
     entityId: string,
     startDate?: Date,
@@ -63,10 +148,10 @@ export class ReportsService {
 
     const [orders, payments] = await Promise.all([
       this.prisma.salesOrder.findMany({
-        where: {
+        where: canonicalSalesOrderWhere({
           entityId,
           ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
-        },
+        }),
         select: {
           id: true,
           notes: true,
@@ -193,7 +278,10 @@ export class ReportsService {
     const orderDateFilter = this.buildDateFilter(startDate, endDate);
     const expenseDateFilter = this.buildDateFilter(startDate, endDate);
     const inventoryAlertThreshold = Number(
-      this.configService.get<string>('DASHBOARD_INVENTORY_ALERT_THRESHOLD', '5'),
+      this.configService.get<string>(
+        'DASHBOARD_INVENTORY_ALERT_THRESHOLD',
+        '5',
+      ),
     );
     const payoutOverdueDays = Number(
       this.configService.get<string>('DASHBOARD_PAYOUT_OVERDUE_DAYS', '3'),
@@ -372,14 +460,14 @@ export class ReportsService {
         },
       }),
       this.prisma.salesOrder.aggregate({
-        where: {
+        where: canonicalSalesOrderWhere({
           entityId,
           hasInvoice: false,
           status: {
             notIn: ['cancelled', 'refunded'],
           },
           ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
-        },
+        }),
         _count: {
           id: true,
         },
@@ -388,14 +476,14 @@ export class ReportsService {
         },
       }),
       this.prisma.salesOrder.count({
-        where: {
+        where: canonicalSalesOrderWhere({
           entityId,
           hasInvoice: false,
           status: {
             notIn: ['cancelled', 'refunded'],
           },
           ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
-        },
+        }),
       }),
       this.prisma.inventorySnapshot.findMany({
         where: {
@@ -503,7 +591,9 @@ export class ReportsService {
     const actualSpendCount =
       Number(expenseAgg._count.id || 0) ||
       Number(fallbackPaidExpenseAgg._count.id || 0);
-    const pendingExpenseAmount = Number(pendingExpenseAgg._sum.amountOriginal || 0);
+    const pendingExpenseAmount = Number(
+      pendingExpenseAgg._sum.amountOriginal || 0,
+    );
     const pendingExpenseCount = Number(pendingExpenseAgg._count.id || 0);
     const approvedExpenseAmount = Number(
       approvedExpenseAgg._sum.amountOriginal || 0,
@@ -516,7 +606,9 @@ export class ReportsService {
       overduePendingPayoutAgg._sum.amountNetOriginal || 0,
     );
     const feeBackfillCount = Number(feeBackfillAgg._count.id || 0);
-    const feeBackfillAmount = Number(feeBackfillAgg._sum.amountGrossOriginal || 0);
+    const feeBackfillAmount = Number(
+      feeBackfillAgg._sum.amountGrossOriginal || 0,
+    );
     const missingPayoutJournalCount = Number(
       missingPayoutJournalAgg._count.id || 0,
     );
@@ -573,7 +665,9 @@ export class ReportsService {
     }
 
     const inventoryRows = Array.from(inventoryByProduct.values());
-    const outOfStockItems = inventoryRows.filter((item) => item.qtyAvailable <= 0);
+    const outOfStockItems = inventoryRows.filter(
+      (item) => item.qtyAvailable <= 0,
+    );
     const lowStockItems = inventoryRows
       .filter(
         (item) =>
@@ -673,8 +767,7 @@ export class ReportsService {
         count: topAlerts.length,
         amount: null,
         tone: topAlerts.length > 0 ? 'critical' : 'healthy',
-        helper:
-          '庫存不足會直接影響成交與交付，先處理缺貨品項與安全庫存調整。',
+        helper: '庫存不足會直接影響成交與交付，先處理缺貨品項與安全庫存調整。',
         accountCode: null,
         accountName: null,
         statusLabel: '待補貨',
@@ -715,8 +808,7 @@ export class ReportsService {
         metric: feeBackfillCount,
         description:
           '若交易已完成但尚未回填 provider payout，系統會將其列入待補費率名單，避免毛利與淨額失真。',
-        accountingEntry:
-          '借：6131 / 6134；貸：1191',
+        accountingEntry: '借：6131 / 6134；貸：1191',
         helper:
           '綠界匯出中的交易手續費、處理費與平台手續費會個別保存，讓管理層可追蹤真實抽成結構。',
       },
@@ -727,8 +819,7 @@ export class ReportsService {
         metric: pendingPayoutCount,
         description:
           '系統把待付款、已付款、待撥款、已撥款、已對帳拆開來看，方便辨識貨到付款或超商未取造成的落差。',
-        accountingEntry:
-          '先留在 1191 應收帳款，實際撥款後才轉入 1113 銀行存款',
+        accountingEntry: '先留在 1191 應收帳款，實際撥款後才轉入 1113 銀行存款',
         helper:
           '這條規則會持續用在 1Shop、Shopify、Shopline 與綠界串接，確保不同通路可用同一套標準追帳。',
       },
@@ -863,11 +954,11 @@ export class ReportsService {
       select: { id: true, code: true, name: true },
     });
 
-    const orderWhere = {
+    const orderWhere = canonicalSalesOrderWhere({
       entityId,
       ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
       status: { notIn: ['cancelled', 'refunded'] },
-    };
+    });
     const paymentWhere = {
       entityId,
       ...(paymentDateFilter ? { payoutDate: paymentDateFilter } : {}),
@@ -899,12 +990,14 @@ export class ReportsService {
       invoiceCount,
     ] = await Promise.all([
       this.prisma.salesOrder.count({ where: orderWhere }),
-      this.prisma.salesOrder.count({ where: { ...orderWhere, customerId: null } }),
+      this.prisma.salesOrder.count({
+        where: { ...orderWhere, customerId: null },
+      }),
       this.prisma.salesOrder.count({
         where: { ...orderWhere, payments: { none: {} } },
       }),
       this.prisma.salesOrder.count({
-        where: { ...orderWhere, hasInvoice: false, invoices: { none: {} } },
+        where: { ...orderWhere, ...missingIssuedInvoiceWhere() },
       }),
       this.prisma.salesOrder.count({
         where: {
@@ -923,7 +1016,11 @@ export class ReportsService {
         where: {
           entityId,
           isActive: true,
-          salesOrders: { some: orderDateFilter ? { orderDate: orderDateFilter } : {} },
+          salesOrders: {
+            some: canonicalSalesOrderWhere(
+              orderDateFilter ? { orderDate: orderDateFilter } : {},
+            ),
+          },
         },
       }),
       this.prisma.payment.count({ where: paymentWhere }),
@@ -1037,6 +1134,8 @@ export class ReportsService {
           missingPaymentPendingCandidates,
           missingInvoiceEmbeddedCandidates,
           missingInvoiceEcpayBackfillCandidates,
+          missingInvoiceNonIssuedRecordCandidates,
+          missingInvoiceLegacyFlagMismatches,
           feeMissingPayoutBackfillCandidates,
         ] = await Promise.all([
           this.prisma.salesOrder.count({ where: channelOrderWhere }),
@@ -1049,8 +1148,7 @@ export class ReportsService {
           this.prisma.salesOrder.count({
             where: {
               ...channelOrderWhere,
-              hasInvoice: false,
-              invoices: { none: {} },
+              ...missingIssuedInvoiceWhere(),
             },
           }),
           this.prisma.salesOrder.aggregate({
@@ -1102,17 +1200,31 @@ export class ReportsService {
           this.prisma.salesOrder.count({
             where: {
               ...channelOrderWhere,
-              hasInvoice: false,
-              invoices: { none: {} },
+              ...missingIssuedInvoiceWhere(),
               notes: { contains: 'invoiceNumber=' },
             },
           }),
           this.prisma.salesOrder.count({
             where: {
               ...channelOrderWhere,
-              hasInvoice: false,
-              invoices: { none: {} },
-              notes: { not: { contains: 'invoiceNumber=' } },
+              ...missingIssuedInvoiceWhere(),
+              OR: [
+                { notes: null },
+                { notes: { not: { contains: 'invoiceNumber=' } } },
+              ],
+            },
+          }),
+          this.prisma.salesOrder.count({
+            where: {
+              ...channelOrderWhere,
+              AND: [missingIssuedInvoiceWhere(), { invoices: { some: {} } }],
+            },
+          }),
+          this.prisma.salesOrder.count({
+            where: {
+              ...channelOrderWhere,
+              ...missingIssuedInvoiceWhere(),
+              hasInvoice: true,
             },
           }),
           this.prisma.payment.count({
@@ -1131,7 +1243,11 @@ export class ReportsService {
                   OR: [
                     { notes: null },
                     { notes: { not: { contains: '[provider-payout]' } } },
-                    { notes: { not: { contains: 'feeSource=provider-payout:ecpay' } } },
+                    {
+                      notes: {
+                        not: { contains: 'feeSource=provider-payout:ecpay' },
+                      },
+                    },
                   ],
                 },
               ],
@@ -1155,6 +1271,8 @@ export class ReportsService {
             missingPaymentPendingCandidates,
             missingInvoiceEmbeddedCandidates,
             missingInvoiceEcpayBackfillCandidates,
+            missingInvoiceNonIssuedRecordCandidates,
+            missingInvoiceLegacyFlagMismatches,
             feeMissingPayoutBackfillCandidates,
           },
           firstOrder: firstOrder
@@ -1200,12 +1318,24 @@ export class ReportsService {
         bankTransactions,
       },
       coverage: {
-        customerLinkedRate: ratio(totalOrders - missingCustomerOrders, totalOrders),
-        paymentLinkedRate: ratio(totalOrders - missingPaymentOrders, totalOrders),
-        invoiceLinkedRate: ratio(totalOrders - missingInvoiceOrders, totalOrders),
+        customerLinkedRate: ratio(
+          totalOrders - missingCustomerOrders,
+          totalOrders,
+        ),
+        paymentLinkedRate: ratio(
+          totalOrders - missingPaymentOrders,
+          totalOrders,
+        ),
+        invoiceLinkedRate: ratio(
+          totalOrders - missingInvoiceOrders,
+          totalOrders,
+        ),
         paymentReconciledRate: ratio(reconciledPayments, totalPayments),
         payoutLineMatchedRate: ratio(matchedPayoutLines, payoutLines),
-        bankTransactionMatchedRate: ratio(matchedBankTransactions, bankTransactions),
+        bankTransactionMatchedRate: ratio(
+          matchedBankTransactions,
+          bankTransactions,
+        ),
         feeActualRate: ratio(feeActualPayments, completedPayments),
       },
       gaps: {
@@ -1231,35 +1361,40 @@ export class ReportsService {
           label: '缺發票資料',
           count: missingInvoiceOrders,
           severity: missingInvoiceOrders ? 'critical' : 'healthy',
-          nextAction: '同步綠界電子發票狀態，或匯入發票明細後回填 SalesOrder / Invoice。',
+          nextAction:
+            '同步綠界電子發票狀態，或匯入發票明細後回填 SalesOrder / Invoice。',
         },
         {
           key: 'unreconciled-payments',
           label: 'Payment 尚未核銷',
           count: pendingPayments,
           severity: pendingPayments ? 'critical' : 'healthy',
-          nextAction: '匯入 / 同步綠界與其他金流撥款明細，回填實際手續費與實收淨額。',
+          nextAction:
+            '匯入 / 同步綠界與其他金流撥款明細，回填實際手續費與實收淨額。',
         },
         {
           key: 'fee-backfill',
           label: '手續費待補',
           count: feeMissingPayments,
           severity: feeMissingPayments ? 'warning' : 'healthy',
-          nextAction: '以綠界撥款列、服務費發票、LINE Pay 或平台報表作為最終費用來源。',
+          nextAction:
+            '以綠界撥款列、服務費發票、LINE Pay 或平台報表作為最終費用來源。',
         },
         {
           key: 'missing-payments',
           label: '訂單缺 Payment',
           count: missingPaymentOrders,
           severity: missingPaymentOrders ? 'warning' : 'healthy',
-          nextAction: '重新同步平台 transactions，或為待付款訂單建立 0 元 Payment 草稿。',
+          nextAction:
+            '重新同步平台 transactions，或為待付款訂單建立 0 元 Payment 草稿。',
         },
         {
           key: 'missing-customers',
           label: '訂單缺顧客',
           count: missingCustomerOrders,
           severity: missingCustomerOrders ? 'warning' : 'healthy',
-          nextAction: '重新同步顧客主檔，並用 email / phone / 外部 customer id 回填訂單。',
+          nextAction:
+            '重新同步顧客主檔，並用 email / phone / 外部 customer id 回填訂單。',
         },
       ],
       recommendedNextSteps: [
@@ -1272,7 +1407,7 @@ export class ReportsService {
   }
 
   async getConnectorReadiness(entityId: string) {
-    const connectors = [
+    const connectorDefinitions = [
       this.buildConnectorReadiness({
         key: 'shopify',
         label: 'Shopify / MOZTECH 官網',
@@ -1348,8 +1483,7 @@ export class ReportsService {
           '確認 3290494 / 3150241 的 HashKey / HashIV、B2C / B2B、查詢、作廢、折讓、字軌權限。',
           '用 stage 或正式小額測試單驗證 Issue / GetIssue / Invalid / Allowance 後，才能啟用正式開票。',
         ],
-        nextAction:
-          '未啟用正式開票前，繼續用綠界銷項發票匯入回填系統狀態。',
+        nextAction: '未啟用正式開票前，繼續用綠界銷項發票匯入回填系統狀態。',
       }),
       this.buildConnectorReadiness({
         key: 'ecpay-payout',
@@ -1358,7 +1492,11 @@ export class ReportsService {
         envNames: [],
         credentialGroups: [
           ['ECPAY_MERCHANTS_JSON'],
-          ['ECPAY_SHOPIFY_MERCHANT_ID', 'ECPAY_SHOPIFY_HASH_KEY', 'ECPAY_SHOPIFY_HASH_IV'],
+          [
+            'ECPAY_SHOPIFY_MERCHANT_ID',
+            'ECPAY_SHOPIFY_HASH_KEY',
+            'ECPAY_SHOPIFY_HASH_IV',
+          ],
         ],
         optionalEnvNames: [
           'ECPAY_SHOPIFY_API_URL',
@@ -1370,8 +1508,7 @@ export class ReportsService {
           '提供 3150241 / 3290494 綠界撥款或金流對帳報表。',
           '確認 3150241 僅供 1Shop / 團購 / 未來 Shopline 使用，不與 Shopify 3290494 混用。',
         ],
-        nextAction:
-          '撥款來源就緒後，回填實際手續費與淨額，再跑保守自動核銷。',
+        nextAction: '撥款來源就緒後，回填實際手續費與淨額，再跑保守自動核銷。',
       }),
       this.buildConnectorReadiness({
         key: 'linepay',
@@ -1380,7 +1517,11 @@ export class ReportsService {
         envNames: [],
         credentialGroups: [
           ['LINE_PAY_ACCOUNTS_JSON'],
-          ['LINE_PAY_MERCHANT_ID', 'LINE_PAY_CHANNEL_ID', 'LINE_PAY_CHANNEL_SECRET'],
+          [
+            'LINE_PAY_MERCHANT_ID',
+            'LINE_PAY_CHANNEL_ID',
+            'LINE_PAY_CHANNEL_SECRET',
+          ],
         ],
         optionalEnvNames: [
           'LINE_PAY_PROFILE_KEY',
@@ -1444,12 +1585,16 @@ export class ReportsService {
         externalNeeds: [
           ...(!this.hasConfig('META_ADS_ACCOUNT_IDS') &&
           !this.hasConfig('META_ADS_ACCOUNTS_JSON')
-            ? ['提供 Meta Ad Account ID，或設定 META_ADS_ACCOUNTS_JSON 做品牌 / 通路 mapping。']
+            ? [
+                '提供 Meta Ad Account ID，或設定 META_ADS_ACCOUNTS_JSON 做品牌 / 通路 mapping。',
+              ]
             : []),
           ...(!this.hasConfig('GOOGLE_ADS_CUSTOMER_ID') &&
           !this.hasConfig('GOOGLE_ADS_CUSTOMER_IDS') &&
           !this.hasConfig('GOOGLE_ADS_ACCOUNTS_JSON')
-            ? ['提供 Google Ads customer ID，或設定 GOOGLE_ADS_ACCOUNTS_JSON 做品牌 / 通路 mapping。']
+            ? [
+                '提供 Google Ads customer ID，或設定 GOOGLE_ADS_ACCOUNTS_JSON 做品牌 / 通路 mapping。',
+              ]
             : []),
           '提供廣告發票或收據來源，以及扣款信用卡 / 銀行帳戶。',
           'TikTok Ads 尚未接入；Google Ads 與 Meta Ads 可先同步 daily spend。',
@@ -1459,10 +1604,91 @@ export class ReportsService {
       }),
     ];
 
+    const syncStates = await this.prisma.connectorSyncState.findMany({
+      where: { entityId },
+      orderBy: { connector: 'asc' },
+    });
+    const syncStateByConnector = new Map(
+      syncStates.map((state) => [state.connector, state]),
+    );
+    const now = Date.now();
+    const staleAfterMinutes: Record<string, number> = {
+      shopline: 60,
+      shopify: 60,
+      oneshop: 60,
+      'ecpay-einvoice': 60,
+      'ecpay-payout': 24 * 60,
+      'ad-spend': 36 * 60,
+    };
+
+    const connectors = connectorDefinitions.map((connector) => {
+      const state = syncStateByConnector.get(connector.key);
+      if (!state) {
+        return {
+          ...connector,
+          syncHealth: {
+            status: 'untracked',
+            lastStartedAt: null,
+            lastFinishedAt: null,
+            lastSuccessAt: null,
+            lastFailureAt: null,
+            lastError: null,
+            trigger: null,
+            metrics: null,
+          },
+        };
+      }
+
+      const leaseExpired = Boolean(
+        state.status === 'running' &&
+        state.leaseExpiresAt &&
+        state.leaseExpiresAt.getTime() <= now,
+      );
+      const staleThreshold =
+        (staleAfterMinutes[connector.key] || 24 * 60) * 60 * 1000;
+      const successStale = Boolean(
+        state.status === 'success' &&
+        state.lastSuccessAt &&
+        now - state.lastSuccessAt.getTime() > staleThreshold,
+      );
+      const healthStatus =
+        leaseExpired || successStale
+          ? 'stale'
+          : state.status === 'running'
+            ? 'running'
+            : state.status === 'failed'
+              ? 'failed'
+              : state.status === 'success'
+                ? 'healthy'
+                : 'untracked';
+
+      return {
+        ...connector,
+        syncHealth: {
+          status: healthStatus,
+          lastStartedAt: state.lastStartedAt?.toISOString() || null,
+          lastFinishedAt: state.lastFinishedAt?.toISOString() || null,
+          lastSuccessAt: state.lastSuccessAt?.toISOString() || null,
+          lastFailureAt: state.lastFailureAt?.toISOString() || null,
+          lastError: state.lastError,
+          trigger: state.trigger,
+          metrics: state.lastMetrics,
+        },
+      };
+    });
+
     const summary = connectors.reduce(
       (acc, connector) => {
         acc.total += 1;
         acc[connector.status] += 1;
+        if (connector.syncHealth.status === 'healthy') acc.syncHealthy += 1;
+        if (connector.syncHealth.status === 'running') acc.syncRunning += 1;
+        if (
+          connector.syncHealth.status === 'failed' ||
+          connector.syncHealth.status === 'stale'
+        ) {
+          acc.syncIssues += 1;
+        }
         return acc;
       },
       {
@@ -1470,6 +1696,9 @@ export class ReportsService {
         ready: 0,
         partial: 0,
         blocked: 0,
+        syncHealthy: 0,
+        syncRunning: 0,
+        syncIssues: 0,
       },
     );
 
@@ -1481,7 +1710,6 @@ export class ReportsService {
       inputDocument: 'backend/docs/user-input-needed-2026-04-27.md',
     };
   }
-
 
   async getLinePayReconciliationReadiness(
     entityId: string,
@@ -1600,8 +1828,8 @@ export class ReportsService {
       const directLine = directByPaymentId.get(payment.id) || null;
       const hasProviderId = Boolean(
         metadata.providerPaymentId ||
-          metadata.providerTradeNo ||
-          metadata.authorization,
+        metadata.providerTradeNo ||
+        metadata.authorization,
       );
       const feeActual = (payment.notes || '').includes('feeStatus=actual');
 
@@ -1615,7 +1843,10 @@ export class ReportsService {
         nextAction = feeActual
           ? '綠界已回填實際手續費，可進入核銷檢查。'
           : '已找到綠界撥款線索，等待手續費與淨額回填。';
-      } else if (directLine || metadata.feeSource === 'provider-payout:linepay') {
+      } else if (
+        directLine ||
+        metadata.feeSource === 'provider-payout:linepay'
+      ) {
         route = 'linepay';
         routeLabel = '走 LINE Pay 直連對帳';
         nextAction = feeActual
@@ -1658,15 +1889,16 @@ export class ReportsService {
         route,
         routeLabel,
         nextAction,
-        matchedPayoutLine: ecpayLine || directLine
-          ? {
-              id: (ecpayLine || directLine)!.id,
-              provider: ecpayLine ? 'ecpay' : 'linepay',
-              status: (ecpayLine || directLine)!.status,
-              confidence: (ecpayLine || directLine)!.confidence,
-              message: (ecpayLine || directLine)!.message,
-            }
-          : null,
+        matchedPayoutLine:
+          ecpayLine || directLine
+            ? {
+                id: (ecpayLine || directLine)!.id,
+                provider: ecpayLine ? 'ecpay' : 'linepay',
+                status: (ecpayLine || directLine)!.status,
+                confidence: (ecpayLine || directLine)!.confidence,
+                message: (ecpayLine || directLine)!.message,
+              }
+            : null,
       };
     });
 
@@ -1822,7 +2054,8 @@ export class ReportsService {
         externalOrderId: payment.salesOrder?.externalOrderId || null,
         orderDate: payment.salesOrder?.orderDate?.toISOString() || null,
         payoutDate: payment.payoutDate?.toISOString() || null,
-        channelCode: payment.salesOrder?.channel?.code || payment.channel || null,
+        channelCode:
+          payment.salesOrder?.channel?.code || payment.channel || null,
         bucketKey,
         bucketLabel: bucket?.label || '其他業績',
         account: bucketKey.startsWith('oneshop:')
@@ -1945,14 +2178,14 @@ export class ReportsService {
         },
       }),
       this.prisma.salesOrder.aggregate({
-        where: {
+        where: canonicalSalesOrderWhere({
           entityId,
           hasInvoice: false,
           status: {
             notIn: ['cancelled', 'refunded'],
           },
           ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
-        },
+        }),
         _count: {
           id: true,
         },
@@ -1973,14 +2206,20 @@ export class ReportsService {
       }),
     ]);
 
-    const payrollByStatus = payrollAgg.reduce<Record<string, number>>((acc, item) => {
-      acc[item.status] = item._count._all
-      return acc
-    }, {})
-    const approvalsByType = approvalAgg.reduce<Record<string, number>>((acc, item) => {
-      acc[item.type] = item._count._all
-      return acc
-    }, {})
+    const payrollByStatus = payrollAgg.reduce<Record<string, number>>(
+      (acc, item) => {
+        acc[item.status] = item._count._all;
+        return acc;
+      },
+      {},
+    );
+    const approvalsByType = approvalAgg.reduce<Record<string, number>>(
+      (acc, item) => {
+        acc[item.type] = item._count._all;
+        return acc;
+      },
+      {},
+    );
 
     return {
       entityId,
@@ -2036,7 +2275,7 @@ export class ReportsService {
           value: Number(pendingInvoiceAgg._count.id || 0),
         },
       ],
-    }
+    };
   }
 
   async getMonthlyChannelReconciliation(
@@ -2067,10 +2306,10 @@ export class ReportsService {
 
     const [orders, payments, payoutLines] = await Promise.all([
       this.prisma.salesOrder.findMany({
-        where: {
+        where: canonicalSalesOrderWhere({
           entityId,
           ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
-        },
+        }),
         select: {
           id: true,
           externalOrderId: true,
@@ -2163,8 +2402,9 @@ export class ReportsService {
         month,
         bucketKey,
         bucketLabel: bucket?.label || '其他業績',
-        account:
-          bucketKey.startsWith('oneshop:') ? bucketKey.replace('oneshop:', '') : null,
+        account: bucketKey.startsWith('oneshop:')
+          ? bucketKey.replace('oneshop:', '')
+          : null,
         salesGross: 0,
         orderCount: 0,
         payoutGross: 0,
@@ -2286,13 +2526,13 @@ export class ReportsService {
     const tolerance = 1;
 
     const orders = await this.prisma.salesOrder.findMany({
-      where: {
+      where: canonicalSalesOrderWhere({
         entityId,
         ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
         status: {
           notIn: ['cancelled'],
         },
-      },
+      }),
       orderBy: {
         orderDate: 'desc',
       },
@@ -2410,7 +2650,10 @@ export class ReportsService {
         (sum, invoice) => sum + Number(invoice.taxAmountOriginal || 0),
         0,
       );
-      const expectedInvoiceTax = this.calculateIncludedTax(invoiceGross, taxRate);
+      const expectedInvoiceTax = this.calculateIncludedTax(
+        invoiceGross,
+        taxRate,
+      );
       const paymentCompleted = order.payments.some((payment) =>
         ['completed', 'success', 'paid', 'cod'].includes(
           (payment.status || '').toLowerCase(),
@@ -2428,25 +2671,38 @@ export class ReportsService {
         );
       });
       const isRefundedOrder = (order.status || '').toLowerCase() === 'refunded';
-      const isCancelledOrder = (order.status || '').toLowerCase() === 'cancelled';
+      const isCancelledOrder =
+        (order.status || '').toLowerCase() === 'cancelled';
       const hasRefundSignal = isRefundedOrder || refundPayments.length > 0;
-      const reconciled = order.payments.some((payment) => payment.reconciledFlag);
+      const reconciled = order.payments.some(
+        (payment) => payment.reconciledFlag,
+      );
       const anomalyCodes: string[] = [];
       const anomalyMessages: string[] = [];
 
-      if (hasRefundSignal && allowanceInvoices.length === 0 && voidInvoices.length === 0) {
+      if (
+        hasRefundSignal &&
+        allowanceInvoices.length === 0 &&
+        voidInvoices.length === 0
+      ) {
         anomalyCodes.push('refund_without_allowance_or_void_invoice');
-        anomalyMessages.push('訂單或付款出現退款訊號，但尚未找到折讓單或作廢發票。');
+        anomalyMessages.push(
+          '訂單或付款出現退款訊號，但尚未找到折讓單或作廢發票。',
+        );
       }
 
       if (hasRefundSignal && reconciled) {
         anomalyCodes.push('refund_after_reconciliation_needs_reversal');
-        anomalyMessages.push('退款訂單已有核銷紀錄，需確認是否已建立反向分錄或折讓。');
+        anomalyMessages.push(
+          '退款訂單已有核銷紀錄，需確認是否已建立反向分錄或折讓。',
+        );
       }
 
       if (isCancelledOrder && paymentGross > 0) {
         anomalyCodes.push('cancelled_order_has_payment');
-        anomalyMessages.push('訂單已取消但仍有收款紀錄，需確認是否退款或保留款項。');
+        anomalyMessages.push(
+          '訂單已取消但仍有收款紀錄，需確認是否退款或保留款項。',
+        );
       }
 
       if ((paymentCompleted || reconciled) && issuedInvoices.length === 0) {
@@ -2454,7 +2710,7 @@ export class ReportsService {
         anomalyMessages.push('訂單已付款或已對帳，但尚未找到正式發票。');
       }
 
-      if (order.hasInvoice !== (issuedInvoices.length > 0)) {
+      if (order.hasInvoice !== issuedInvoices.length > 0) {
         anomalyCodes.push('invoice_flag_mismatch');
         anomalyMessages.push('訂單發票旗標與實際發票紀錄不一致。');
       }
@@ -2521,7 +2777,9 @@ export class ReportsService {
       }
 
       const feeRatePct =
-        paymentGross > 0 ? Number(((feeTotal / paymentGross) * 100).toFixed(2)) : 0;
+        paymentGross > 0
+          ? Number(((feeTotal / paymentGross) * 100).toFixed(2))
+          : 0;
       const severity = this.resolveAuditSeverity(anomalyCodes);
       const recommendation = this.buildAuditRecommendation(anomalyCodes);
 
@@ -2593,7 +2851,9 @@ export class ReportsService {
         acc.totalGatewayFeeAmount += item.gatewayFeeAmount;
         acc.totalPlatformFeeAmount += item.platformFeeAmount;
         acc.totalFeeAmount += item.feeTotalAmount;
-        acc.flaggedGrossAmount += item.anomalyCodes.length ? item.grossAmount : 0;
+        acc.flaggedGrossAmount += item.anomalyCodes.length
+          ? item.grossAmount
+          : 0;
         acc.flaggedFeeAmount += hasFeeIssue ? item.feeTotalAmount : 0;
         acc.invoiceIssueCount += hasInvoiceIssue ? 1 : 0;
         acc.taxIssueCount += hasTaxIssue ? 1 : 0;
@@ -2632,7 +2892,8 @@ export class ReportsService {
           return severityDiff;
         }
         return (
-          new Date(right.orderDate).getTime() - new Date(left.orderDate).getTime()
+          new Date(right.orderDate).getTime() -
+          new Date(left.orderDate).getTime()
         );
       });
 
@@ -2673,13 +2934,13 @@ export class ReportsService {
     const [orders, payments, expenses, expenseRequests, arInvoices] =
       await Promise.all([
         this.prisma.salesOrder.findMany({
-          where: {
+          where: canonicalSalesOrderWhere({
             entityId,
             status: {
               notIn: ['cancelled', 'refunded'],
             },
             ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
-          },
+          }),
           select: {
             id: true,
             orderDate: true,
@@ -2925,7 +3186,9 @@ export class ReportsService {
 
     for (const expenseRequest of expenseRequests) {
       const period = ensurePeriod(expenseRequest.updatedAt);
-      period.fallbackExpenseAmount += Number(expenseRequest.amountOriginal || 0);
+      period.fallbackExpenseAmount += Number(
+        expenseRequest.amountOriginal || 0,
+      );
       period.fallbackExpenseCount += 1;
       if (
         this.isAdvertisingSpend([
@@ -3005,7 +3268,8 @@ export class ReportsService {
         gatewayFee: acc.gatewayFee + period.gatewayFee,
         platformFee: acc.platformFee + period.platformFee,
         feeTotal: acc.feeTotal + period.feeTotal,
-        actualExpenseAmount: acc.actualExpenseAmount + period.actualExpenseAmount,
+        actualExpenseAmount:
+          acc.actualExpenseAmount + period.actualExpenseAmount,
         fallbackExpenseAmount:
           acc.fallbackExpenseAmount + period.fallbackExpenseAmount,
         operatingExpenses: acc.operatingExpenses + period.operatingExpenses,
@@ -3048,6 +3312,12 @@ export class ReportsService {
       },
     );
 
+    const journalApproval = await this.getJournalApprovalReadiness(
+      entityId,
+      startDate,
+      endDate,
+    );
+
     return {
       entityId,
       groupBy,
@@ -3065,6 +3335,12 @@ export class ReportsService {
         ),
       },
       periods,
+      dataBasis: 'operational_sources',
+      releaseGate: journalApproval.releaseGate,
+      journalApproval: {
+        counts: journalApproval.counts,
+        amounts: journalApproval.amounts,
+      },
     };
   }
 
@@ -3078,13 +3354,13 @@ export class ReportsService {
     const orderDateFilter = this.buildDateFilter(startDate, endDate);
 
     const orders = await this.prisma.salesOrder.findMany({
-      where: {
+      where: canonicalSalesOrderWhere({
         entityId,
         status: {
           notIn: ['cancelled', 'refunded'],
         },
         ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
-      },
+      }),
       orderBy: {
         orderDate: 'asc',
       },
@@ -3167,18 +3443,19 @@ export class ReportsService {
         notes: order.notes,
         stores,
       });
-      const periodDescriptor = this.resolvePeriodDescriptor(order.orderDate, groupBy);
-      const period =
-        periodMap.get(periodDescriptor.key) ||
-        {
-          key: periodDescriptor.key,
-          label: periodDescriptor.label,
-          startDate: periodDescriptor.startDate.toISOString(),
-          endDate: periodDescriptor.endDate.toISOString(),
-          revenue: 0,
-          orderCount: 0,
-          customerIds: new Set<string>(),
-        };
+      const periodDescriptor = this.resolvePeriodDescriptor(
+        order.orderDate,
+        groupBy,
+      );
+      const period = periodMap.get(periodDescriptor.key) || {
+        key: periodDescriptor.key,
+        label: periodDescriptor.label,
+        startDate: periodDescriptor.startDate.toISOString(),
+        endDate: periodDescriptor.endDate.toISOString(),
+        revenue: 0,
+        orderCount: 0,
+        customerIds: new Set<string>(),
+      };
       period.revenue += revenue;
       period.orderCount += 1;
       if (order.customerId) {
@@ -3204,17 +3481,15 @@ export class ReportsService {
           [productName, productSku].filter(Boolean).join(' '),
         );
         const productKey = `${inferredBrand}::${productSku}`;
-        const product =
-          productMap.get(productKey) ||
-          {
-            sku: productSku,
-            name: productName,
-            category: item.product?.category || null,
-            brand: inferredBrand,
-            revenue: 0,
-            quantity: 0,
-            orderIds: new Set<string>(),
-          };
+        const product = productMap.get(productKey) || {
+          sku: productSku,
+          name: productName,
+          category: item.product?.category || null,
+          brand: inferredBrand,
+          revenue: 0,
+          quantity: 0,
+          orderIds: new Set<string>(),
+        };
 
         product.revenue += itemRevenue;
         product.quantity += qty;
@@ -3222,17 +3497,15 @@ export class ReportsService {
         productMap.set(productKey, product);
 
         const brandKey = `${inferredBrand}::${source.label}::${source.channelCode || 'unknown'}`;
-        const brand =
-          brandMap.get(brandKey) ||
-          {
-            brand: inferredBrand,
-            sourceLabel: source.label,
-            channelCode: source.channelCode,
-            revenue: 0,
-            orderIds: new Set<string>(),
-            customerIds: new Set<string>(),
-            productQty: new Map<string, number>(),
-          };
+        const brand = brandMap.get(brandKey) || {
+          brand: inferredBrand,
+          sourceLabel: source.label,
+          channelCode: source.channelCode,
+          revenue: 0,
+          orderIds: new Set<string>(),
+          customerIds: new Set<string>(),
+          productQty: new Map<string, number>(),
+        };
         brand.revenue += itemRevenue;
         brand.orderIds.add(order.id);
         if (order.customerId) {
@@ -3248,17 +3521,15 @@ export class ReportsService {
 
       if (!hasLineLevelBrand) {
         const brandKey = `${source.brand}::${source.label}::${source.channelCode || 'unknown'}`;
-        const brand =
-          brandMap.get(brandKey) ||
-          {
-            brand: source.brand,
-            sourceLabel: source.label,
-            channelCode: source.channelCode,
-            revenue: 0,
-            orderIds: new Set<string>(),
-            customerIds: new Set<string>(),
-            productQty: new Map<string, number>(),
-          };
+        const brand = brandMap.get(brandKey) || {
+          brand: source.brand,
+          sourceLabel: source.label,
+          channelCode: source.channelCode,
+          revenue: 0,
+          orderIds: new Set<string>(),
+          customerIds: new Set<string>(),
+          productQty: new Map<string, number>(),
+        };
         brand.revenue += revenue;
         brand.orderIds.add(order.id);
         if (order.customerId) {
@@ -3349,13 +3620,13 @@ export class ReportsService {
 
     const [orders, adExpenses] = await Promise.all([
       this.prisma.salesOrder.findMany({
-        where: {
+        where: canonicalSalesOrderWhere({
           entityId,
           status: {
             notIn: ['cancelled', 'refunded'],
           },
           ...(orderDateFilter ? { orderDate: orderDateFilter } : {}),
-        },
+        }),
         orderBy: {
           orderDate: 'asc',
         },
@@ -3393,9 +3664,7 @@ export class ReportsService {
           sourceModule: {
             in: AD_EXPENSE_SOURCE_MODULES,
           },
-          ...(adExpenseDateFilter
-            ? { expenseDate: adExpenseDateFilter }
-            : {}),
+          ...(adExpenseDateFilter ? { expenseDate: adExpenseDateFilter } : {}),
         },
         orderBy: {
           expenseDate: 'asc',
@@ -3513,6 +3782,14 @@ export class ReportsService {
       brandBucket.adSpend += amount;
     };
 
+    const getExpenseSpend = (expense: (typeof adExpenses)[number]) =>
+      expense.items.length > 0
+        ? expense.items.reduce(
+            (sum, item) => sum + Number(item.amountOriginal || 0),
+            0,
+          )
+        : Number(expense.totalAmountOriginal || 0);
+
     for (const order of orders) {
       const source = this.resolveSourceContext({
         channelCode: order.channel?.code,
@@ -3569,15 +3846,33 @@ export class ReportsService {
               this.extractMetaAdsAccountId(descriptionText),
               descriptionText,
             );
-      const spend =
-        expense.items.length > 0
-          ? expense.items.reduce(
-              (sum, item) => sum + Number(item.amountOriginal || 0),
-              0,
-            )
-          : Number(expense.totalAmountOriginal || 0);
+      const spend = getExpenseSpend(expense);
       addAdSpend(expense.expenseDate, brand, spend);
     }
+
+    const sources = AD_EXPENSE_SOURCE_MODULES.map((sourceModule) => {
+      const sourceExpenses = adExpenses.filter(
+        (expense) => expense.sourceModule === sourceModule,
+      );
+      const lastExpenseDate = sourceExpenses.reduce<Date | null>(
+        (latest, expense) =>
+          !latest || expense.expenseDate > latest
+            ? expense.expenseDate
+            : latest,
+        null,
+      );
+      return {
+        sourceModule,
+        label: sourceModule === 'meta_ads' ? 'Meta' : 'Google Ads',
+        adSpend: Number(
+          sourceExpenses
+            .reduce((sum, expense) => sum + getExpenseSpend(expense), 0)
+            .toFixed(2),
+        ),
+        expenseCount: sourceExpenses.length,
+        lastExpenseDate: lastExpenseDate?.toISOString() || null,
+      };
+    });
 
     const formatRoas = (revenue: number, adSpend: number) =>
       adSpend > 0 ? Number((revenue / adSpend).toFixed(4)) : null;
@@ -3643,6 +3938,7 @@ export class ReportsService {
         attributionNote:
           '這是會計口徑的 blended ROAS：電商品牌營收除以 Meta 與 Google Ads 每日花費，不等於廣告平台歸因 ROAS。',
       },
+      sources,
       brands,
       periods,
     };
@@ -3775,9 +4071,7 @@ export class ReportsService {
           sourceModule: {
             in: AD_EXPENSE_SOURCE_MODULES,
           },
-          ...(adExpenseDateFilter
-            ? { expenseDate: adExpenseDateFilter }
-            : {}),
+          ...(adExpenseDateFilter ? { expenseDate: adExpenseDateFilter } : {}),
         },
         {
           OR: [
@@ -3879,9 +4173,7 @@ export class ReportsService {
           account:
             typeof store?.account === 'string' ? store.account.trim() : '',
           storeName:
-            typeof store?.storeName === 'string'
-              ? store.storeName.trim()
-              : '',
+            typeof store?.storeName === 'string' ? store.storeName.trim() : '',
         }))
         .filter((store) => store.account);
     } catch {
@@ -4052,9 +4344,10 @@ export class ReportsService {
 
     if (
       anomalyCodes.some((code) =>
-        ['missing_invoice_after_payment', 'reconciled_without_invoice'].includes(
-          code,
-        ),
+        [
+          'missing_invoice_after_payment',
+          'reconciled_without_invoice',
+        ].includes(code),
       )
     ) {
       return '先補發票，再確認會計分錄與稅務申報是否應同步回寫。';
@@ -4268,7 +4561,8 @@ export class ReportsService {
       };
     }
 
-    const fallback = meta.storeName || meta.storeHandle || params.channelName || '其他來源';
+    const fallback =
+      meta.storeName || meta.storeHandle || params.channelName || '其他來源';
     return {
       label: fallback,
       brand: this.resolveCommerceBrand(fallback),
@@ -4276,7 +4570,10 @@ export class ReportsService {
     };
   }
 
-  private resolveProductBrand(productName?: string | null, fallbackBrand?: string) {
+  private resolveProductBrand(
+    productName?: string | null,
+    fallbackBrand?: string,
+  ) {
     const normalizedName = (productName || '').trim();
     if (!normalizedName) {
       return this.resolveCommerceBrand(fallbackBrand);
@@ -4369,7 +4666,11 @@ export class ReportsService {
 
     return {
       brand: this.resolveCommerceBrand(matched.brand),
-      label: matched.label?.trim() || fallback?.storeName || fallback?.channelName || '',
+      label:
+        matched.label?.trim() ||
+        fallback?.storeName ||
+        fallback?.channelName ||
+        '',
     };
   }
 
@@ -4386,7 +4687,9 @@ export class ReportsService {
 
     try {
       const parsed = JSON.parse(raw);
-      const rules = Array.isArray(parsed) ? parsed : parsed?.accounts || parsed?.rules;
+      const rules = Array.isArray(parsed)
+        ? parsed
+        : parsed?.accounts || parsed?.rules;
       if (!Array.isArray(rules)) {
         return [];
       }
@@ -4503,14 +4806,16 @@ export class ReportsService {
         const normalized = value.startsWith('act_') ? value : `act_${value}`;
         return normalized === accountId;
       });
+      const brand =
+        typeof matched?.brand === 'string' ? matched.brand.trim() : '';
+      if (brand) {
+        return this.resolveCommerceBrand(brand);
+      }
       const reportBrand =
         typeof matched?.reportBrand === 'string'
           ? matched.reportBrand.trim()
           : '';
-      if (reportBrand) {
-        return reportBrand;
-      }
-      return typeof matched?.brand === 'string' ? matched.brand.trim() : '';
+      return reportBrand ? this.resolveCommerceBrand(reportBrand) : '';
     } catch {
       return '';
     }
@@ -4538,14 +4843,16 @@ export class ReportsService {
         ).replace(/[^0-9]/g, '');
         return value === normalizedCustomerId;
       });
+      const brand =
+        typeof matched?.brand === 'string' ? matched.brand.trim() : '';
+      if (brand) {
+        return this.resolveCommerceBrand(brand);
+      }
       const reportBrand =
         typeof matched?.reportBrand === 'string'
           ? matched.reportBrand.trim()
           : '';
-      if (reportBrand) {
-        return reportBrand;
-      }
-      return typeof matched?.brand === 'string' ? matched.brand.trim() : '';
+      return reportBrand ? this.resolveCommerceBrand(reportBrand) : '';
     } catch {
       return '';
     }
@@ -4607,7 +4914,11 @@ export class ReportsService {
       params.externalNeeds.length === 0;
     const internallyConfigured =
       missingRequired.length === 0 && hasCredentialGroup;
-    const status = ready ? 'ready' : internallyConfigured ? 'partial' : 'blocked';
+    const status = ready
+      ? 'ready'
+      : internallyConfigured
+        ? 'partial'
+        : 'blocked';
     const jsonSummary = params.jsonEnvName
       ? this.summarizeJsonConfig(params.jsonEnvName)
       : null;

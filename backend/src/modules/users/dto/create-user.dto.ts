@@ -32,6 +32,12 @@ export class CreateUserDto {
   readonly roleIds?: string[];
 
   @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsString({ each: true })
+  readonly entityIds?: string[];
+
+  @IsOptional()
   @IsBoolean()
   readonly mustChangePassword?: boolean;
 

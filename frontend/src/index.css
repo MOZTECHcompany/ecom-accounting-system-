@@ -850,3 +850,57 @@ body.dark .glass-input {
   background-color: #4B5563 !important; /* Dark Gray to ensure contrast */
   color: #ffffff !important;
 }
+
+/* ERP action controls use one consistent hit area across pages. */
+.ant-btn:not(.ant-btn-link) {
+  min-height: 40px !important;
+  height: 40px !important;
+  padding-inline: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ant-btn-sm:not(.ant-btn-link),
+.ant-btn-lg:not(.ant-btn-link) {
+  min-height: 40px !important;
+  height: 40px !important;
+}
+
+.ant-btn-icon-only:not(.ant-btn-link) {
+  width: 40px !important;
+  padding-inline: 0;
+}
+
+.ant-modal-close,
+.ant-drawer-close {
+  width: 40px !important;
+  min-width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ant-pagination .ant-pagination-item,
+.ant-pagination .ant-pagination-prev,
+.ant-pagination .ant-pagination-next,
+.ant-pagination .ant-pagination-jump-prev,
+.ant-pagination .ant-pagination-jump-next {
+  min-width: 40px !important;
+  height: 40px !important;
+  line-height: 38px !important;
+}
+
+.ant-pagination .ant-pagination-prev button,
+.ant-pagination .ant-pagination-next button {
+  width: 40px !important;
+  height: 40px !important;
+}
+
+.ant-radio-button-wrapper {
+  min-height: 40px;
+  height: 40px;
+  line-height: 38px;
+}

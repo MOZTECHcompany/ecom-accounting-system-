@@ -69,9 +69,6 @@ const AccountingPeriodsPage: React.FC = () => {
           <Title level={2} className="!text-gray-800 font-light tracking-tight !mb-1">
             會計期間
           </Title>
-          <Text className="text-gray-500">
-            檢查目前各期間是否為開放、已結帳或已鎖定，避免分錄落在錯誤期間。
-          </Text>
         </div>
         <Segmented
           options={[

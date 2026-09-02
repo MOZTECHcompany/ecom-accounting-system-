@@ -26,10 +26,13 @@ import { CreateComputerUseSessionDto } from './dto/create-computer-use-session.d
 import { RunComputerUseTaskDto } from './dto/run-computer-use-task.dto';
 import { NavigateComputerUseSessionDto } from './dto/navigate-computer-use-session.dto';
 import type { Request } from 'express';
+import { EntityAccessGuard } from '../../common/guards/entity-access.guard';
+import { RequireEntityAccess } from '../../common/decorators/entity-access.decorator';
 
 @ApiTags('AI Core')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, EntityAccessGuard)
+@RequireEntityAccess('accounting')
 @Controller('ai')
 export class AiController {
   constructor(
@@ -47,6 +50,7 @@ export class AiController {
   }
 
   @Post('insights/daily-briefing')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT')
   @ApiOperation({ summary: '取得每日財務 AI 簡報' })
   async getDailyBriefing(@Body() body: { entityId: string; modelId?: string }) {
     const briefing = await this.insightsService.getDailyBriefing(
@@ -57,6 +61,7 @@ export class AiController {
   }
 
   @Post('copilot/chat')
+  @Roles('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT')
   @ApiOperation({ summary: '與 AI 助手對話（系統知識 + 實際資料查詢）' })
   async chat(
     @Req() req: Request,
@@ -114,7 +119,11 @@ export class AiController {
     @Body() body: NavigateComputerUseSessionDto,
   ) {
     const user = req.user as any;
-    return this.computerUseService.navigateSession(user.id, sessionId, body.url);
+    return this.computerUseService.navigateSession(
+      user.id,
+      sessionId,
+      body.url,
+    );
   }
 
   @Post('computer-use/sessions/:sessionId/run')

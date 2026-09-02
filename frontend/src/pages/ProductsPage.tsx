@@ -170,19 +170,19 @@ const ProductsPage: React.FC = () => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="p-6"
+      className="px-2 py-4 sm:p-6"
     >
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <Title level={2} className="!mb-0">產品與庫存管理</Title>
-          <p className="text-gray-500 mt-1">管理所有商品資料、庫存數量與成本結構</p>
+      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <Title level={2} className="!mb-0 !text-2xl sm:!text-3xl">產品與庫存管理</Title>
         </div>
-        <Space>
-          <Button icon={<ReloadOutlined />} onClick={fetchProducts}>重新整理</Button>
-          <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>
+        <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:w-auto lg:flex lg:flex-wrap lg:justify-end">
+          <Button className="w-full lg:w-auto" icon={<ReloadOutlined />} onClick={fetchProducts}>重新整理</Button>
+          <Button className="w-full lg:w-auto" icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>
             下載匯入範本
           </Button>
           <Upload
+            className="w-full lg:w-auto"
             accept=".xlsx,.xls,.csv"
             showUploadList={false}
             beforeUpload={(file) => {
@@ -200,17 +200,17 @@ const ProductsPage: React.FC = () => {
               }
             }}
           >
-            <Button icon={<UploadOutlined />} loading={previewingImport} disabled={importing || previewingImport}>
+            <Button className="w-full lg:w-auto" icon={<UploadOutlined />} loading={previewingImport} disabled={importing || previewingImport}>
               預覽匯入 Excel/CSV
             </Button>
           </Upload>
-          <Button type="primary" icon={<PlusOutlined />} size="large" onClick={() => setIsModalVisible(true)}>
+          <Button className="w-full lg:w-auto" type="primary" icon={<PlusOutlined />} size="large" onClick={() => setIsModalVisible(true)}>
             新增產品
           </Button>
-        </Space>
+        </div>
       </div>
 
-      <Card className="shadow-sm rounded-xl border-0">
+      <Card className="overflow-hidden shadow-sm rounded-xl border-0">
         {!loading && !products.length && (
           <Alert
             className="mb-4"
@@ -225,6 +225,7 @@ const ProductsPage: React.FC = () => {
           dataSource={products} 
           rowKey="id" 
           loading={loading}
+          scroll={{ x: 980 }}
         />
       </Card>
 
@@ -289,24 +290,24 @@ const ProductsPage: React.FC = () => {
           <Form.Item name="sku" label="SKU" rules={[{ required: true }]}>
             <Input placeholder="例如: PB-001" />
           </Form.Item>
-          <Form.Item name="barcode" label="國際條碼 (Barcode)" rules={[{ required: true, message: '國際條碼為必填' }]}>
+          <Form.Item name="barcode" label="國際條碼" rules={[{ required: true, message: '國際條碼為必填' }]}>
             <Input placeholder="例如: 4710000000000" prefix={<BarcodeOutlined />} />
           </Form.Item>
           <Form.Item name="modelNumber" label="原廠型號 (Model No.)">
             <Input placeholder="例如: A2890" />
           </Form.Item>
           <Form.Item name="hasSerialNumbers" valuePropName="checked">
-            <Checkbox>啟用單品序號追蹤 (Serial Number Tracking)</Checkbox>
+            <Checkbox>啟用單品序號追蹤</Checkbox>
           </Form.Item>
           <Form.Item name="name" label="產品名稱" rules={[{ required: true }]}>
             <Input placeholder="例如: Power Bank 10000mAh" />
           </Form.Item>
           <Form.Item name="type" label="類型" rules={[{ required: true }]}>
             <Select>
-              <Option value="RAW_MATERIAL">原物料 (Raw Material)</Option>
-              <Option value="SEMI_FINISHED">半成品 (Semi-Finished)</Option>
-              <Option value="FINISHED_GOOD">製成品 (Finished Good)</Option>
-              <Option value="SERVICE">服務 (Service)</Option>
+              <Option value="RAW_MATERIAL">原物料</Option>
+              <Option value="SEMI_FINISHED">半成品</Option>
+              <Option value="FINISHED_GOOD">製成品</Option>
+              <Option value="SERVICE">服務</Option>
             </Select>
           </Form.Item>
           <Form.Item name="unit" label="單位" rules={[{ required: true }]}>
@@ -362,7 +363,7 @@ const ProductsPage: React.FC = () => {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="countryOfOrigin" label="原產地 (Country of Origin)">
+              <Form.Item name="countryOfOrigin" label="原產地">
                 <Input placeholder="例如: TW, CN" />
               </Form.Item>
             </Col>

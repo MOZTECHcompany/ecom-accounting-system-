@@ -272,14 +272,15 @@ export class ShoplineController {
   @Post('sync/auto')
   async autoSync(
     @Headers('x-sync-token') syncToken: string | undefined,
-    @Body() body: Partial<SyncRequestDto>,
+    @Body() body?: Partial<SyncRequestDto>,
   ) {
     this.shoplineService.assertSchedulerToken(syncToken);
 
     return this.shoplineService.autoSync({
-      entityId: body.entityId,
-      since: body.since ? new Date(body.since) : undefined,
-      until: body.until ? new Date(body.until) : undefined,
+      entityId: body?.entityId,
+      since: body?.since ? new Date(body.since) : undefined,
+      until: body?.until ? new Date(body.until) : undefined,
+      trigger: 'scheduler',
     });
   }
 

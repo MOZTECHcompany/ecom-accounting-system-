@@ -147,8 +147,8 @@ const LoginPage: React.FC = () => {
           >
             <BrandMark className="w-12 h-12 drop-shadow-sm" alt="System logo" />
           </motion.div>
-          <Title level={2} className="!text-gray-800 !mb-2 !font-light tracking-tight">AI 電子商務營運中樞</Title>
-          <Text className="text-gray-500 font-light">AI E-Commerce Operations Hub</Text>
+          <Title level={2} className="!text-gray-800 !mb-2 !font-light tracking-tight">電子商務 ERP</Title>
+          <Text className="text-gray-500 font-light">營運與財務管理系統</Text>
         </div>
 
         <Form

@@ -13,7 +13,7 @@ export type Entity = {
   contactPhone?: string
 }
 
-export type EntityPayload = {
+export type EntityUpdatePayload = {
   loginCode: string
   name: string
   country: string
@@ -23,6 +23,9 @@ export type EntityPayload = {
   contactEmail?: string
   contactPhone?: string
   isActive?: boolean
+}
+
+export type EntityCreatePayload = EntityUpdatePayload & {
   adminName?: string
   adminEmail?: string
   adminEmployeeNo?: string
@@ -40,12 +43,12 @@ export async function listEntities(params?: { isActive?: boolean }): Promise<Ent
   return response.data
 }
 
-export async function createEntity(data: EntityPayload): Promise<Entity> {
+export async function createEntity(data: EntityCreatePayload): Promise<Entity> {
   const response = await api.post<Entity>('/entities', data)
   return response.data
 }
 
-export async function updateEntity(id: string, data: Partial<EntityPayload>): Promise<Entity> {
+export async function updateEntity(id: string, data: Partial<EntityUpdatePayload>): Promise<Entity> {
   const response = await api.put<Entity>(`/entities/${id}`, data)
   return response.data
 }

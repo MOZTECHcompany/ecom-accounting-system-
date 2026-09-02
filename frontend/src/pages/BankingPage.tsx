@@ -17,7 +17,6 @@ import {
   Statistic,
   Row,
   Col,
-  Space,
   Alert
 } from 'antd'
 import { 
@@ -34,11 +33,11 @@ import dayjs from 'dayjs'
 import { bankingService } from '../services/banking.service'
 import { BankAccount, BankTransaction, ManagedUser } from '../types'
 import { usersService } from '../services/users.service'
+import { resolveEntityId } from '../services/entities.service'
 import { useAuth } from '../contexts/AuthContext'
 import { hasPermission } from '../utils/access'
 
 const { Title, Text } = Typography
-const DEFAULT_ENTITY_ID = import.meta.env.VITE_DEFAULT_ENTITY_ID?.trim() || 'tw-entity-001'
 
 const bankStatementTemplateRows = [
   ['txn_date', 'value_date', 'description', 'credit', 'debit', 'amount', 'currency', 'reference_no', 'virtual_account_no'],
@@ -97,7 +96,8 @@ const AccountsTab = () => {
   const fetchAccounts = async () => {
     setLoading(true)
     try {
-      const result = await bankingService.getAccounts()
+      const entityId = await resolveEntityId()
+      const result = await bankingService.getAccounts(entityId)
       setAccounts(Array.isArray(result) ? result : [])
     } catch (error) {
       message.error('載入帳戶失敗')
@@ -131,9 +131,10 @@ const AccountsTab = () => {
   const handleCreate = async () => {
     try {
       const values = await form.validateFields()
+      const entityId = await resolveEntityId(values.entityId)
       await bankingService.createAccount({
         ...values,
-        entityId: values.entityId || localStorage.getItem('entityId') || DEFAULT_ENTITY_ID,
+        entityId,
       })
       message.success('帳戶建立成功')
       setDrawerOpen(false)
@@ -225,7 +226,7 @@ const AccountsTab = () => {
   return (
     <div className="page-section-stack">
       <Row gutter={16}>
-        <Col span={12}>
+        <Col xs={24} sm={12}>
           <Card bordered={false} className="glass-card">
             <Statistic
               title="總資產餘額 (預估)"
@@ -237,7 +238,7 @@ const AccountsTab = () => {
             />
           </Card>
         </Col>
-        <Col span={12}>
+        <Col xs={24} sm={12}>
           <Card bordered={false} className="glass-card">
             <Statistic
               title="銀行帳戶數"
@@ -271,6 +272,7 @@ const AccountsTab = () => {
         loading={loading}
         columns={columns}
         dataSource={accounts}
+        scroll={{ x: 860 }}
       />
 
       <GlassDrawer
@@ -408,7 +410,8 @@ const TransactionsTab = () => {
 
   const fetchAccounts = async () => {
     try {
-      const result = await bankingService.getAccounts()
+      const entityId = await resolveEntityId()
+      const result = await bankingService.getAccounts(entityId)
       setAccounts(Array.isArray(result) ? result : [])
       if (!selectedAccountId && Array.isArray(result) && result.length === 1) {
         setSelectedAccountId(result[0].id)
@@ -512,13 +515,14 @@ const TransactionsTab = () => {
 
   return (
     <div className="page-section-stack">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Title level={4} className="!mb-0 !font-light">交易明細</Title>
-        <Space wrap>
-          <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>
+        <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2">
+          <Button className="w-full sm:w-auto" icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>
             下載匯入範本
           </Button>
           <Button
+            className="w-full sm:w-auto"
             type="primary"
             icon={<UploadOutlined />}
             onClick={handleOpenImport}
@@ -527,7 +531,7 @@ const TransactionsTab = () => {
           >
             匯入對帳單
           </Button>
-        </Space>
+        </div>
       </div>
 
       {!accounts.length && (
@@ -551,6 +555,7 @@ const TransactionsTab = () => {
         loading={loading}
         columns={columns}
         dataSource={transactions}
+        scroll={{ x: 700 }}
       />
 
       <Modal
@@ -616,6 +621,7 @@ const TransactionsTab = () => {
                 rowKey="rowNumber"
                 pagination={false}
                 dataSource={importPreview.sampleRows || []}
+                scroll={{ x: 620 }}
                 columns={[
                   { title: '列', dataIndex: 'rowNumber', width: 64 },
                   {
@@ -664,7 +670,6 @@ const BankingPage: React.FC = () => {
     >
       <div>
         <Title level={2} className="!mb-1 !font-light">銀行與資金</Title>
-        <Text className="text-gray-500">管理銀行帳戶與資金流向</Text>
       </div>
 
       <Card className="glass-card" bordered={false}>

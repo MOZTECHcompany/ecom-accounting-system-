@@ -12,6 +12,13 @@ import {
   UnifiedOrder,
   UnifiedTransaction,
 } from '../interfaces/sales-channel-adapter.interface';
+import {
+  buildPaymentSourceTransactionKey,
+  resolveStoredGrossAmount,
+  resolveStoredNetAmount,
+  resolveStoredPaymentStatus,
+} from '../payment-integrity';
+import { buildSalesOrderSourceKey } from '../sales-order-integrity';
 
 const SHOPIFY_CHANNEL_CODE = 'SHOPIFY';
 
@@ -35,11 +42,7 @@ export class ShopifyService {
     return this.adapter.testConnection();
   }
 
-  async autoSync(options?: {
-    entityId?: string;
-    since?: Date;
-    until?: Date;
-  }) {
+  async autoSync(options?: { entityId?: string; since?: Date; until?: Date }) {
     const enabled =
       this.config.get<string>('SHOPIFY_SYNC_ENABLED', 'true') !== 'false';
 
@@ -57,8 +60,7 @@ export class ShopifyService {
     );
     const until = options?.until || new Date();
     const since =
-      options?.since ||
-      new Date(until.getTime() - lookbackMinutes * 60 * 1000);
+      options?.since || new Date(until.getTime() - lookbackMinutes * 60 * 1000);
 
     this.logger.log(
       `Starting Shopify auto sync for entity=${entityId}, since=${since.toISOString()}, until=${until.toISOString()}`,
@@ -567,12 +569,18 @@ export class ShopifyService {
     channelId: string,
     order: UnifiedOrder,
   ): Promise<'created' | 'updated'> {
-    const existing = await this.prisma.salesOrder.findFirst({
-      where: {
+    const sourceOrderKey = buildSalesOrderSourceKey(
+      channelId,
+      order.externalId,
+    );
+    const sourceIdentity = {
+      entityId_sourceOrderKey: {
         entityId,
-        channelId,
-        externalOrderId: order.externalId,
+        sourceOrderKey,
       },
+    };
+    const existing = await this.prisma.salesOrder.findUnique({
+      where: sourceIdentity,
     });
 
     // FX Rate is already handled in Adapter, so here we just use it?
@@ -625,32 +633,31 @@ export class ShopifyService {
       notes: this.mergeShopifyOrderMetadataIntoNotes(existing?.notes, order),
     };
 
-    if (existing) {
-      const updated = await this.prisma.salesOrder.update({
-        where: { id: existing.id },
-        data: {
-          ...data,
-          hasInvoice: existing.hasInvoice, // Preserve
-        },
-      });
-      await this.syncSalesOrderItems(updated.id, entityId, order, currency, fxRate);
-      return 'updated';
-    }
-
-    const created = await this.prisma.salesOrder.create({
-      data: {
+    const customerId =
+      !existing && order.customer
+        ? await this.ensureCustomer(entityId, order.customer)
+        : undefined;
+    const stored = await this.prisma.salesOrder.upsert({
+      where: sourceIdentity,
+      update: data,
+      create: {
         entityId,
         channelId,
         externalOrderId: order.externalId,
+        sourceOrderKey,
         hasInvoice: false,
         ...data,
-        customerId: order.customer
-          ? await this.ensureCustomer(entityId, order.customer)
-          : undefined,
+        customerId,
       },
     });
-    await this.syncSalesOrderItems(created.id, entityId, order, currency, fxRate);
-    return 'created';
+    await this.syncSalesOrderItems(
+      stored.id,
+      entityId,
+      order,
+      currency,
+      fxRate,
+    );
+    return existing ? 'updated' : 'created';
   }
 
   private async syncSalesOrderItems(
@@ -707,7 +714,11 @@ export class ShopifyService {
     }
   }
 
-  private normalizeLineItemSku(orderId: string, sku: string | undefined, index: number) {
+  private normalizeLineItemSku(
+    orderId: string,
+    sku: string | undefined,
+    index: number,
+  ) {
     const normalized = (sku || '').trim();
     if (normalized && normalized !== 'UNKNOWN') {
       return normalized.slice(0, 120);
@@ -722,9 +733,7 @@ export class ShopifyService {
     const raw = order.raw || {};
     const parts = [
       `shopifyOrderId=${this.sanitizeNoteValue(order.externalId)}`,
-      raw.name
-        ? `shopifyOrderName=${this.sanitizeNoteValue(raw.name)}`
-        : null,
+      raw.name ? `shopifyOrderName=${this.sanitizeNoteValue(raw.name)}` : null,
       raw.order_number
         ? `shopifyOrderNumber=${this.sanitizeNoteValue(raw.order_number)}`
         : null,
@@ -754,20 +763,36 @@ export class ShopifyService {
     channelId: string,
     tx: UnifiedTransaction,
   ): Promise<'created' | 'updated'> {
-    const existing = await this.prisma.payment.findFirst({
-      where: {
-        entityId,
-        channelId,
-        payoutBatchId: tx.externalId, // Using transaction ID as batch ID if generic
-      },
-    });
+    const sourceTransactionKey = buildPaymentSourceTransactionKey(
+      channelId,
+      tx.externalId,
+    );
+    const existing =
+      (await this.prisma.payment.findUnique({
+        where: {
+          entityId_sourceTransactionKey: {
+            entityId,
+            sourceTransactionKey,
+          },
+        },
+      })) ||
+      (await this.prisma.payment.findFirst({
+        where: {
+          entityId,
+          channelId,
+          payoutBatchId: tx.externalId,
+          sourceTransactionKey: null,
+        },
+        orderBy: [{ reconciledFlag: 'desc' }, { createdAt: 'asc' }],
+      }));
 
     const salesOrder = tx.orderId
-      ? await this.prisma.salesOrder.findFirst({
+      ? await this.prisma.salesOrder.findUnique({
           where: {
-            entityId,
-            channelId,
-            externalOrderId: tx.orderId,
+            entityId_sourceOrderKey: {
+              entityId,
+              sourceOrderKey: buildSalesOrderSourceKey(channelId, tx.orderId),
+            },
           },
         })
       : null;
@@ -775,6 +800,8 @@ export class ShopifyService {
     const currency = tx.currency;
     const fxRate = new Decimal(await this.getFxRate(currency, tx.date));
     const toBase = (amount: Decimal) => amount.mul(fxRate);
+    const grossAmount = resolveStoredGrossAmount(tx);
+    const netAmount = resolveStoredNetAmount(tx);
     const hasLockedProviderPayout = this.hasLockedProviderPayout(
       existing?.notes,
     );
@@ -785,12 +812,13 @@ export class ShopifyService {
       channelId,
       salesOrderId: salesOrder?.id ?? null,
       payoutBatchId: tx.externalId,
+      sourceTransactionKey,
       channel: 'SHOPIFY',
       payoutDate: tx.date,
-      amountGrossOriginal: tx.amount, // Start with Gross
+      amountGrossOriginal: grossAmount,
       amountGrossCurrency: currency,
       amountGrossFxRate: fxRate,
-      amountGrossBase: toBase(tx.amount),
+      amountGrossBase: toBase(grossAmount),
       // Platform Fee
       feePlatformOriginal: hasLockedProviderPayout
         ? existing?.feePlatformOriginal || new Decimal(0)
@@ -816,18 +844,19 @@ export class ShopifyService {
       shippingFeePaidBase: new Decimal(0),
 
       amountNetOriginal: hasLockedProviderPayout
-        ? existing?.amountNetOriginal || tx.net
-        : tx.net,
+        ? existing?.amountNetOriginal || netAmount
+        : netAmount,
       amountNetCurrency: currency,
       amountNetFxRate: fxRate,
       amountNetBase: hasLockedProviderPayout
-        ? existing?.amountNetBase || toBase(tx.net)
-        : toBase(tx.net),
+        ? existing?.amountNetBase || toBase(netAmount)
+        : toBase(netAmount),
 
       reconciledFlag: hasLockedProviderPayout
         ? existing?.reconciledFlag || false
         : false,
       bankAccountId: null,
+      status: resolveStoredPaymentStatus(tx),
       notes: paymentNotes,
     };
 
@@ -839,7 +868,16 @@ export class ShopifyService {
       return 'updated';
     }
 
-    await this.prisma.payment.create({ data });
+    await this.prisma.payment.upsert({
+      where: {
+        entityId_sourceTransactionKey: {
+          entityId,
+          sourceTransactionKey,
+        },
+      },
+      update: data,
+      create: data,
+    });
     return 'created';
   }
 

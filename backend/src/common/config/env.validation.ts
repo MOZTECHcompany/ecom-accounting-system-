@@ -85,6 +85,42 @@ class EnvironmentVariables {
 
   @IsOptional()
   @IsString()
+  FRONTEND_PUBLIC_URL?: string;
+
+  @IsOptional()
+  @IsString()
+  FRONTEND_URL?: string;
+
+  @IsOptional()
+  @IsString()
+  PAYMENT_LINK_BASE_URL?: string;
+
+  @IsOptional()
+  @IsString()
+  AFTER_SALES_LEGACY_BASE_URL?: string;
+
+  @IsOptional()
+  @IsString()
+  AFTER_SALES_LEGACY_API_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  AFTER_SALES_LEGACY_TIMEOUT_MS?: string;
+
+  @IsOptional()
+  @IsString()
+  AFTER_SALES_STAGING_RETENTION_DAYS?: string;
+
+  @IsOptional()
+  @IsString()
+  AFTER_SALES_LEGACY_USE_CLOUD_RUN_IAM?: string;
+
+  @IsOptional()
+  @IsString()
+  AFTER_SALES_LEGACY_CLOUD_RUN_AUDIENCE?: string;
+
+  @IsOptional()
+  @IsString()
   SMTP_HOST?: string;
 
   @IsOptional()

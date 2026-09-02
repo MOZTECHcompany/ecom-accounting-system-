@@ -8,13 +8,15 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
-import { createCipheriv } from 'crypto';
+import { createCipheriv, createHash } from 'crypto';
 import { ImportProviderPayoutsDto } from './dto/import-provider-payouts.dto';
 import { SyncEcpayShopifyPayoutsDto } from './dto/sync-ecpay-shopify-payouts.dto';
 import { ProviderPayoutReconciliationService } from './provider-payout-reconciliation.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
-type EcpayShopifyQuery =
+type EcpayPayoutApiKind = 'trade-media' | 'general' | 'shopify';
+type EcpayPaymentType = '01' | '02' | '03' | '04' | '05' | '11';
+type EcpayPayoutQuery =
   | {
       MerchantID: string;
       PaymentID: string;
@@ -24,7 +26,7 @@ type EcpayShopifyQuery =
       DateType: '1' | '2';
       BeginDate: string;
       EndDate: string;
-      PaymentType?: '01' | '02' | '03' | '11';
+      PaymentType?: EcpayPaymentType;
     };
 
 type EcpayCsvRow = Record<string, string>;
@@ -35,6 +37,8 @@ type EcpayMerchantProfile = {
   hashKey: string;
   hashIv: string;
   apiUrl: string;
+  apiKind: EcpayPayoutApiKind;
+  creditApiUrl?: string;
   entityId?: string;
   syncEnabled: boolean;
   lookbackDays: number;
@@ -122,48 +126,60 @@ export class EcpayShopifyPayoutService {
     dto: SyncEcpayShopifyPayoutsDto,
     importedBy?: string,
   ) {
+    return this.syncPayouts(dto, importedBy);
+  }
+
+  async previewPayouts(dto: SyncEcpayShopifyPayoutsDto) {
+    const profile = this.resolveMerchantProfile(dto.merchantKey);
+    this.assertApiCredentials(profile);
+    const queries = this.buildQueries(dto, profile);
+
+    if (queries.length !== 1) {
+      throw new BadRequestException(
+        '綠界唯讀預覽一次最多查詢一個月；歷史資料請由背景工作分段處理。',
+      );
+    }
+
+    const canonicalRows = await this.fetchCanonicalRows(queries, profile);
+
+    return {
+      success: true,
+      dryRun: true,
+      imported: false,
+      source: this.getSourceName(profile),
+      apiKind: profile.apiKind,
+      merchantKey: profile.key,
+      merchantId: profile.merchantId,
+      entityId: dto.entityId || profile.entityId || null,
+      query: queries[0],
+      recordCount: canonicalRows.length,
+      totals: this.summarizeCanonicalRows(canonicalRows),
+      sampleRows: canonicalRows.slice(0, 5),
+    };
+  }
+
+  async syncPayouts(dto: SyncEcpayShopifyPayoutsDto, importedBy?: string) {
     const profile = this.resolveMerchantProfile(dto.merchantKey);
     this.assertApiCredentials(profile);
 
     const entityId = this.resolveEntityId(dto.entityId, profile.entityId);
     const queries = this.buildQueries(dto, profile);
-    const canonicalRowMap = new Map<string, CanonicalImportRow>();
-
-    for (const query of queries) {
-      const csvText = await this.fetchCsv(query, profile);
-      this.assertApiResponse(csvText);
-
-      const parsedRows = this.parseCsv(csvText);
-      for (const row of parsedRows) {
-        const canonical = this.toCanonicalImportRow(row);
-        if (
-          !(
-            canonical.providerPaymentId ||
-            canonical.providerTradeNo ||
-            canonical.grossAmount
-          )
-        ) {
-          continue;
-        }
-        canonicalRowMap.set(this.buildCanonicalRowKey(canonical), canonical);
-      }
-    }
-
-    const canonicalRows = Array.from(canonicalRowMap.values());
+    const canonicalRows = await this.fetchCanonicalRows(queries, profile);
     const firstQuery = queries[0];
 
     if (!canonicalRows.length) {
       return {
         success: true,
         imported: false,
-        source: 'ecpay.shopify-api',
+        source: this.getSourceName(profile),
+        apiKind: profile.apiKind,
         merchantKey: profile.key,
         merchantId: profile.merchantId,
         query: firstQuery,
         queries,
         entityId,
         recordCount: 0,
-        message: '綠界本次查詢沒有新的 Shopify 撥款資料。',
+        message: '綠界本次查詢沒有新的撥款資料。',
       };
     }
 
@@ -185,7 +201,8 @@ export class EcpayShopifyPayoutService {
     return {
       success: true,
       imported: true,
-      source: 'ecpay.shopify-api',
+      source: this.getSourceName(profile),
+      apiKind: profile.apiKind,
       merchantKey: profile.key,
       merchantId: profile.merchantId,
       entityId,
@@ -203,9 +220,7 @@ export class EcpayShopifyPayoutService {
       '';
 
     if (!expected) {
-      throw new UnauthorizedException(
-        'ECPAY_SYNC_JOB_TOKEN is not configured',
-      );
+      throw new UnauthorizedException('ECPAY_SYNC_JOB_TOKEN is not configured');
     }
 
     if (!providedToken || providedToken !== expected) {
@@ -220,7 +235,7 @@ export class EcpayShopifyPayoutService {
       endDate: string;
       merchantKeys?: string[];
       dateType?: '1' | '2';
-      paymentType?: '01' | '02' | '03' | '11';
+      paymentType?: EcpayPaymentType;
       windowDays?: number;
       maxWindows?: number;
     },
@@ -228,7 +243,11 @@ export class EcpayShopifyPayoutService {
   ) {
     const merchantKeys =
       params.merchantKeys && params.merchantKeys.length
-        ? Array.from(new Set(params.merchantKeys.map((key) => key.trim()).filter(Boolean)))
+        ? Array.from(
+            new Set(
+              params.merchantKeys.map((key) => key.trim()).filter(Boolean),
+            ),
+          )
         : this.merchantProfiles
             .filter((profile) => this.hasApiCredentials(profile))
             .map((profile) => profile.key);
@@ -239,7 +258,10 @@ export class EcpayShopifyPayoutService {
       );
     }
 
-    const { begin, end } = this.parseDateRange(params.beginDate, params.endDate);
+    const { begin, end } = this.parseDateRange(
+      params.beginDate,
+      params.endDate,
+    );
     const windows = this.buildRollingWindows(
       begin,
       end,
@@ -353,7 +375,11 @@ export class EcpayShopifyPayoutService {
   ) {
     const requestedKeys =
       params.merchantKeys && params.merchantKeys.length
-        ? Array.from(new Set(params.merchantKeys.map((key) => key.trim()).filter(Boolean)))
+        ? Array.from(
+            new Set(
+              params.merchantKeys.map((key) => key.trim()).filter(Boolean),
+            ),
+          )
         : this.merchantProfiles
             .filter((profile) => this.hasApiCredentials(profile))
             .map((profile) => profile.key);
@@ -456,8 +482,13 @@ export class EcpayShopifyPayoutService {
   private buildQueries(
     dto: SyncEcpayShopifyPayoutsDto,
     profile: EcpayMerchantProfile,
-  ): EcpayShopifyQuery[] {
+  ): EcpayPayoutQuery[] {
     if (dto.paymentId?.trim()) {
+      if (profile.apiKind !== 'shopify') {
+        throw new BadRequestException(
+          '一般綠界撥款 API 不支援 Shopify PaymentID 單筆查詢。',
+        );
+      }
       return [
         {
           MerchantID: profile.merchantId,
@@ -504,7 +535,7 @@ export class EcpayShopifyPayoutService {
 
     while (cursor <= end) {
       const windowEnd = new Date(
-        Math.min(this.endOfMonth(cursor).getTime(), end.getTime()),
+        Math.min(this.addDays(cursor, 31).getTime(), end.getTime()),
       );
       windows.push({
         beginDate: this.formatDate(cursor),
@@ -534,10 +565,6 @@ export class EcpayShopifyPayoutService {
     return windows;
   }
 
-  private endOfMonth(date: Date) {
-    return new Date(date.getFullYear(), date.getMonth() + 1, 0);
-  }
-
   private assertWindowRange(beginDate: string, endDate: string) {
     const { begin, end } = this.parseDateRange(beginDate, endDate);
     const diffDays = Math.floor(
@@ -558,6 +585,101 @@ export class EcpayShopifyPayoutService {
     ].join('::');
   }
 
+  private async fetchCanonicalRows(
+    queries: EcpayPayoutQuery[],
+    profile: EcpayMerchantProfile,
+  ) {
+    const canonicalRowMap = new Map<string, CanonicalImportRow>();
+    const primaryNegativeOrders = new Set<string>();
+
+    for (const query of queries) {
+      const csvText = await this.fetchCsv(query, profile);
+      this.assertApiResponse(csvText);
+
+      for (const row of this.parseCsv(csvText)) {
+        const canonical = this.toCanonicalImportRow(row, profile.apiKind);
+        if (
+          !(
+            canonical.providerPaymentId ||
+            canonical.providerTradeNo ||
+            canonical.externalOrderId ||
+            canonical.grossAmount
+          )
+        ) {
+          continue;
+        }
+        canonicalRowMap.set(this.buildCanonicalRowKey(canonical), canonical);
+        if (
+          typeof canonical.grossAmount === 'number' &&
+          canonical.grossAmount < 0 &&
+          typeof canonical.externalOrderId === 'string'
+        ) {
+          primaryNegativeOrders.add(canonical.externalOrderId);
+        }
+      }
+
+      if (profile.apiKind === 'trade-media' && 'BeginDate' in query) {
+        const creditCsvText = await this.fetchCreditFundingCsv(query, profile);
+        this.assertApiResponse(creditCsvText);
+
+        for (const row of this.parseCsv(creditCsvText)) {
+          const canonical = this.toCanonicalCreditRefundRow(row);
+          if (
+            typeof canonical.grossAmount !== 'number' ||
+            canonical.grossAmount >= 0
+          ) {
+            continue;
+          }
+          // FundingReconDetail interleaves real records with daily subtotal
+          // rows. Subtotals can carry negative amounts but have no traceable
+          // order, authorization, or transaction date, so they must never be
+          // treated as refunds.
+          if (
+            !canonical.externalOrderId ||
+            !canonical.providerPaymentId ||
+            !canonical.transactionDate
+          ) {
+            continue;
+          }
+          if (
+            typeof canonical.externalOrderId === 'string' &&
+            primaryNegativeOrders.has(canonical.externalOrderId)
+          ) {
+            continue;
+          }
+          canonicalRowMap.set(this.buildCanonicalRowKey(canonical), canonical);
+        }
+      }
+    }
+
+    return Array.from(canonicalRowMap.values());
+  }
+
+  private summarizeCanonicalRows(rows: CanonicalImportRow[]) {
+    const sum = (field: keyof CanonicalImportRow) =>
+      Number(
+        rows
+          .reduce((total, row) => {
+            const value = row[field];
+            return total + (typeof value === 'number' ? value : 0);
+          }, 0)
+          .toFixed(2),
+      );
+
+    return {
+      grossAmount: sum('grossAmount'),
+      feeAmount: sum('feeAmount'),
+      gatewayFeeAmount: sum('gatewayFeeAmount'),
+      processingFeeAmount: sum('processingFeeAmount'),
+      platformFeeAmount: sum('platformFeeAmount'),
+      refundAmount: sum('refundAmount'),
+      netAmount: sum('netAmount'),
+      negativeRowCount: rows.filter(
+        (row) => typeof row.grossAmount === 'number' && row.grossAmount < 0,
+      ).length,
+    };
+  }
+
   private getNetAmount(row: EcpayCsvRow) {
     return (
       this.parseNumber(row['撥款金額']) ??
@@ -569,21 +691,41 @@ export class EcpayShopifyPayoutService {
     );
   }
 
-  private toCanonicalImportRow(row: EcpayCsvRow): CanonicalImportRow {
+  private toCanonicalImportRow(
+    row: EcpayCsvRow,
+    apiKind: EcpayPayoutApiKind,
+  ): CanonicalImportRow {
     const grossAmount = this.parseNumber(row['交易金額']);
-    const gatewayFeeAmount =
+    const explicitGatewayFee =
       this.parseNumber(row['交易手續費']) ??
       this.parseNumber(row['金流手續費']) ??
       this.parseNumber(row['信用卡手續費']);
     const processingFeeAmount =
       this.parseNumber(row['金流處理費']) ??
       this.parseNumber(row['處理費']) ??
-      this.parseNumber(row['服務費']);
+      this.parseNumber(row['交易處理費']);
     const platformFeeAmount =
-      this.parseNumber(row['平台手續費']) ??
-      this.parseNumber(row['平台費']);
-    const fallbackFee =
-      this.parseNumber(row['手續費']) ?? this.parseNumber(row['交易手續費']);
+      this.parseNumber(row['平台手續費']) ?? this.parseNumber(row['平台費']);
+    const serviceFee = this.parseNumber(row['服務費']);
+    const reportedShopifyTotalFee =
+      apiKind === 'shopify' ? this.parseNumber(row['手續費']) : null;
+    const uiGatewayFee =
+      serviceFee !== null ? this.parseNumber(row['手續費']) : null;
+    const derivedShopifyGatewayFee =
+      reportedShopifyTotalFee !== null && processingFeeAmount !== null
+        ? Number(
+            (
+              reportedShopifyTotalFee -
+              processingFeeAmount -
+              (platformFeeAmount ?? 0)
+            ).toFixed(2),
+          )
+        : null;
+    const gatewayFeeAmount =
+      (apiKind === 'trade-media' ? this.parseNumber(row['手續費']) : null) ??
+      explicitGatewayFee ??
+      uiGatewayFee ??
+      derivedShopifyGatewayFee;
     const splitFeeTotal = [
       gatewayFeeAmount,
       processingFeeAmount,
@@ -591,30 +733,35 @@ export class EcpayShopifyPayoutService {
     ]
       .filter((value): value is number => value !== null)
       .reduce((sum, value) => sum + value, 0);
-    const totalFee =
-      splitFeeTotal > 0 ? splitFeeTotal : (fallbackFee ?? 0);
     const refundAmount = this.parseNumber(row['退款金額']) ?? 0;
+    const reportedNetAmount = this.getNetAmount(row);
+    const derivedTotalFee =
+      grossAmount !== null && reportedNetAmount !== null
+        ? Number((grossAmount - refundAmount - reportedNetAmount).toFixed(2))
+        : null;
+    const totalFee =
+      serviceFee ?? reportedShopifyTotalFee ?? derivedTotalFee ?? splitFeeTotal;
     const netAmount =
-      this.getNetAmount(row) ??
+      reportedNetAmount ??
       (grossAmount === null
         ? null
         : Number((grossAmount - totalFee - refundAmount).toFixed(2)));
 
     return {
-      externalOrderId: row['廠商訂單編號'] || null,
-      providerTradeNo: row['綠界交易編號'] || row['TradeNo'] || null,
+      externalOrderId: row['特店交易編號'] || row['廠商訂單編號'] || null,
+      providerTradeNo:
+        row['綠界交易編號'] || row['綠界訂單編號'] || row['TradeNo'] || null,
       providerPaymentId: row['PaymentID'] || row['payment_id'] || null,
       statementDate: row['結算日期'] || row['報表日期'] || null,
-      payoutDate: row['撥款日期'] || row['入帳日期'] || null,
-      gateway: row['付款方式'] || null,
+      payoutDate:
+        row['撥款日期'] || row['撥款入帳日期'] || row['入帳日期'] || null,
+      gateway: row['付款方式'] || row['項目'] || null,
       payoutStatus: row['撥款狀態'] || row['結算狀態'] || null,
       currency: 'TWD',
       grossAmount,
       feeAmount: Number(totalFee.toFixed(2)),
       gatewayFeeAmount:
-        gatewayFeeAmount === null
-          ? null
-          : Number(gatewayFeeAmount.toFixed(2)),
+        gatewayFeeAmount === null ? null : Number(gatewayFeeAmount.toFixed(2)),
       processingFeeAmount:
         processingFeeAmount === null
           ? null
@@ -626,9 +773,27 @@ export class EcpayShopifyPayoutService {
       netAmount,
       refundAmount: Number(refundAmount.toFixed(2)),
       processingFee: processingFeeAmount,
-      transactionDate: row['交易日期'] || null,
-      feeRate: row['手續費率'] || null,
+      transactionDate: row['交易日期'] || row['訂單日期'] || null,
+      feeRate: row['手續費率'] || row['費率'] || null,
     };
+  }
+
+  private toCanonicalCreditRefundRow(row: EcpayCsvRow): CanonicalImportRow {
+    return this.toCanonicalImportRow(
+      {
+        廠商訂單編號: row['訂單編號'] || '',
+        PaymentID: row['授權單號'] || '',
+        交易日期: row['交易日期'] || '',
+        付款方式: '信用卡',
+        交易金額: row['交易金額'] || '',
+        手續費: row['手續費'] || '',
+        交易處理費: row['交易處理費'] || '',
+        撥款金額: row['撥款金額'] || '',
+        撥款狀態: '已撥款',
+        費率: row['%數'] || '',
+      },
+      'trade-media',
+    );
   }
 
   private parseNumber(value?: string) {
@@ -645,38 +810,38 @@ export class EcpayShopifyPayoutService {
     return Number.isFinite(parsed) ? parsed : null;
   }
 
-  private buildVirtualFileName(queries: EcpayShopifyQuery[]) {
+  private buildVirtualFileName(queries: EcpayPayoutQuery[]) {
     if (queries.length === 1 && 'PaymentID' in queries[0]) {
       return `ecpay-shopify-payment-${queries[0].PaymentID}.csv`;
     }
 
     const dateQueries = queries.filter(
-      (query): query is Extract<EcpayShopifyQuery, { BeginDate: string }> =>
+      (query): query is Extract<EcpayPayoutQuery, { BeginDate: string }> =>
         'BeginDate' in query,
     );
     const beginDate = dateQueries[0]?.BeginDate || this.formatDate(new Date());
-    const endDate =
-      dateQueries[dateQueries.length - 1]?.EndDate || beginDate;
+    const endDate = dateQueries[dateQueries.length - 1]?.EndDate || beginDate;
 
-    return `ecpay-shopify-${beginDate}-${endDate}.csv`;
+    return `ecpay-payout-${beginDate}-${endDate}.csv`;
   }
 
   private buildBatchNotes(
-    queries: EcpayShopifyQuery[],
+    queries: EcpayPayoutQuery[],
     profile: EcpayMerchantProfile,
   ) {
     if (queries.length === 1 && 'PaymentID' in queries[0]) {
-      return `source=ecpay.shopify-api; merchantKey=${profile.key}; merchantId=${profile.merchantId}; paymentId=${queries[0].PaymentID}`;
+      return `source=${this.getSourceName(profile)}; merchantKey=${profile.key}; merchantId=${profile.merchantId}; paymentId=${queries[0].PaymentID}`;
     }
 
     const dateQueries = queries.filter(
-      (query): query is Extract<EcpayShopifyQuery, { BeginDate: string }> =>
+      (query): query is Extract<EcpayPayoutQuery, { BeginDate: string }> =>
         'BeginDate' in query,
     );
     const firstQuery = dateQueries[0];
     const lastQuery = dateQueries[dateQueries.length - 1];
     const parts = [
-      'source=ecpay.shopify-api',
+      `source=${this.getSourceName(profile)}`,
+      `apiKind=${profile.apiKind}`,
       `merchantKey=${profile.key}`,
       `merchantId=${profile.merchantId}`,
       `windowCount=${dateQueries.length}`,
@@ -692,11 +857,15 @@ export class EcpayShopifyPayoutService {
   }
 
   private async fetchCsv(
-    query: EcpayShopifyQuery,
+    query: EcpayPayoutQuery,
     profile: EcpayMerchantProfile,
   ) {
     if ('BeginDate' in query) {
       this.assertWindowRange(query.BeginDate, query.EndDate);
+    }
+
+    if (profile.apiKind === 'trade-media') {
+      return this.fetchTradeMediaCsv(query, profile);
     }
 
     const encryptedData = this.encryptData(query, profile);
@@ -717,14 +886,115 @@ export class EcpayShopifyPayoutService {
     const text = await response.text();
     if (!response.ok) {
       throw new ServiceUnavailableException(
-        `綠界 Shopify 對帳 API 失敗 (${response.status})`,
+        `綠界撥款對帳 API 失敗 (${response.status})`,
       );
     }
 
     return text;
   }
 
-  private encryptData(query: EcpayShopifyQuery, profile: EcpayMerchantProfile) {
+  private async fetchTradeMediaCsv(
+    query: EcpayPayoutQuery,
+    profile: EcpayMerchantProfile,
+  ) {
+    if (!('BeginDate' in query)) {
+      throw new BadRequestException(
+        '綠界特店對帳媒體 API 不支援 Shopify PaymentID 單筆查詢。',
+      );
+    }
+
+    const requestFields: Record<string, string> = {
+      MerchantID: profile.merchantId,
+      DateType: query.DateType === '2' ? '4' : '2',
+      BeginDate: query.BeginDate,
+      EndDate: query.EndDate,
+      MediaFormated: '2',
+      CharSet: '2',
+    };
+    if (query.PaymentType) {
+      requestFields.PaymentType = query.PaymentType;
+    }
+    requestFields.CheckMacValue = this.createCheckMacValue(
+      requestFields,
+      profile,
+    );
+
+    const response = await fetch(profile.apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams(requestFields).toString(),
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      throw new ServiceUnavailableException(
+        `綠界特店對帳媒體 API 失敗 (${response.status})`,
+      );
+    }
+
+    return text;
+  }
+
+  private async fetchCreditFundingCsv(
+    query: Extract<EcpayPayoutQuery, { BeginDate: string }>,
+    profile: EcpayMerchantProfile,
+  ) {
+    const requestFields: Record<string, string> = {
+      MerchantID: profile.merchantId,
+      PayDateType: query.DateType === '2' ? 'enter' : 'fund',
+      StartDate: query.BeginDate,
+      EndDate: query.EndDate,
+      CharSet: '2',
+    };
+    requestFields.CheckMacValue = this.createCheckMacValue(
+      requestFields,
+      profile,
+    );
+
+    const response = await fetch(
+      profile.creditApiUrl ||
+        'https://payment.ecpay.com.tw/CreditDetail/FundingReconDetail',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(requestFields).toString(),
+      },
+    );
+    const text = await response.text();
+    if (!response.ok) {
+      throw new ServiceUnavailableException(
+        `綠界信用卡撥款對帳 API 失敗 (${response.status})`,
+      );
+    }
+
+    return text;
+  }
+
+  private createCheckMacValue(
+    fields: Record<string, string>,
+    profile: EcpayMerchantProfile,
+  ) {
+    const sorted = Object.entries(fields)
+      .filter(([key]) => key.toLowerCase() !== 'checkmacvalue')
+      .sort(([left], [right]) =>
+        left.toLowerCase().localeCompare(right.toLowerCase()),
+      )
+      .map(([key, value]) => `${key}=${value}`)
+      .join('&');
+    const source = `HashKey=${profile.hashKey}&${sorted}&HashIV=${profile.hashIv}`;
+    const encoded = encodeURIComponent(source)
+      .replace(/%20/g, '+')
+      .replace(/~/g, '%7E')
+      .replace(/'/g, '%27')
+      .toLowerCase();
+
+    return createHash('sha256').update(encoded).digest('hex').toUpperCase();
+  }
+
+  private encryptData(query: EcpayPayoutQuery, profile: EcpayMerchantProfile) {
     const encoded = encodeURIComponent(JSON.stringify(query));
     const cipher = createCipheriv(
       'aes-128-cbc',
@@ -740,12 +1010,11 @@ export class EcpayShopifyPayoutService {
   private assertApiResponse(csvText: string) {
     const text = csvText.trim();
     if (!text) {
-      throw new InternalServerErrorException(
-        '綠界 Shopify 對帳 API 回傳空白內容。',
-      );
+      throw new InternalServerErrorException('綠界撥款對帳 API 回傳空白內容。');
     }
 
     if (
+      text.includes('ip_not_whitelisted') ||
       text.includes(
         "Please check if the downloaded IP is the same as the settings on merchant's dashboard.",
       )
@@ -753,6 +1022,22 @@ export class EcpayShopifyPayoutService {
       throw new BadRequestException(
         '綠界已拒絕目前的來源 IP。請先把 Cloud Run 對外出口靜態 IP 加到綠界後台白名單。',
       );
+    }
+
+    if (text.startsWith('{')) {
+      try {
+        const payload = JSON.parse(text) as Record<string, unknown>;
+        const code = payload.TransCode || payload.RtnCode || 'unknown';
+        const message = payload.TransMsg || payload.RtnMsg || '未知錯誤';
+        throw new BadRequestException(
+          `綠界撥款對帳 API 拒絕查詢 (${String(code)}): ${String(message)}`,
+        );
+      } catch (error) {
+        if (error instanceof BadRequestException) {
+          throw error;
+        }
+        throw new BadRequestException('綠界撥款對帳 API 回傳非預期格式。');
+      }
     }
   }
 
@@ -837,6 +1122,13 @@ export class EcpayShopifyPayoutService {
 
     value = value.replace(/""/g, '"').trim();
 
+    // ECPay Trade Media V3 prefixes unquoted numeric and identifier cells with
+    // "=" (for example =790) so spreadsheet applications preserve the value.
+    // Normalize that transport wrapper before any identifier or amount parsing.
+    if (value.startsWith('=')) {
+      value = value.slice(1).trim();
+    }
+
     if (value === '-') {
       return '';
     }
@@ -889,6 +1181,24 @@ export class EcpayShopifyPayoutService {
     );
   }
 
+  private inferApiKind(apiUrl: string): EcpayPayoutApiKind {
+    if (apiUrl.includes('/PaymentMedia/TradeNoAio')) {
+      return 'trade-media';
+    }
+    return apiUrl.includes('/1.0.0/Cashier/QueryTradeMedia')
+      ? 'general'
+      : 'shopify';
+  }
+
+  private getSourceName(profile: EcpayMerchantProfile) {
+    if (profile.apiKind === 'trade-media') {
+      return 'ecpay.trade-media-api';
+    }
+    return profile.apiKind === 'general'
+      ? 'ecpay.general-payout-api'
+      : 'ecpay.shopify-api';
+  }
+
   private getLegacyProfile(): EcpayMerchantProfile | null {
     const merchantId =
       this.configService.get<string>('ECPAY_SHOPIFY_MERCHANT_ID', '') || '';
@@ -914,6 +1224,7 @@ export class EcpayShopifyPayoutService {
       hashKey: hashKey.trim(),
       hashIv: hashIv.trim(),
       apiUrl: this.getDefaultApiUrl(),
+      apiKind: 'shopify',
       entityId:
         this.configService.get<string>('SHOPIFY_DEFAULT_ENTITY_ID', '') || '',
       syncEnabled: this.isTruthy(
@@ -929,7 +1240,8 @@ export class EcpayShopifyPayoutService {
 
   private loadMerchantProfiles() {
     const profiles: EcpayMerchantProfile[] = [];
-    const raw = this.configService.get<string>('ECPAY_MERCHANTS_JSON', '') || '';
+    const raw =
+      this.configService.get<string>('ECPAY_MERCHANTS_JSON', '') || '';
 
     if (raw.trim()) {
       try {
@@ -937,7 +1249,9 @@ export class EcpayShopifyPayoutService {
         if (Array.isArray(parsed)) {
           for (const item of parsed) {
             const merchantId =
-              typeof item?.merchantId === 'string' ? item.merchantId.trim() : '';
+              typeof item?.merchantId === 'string'
+                ? item.merchantId.trim()
+                : '';
             const hashKey =
               typeof item?.hashKey === 'string' ? item.hashKey.trim() : '';
             const hashIv =
@@ -952,6 +1266,17 @@ export class EcpayShopifyPayoutService {
                 ? item.lookbackDays
                 : Number(item?.lookbackDays || 90);
 
+            const configuredApiUrl =
+              typeof item?.apiUrl === 'string' && item.apiUrl.trim()
+                ? item.apiUrl.trim()
+                : this.getDefaultApiUrl();
+            const apiKind: EcpayPayoutApiKind =
+              item?.apiKind === 'trade-media' ||
+              item?.apiKind === 'general' ||
+              item?.apiKind === 'shopify'
+                ? item.apiKind
+                : this.inferApiKind(configuredApiUrl);
+
             profiles.push({
               key:
                 typeof item?.key === 'string' && item.key.trim()
@@ -960,10 +1285,12 @@ export class EcpayShopifyPayoutService {
               merchantId,
               hashKey,
               hashIv,
-              apiUrl:
-                typeof item?.apiUrl === 'string' && item.apiUrl.trim()
-                  ? item.apiUrl.trim()
-                  : this.getDefaultApiUrl(),
+              apiUrl: configuredApiUrl,
+              apiKind,
+              creditApiUrl:
+                typeof item?.creditApiUrl === 'string'
+                  ? item.creditApiUrl.trim()
+                  : '',
               entityId:
                 typeof item?.entityId === 'string' ? item.entityId.trim() : '',
               syncEnabled: this.isTruthy(item?.syncEnabled),
@@ -992,7 +1319,8 @@ export class EcpayShopifyPayoutService {
       legacy &&
       !profiles.some(
         (profile) =>
-          profile.key === legacy.key || profile.merchantId === legacy.merchantId,
+          profile.key === legacy.key ||
+          profile.merchantId === legacy.merchantId,
       )
     ) {
       profiles.unshift(legacy);

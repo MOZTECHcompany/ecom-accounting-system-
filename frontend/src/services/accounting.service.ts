@@ -1,11 +1,10 @@
 import api from './api'
 import { Account } from '../types'
-
-const DEFAULT_ENTITY_ID = import.meta.env.VITE_DEFAULT_ENTITY_ID?.trim() || 'tw-entity-001'
+import { resolveEntityId } from './entities.service'
 
 export const accountingService = {
   async getAccounts(entityId?: string): Promise<Account[]> {
-    const effectiveEntityId = entityId?.trim() || DEFAULT_ENTITY_ID
+    const effectiveEntityId = await resolveEntityId(entityId)
     const response = await api.get<Account[]>('/accounting/accounts', {
       params: { entityId: effectiveEntityId },
     })
@@ -18,7 +17,7 @@ export const accountingService = {
   },
 
   async getPeriods(entityId?: string, status?: string): Promise<AccountingPeriod[]> {
-    const effectiveEntityId = entityId?.trim() || DEFAULT_ENTITY_ID
+    const effectiveEntityId = await resolveEntityId(entityId)
     const response = await api.get<AccountingPeriod[]>('/accounting/periods', {
       params: { entityId: effectiveEntityId, status },
     })
@@ -26,7 +25,7 @@ export const accountingService = {
   },
 
   async getJournals(entityId?: string, periodId?: string): Promise<JournalEntry[]> {
-    const effectiveEntityId = entityId?.trim() || DEFAULT_ENTITY_ID
+    const effectiveEntityId = await resolveEntityId(entityId)
     const response = await api.get<JournalEntry[]>('/accounting/journals', {
       params: { entityId: effectiveEntityId, periodId },
     })
@@ -46,7 +45,7 @@ export const accountingService = {
       memo?: string
     }>
   }): Promise<JournalEntry> {
-    const effectiveEntityId = data.entityId?.trim() || DEFAULT_ENTITY_ID
+    const effectiveEntityId = await resolveEntityId(data.entityId)
     const response = await api.post<JournalEntry>('/accounting/journals', {
       ...data,
       entityId: effectiveEntityId,
@@ -70,7 +69,7 @@ export const accountingService = {
   },
 
   async getIncomeStatement(startDate: string, endDate: string, entityId?: string): Promise<IncomeStatement> {
-    const effectiveEntityId = entityId?.trim() || DEFAULT_ENTITY_ID
+    const effectiveEntityId = await resolveEntityId(entityId)
     const response = await api.get<IncomeStatement>('/accounting/reports/income-statement', {
       params: { entityId: effectiveEntityId, startDate, endDate },
     })
@@ -78,7 +77,7 @@ export const accountingService = {
   },
 
   async getBalanceSheet(asOfDate: string, entityId?: string): Promise<BalanceSheet> {
-    const effectiveEntityId = entityId?.trim() || DEFAULT_ENTITY_ID
+    const effectiveEntityId = await resolveEntityId(entityId)
     const response = await api.get<BalanceSheet>('/accounting/reports/balance-sheet', {
       params: { entityId: effectiveEntityId, asOfDate },
     })
@@ -86,7 +85,7 @@ export const accountingService = {
   },
 
   async getTrialBalance(asOfDate: string, entityId?: string): Promise<TrialBalance> {
-    const effectiveEntityId = entityId?.trim() || DEFAULT_ENTITY_ID
+    const effectiveEntityId = await resolveEntityId(entityId)
     const response = await api.get<TrialBalance>('/accounting/reports/trial-balance', {
       params: { entityId: effectiveEntityId, asOfDate },
     })
@@ -99,15 +98,16 @@ export const accountingService = {
     entityId?: string,
     accountId?: string,
   ): Promise<GeneralLedger> {
-    const effectiveEntityId = entityId?.trim() || DEFAULT_ENTITY_ID
+    const effectiveEntityId = await resolveEntityId(entityId)
     const response = await api.get<GeneralLedger>('/accounting/reports/general-ledger', {
       params: { entityId: effectiveEntityId, startDate, endDate, accountId },
     })
     return response.data
   },
 
-  async analyzeReport(data: { entityId: string; startDate: string; endDate: string; context?: string }): Promise<any> {
-    const response = await api.post('/reports/analyze', data)
+  async analyzeReport(data: { entityId?: string; startDate: string; endDate: string; context?: string }): Promise<any> {
+    const entityId = await resolveEntityId(data.entityId)
+    const response = await api.post('/reports/analyze', { ...data, entityId })
     return response.data
   },
 
@@ -178,7 +178,9 @@ export interface BalanceSheet {
   totalAssets: number
   totalLiabilities: number
   totalEquity: number
-  calculatedRetainedEarnings: number
+  difference: number
+  balanced: boolean
+  calculatedRetainedEarnings: number | null
 }
 
 export interface TrialBalanceItem {

@@ -315,12 +315,18 @@ export class MetaAdsService {
       channelCode: row.rawAccount?.channelCode || null,
       dateStart: row.date_start || null,
       dateStop: row.date_stop || null,
+      currency: row.rawAccount?.currency || null,
       spend: this.toNumber(row.spend),
       impressions: this.toNumber(row.impressions),
       clicks: this.toNumber(row.clicks),
       ctr: this.toNumber(row.ctr),
       cpc: this.toNumber(row.cpc),
       cpm: this.toNumber(row.cpm),
+      actions: Array.isArray(row.actions) ? row.actions : [],
+      actionValues: Array.isArray(row.action_values) ? row.action_values : [],
+      purchaseRoas: Array.isArray(row.purchase_roas)
+        ? row.purchase_roas
+        : [],
     };
   }
 

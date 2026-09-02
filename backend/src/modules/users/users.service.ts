@@ -11,8 +11,27 @@ import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import {
+  DataAccessModule,
+  DataAccessScope,
+  EntityAccessService,
+  UserDataAccessContext,
+} from '../../common/entity-access/entity-access.service';
 
 const USER_INCLUDE = {
+  entityMemberships: {
+    orderBy: [{ isPrimary: 'desc' }, { entityId: 'asc' }],
+    include: {
+      entity: {
+        select: {
+          id: true,
+          loginCode: true,
+          name: true,
+          isActive: true,
+        },
+      },
+    },
+  },
   roles: {
     include: {
       role: {
@@ -33,25 +52,6 @@ type UserWithRelations = Prisma.UserGetPayload<{
 }>;
 
 type PrismaClientOrTx = PrismaService | Prisma.TransactionClient;
-type DataAccessScope = 'SELF' | 'DEPARTMENT' | 'ENTITY';
-type DataAccessModule =
-  | 'employees'
-  | 'attendance'
-  | 'payroll'
-  | 'accounting'
-  | 'inventory'
-  | 'sales'
-  | 'purchasing'
-  | 'banking';
-
-type UserDataAccessContext = {
-  scope: DataAccessScope;
-  entityId: string;
-  employeeId: string | null;
-  departmentId: string | null;
-  noAccess: boolean;
-};
-
 /**
  * UsersService
  * 使用者服務，處理使用者相關的資料庫操作
@@ -61,28 +61,10 @@ export class UsersService {
   private readonly logger = new Logger(UsersService.name);
   private readonly SALT_ROUNDS = 10;
 
-  constructor(private readonly prisma: PrismaService) {}
-
-  private readonly dataScopeFields: Record<
-    DataAccessModule,
-    | 'employeeDataScope'
-    | 'attendanceDataScope'
-    | 'payrollDataScope'
-    | 'accountingDataScope'
-    | 'inventoryDataScope'
-    | 'salesDataScope'
-    | 'purchasingDataScope'
-    | 'bankingDataScope'
-  > = {
-    employees: 'employeeDataScope',
-    attendance: 'attendanceDataScope',
-    payroll: 'payrollDataScope',
-    accounting: 'accountingDataScope',
-    inventory: 'inventoryDataScope',
-    sales: 'salesDataScope',
-    purchasing: 'purchasingDataScope',
-    banking: 'bankingDataScope',
-  };
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly entityAccessService: EntityAccessService,
+  ) {}
 
   private normalizeDataScope(value?: string | null): DataAccessScope {
     return value === 'DEPARTMENT' || value === 'ENTITY' ? value : 'SELF';
@@ -306,6 +288,7 @@ export class UsersService {
       password,
       name,
       roleIds = [],
+      entityIds = [],
       mustChangePassword,
       employeeDataScope,
       attendanceDataScope,
@@ -333,6 +316,7 @@ export class UsersService {
         if (roleIds.length > 0) {
           await this.ensureRoleIdsExist(roleIds, tx);
         }
+        await this.ensureEntityIdsExist(entityIds, tx);
 
         const user = await tx.user.create({
           data: {
@@ -354,6 +338,17 @@ export class UsersService {
         if (roleIds.length > 0) {
           await tx.userRole.createMany({
             data: roleIds.map((roleId) => ({ userId: user.id, roleId })),
+            skipDuplicates: true,
+          });
+        }
+
+        if (entityIds.length > 0) {
+          await tx.userEntityMembership.createMany({
+            data: entityIds.map((entityId, index) => ({
+              userId: user.id,
+              entityId,
+              isPrimary: index === 0,
+            })),
             skipDuplicates: true,
           });
         }
@@ -397,6 +392,7 @@ export class UsersService {
       salesDataScope,
       purchasingDataScope,
       bankingDataScope,
+      entityIds,
     } = dto;
 
     if (
@@ -411,7 +407,8 @@ export class UsersService {
       typeof inventoryDataScope === 'undefined' &&
       typeof salesDataScope === 'undefined' &&
       typeof purchasingDataScope === 'undefined' &&
-      typeof bankingDataScope === 'undefined'
+      typeof bankingDataScope === 'undefined' &&
+      typeof entityIds === 'undefined'
     ) {
       throw new BadRequestException('No updates provided');
     }
@@ -459,10 +456,30 @@ export class UsersService {
     }
 
     try {
-      const updated = await this.prisma.user.update({
-        where: { id },
-        data,
-        include: USER_INCLUDE,
+      const updated = await this.prisma.$transaction(async (tx) => {
+        if (typeof entityIds !== 'undefined') {
+          await this.ensureEntityIdsExist(entityIds, tx);
+        }
+
+        await tx.user.update({ where: { id }, data });
+
+        if (typeof entityIds !== 'undefined') {
+          await tx.userEntityMembership.deleteMany({ where: { userId: id } });
+          if (entityIds.length > 0) {
+            await tx.userEntityMembership.createMany({
+              data: entityIds.map((entityId, index) => ({
+                userId: id,
+                entityId,
+                isPrimary: index === 0,
+              })),
+            });
+          }
+        }
+
+        return tx.user.findUnique({
+          where: { id },
+          include: USER_INCLUDE,
+        });
       });
 
       this.logger.log(`Updated user ${id}`);
@@ -640,63 +657,11 @@ export class UsersService {
     module: DataAccessModule,
     requestedEntityId?: string,
   ): Promise<UserDataAccessContext> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        employeeDataScope: true,
-        attendanceDataScope: true,
-        payrollDataScope: true,
-        accountingDataScope: true,
-        inventoryDataScope: true,
-        salesDataScope: true,
-        purchasingDataScope: true,
-        bankingDataScope: true,
-        employee: {
-          select: {
-            id: true,
-            entityId: true,
-            departmentId: true,
-          },
-        },
-      },
-    });
-
-    if (!user) {
-      throw new NotFoundException(`User with ID ${userId} not found`);
-    }
-
-    const scope = this.normalizeDataScope(user[this.dataScopeFields[module]]);
-
-    const fallbackEntity = await this.prisma.entity.findFirst({
-      orderBy: { id: 'asc' },
-      select: { id: true },
-    });
-
-    if (!fallbackEntity && !requestedEntityId && !user.employee?.entityId) {
-      throw new NotFoundException('No entity configured');
-    }
-
-    const entityId =
-      requestedEntityId || user.employee?.entityId || fallbackEntity?.id || '';
-
-    const noAccess =
-      scope === 'SELF'
-        ? !user.employee?.id ||
-          (Boolean(requestedEntityId) &&
-            requestedEntityId !== user.employee?.entityId)
-        : scope === 'DEPARTMENT'
-          ? !user.employee?.departmentId ||
-            (Boolean(requestedEntityId) &&
-              requestedEntityId !== user.employee?.entityId)
-          : false;
-
-    return {
-      scope,
-      entityId,
-      employeeId: user.employee?.id || null,
-      departmentId: user.employee?.departmentId || null,
-      noAccess,
-    };
+    return this.entityAccessService.getContext(
+      userId,
+      module,
+      requestedEntityId,
+    );
   }
 
   /**
@@ -826,6 +791,29 @@ export class UsersService {
 
     if (missing.length > 0) {
       throw new BadRequestException(`Roles not found: ${missing.join(', ')}`);
+    }
+  }
+
+  private async ensureEntityIdsExist(
+    entityIds: string[],
+    db: PrismaClientOrTx,
+  ) {
+    if (!entityIds.length) {
+      return;
+    }
+
+    const uniqueEntityIds = Array.from(new Set(entityIds));
+    const entities = await db.entity.findMany({
+      where: { id: { in: uniqueEntityIds }, isActive: true },
+      select: { id: true },
+    });
+    const foundIds = new Set(entities.map((entity) => entity.id));
+    const missing = uniqueEntityIds.filter((id) => !foundIds.has(id));
+
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `Active companies not found: ${missing.join(', ')}`,
+      );
     }
   }
 

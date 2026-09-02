@@ -112,9 +112,6 @@ const JournalEntriesPage: React.FC = () => {
           <Title level={2} className="!text-gray-800 font-light tracking-tight !mb-1">
             會計分錄
           </Title>
-          <Text className="text-gray-500">
-            查看系統已產生的營收、撥款、薪資與人工分錄，確認每筆交易是否已落帳。
-          </Text>
         </div>
         <Space wrap>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>

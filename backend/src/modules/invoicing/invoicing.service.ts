@@ -5,6 +5,7 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { PreviewInvoiceDto } from './dto/preview-invoice.dto';
@@ -13,6 +14,9 @@ import { Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { EcpayEinvoiceAdapter } from './adapters/ecpay-einvoice.adapter';
 import { SalesOrderService } from '../sales/services/sales-order.service';
+import { isReceivedPaymentStatus } from '../integration/payment-integrity';
+import { canonicalSalesOrderWhere } from '../integration/sales-order-integrity';
+import { buildInvoiceOrderStateWhere } from './invoice-order-state';
 
 /**
  * InvoicingService
@@ -138,7 +142,9 @@ export class InvoicingService {
           const pageRows = Array.isArray(response.invoiceData)
             ? response.invoiceData
             : [];
-          rows.push(...(pageRows as Record<string, string | number | boolean | null>[]));
+          rows.push(
+            ...(pageRows as Record<string, string | number | boolean | null>[]),
+          );
           totalCount = Number(response.totalCount || totalCount || 0);
           pagesFetched = page;
 
@@ -147,14 +153,15 @@ export class InvoicingService {
           }
         }
 
-        const importResult = await this.salesOrderService.importEcpayIssuedInvoices({
-          entityId,
-          merchantKey: merchant.merchantKey,
-          merchantId: merchant.merchantId,
-          markIssued: true,
-          dryRun: options.dryRun === true,
-          rows,
-        });
+        const importResult =
+          await this.salesOrderService.importEcpayIssuedInvoices({
+            entityId,
+            merchantKey: merchant.merchantKey,
+            merchantId: merchant.merchantId,
+            markIssued: true,
+            dryRun: options.dryRun === true,
+            rows,
+          });
 
         fetched += rows.length;
         matched += importResult.matched || 0;
@@ -193,6 +200,62 @@ export class InvoicingService {
       invalid,
       results,
     };
+  }
+
+  assertEcpayInvoiceSyncToken(providedToken?: string | null) {
+    const expected =
+      process.env.ECPAY_EINVOICE_SYNC_JOB_TOKEN?.trim() ||
+      process.env.SHOPIFY_SYNC_JOB_TOKEN?.trim() ||
+      '';
+
+    if (!expected) {
+      throw new BadRequestException(
+        'ECPAY_EINVOICE_SYNC_JOB_TOKEN is not configured',
+      );
+    }
+    if (!providedToken || providedToken !== expected) {
+      throw new UnauthorizedException('Invalid invoice sync token');
+    }
+  }
+
+  async autoSyncRecentEcpayInvoices(options?: {
+    entityId?: string;
+    lookbackDays?: number;
+  }) {
+    if (process.env.ECPAY_EINVOICE_SYNC_ENABLED !== 'true') {
+      return {
+        success: true,
+        skipped: true,
+        reason: 'ECPAY_EINVOICE_SYNC_ENABLED is false',
+      };
+    }
+
+    const lookbackDays = Math.min(
+      Math.max(
+        Math.floor(
+          Number(
+            options?.lookbackDays ||
+              process.env.ECPAY_EINVOICE_SYNC_LOOKBACK_DAYS ||
+              7,
+          ),
+        ),
+        1,
+      ),
+      62,
+    );
+    const end = new Date();
+    const begin = new Date(end);
+    begin.setDate(begin.getDate() - (lookbackDays - 1));
+
+    return this.syncEcpayInvoiceListToOrders({
+      entityId:
+        options?.entityId?.trim() ||
+        process.env.ECPAY_EINVOICE_DEFAULT_ENTITY_ID?.trim() ||
+        'tw-entity-001',
+      beginDate: this.formatInvoiceDate(begin),
+      endDate: this.formatInvoiceDate(end),
+      dryRun: false,
+    });
   }
 
   async queryEcpayGovInvoiceWordSettings(options: {
@@ -910,59 +973,40 @@ export class InvoicingService {
           }
         : undefined;
 
-    const [orders, issuedAgg, voidAgg] = await Promise.all([
+    const stateWhere = buildInvoiceOrderStateWhere(entityId, orderDate);
+    const orderInclude = this.getInvoiceQueueOrderInclude();
+
+    const [
+      eligibleOrders,
+      waitingOrders,
+      completedOrders,
+      completedOrderCount,
+      eligibleCount,
+      waitingPaymentCount,
+      issuedAgg,
+      voidAgg,
+    ] = await Promise.all([
       this.prisma.salesOrder.findMany({
-        where: {
-          entityId,
-          status: {
-            notIn: ['cancelled', 'refunded'],
-          },
-          ...(orderDate ? { orderDate } : {}),
-        },
-        include: {
-          customer: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-          channel: {
-            select: {
-              code: true,
-              name: true,
-            },
-          },
-          payments: {
-            orderBy: {
-              payoutDate: 'desc',
-            },
-            select: {
-              id: true,
-              payoutDate: true,
-              status: true,
-              reconciledFlag: true,
-              amountNetOriginal: true,
-              notes: true,
-            },
-          },
-          invoices: {
-            orderBy: {
-              createdAt: 'desc',
-            },
-            select: {
-              id: true,
-              invoiceNumber: true,
-              status: true,
-              issuedAt: true,
-            },
-          },
-        },
-        orderBy: {
-          orderDate: 'desc',
-        },
-        take: normalizedLimit * 4,
+        where: stateWhere.eligible,
+        include: orderInclude,
+        orderBy: [{ orderDate: 'asc' }, { id: 'asc' }],
+        take: normalizedLimit,
       }),
+      this.prisma.salesOrder.findMany({
+        where: stateWhere.waitingPayment,
+        include: orderInclude,
+        orderBy: [{ orderDate: 'asc' }, { id: 'asc' }],
+        take: normalizedLimit,
+      }),
+      this.prisma.salesOrder.findMany({
+        where: stateWhere.completed,
+        include: orderInclude,
+        orderBy: [{ orderDate: 'desc' }, { id: 'asc' }],
+        take: normalizedLimit,
+      }),
+      this.prisma.salesOrder.count({ where: stateWhere.completed }),
+      this.prisma.salesOrder.count({ where: stateWhere.eligible }),
+      this.prisma.salesOrder.count({ where: stateWhere.waitingPayment }),
       this.prisma.invoice.aggregate({
         where: {
           entityId,
@@ -988,81 +1032,17 @@ export class InvoicingService {
       }),
     ]);
 
-    const items = orders
-      .map((order) => {
-        const latestPayment = order.payments[0] || null;
-        const latestInvoice = order.invoices[0] || null;
-        const paymentCompleted = order.payments.some((payment) =>
-          ['completed', 'success'].includes(
-            (payment.status || '').toLowerCase(),
-          ),
-        );
-        const reconciled = order.payments.some(
-          (payment) => payment.reconciledFlag,
-        );
-        const journalLinked = order.payments.some((payment) =>
-          (payment.notes || '').includes('journalEntryId='),
-        );
-        const latestPaymentStatus =
-          latestPayment?.status?.toLowerCase() || 'pending';
-        const invoiceStatus = order.hasInvoice
-          ? 'completed'
-          : paymentCompleted || reconciled
-            ? 'eligible'
-            : 'waiting_payment';
-        const reason = order.hasInvoice
-          ? '訂單已開立正式發票'
-          : paymentCompleted || reconciled
-            ? '已付款或已對帳，可進入批次開票'
-            : '尚未完成付款或撥款對帳，暫不建議開立';
-
-        return {
-          orderId: order.id,
-          externalOrderId: order.externalOrderId || null,
-          orderDate: order.orderDate.toISOString(),
-          channelCode: order.channel?.code || null,
-          channelName: order.channel?.name || null,
-          customerName: order.customer?.name || '散客',
-          customerEmail: order.customer?.email || null,
-          totalAmount: Number(order.totalGrossOriginal || 0),
-          paymentStatus: latestPaymentStatus,
-          paymentDate: latestPayment?.payoutDate?.toISOString() || null,
-          reconciledFlag: reconciled,
-          journalLinked,
-          invoiceStatus,
-          invoiceNumber: latestInvoice?.invoiceNumber || null,
-          invoiceIssuedAt: latestInvoice?.issuedAt?.toISOString() || null,
-          reason,
-          daysSinceOrder: Math.max(
-            0,
-            Math.floor(
-              (Date.now() - new Date(order.orderDate).getTime()) /
-                (24 * 60 * 60 * 1000),
-            ),
-          ),
-        };
-      })
-      .sort((left, right) => {
-        const score = (status: string) =>
-          status === 'eligible' ? 0 : status === 'waiting_payment' ? 1 : 2;
-        const scoreDiff =
-          score(left.invoiceStatus) - score(right.invoiceStatus);
-        if (scoreDiff !== 0) {
-          return scoreDiff;
-        }
-        return right.daysSinceOrder - left.daysSinceOrder;
-      });
-
-    const limitedItems = items.slice(0, normalizedLimit);
-    const eligibleItems = items.filter(
-      (item) => item.invoiceStatus === 'eligible',
-    );
-    const waitingItems = items.filter(
-      (item) => item.invoiceStatus === 'waiting_payment',
-    );
-    const completedItems = items.filter(
-      (item) => item.invoiceStatus === 'completed',
-    );
+    const items = [
+      ...eligibleOrders.map((order) =>
+        this.toInvoiceQueueItem(order, 'eligible'),
+      ),
+      ...waitingOrders.map((order) =>
+        this.toInvoiceQueueItem(order, 'waiting_payment'),
+      ),
+      ...completedOrders.map((order) =>
+        this.toInvoiceQueueItem(order, 'completed'),
+      ),
+    ];
 
     return {
       entityId,
@@ -1074,13 +1054,12 @@ export class InvoicingService {
         issuedCount: Number(issuedAgg._count.id || 0),
         issuedAmount: Number(issuedAgg._sum.totalAmountOriginal || 0),
         voidCount: Number(voidAgg._count.id || 0),
-        pendingCount: items.filter((item) => item.invoiceStatus !== 'completed')
-          .length,
-        eligibleCount: eligibleItems.length,
-        waitingPaymentCount: waitingItems.length,
-        completedOrderCount: completedItems.length,
+        pendingCount: eligibleCount + waitingPaymentCount,
+        eligibleCount,
+        waitingPaymentCount,
+        completedOrderCount,
       },
-      items: limitedItems,
+      items: items.slice(0, normalizedLimit),
     };
   }
 
@@ -1098,10 +1077,39 @@ export class InvoicingService {
   ) {
     this.assertInvoiceIssuingAvailable(options?.merchantKey);
 
-    const queue = await this.getInvoiceQueue(entityId, options);
-    const targets = queue.items.filter(
-      (item) => item.invoiceStatus === 'eligible',
+    const normalizedLimit = Math.min(
+      Math.max(Math.floor(options?.limit || 12), 1),
+      50,
     );
+    const orderDate =
+      options?.startDate || options?.endDate
+        ? {
+            ...(options?.startDate ? { gte: options.startDate } : {}),
+            ...(options?.endDate ? { lte: options.endDate } : {}),
+          }
+        : undefined;
+    const stateWhere = buildInvoiceOrderStateWhere(entityId, orderDate);
+    const orders = await this.prisma.salesOrder.findMany({
+      where: stateWhere.eligible,
+      select: {
+        id: true,
+        externalOrderId: true,
+        customer: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: [{ orderDate: 'asc' }, { id: 'asc' }],
+      take: normalizedLimit,
+    });
+    const targets = orders.map((order) => ({
+      orderId: order.id,
+      externalOrderId: order.externalOrderId || null,
+      customerName: order.customer?.name || '散客',
+      customerEmail: order.customer?.email || null,
+    }));
     const issued: Array<{
       orderId: string;
       invoiceId: string;
@@ -1142,12 +1150,109 @@ export class InvoicingService {
 
     return {
       success: failed.length === 0,
-      scannedCount: queue.items.length,
+      scannedCount: targets.length,
       eligibleCount: targets.length,
       issuedCount: issued.length,
       failedCount: failed.length,
       issued,
       failed,
+    };
+  }
+
+  private getInvoiceQueueOrderInclude() {
+    return {
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+      channel: {
+        select: {
+          code: true,
+          name: true,
+        },
+      },
+      payments: {
+        orderBy: {
+          payoutDate: 'desc' as const,
+        },
+        select: {
+          id: true,
+          payoutDate: true,
+          status: true,
+          reconciledFlag: true,
+          amountNetOriginal: true,
+          notes: true,
+        },
+      },
+      invoices: {
+        orderBy: {
+          createdAt: 'desc' as const,
+        },
+        select: {
+          id: true,
+          invoiceNumber: true,
+          status: true,
+          issuedAt: true,
+        },
+      },
+    };
+  }
+
+  private toInvoiceQueueItem(
+    order: any,
+    invoiceStatus: 'eligible' | 'waiting_payment' | 'completed',
+  ) {
+    const receivedPayments = order.payments.filter((payment) =>
+      isReceivedPaymentStatus(payment.status),
+    );
+    const latestPayment = receivedPayments[0] || order.payments[0] || null;
+    const issuedInvoice = order.invoices.find(
+      (invoice) => (invoice.status || '').toLowerCase() === 'issued',
+    );
+    const latestInvoice = issuedInvoice || order.invoices[0] || null;
+    const reconciled = receivedPayments.some(
+      (payment) => payment.reconciledFlag,
+    );
+    const journalLinked = receivedPayments.some((payment) =>
+      (payment.notes || '').includes('journalEntryId='),
+    );
+    const hasNonIssuedInvoice = !issuedInvoice && Boolean(latestInvoice);
+    const reason =
+      invoiceStatus === 'completed'
+        ? '已有有效發票'
+        : hasNonIssuedInvoice
+          ? '現有發票未完成開立，需重新核對'
+          : invoiceStatus === 'eligible'
+            ? '已收到有效款項，可開立發票'
+            : '尚未收到有效款項';
+
+    return {
+      orderId: order.id,
+      externalOrderId: order.externalOrderId || null,
+      orderDate: order.orderDate.toISOString(),
+      channelCode: order.channel?.code || null,
+      channelName: order.channel?.name || null,
+      customerName: order.customer?.name || '散客',
+      customerEmail: order.customer?.email || null,
+      totalAmount: Number(order.totalGrossOriginal || 0),
+      paymentStatus: latestPayment?.status?.toLowerCase() || 'pending',
+      paymentDate: latestPayment?.payoutDate?.toISOString() || null,
+      reconciledFlag: reconciled,
+      journalLinked,
+      invoiceStatus,
+      invoiceNumber: latestInvoice?.invoiceNumber || null,
+      invoiceIssuedAt: latestInvoice?.issuedAt?.toISOString() || null,
+      reason,
+      daysSinceOrder: Math.max(
+        0,
+        Math.floor(
+          (Date.now() - new Date(order.orderDate).getTime()) /
+            (24 * 60 * 60 * 1000),
+        ),
+      ),
     };
   }
 
@@ -1203,7 +1308,9 @@ export class InvoicingService {
 
   private normalizeQueryDate(value: string | undefined, fieldName: string) {
     if (!value || !value.trim()) {
-      throw new BadRequestException(`${fieldName} 為必填，格式需為 YYYY-MM-DD。`);
+      throw new BadRequestException(
+        `${fieldName} 為必填，格式需為 YYYY-MM-DD。`,
+      );
     }
 
     const normalized = value.trim().replace(/\//g, '-');
@@ -1281,9 +1388,7 @@ export class InvoicingService {
   private normalizeRocInvoiceYear(value?: string) {
     const raw = value?.trim() || String(new Date().getFullYear() - 1911);
     if (!/^\d{3}$/.test(raw)) {
-      throw new BadRequestException(
-        'invoiceYear 需為民國年三碼，例如 115。',
-      );
+      throw new BadRequestException('invoiceYear 需為民國年三碼，例如 115。');
     }
     return raw;
   }

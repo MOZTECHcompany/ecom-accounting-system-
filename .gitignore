@@ -62,6 +62,9 @@ web_modules/
 # Output of 'npm pack'
 *.tgz
 
+# Local operational exports may contain company financial or inventory data.
+/artifacts/*.xlsx
+
 # Yarn Integrity file
 .yarn-integrity
 

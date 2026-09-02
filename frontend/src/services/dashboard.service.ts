@@ -47,6 +47,16 @@ export type ConnectorReadinessItem = {
   } | null;
   externalNeeds: string[];
   nextAction: string;
+  syncHealth?: {
+    status: "healthy" | "running" | "failed" | "stale" | "untracked";
+    lastStartedAt: string | null;
+    lastFinishedAt: string | null;
+    lastSuccessAt: string | null;
+    lastFailureAt: string | null;
+    lastError: string | null;
+    trigger: string | null;
+    metrics?: unknown;
+  };
 };
 
 export type ConnectorReadiness = {
@@ -57,6 +67,9 @@ export type ConnectorReadiness = {
     ready: number;
     partial: number;
     blocked: number;
+    syncHealthy?: number;
+    syncRunning?: number;
+    syncIssues?: number;
   };
   connectors: ConnectorReadinessItem[];
   inputDocument: string;
@@ -364,6 +377,20 @@ export type ManagementSummary = {
   };
   summary: Omit<ManagementSummaryPeriod, "key" | "label" | "startDate" | "endDate">;
   periods: ManagementSummaryPeriod[];
+  dataBasis: "operational_sources";
+  releaseGate: {
+    status: "ready" | "blocked";
+    financialReportsUseApprovedOnly: boolean;
+    canPublishFinancialStatements: boolean;
+    reason: string;
+  };
+  journalApproval: {
+    counts: { total: number; approved: number; unapproved: number };
+    amounts: {
+      approved: { debit: number; credit: number; amountBase: number };
+      unapproved: { debit: number; credit: number; amountBase: number };
+    };
+  };
 };
 
 export type AdPerformanceBrand = {
@@ -408,6 +435,13 @@ export type AdPerformanceSummary = {
     adSource: string;
     attributionNote: string;
   };
+  sources: Array<{
+    sourceModule: "meta_ads" | "google_ads";
+    label: string;
+    adSpend: number;
+    expenseCount: number;
+    lastExpenseDate: string | null;
+  }>;
   brands: AdPerformanceBrand[];
   periods: AdPerformancePeriod[];
 };
@@ -489,6 +523,8 @@ export type DataCompletenessChannelBreakdown = {
     missingPaymentPendingCandidates: number;
     missingInvoiceEmbeddedCandidates: number;
     missingInvoiceEcpayBackfillCandidates: number;
+    missingInvoiceNonIssuedRecordCandidates?: number;
+    missingInvoiceLegacyFlagMismatches?: number;
     feeMissingPayoutBackfillCandidates: number;
   };
   firstOrder: {

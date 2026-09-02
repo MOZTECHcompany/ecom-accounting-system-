@@ -496,7 +496,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
       ),
     },
     {
-      title: 'AI 建議',
+      title: '系統建議',
       key: 'ai',
       width: '15%',
       responsive: ['lg'],
@@ -779,7 +779,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
                         )}
                         {!request.suggestedAccount && (
                           <div className="flex items-center gap-1 text-amber-600">
-                            <WarningOutlined /> 缺少 AI 科目建議
+                            <WarningOutlined /> 缺少科目建議
                           </div>
                         )}
                         {(() => {
@@ -812,9 +812,9 @@ const ExpenseReviewCenterPage: React.FC = () => {
               <h3 className="text-lg font-semibold text-slate-800">待審核清單</h3>
               <p className="text-slate-500 text-sm mt-1">符合目前篩選的 {filteredRequests.length} 筆申請</p>
             </div>
-            <Tooltip title="透過 AI 建議覆蓋率掌握模型使用情況">
+            <Tooltip title="查看科目建議覆蓋率">
               <div className="text-right hidden md:block">
-                <div className="text-xs text-slate-500 mb-1">AI 建議覆蓋率</div>
+                <div className="text-xs text-slate-500 mb-1">科目建議覆蓋率</div>
                 <Progress percent={aiCoverage} size="small" style={{ width: 120 }} strokeColor="#3b82f6" />
               </div>
             </Tooltip>
@@ -881,7 +881,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
                         <BulbOutlined className="text-blue-500" />
                         <div className="flex-1 min-w-0">
                           <div className="text-xs text-blue-600 font-medium truncate">
-                            AI 建議: {request.suggestedAccount.code} {request.suggestedAccount.name}
+                            系統建議: {request.suggestedAccount.code} {request.suggestedAccount.name}
                           </div>
                         </div>
                         <div className="text-[10px] text-blue-400 whitespace-nowrap">
@@ -1021,7 +1021,7 @@ const ExpenseReviewCenterPage: React.FC = () => {
                       {selectedRequest.suggestedAccount && (
                         <div className="text-xs text-slate-500 flex items-center gap-1">
                           <BulbOutlined className="text-yellow-500" />
-                          AI 建議: {selectedRequest.suggestedAccount.code} {selectedRequest.suggestedAccount.name}
+                          系統建議: {selectedRequest.suggestedAccount.code} {selectedRequest.suggestedAccount.name}
                           {selectedRequest.suggestionConfidence && (
                             <span className="text-slate-400">
                               (信心 {(Number(selectedRequest.suggestionConfidence) * 100).toFixed(0)}%)

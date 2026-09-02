@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InventoryService } from '../inventory/inventory.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { ProductType } from '@prisma/client';
+import { Prisma, ProductType } from '@prisma/client';
 
 /**
  * 成本管理服務
@@ -76,8 +76,12 @@ export class CostService {
    * 記錄進貨成本並更新移動平均成本
    * 觸發時機：採購收貨 (Purchase Order Receive)
    */
-  async recordPurchaseCost(purchaseOrderId: string) {
-    const po = await this.prisma.purchaseOrder.findUnique({
+  async recordPurchaseCost(
+    purchaseOrderId: string,
+    transactionClient?: Prisma.TransactionClient,
+  ) {
+    const db = transactionClient || this.prisma;
+    const po = await db.purchaseOrder.findUnique({
       where: { id: purchaseOrderId },
       include: { items: true },
     });
@@ -85,7 +89,7 @@ export class CostService {
     if (!po) throw new Error('Purchase Order not found');
 
     for (const item of po.items) {
-      const product = await this.prisma.product.findUnique({
+      const product = await db.product.findUnique({
         where: { id: item.productId },
       });
 
@@ -93,8 +97,8 @@ export class CostService {
 
       // 1. 取得當前庫存快照 (已由 InventoryService 增加數量)
       // 這裡簡化計算，假設所有倉庫總庫存
-      const inventorySnapshots = await this.prisma.inventorySnapshot.findMany({
-        where: { productId: item.productId },
+      const inventorySnapshots = await db.inventorySnapshot.findMany({
+        where: { entityId: po.entityId, productId: item.productId },
       });
       const totalQtyOnHand = inventorySnapshots.reduce((sum, snap) => sum + Number(snap.qtyOnHand), 0);
       
@@ -112,7 +116,7 @@ export class CostService {
       }
 
       // 4. 更新產品成本資訊
-      await this.prisma.product.update({
+      await db.product.update({
         where: { id: item.productId },
         data: {
           latestPurchasePrice: newUnitCost,

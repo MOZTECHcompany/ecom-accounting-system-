@@ -7,6 +7,7 @@ import { AiComputerUseService } from './ai-computer-use.service';
 import { AiController } from './ai.controller';
 import { PrismaModule } from '../../common/prisma/prisma.module';
 import { ReportsModule } from '../reports/reports.module';
+import { RolesGuard } from '../../common/guards/roles.guard';
 
 @Global()
 @Module({
@@ -18,6 +19,7 @@ import { ReportsModule } from '../reports/reports.module';
     AiKnowledgeService,
     AiCopilotService,
     AiComputerUseService,
+    RolesGuard,
   ],
   exports: [
     AiService,

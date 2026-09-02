@@ -382,11 +382,11 @@ const SalesAnalytics: React.FC<{
       </Row>
 
       <div className="rounded-3xl bg-[linear-gradient(90deg,#1d4ed8,#6d28d9,#7c3aed)] px-6 py-5 text-white shadow-lg">
-        <div className="text-sm font-semibold">AI 智慧洞察</div>
+        <div className="text-sm font-semibold">營運摘要</div>
         <div className="mt-2 text-sm leading-7 text-white/90">
           {topSource
-            ? `目前 ${topSource.name} 是主要平台來源，貢獻 NT$ ${topSource.value.toLocaleString()}。${topBrand ? `${topBrand.name} 則是目前主要品牌，累積銷售 NT$ ${topBrand.value.toLocaleString()}。` : ''} 建議優先檢查這個平台與品牌的高營收訂單、待對帳款項與客戶回購情況。`
-            : '目前還沒有足夠的真實訂單資料可供 AI 洞察，先同步 Shopify / 團購 / Shopline 訂單後，這裡就會開始變成真實營運面板。'}
+            ? `${topSource.name} 貢獻 NT$ ${topSource.value.toLocaleString()}${topBrand ? `；${topBrand.name} 品牌銷售 NT$ ${topBrand.value.toLocaleString()}` : ''}。`
+            : '尚無足夠訂單資料。'}
         </div>
       </div>
     </div>

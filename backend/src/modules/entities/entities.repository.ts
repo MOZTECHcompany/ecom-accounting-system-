@@ -11,9 +11,12 @@ import { UpdateEntityDto } from './dto/update-entity.dto';
 export class EntitiesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(isActive?: boolean) {
+  async findAll(isActive?: boolean, entityIds?: string[] | null) {
     return this.prisma.entity.findMany({
-      where: isActive !== undefined ? { isActive } : undefined,
+      where: {
+        ...(isActive !== undefined ? { isActive } : {}),
+        ...(entityIds ? { id: { in: entityIds } } : {}),
+      },
       orderBy: [{ loginCode: 'asc' }, { name: 'asc' }],
     });
   }
@@ -44,16 +47,9 @@ export class EntitiesRepository {
   }
 
   async update(id: string, data: UpdateEntityDto) {
-    const {
-      adminName,
-      adminEmail,
-      adminEmployeeNo,
-      adminPassword,
-      ...entityData
-    } = data;
     return this.prisma.entity.update({
       where: { id },
-      data: entityData,
+      data,
     });
   }
 

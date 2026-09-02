@@ -46,8 +46,8 @@ const FinancialHealthWidget: React.FC = () => {
               className="glass-card h-full" 
               title={
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-lg">現金流預測 (Cash Flow Forecast)</span>
-                  <Tooltip title="基於歷史數據與 AI 模型預測未來 3 個月的現金流向" overlayClassName="glass-tooltip">
+                  <span className="font-medium text-lg">現金流預測</span>
+                  <Tooltip title="依歷史資料估算未來 3 個月的現金流" overlayClassName="glass-tooltip">
                     <InfoCircleOutlined className="text-gray-400" />
                   </Tooltip>
                 </div>
@@ -178,7 +178,7 @@ const FinancialHealthWidget: React.FC = () => {
             >
               <Card bordered={false} className="glass-card !border-0 bg-gradient-to-br from-blue-500/90 to-indigo-600/90 text-white backdrop-blur-xl shadow-lg shadow-blue-500/20">
                 <div className="flex justify-between items-center mb-4">
-                  <span className="text-white/90 font-medium">流動比率 (Current Ratio)</span>
+                  <span className="text-white/90 font-medium">流動比率</span>
                   <Tooltip title="流動資產 / 流動負債，建議值 > 1.5" overlayClassName="glass-tooltip">
                     <InfoCircleOutlined className="text-white/70" />
                   </Tooltip>
@@ -191,7 +191,7 @@ const FinancialHealthWidget: React.FC = () => {
                 </div>
                 <Progress percent={80} showInfo={false} strokeColor="#86efac" trailColor="rgba(255,255,255,0.2)" size="small" />
                 <div className="mt-4 pt-4 border-t border-white/10 flex justify-between text-sm text-white/80">
-                  <span>速動比率 (Quick Ratio)</span>
+                  <span>速動比率</span>
                   <span className="font-mono font-bold">1.8</span>
                 </div>
               </Card>

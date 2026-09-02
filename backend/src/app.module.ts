@@ -13,6 +13,7 @@ import { RedisModule } from './common/redis/redis.module'; // Added RedisModule
 import { GlobalQueueModule } from './common/queue/queue.module'; // Added QueueModule
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { GuardsModule } from './common/guards/guards.module';
+import { ConnectorSyncModule } from './common/sync/connector-sync.module';
 
 // Feature modules - 按照指定的 12 個模組順序
 import { AuthModule } from './modules/auth/auth.module';
@@ -46,6 +47,8 @@ import { GoogleAdsIntegrationModule } from './modules/integration/google-ads/goo
 import { Ga4IntegrationModule } from './modules/integration/ga4/ga4.module';
 import { PurchaseModule } from './modules/purchase/purchase.module';
 import { AssemblyModule } from './modules/assembly/assembly.module';
+import { InvoiceSyncModule } from './modules/invoice-sync/invoice-sync.module';
+import { AfterSalesIntegrationModule } from './modules/integration/after-sales/after-sales.module';
 
 /**
  * AppModule
@@ -80,6 +83,7 @@ import { AssemblyModule } from './modules/assembly/assembly.module';
     RedisModule, // Added logic
     GlobalQueueModule, // Global Queue
     GuardsModule,
+    ConnectorSyncModule,
     ScheduleModule.forRoot(),
 
     // Features
@@ -110,6 +114,7 @@ import { AssemblyModule } from './modules/assembly/assembly.module';
 
     // 5. 整合模組（外部服務整合）
     InvoicingModule, // → SalesModule, ArModule (電子發票)
+    InvoiceSyncModule,
     ReconciliationModule, // → BankingModule, AccountingModule (銀行對帳)
     ShopifyIntegrationModule,
     OneShopIntegrationModule,
@@ -117,6 +122,7 @@ import { AssemblyModule } from './modules/assembly/assembly.module';
     MetaAdsIntegrationModule,
     GoogleAdsIntegrationModule,
     Ga4IntegrationModule,
+    AfterSalesIntegrationModule,
     NotificationModule,
     AiModule,
     AttendanceModule,

@@ -14,6 +14,13 @@ import {
   UnifiedOrder,
   UnifiedTransaction,
 } from '../interfaces/sales-channel-adapter.interface';
+import {
+  buildPaymentSourceTransactionKey,
+  resolveStoredGrossAmount,
+  resolveStoredNetAmount,
+  resolveStoredPaymentStatus,
+} from '../payment-integrity';
+import { buildSalesOrderSourceKey } from '../sales-order-integrity';
 
 const ONESHOP_CHANNEL_CODE = '1SHOP';
 
@@ -136,7 +143,11 @@ export class OneShopService implements OnModuleInit {
 
     for (const tx of transactions) {
       try {
-        const result = await this.upsertPayment(params.entityId, channel.id, tx);
+        const result = await this.upsertPayment(
+          params.entityId,
+          channel.id,
+          tx,
+        );
         if (result === 'created') created++;
         if (result === 'updated') updated++;
       } catch (error: any) {
@@ -154,11 +165,7 @@ export class OneShopService implements OnModuleInit {
     };
   }
 
-  async autoSync(options?: {
-    entityId?: string;
-    since?: Date;
-    until?: Date;
-  }) {
+  async autoSync(options?: { entityId?: string; since?: Date; until?: Date }) {
     const enabled =
       this.config.get<string>('ONESHOP_SYNC_ENABLED', 'false') === 'true';
 
@@ -291,11 +298,16 @@ export class OneShopService implements OnModuleInit {
       windowIndex += 1;
     }
 
-    const remainingWindows = Math.max(allWindows.length - selectedWindows.length, 0);
+    const remainingWindows = Math.max(
+      allWindows.length - selectedWindows.length,
+      0,
+    );
     const lastWindow = selectedWindows[selectedWindows.length - 1];
     const nextBeginDate =
       remainingWindows > 0 && lastWindow
-        ? new Date(lastWindow.until.getTime() + 24 * 60 * 60 * 1000).toISOString()
+        ? new Date(
+            lastWindow.until.getTime() + 24 * 60 * 60 * 1000,
+          ).toISOString()
         : null;
 
     return {
@@ -340,37 +352,37 @@ export class OneShopService implements OnModuleInit {
 
     const [ordersAgg, ordersCount, paymentsAgg, reconciledCount, paymentCount] =
       await Promise.all([
-      this.prisma.salesOrder.aggregate({
-        where: ordersWhere,
-        _sum: {
-          totalGrossOriginal: true,
-          taxAmountOriginal: true,
-          discountAmountOriginal: true,
-          shippingFeeOriginal: true,
-        },
-      }),
-      this.prisma.salesOrder.count({
-        where: ordersWhere,
-      }),
-      this.prisma.payment.aggregate({
-        where: paymentsWhere,
-        _sum: {
-          amountGrossOriginal: true,
-          amountNetOriginal: true,
-          feePlatformOriginal: true,
-          feeGatewayOriginal: true,
-        },
-      }),
-      this.prisma.payment.count({
-        where: {
-          ...paymentsWhere,
-          reconciledFlag: true,
-        },
-      }),
-      this.prisma.payment.count({
-        where: paymentsWhere,
-      }),
-    ]);
+        this.prisma.salesOrder.aggregate({
+          where: ordersWhere,
+          _sum: {
+            totalGrossOriginal: true,
+            taxAmountOriginal: true,
+            discountAmountOriginal: true,
+            shippingFeeOriginal: true,
+          },
+        }),
+        this.prisma.salesOrder.count({
+          where: ordersWhere,
+        }),
+        this.prisma.payment.aggregate({
+          where: paymentsWhere,
+          _sum: {
+            amountGrossOriginal: true,
+            amountNetOriginal: true,
+            feePlatformOriginal: true,
+            feeGatewayOriginal: true,
+          },
+        }),
+        this.prisma.payment.count({
+          where: {
+            ...paymentsWhere,
+            reconciledFlag: true,
+          },
+        }),
+        this.prisma.payment.count({
+          where: paymentsWhere,
+        }),
+      ]);
 
     const num = (value: Decimal | number | null | undefined) =>
       value ? Number(value) : 0;
@@ -517,7 +529,12 @@ export class OneShopService implements OnModuleInit {
     transactions: UnifiedTransaction[],
     caches: ReturnType<OneShopService['createSyncWindowCaches']>,
   ) {
-    const uniqueOrderIds = [...new Set(orders.map((order) => order.externalId))];
+    const uniqueOrderIds = [
+      ...new Set(orders.map((order) => order.externalId)),
+    ];
+    const uniqueOrderSourceKeys = uniqueOrderIds.map((externalOrderId) =>
+      buildSalesOrderSourceKey(channelId, externalOrderId),
+    );
     const uniquePaymentIds = [
       ...new Set(transactions.map((tx) => tx.externalId).filter(Boolean)),
     ];
@@ -536,43 +553,46 @@ export class OneShopService implements OnModuleInit {
       ),
     ];
 
-    const [existingOrders, existingPayments, customersByEmail, customersByPhone] =
-      await Promise.all([
-        uniqueOrderIds.length
-          ? this.prisma.salesOrder.findMany({
-              where: {
-                entityId,
-                channelId,
-                externalOrderId: { in: uniqueOrderIds },
-              },
-            })
-          : Promise.resolve([]),
-        uniquePaymentIds.length
-          ? this.prisma.payment.findMany({
-              where: {
-                entityId,
-                channelId,
-                payoutBatchId: { in: uniquePaymentIds },
-              },
-            })
-          : Promise.resolve([]),
-        uniqueEmails.length
-          ? this.prisma.customer.findMany({
-              where: {
-                entityId,
-                email: { in: uniqueEmails },
-              },
-            })
-          : Promise.resolve([]),
-        uniquePhones.length
-          ? this.prisma.customer.findMany({
-              where: {
-                entityId,
-                phone: { in: uniquePhones },
-              },
-            })
-          : Promise.resolve([]),
-      ]);
+    const [
+      existingOrders,
+      existingPayments,
+      customersByEmail,
+      customersByPhone,
+    ] = await Promise.all([
+      uniqueOrderSourceKeys.length
+        ? this.prisma.salesOrder.findMany({
+            where: {
+              entityId,
+              sourceOrderKey: { in: uniqueOrderSourceKeys },
+            },
+          })
+        : Promise.resolve([]),
+      uniquePaymentIds.length
+        ? this.prisma.payment.findMany({
+            where: {
+              entityId,
+              channelId,
+              payoutBatchId: { in: uniquePaymentIds },
+            },
+          })
+        : Promise.resolve([]),
+      uniqueEmails.length
+        ? this.prisma.customer.findMany({
+            where: {
+              entityId,
+              email: { in: uniqueEmails },
+            },
+          })
+        : Promise.resolve([]),
+      uniquePhones.length
+        ? this.prisma.customer.findMany({
+            where: {
+              entityId,
+              phone: { in: uniquePhones },
+            },
+          })
+        : Promise.resolve([]),
+    ]);
 
     for (const order of existingOrders) {
       caches.salesOrdersByExternalId.set(order.externalOrderId, order);
@@ -586,7 +606,10 @@ export class OneShopService implements OnModuleInit {
 
     for (const customer of customersByEmail) {
       if (customer.email) {
-        caches.customersByEmail.set(customer.email.trim().toLowerCase(), customer);
+        caches.customersByEmail.set(
+          customer.email.trim().toLowerCase(),
+          customer,
+        );
       }
     }
 
@@ -665,14 +688,20 @@ export class OneShopService implements OnModuleInit {
     order: UnifiedOrder,
     caches?: ReturnType<OneShopService['createSyncWindowCaches']>,
   ): Promise<'created' | 'updated'> {
+    const sourceOrderKey = buildSalesOrderSourceKey(
+      channelId,
+      order.externalId,
+    );
+    const sourceIdentity = {
+      entityId_sourceOrderKey: {
+        entityId,
+        sourceOrderKey,
+      },
+    };
     const existing =
       caches?.salesOrdersByExternalId.get(order.externalId) ||
-      (await this.prisma.salesOrder.findFirst({
-        where: {
-          entityId,
-          channelId,
-          externalOrderId: order.externalId,
-        },
+      (await this.prisma.salesOrder.findUnique({
+        where: sourceIdentity,
       }));
 
     const currency = order.totals.currency;
@@ -706,36 +735,47 @@ export class OneShopService implements OnModuleInit {
       notes: this.buildOrderNotes(order),
     };
 
-    if (existing) {
-      const updated = await this.prisma.salesOrder.update({
-        where: { id: existing.id },
-        data: {
-          ...data,
-          hasInvoice: existing.hasInvoice || this.hasEmbeddedInvoice(order),
-        },
-      });
-      await this.syncSalesOrderItems(updated.id, entityId, order, currency, fxRate);
-      await this.syncEmbeddedInvoice(updated.id, entityId, order, currency, fxRate);
-      await this.syncPendingPaymentDraft(updated.id, entityId, channelId, order, currency, fxRate);
-      caches?.salesOrdersByExternalId.set(order.externalId, updated);
-      return 'updated';
-    }
-
-    const created = await this.prisma.salesOrder.create({
-      data: {
+    const embeddedInvoice = this.hasEmbeddedInvoice(order);
+    const stored = await this.prisma.salesOrder.upsert({
+      where: sourceIdentity,
+      update: {
+        ...data,
+        ...(embeddedInvoice ? { hasInvoice: true } : {}),
+      },
+      create: {
         entityId,
         channelId,
         externalOrderId: order.externalId,
-        hasInvoice: this.hasEmbeddedInvoice(order),
+        sourceOrderKey,
+        hasInvoice: embeddedInvoice,
         ...data,
       },
     });
-    await this.syncSalesOrderItems(created.id, entityId, order, currency, fxRate);
-    await this.syncEmbeddedInvoice(created.id, entityId, order, currency, fxRate);
-    await this.syncPendingPaymentDraft(created.id, entityId, channelId, order, currency, fxRate);
-    caches?.salesOrdersByExternalId.set(order.externalId, created);
+    await this.syncSalesOrderItems(
+      stored.id,
+      entityId,
+      order,
+      currency,
+      fxRate,
+    );
+    await this.syncEmbeddedInvoice(
+      stored.id,
+      entityId,
+      order,
+      currency,
+      fxRate,
+    );
+    await this.syncPendingPaymentDraft(
+      stored.id,
+      entityId,
+      channelId,
+      order,
+      currency,
+      fxRate,
+    );
+    caches?.salesOrdersByExternalId.set(order.externalId, stored);
 
-    return 'created';
+    return existing ? 'updated' : 'created';
   }
 
   private async syncSalesOrderItems(
@@ -792,7 +832,11 @@ export class OneShopService implements OnModuleInit {
     }
   }
 
-  private normalizeLineItemSku(orderId: string, sku: string | undefined, index: number) {
+  private normalizeLineItemSku(
+    orderId: string,
+    sku: string | undefined,
+    index: number,
+  ) {
     const normalized = (sku || '').trim();
     if (normalized && normalized !== 'UNKNOWN') {
       return normalized.slice(0, 120);
@@ -801,7 +845,9 @@ export class OneShopService implements OnModuleInit {
   }
 
   private hasEmbeddedInvoice(order: UnifiedOrder) {
-    const receipt = Array.isArray(order.raw?.receipt) ? order.raw.receipt[0] : null;
+    const receipt = Array.isArray(order.raw?.receipt)
+      ? order.raw.receipt[0]
+      : null;
     return Boolean(
       receipt &&
         typeof receipt.invoice_number === 'string' &&
@@ -816,7 +862,9 @@ export class OneShopService implements OnModuleInit {
     currency: string,
     fxRate: Decimal,
   ) {
-    const receipt = Array.isArray(order.raw?.receipt) ? order.raw.receipt[0] : null;
+    const receipt = Array.isArray(order.raw?.receipt)
+      ? order.raw.receipt[0]
+      : null;
     const invoiceNumber =
       receipt && typeof receipt.invoice_number === 'string'
         ? receipt.invoice_number.trim()
@@ -949,9 +997,7 @@ export class OneShopService implements OnModuleInit {
     const providerPaymentId =
       typeof order.raw?.payment_third_party_no === 'string'
         ? order.raw.payment_third_party_no.trim()
-        : typeof order.raw?.logistics_third_party_no === 'string'
-          ? order.raw.logistics_third_party_no.trim()
-          : '';
+        : '';
 
     if (paymentStatus && paymentStatus !== 'pending') {
       return;
@@ -973,6 +1019,11 @@ export class OneShopService implements OnModuleInit {
     }
 
     const zero = new Decimal(0);
+    const draftPaymentId = `draft:${order.externalId}`;
+    const sourceTransactionKey = buildPaymentSourceTransactionKey(
+      channelId,
+      draftPaymentId,
+    );
     const expectedGross = order.totals.gross.toDecimalPlaces(2);
     const notes = [
       '[1shop-payment-draft]',
@@ -983,39 +1034,49 @@ export class OneShopService implements OnModuleInit {
       'feeSource=awaiting_payment',
     ].join('; ');
 
-    await this.prisma.payment.create({
-      data: {
-        entityId,
-        channelId,
-        salesOrderId,
-        payoutBatchId: `draft:${order.externalId}`,
-        channel: ONESHOP_CHANNEL_CODE,
-        payoutDate: order.orderDate,
-        amountGrossOriginal: zero,
-        amountGrossCurrency: currency,
-        amountGrossFxRate: fxRate,
-        amountGrossBase: zero,
-        feePlatformOriginal: zero,
-        feePlatformCurrency: currency,
-        feePlatformFxRate: fxRate,
-        feePlatformBase: zero,
-        feeGatewayOriginal: zero,
-        feeGatewayCurrency: currency,
-        feeGatewayFxRate: fxRate,
-        feeGatewayBase: zero,
-        shippingFeePaidOriginal: zero,
-        shippingFeePaidCurrency: currency,
-        shippingFeePaidFxRate: fxRate,
-        shippingFeePaidBase: zero,
-        amountNetOriginal: zero,
-        amountNetCurrency: currency,
-        amountNetFxRate: fxRate,
-        amountNetBase: zero,
-        reconciledFlag: false,
-        bankAccountId: null,
-        status: 'pending',
-        notes,
+    const data = {
+      entityId,
+      channelId,
+      salesOrderId,
+      payoutBatchId: draftPaymentId,
+      sourceTransactionKey,
+      channel: ONESHOP_CHANNEL_CODE,
+      payoutDate: order.orderDate,
+      amountGrossOriginal: zero,
+      amountGrossCurrency: currency,
+      amountGrossFxRate: fxRate,
+      amountGrossBase: zero,
+      feePlatformOriginal: zero,
+      feePlatformCurrency: currency,
+      feePlatformFxRate: fxRate,
+      feePlatformBase: zero,
+      feeGatewayOriginal: zero,
+      feeGatewayCurrency: currency,
+      feeGatewayFxRate: fxRate,
+      feeGatewayBase: zero,
+      shippingFeePaidOriginal: zero,
+      shippingFeePaidCurrency: currency,
+      shippingFeePaidFxRate: fxRate,
+      shippingFeePaidBase: zero,
+      amountNetOriginal: zero,
+      amountNetCurrency: currency,
+      amountNetFxRate: fxRate,
+      amountNetBase: zero,
+      reconciledFlag: false,
+      bankAccountId: null,
+      status: 'pending',
+      notes,
+    };
+
+    await this.prisma.payment.upsert({
+      where: {
+        entityId_sourceTransactionKey: {
+          entityId,
+          sourceTransactionKey,
+        },
       },
+      update: data,
+      create: data,
     });
   }
 
@@ -1025,25 +1086,40 @@ export class OneShopService implements OnModuleInit {
     tx: UnifiedTransaction,
     caches?: ReturnType<OneShopService['createSyncWindowCaches']>,
   ): Promise<'created' | 'updated'> {
+    const sourceTransactionKey = buildPaymentSourceTransactionKey(
+      channelId,
+      tx.externalId,
+    );
     const salesOrder = tx.orderId
       ? caches?.salesOrdersByExternalId.get(tx.orderId) ||
-        (await this.prisma.salesOrder.findFirst({
+        (await this.prisma.salesOrder.findUnique({
           where: {
-            entityId,
-            channelId,
-            externalOrderId: tx.orderId,
+            entityId_sourceOrderKey: {
+              entityId,
+              sourceOrderKey: buildSalesOrderSourceKey(channelId, tx.orderId),
+            },
           },
         }))
       : null;
 
     const existing =
+      (await this.prisma.payment.findUnique({
+        where: {
+          entityId_sourceTransactionKey: {
+            entityId,
+            sourceTransactionKey,
+          },
+        },
+      })) ||
       caches?.paymentsByExternalId.get(tx.externalId) ||
       (await this.prisma.payment.findFirst({
         where: {
           entityId,
           channelId,
           payoutBatchId: tx.externalId,
+          sourceTransactionKey: null,
         },
+        orderBy: [{ reconciledFlag: 'desc' }, { createdAt: 'asc' }],
       }));
 
     const currency = tx.currency || 'TWD';
@@ -1052,7 +1128,7 @@ export class OneShopService implements OnModuleInit {
     const draftPaymentId = tx.orderId ? `draft:${tx.orderId}` : null;
 
     if (draftPaymentId && tx.status !== 'pending') {
-      await this.prisma.payment.deleteMany({
+      await this.prisma.payment.updateMany({
         where: {
           entityId,
           channelId,
@@ -1060,46 +1136,64 @@ export class OneShopService implements OnModuleInit {
           payoutBatchId: draftPaymentId,
           status: 'pending',
         },
+        data: {
+          status: 'superseded',
+        },
       });
     }
 
-    const hasLockedProviderPayout = this.hasLockedProviderPayout(existing?.notes);
+    const hasLockedProviderPayout = this.hasLockedProviderPayout(
+      existing?.notes,
+    );
     const paymentNotes = this.buildPaymentNotes(existing?.notes, tx);
+    const grossAmount = resolveStoredGrossAmount(tx);
+    const netAmount = resolveStoredNetAmount(tx);
 
     const data = {
       entityId,
       channelId,
       salesOrderId: salesOrder?.id ?? null,
       payoutBatchId: tx.externalId,
+      sourceTransactionKey,
       channel: ONESHOP_CHANNEL_CODE,
       payoutDate: tx.date,
-      amountGrossOriginal: tx.amount,
+      amountGrossOriginal: grossAmount,
       amountGrossCurrency: currency,
       amountGrossFxRate: fxRate,
-      amountGrossBase: tx.amount.mul(fxRate),
-      feePlatformOriginal: hasLockedProviderPayout ? existing?.feePlatformOriginal || zero : tx.fee,
+      amountGrossBase: grossAmount.mul(fxRate),
+      feePlatformOriginal: hasLockedProviderPayout
+        ? existing?.feePlatformOriginal || zero
+        : tx.fee,
       feePlatformCurrency: currency,
       feePlatformFxRate: fxRate,
       feePlatformBase: hasLockedProviderPayout
         ? existing?.feePlatformBase || zero
         : tx.fee.mul(fxRate),
-      feeGatewayOriginal: hasLockedProviderPayout ? existing?.feeGatewayOriginal || zero : zero,
+      feeGatewayOriginal: hasLockedProviderPayout
+        ? existing?.feeGatewayOriginal || zero
+        : zero,
       feeGatewayCurrency: currency,
       feeGatewayFxRate: fxRate,
-      feeGatewayBase: hasLockedProviderPayout ? existing?.feeGatewayBase || zero : zero,
+      feeGatewayBase: hasLockedProviderPayout
+        ? existing?.feeGatewayBase || zero
+        : zero,
       shippingFeePaidOriginal: zero,
       shippingFeePaidCurrency: currency,
       shippingFeePaidFxRate: fxRate,
       shippingFeePaidBase: zero,
-      amountNetOriginal: hasLockedProviderPayout ? existing?.amountNetOriginal || tx.net : tx.net,
+      amountNetOriginal: hasLockedProviderPayout
+        ? existing?.amountNetOriginal || netAmount
+        : netAmount,
       amountNetCurrency: currency,
       amountNetFxRate: fxRate,
       amountNetBase: hasLockedProviderPayout
-        ? existing?.amountNetBase || tx.net.mul(fxRate)
-        : tx.net.mul(fxRate),
-      reconciledFlag: hasLockedProviderPayout ? existing?.reconciledFlag || false : false,
+        ? existing?.amountNetBase || netAmount.mul(fxRate)
+        : netAmount.mul(fxRate),
+      reconciledFlag: hasLockedProviderPayout
+        ? existing?.reconciledFlag || false
+        : false,
       bankAccountId: null,
-      status: tx.status === 'success' ? 'completed' : tx.status,
+      status: resolveStoredPaymentStatus(tx),
       notes: paymentNotes,
     };
 
@@ -1112,7 +1206,16 @@ export class OneShopService implements OnModuleInit {
       return 'updated';
     }
 
-    const created = await this.prisma.payment.create({ data });
+    const created = await this.prisma.payment.upsert({
+      where: {
+        entityId_sourceTransactionKey: {
+          entityId,
+          sourceTransactionKey,
+        },
+      },
+      update: data,
+      create: data,
+    });
     caches?.paymentsByExternalId.set(tx.externalId, created);
     return 'created';
   }
@@ -1148,7 +1251,9 @@ export class OneShopService implements OnModuleInit {
       notes.push(`originalOrderNumber=${originalOrderNumber}`);
     }
 
-    const receipt = Array.isArray(order.raw?.receipt) ? order.raw.receipt[0] : null;
+    const receipt = Array.isArray(order.raw?.receipt)
+      ? order.raw.receipt[0]
+      : null;
     const invoiceNumber =
       receipt && typeof receipt.invoice_number === 'string'
         ? receipt.invoice_number.trim()
@@ -1171,7 +1276,9 @@ export class OneShopService implements OnModuleInit {
     const rawNote =
       typeof order.raw?.note === 'string' ? order.raw.note.trim() : '';
     const rawShopNote =
-      typeof order.raw?.shop_note === 'string' ? order.raw.shop_note.trim() : '';
+      typeof order.raw?.shop_note === 'string'
+        ? order.raw.shop_note.trim()
+        : '';
 
     if (rawNote) {
       notes.push(`customerNote=${rawNote}`);

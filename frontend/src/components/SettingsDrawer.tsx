@@ -1,13 +1,12 @@
 import React from "react";
-import { Switch, Typography, Space, Select } from "antd";
+import { Switch, Typography, Space } from "antd";
 import { GlassDrawer, GlassDrawerSection } from "./ui/GlassDrawer";
 import { useTheme } from "../contexts/ThemeContext";
-import { useAI } from "../contexts/AIContext";
+import type { PrimaryColor } from "../contexts/ThemeContext";
 import {
   BulbOutlined,
   BulbFilled,
   CheckCircleFilled,
-  RobotOutlined,
 } from "@ant-design/icons";
 
 const { Text } = Typography;
@@ -19,17 +18,8 @@ interface SettingsDrawerProps {
 
 const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ open, onClose }) => {
   const { mode, toggleMode, primaryColor, setPrimaryColor } = useTheme();
-  const {
-    selectedModelId,
-    setSelectedModelId,
-    availableModels,
-    loading: aiLoading,
-  } = useAI();
-  const selectedMode = availableModels.find(
-    (model) => model.id === selectedModelId,
-  );
 
-  const colors = [
+  const colors: Array<{ name: string; value: PrimaryColor; hex: string }> = [
     { name: "Classic Black", value: "black", hex: "#000000" },
     { name: "Tech Blue", value: "blue", hex: "#1677ff" },
     { name: "Royal Purple", value: "purple", hex: "#722ed1" },
@@ -39,7 +29,7 @@ const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ open, onClose }) => {
 
   return (
     <GlassDrawer
-      title="介面設定 (Interface Settings)"
+      title="介面設定"
       placement="right"
       onClose={onClose}
       open={open}
@@ -49,7 +39,7 @@ const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ open, onClose }) => {
         {/* Theme Mode */}
         <GlassDrawerSection>
           <div className="mb-4 font-semibold text-slate-800">
-            外觀模式 (Appearance)
+            外觀模式
           </div>
           <div className="bg-white/40 p-1 rounded-xl flex border border-white/20">
             <button
@@ -61,7 +51,7 @@ const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ open, onClose }) => {
               }`}
             >
               <Space>
-                <BulbOutlined /> 淺色 Light
+                <BulbOutlined /> 淺色
               </Space>
             </button>
             <button
@@ -73,7 +63,7 @@ const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ open, onClose }) => {
               }`}
             >
               <Space>
-                <BulbFilled /> 深色 Dark
+                <BulbFilled /> 深色
               </Space>
             </button>
           </div>
@@ -82,13 +72,13 @@ const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ open, onClose }) => {
         {/* Primary Color */}
         <GlassDrawerSection>
           <div className="mb-4 font-semibold text-slate-800">
-            主題色系 (Accent Color)
+            主題色系
           </div>
           <div className="grid grid-cols-5 gap-2">
             {colors.map((color) => (
               <button
                 key={color.value}
-                onClick={() => setPrimaryColor(color.value as any)}
+                onClick={() => setPrimaryColor(color.value)}
                 className="w-10 h-10 rounded-full flex items-center justify-center transition-transform hover:scale-110 relative"
                 style={{ backgroundColor: color.hex }}
                 title={color.name}
@@ -104,51 +94,17 @@ const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ open, onClose }) => {
           </Text>
         </GlassDrawerSection>
 
-        {/* AI Settings */}
-        <GlassDrawerSection>
-          <div className="mb-4 font-semibold text-slate-800 flex items-center gap-2">
-            <RobotOutlined className="text-sky-600" /> AI 助手
-          </div>
-          <div className="mb-2 rounded-xl border border-sky-100/80 bg-gradient-to-br from-sky-50/80 to-emerald-50/70 p-4">
-            <Text className="block mb-2 text-sm font-medium text-gray-700">
-              助手工作模式
-            </Text>
-            <Text type="secondary" className="block mb-3 text-xs leading-6">
-              平常使用建議維持標準模式；真的需要較深入分析時，再切到深度模式即可。
-            </Text>
-            <Select
-              className="w-full"
-              size="large"
-              loading={aiLoading}
-              value={selectedModelId}
-              onChange={setSelectedModelId}
-              options={availableModels.map((model) => ({
-                label: model.name,
-                value: model.id,
-              }))}
-            />
-            <Text type="secondary" className="block mt-3 text-xs leading-6">
-              目前模式：{selectedMode?.name || "標準模式"}
-              {selectedMode?.description ? `，${selectedMode.description}` : ""}
-            </Text>
-          </div>
-          <div className="rounded-xl border border-slate-200/70 bg-white/50 px-4 py-3 text-xs leading-6 text-slate-500">
-            這個設定會套用到全系統的 AI
-            輔助功能。原則是少即是多，能簡單回答就不把事情複雜化。
-          </div>
-        </GlassDrawerSection>
-
         {/* Other Settings Placeholder */}
         <GlassDrawerSection>
           <div className="mb-4 font-semibold text-slate-800">
-            顯示設定 (Display)
+            顯示設定
           </div>
           <div className="flex items-center justify-between mb-4">
-            <Text>緊湊模式 (Compact Mode)</Text>
+            <Text>緊湊模式</Text>
             <Switch size="small" />
           </div>
           <div className="flex items-center justify-between">
-            <Text>減少動畫 (Reduce Motion)</Text>
+            <Text>減少動畫</Text>
             <Switch size="small" />
           </div>
         </GlassDrawerSection>

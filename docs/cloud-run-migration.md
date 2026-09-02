@@ -29,8 +29,10 @@ chmod +x scripts/deploy-cloud-run.sh
 
 PROJECT_ID=moztech-main-db \
 REGION=asia-east1 \
-FRONTEND_API_URL=https://YOUR_BACKEND_URL/api/v1 \
-BACKEND_CORS_ORIGIN=https://YOUR_FRONTEND_URL \
+ERP_PUBLIC_FRONTEND_URL=https://erp.corely.cc \
+ERP_PUBLIC_API_URL=https://api.erp.corely.cc \
+FRONTEND_API_URL=https://api.erp.corely.cc/api/v1 \
+BACKEND_CORS_ORIGIN=https://erp.corely.cc \
 BACKEND_ENV_VARS_FILE=backend/.env.cloudrun.yaml \
 ./scripts/deploy-cloud-run.sh
 ```
@@ -68,8 +70,10 @@ CLOUD_RUN_SERVICE=ecom-accounting-backend
 
 ```text
 CLOUD_RUN_ARTIFACT_REPOSITORY=cloud-run
-FRONTEND_API_URL=https://ecom-accounting-backend-sp5g377smq-de.a.run.app/api/v1
-FRONTEND_WS_URL=https://ecom-accounting-backend-sp5g377smq-de.a.run.app
+ERP_PUBLIC_FRONTEND_URL=https://erp.corely.cc
+ERP_PUBLIC_API_URL=https://api.erp.corely.cc
+FRONTEND_API_URL=https://api.erp.corely.cc/api/v1
+FRONTEND_WS_URL=https://api.erp.corely.cc
 DEFAULT_ENTITY_ID=tw-entity-001
 ```
 
@@ -78,7 +82,8 @@ DEFAULT_ENTITY_ID=tw-entity-001
 1. GitHub Actions 用 Workload Identity 登入 GCP。
 2. Cloud Build 建立 Docker image 並推到 Artifact Registry。
 3. Cloud Run 使用該 image 建立新 revision。
-4. 前端會把 `API_URL` / `WS_URL` 寫進 Cloud Run runtime env，讓 `/config.js` 指向正確後端。
+4. 前端會把 `API_URL` / `WS_URL` 寫進 Cloud Run runtime env，讓 `/config.js` 固定指向 `api.erp.corely.cc`。
+5. 發布流程會以 `erp.corely.cc` 與 `api.erp.corely.cc` 再做正式網域驗收；Cloud Run 原生網址只保留給候選版本檢查與故障排查。
 
 ## 後端環境變數檔範例
 可以建立 `backend/.env.cloudrun.yaml`：

@@ -6,16 +6,14 @@ import {
   Select,
   message,
   Steps,
-  Card,
   Typography,
-  Space,
   Alert,
-  Progress,
 } from 'antd'
+import type { UploadFile, UploadProps } from 'antd'
+import type { ColumnsType } from 'antd/es/table'
 import {
   InboxOutlined,
   FileExcelOutlined,
-  CheckCircleOutlined,
   UploadOutlined,
 } from '@ant-design/icons'
 import * as XLSX from 'xlsx'
@@ -25,11 +23,13 @@ const { Dragger } = Upload
 const { Title, Text } = Typography
 const { Option } = Select
 
+type ImportRow = Record<string, unknown>
+
 interface ImportConfig {
   type: 'salary' | 'fixed_expense'
   label: string
-  columns: any[]
-  sampleData: any[]
+  columns: ColumnsType<ImportRow>
+  sampleData: ImportRow[]
 }
 
 const IMPORT_TYPES: Record<string, ImportConfig> = {
@@ -82,10 +82,8 @@ const IMPORT_TYPES: Record<string, ImportConfig> = {
 const ImportPage: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(0)
   const [importType, setImportType] = useState<string>('salary')
-  const [fileList, setFileList] = useState<any[]>([])
-  const [previewData, setPreviewData] = useState<any[]>([])
-  const [uploading, setUploading] = useState(false)
-  const [progress, setProgress] = useState(0)
+  const [fileList, setFileList] = useState<UploadFile[]>([])
+  const [previewData, setPreviewData] = useState<ImportRow[]>([])
 
   const handleFileRead = (file: File) => {
     const reader = new FileReader()
@@ -95,9 +93,9 @@ const ImportPage: React.FC = () => {
         const workbook = XLSX.read(data, { type: 'binary' })
         const sheetName = workbook.SheetNames[0]
         const sheet = workbook.Sheets[sheetName]
-        const jsonData = XLSX.utils.sheet_to_json(sheet)
+        const jsonData = XLSX.utils.sheet_to_json<ImportRow>(sheet)
         setPreviewData(jsonData)
-        message.success(`成功解析 ${jsonData.length} 筆資料`)
+        message.success(`成功解析 ${jsonData.length} 筆資料；目前僅供預覽，尚未匯入系統`)
         setCurrentStep(1)
       } catch (error) {
         console.error(error)
@@ -107,11 +105,11 @@ const ImportPage: React.FC = () => {
     reader.readAsBinaryString(file)
   }
 
-  const props = {
+  const props: UploadProps = {
     name: 'file',
     multiple: false,
     fileList,
-    beforeUpload: (file: File) => {
+    beforeUpload: (file) => {
       setFileList([file])
       handleFileRead(file)
       return false
@@ -123,31 +121,10 @@ const ImportPage: React.FC = () => {
     },
   }
 
-  const handleImport = async () => {
-    setUploading(true)
-    setProgress(0)
-
-    // Simulate API call with progress
-    const total = previewData.length
-    const batchSize = 50
-    const batches = Math.ceil(total / batchSize)
-
-    for (let i = 0; i < batches; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 500)) // Simulate network delay
-      const currentProgress = Math.round(((i + 1) / batches) * 100)
-      setProgress(currentProgress)
-    }
-
-    setUploading(false)
-    setCurrentStep(2)
-    message.success('匯入完成')
-  }
-
   const reset = () => {
     setCurrentStep(0)
     setFileList([])
     setPreviewData([])
-    setProgress(0)
   }
 
   const config = IMPORT_TYPES[importType]
@@ -164,11 +141,14 @@ const ImportPage: React.FC = () => {
           <Title level={2} className="!mb-1 !font-light">
             資料匯入中心
           </Title>
-          <Text type="secondary">批次匯入薪資、固定費用與其他交易紀錄</Text>
+          <Text type="secondary">檢查薪資與固定費用檔案</Text>
         </div>
         <Select
           value={importType}
-          onChange={setImportType}
+          onChange={(value) => {
+            setImportType(value)
+            reset()
+          }}
           size="large"
           className="w-48"
         >
@@ -177,14 +157,20 @@ const ImportPage: React.FC = () => {
         </Select>
       </div>
 
+      <Alert
+        type="warning"
+        showIcon
+        message="目前僅提供檔案預覽，不會寫入系統"
+        className="!rounded-2xl"
+      />
+
       <div className="glass-panel p-8">
         <Steps
           current={currentStep}
           className="mb-8"
           items={[
-            { title: '上傳檔案', icon: <UploadOutlined /> },
-            { title: '預覽與確認', icon: <FileExcelOutlined /> },
-            { title: '匯入完成', icon: <CheckCircleOutlined /> },
+            { title: '選擇檔案', icon: <UploadOutlined /> },
+            { title: '本機預覽', icon: <FileExcelOutlined /> },
           ]}
         />
 
@@ -194,9 +180,9 @@ const ImportPage: React.FC = () => {
               <p className="ant-upload-drag-icon">
                 <InboxOutlined className="text-blue-500" />
               </p>
-              <p className="ant-upload-text">點擊或拖曳檔案至此區域上傳</p>
+              <p className="ant-upload-text">點擊或拖曳檔案至此區域進行本機預覽</p>
               <p className="ant-upload-hint">
-                支援 .xlsx, .csv 格式。請確保欄位名稱符合範本。
+                支援 .xlsx, .csv 格式；檔案只會在瀏覽器中解析，不會上傳至後端。
               </p>
             </Dragger>
 
@@ -216,8 +202,7 @@ const ImportPage: React.FC = () => {
         {currentStep === 1 && (
           <div className="space-y-8">
             <Alert
-              message={`準備匯入 ${previewData.length} 筆資料`}
-              description="請檢查下方資料是否正確。若有錯誤，請修改 Excel 檔案後重新上傳。"
+              message={`已解析 ${previewData.length} 筆資料`}
               type="info"
               showIcon
             />
@@ -232,42 +217,7 @@ const ImportPage: React.FC = () => {
 
             <div className="flex justify-end gap-4">
               <Button onClick={reset}>重新上傳</Button>
-              <Button
-                type="primary"
-                onClick={handleImport}
-                loading={uploading}
-                size="large"
-              >
-                確認匯入
-              </Button>
             </div>
-          </div>
-        )}
-
-        {currentStep === 2 && (
-          <div className="text-center py-12 space-y-6">
-            <CheckCircleOutlined className="text-6xl text-green-500" />
-            <div>
-              <Title level={3}>匯入成功</Title>
-              <Text type="secondary">
-                已成功將 {previewData.length} 筆資料匯入至系統
-              </Text>
-            </div>
-            <Button type="primary" onClick={reset}>
-              繼續匯入
-            </Button>
-          </div>
-        )}
-
-        {uploading && (
-          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
-            <Card className="w-96 text-center glass-panel">
-              <Space direction="vertical" size="large" className="w-full">
-                <Title level={4}>資料處理中...</Title>
-                <Progress percent={progress} status="active" />
-                <Text type="secondary">請勿關閉視窗</Text>
-              </Space>
-            </Card>
           </div>
         )}
       </div>

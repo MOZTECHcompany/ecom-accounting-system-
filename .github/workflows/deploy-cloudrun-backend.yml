@@ -1,13 +1,16 @@
 name: Deploy Backend to Cloud Run
 
 on:
-  push:
-    branches: ["main"]
+  workflow_call:
   workflow_dispatch: {}
 
 permissions:
   contents: read
   id-token: write
+
+concurrency:
+  group: deploy-backend-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'moztech-main-db' }}
@@ -16,9 +19,16 @@ env:
   GCP_WIF_SERVICE_ACCOUNT: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT || vars.GCP_WIF_SERVICE_ACCOUNT }}
   ARTIFACT_REPOSITORY: ${{ vars.CLOUD_RUN_ARTIFACT_REPOSITORY || 'cloud-run' }}
   BACKEND_SERVICE: ${{ secrets.CLOUD_RUN_BACKEND_SERVICE || secrets.CLOUD_RUN_SERVICE || 'ecom-accounting-backend' }}
+  MIGRATION_JOB: ${{ vars.CLOUD_RUN_MIGRATION_JOB || 'ecom-accounting-db-migrate' }}
+  ERP_PUBLIC_FRONTEND_URL: ${{ vars.ERP_PUBLIC_FRONTEND_URL || 'https://erp.corely.cc' }}
+  ERP_PUBLIC_API_URL: ${{ vars.ERP_PUBLIC_API_URL || 'https://api.erp.corely.cc' }}
 
 jobs:
+  quality:
+    uses: ./.github/workflows/release-quality-gate.yml
+
   deploy:
+    needs: quality
     runs-on: ubuntu-latest
 
     steps:
@@ -31,6 +41,14 @@ jobs:
           set -euo pipefail
           if [[ -z "${GCP_WIF_PROVIDER}" || -z "${GCP_WIF_SERVICE_ACCOUNT}" ]]; then
             echo "::error::Missing GCP_WIF_PROVIDER or GCP_WIF_SERVICE_ACCOUNT. Add them to GitHub Actions Secrets or Variables."
+            exit 1
+          fi
+          if [[ "${ERP_PUBLIC_FRONTEND_URL%/}" != "https://erp.corely.cc" ]]; then
+            echo "::error::ERP_PUBLIC_FRONTEND_URL must be https://erp.corely.cc."
+            exit 1
+          fi
+          if [[ "${ERP_PUBLIC_API_URL%/}" != "https://api.erp.corely.cc" ]]; then
+            echo "::error::ERP_PUBLIC_API_URL must be https://api.erp.corely.cc."
             exit 1
           fi
 
@@ -52,32 +70,157 @@ jobs:
           set -euo pipefail
 
           IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPOSITORY}/${BACKEND_SERVICE}:${GITHUB_SHA}"
+          CANDIDATE_TAG="c-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if (( ${#BACKEND_SERVICE} + ${#CANDIDATE_TAG} + 1 > 46 )); then
+            echo "::error::Cloud Run service name and candidate traffic tag exceed the 46-character platform limit."
+            exit 1
+          fi
 
-          gcloud artifacts repositories describe "${ARTIFACT_REPOSITORY}" \
+          if ! gcloud artifacts repositories describe "${ARTIFACT_REPOSITORY}" \
             --project="${GCP_PROJECT_ID}" \
-            --location="${GCP_REGION}" >/dev/null 2>&1 || \
-          gcloud artifacts repositories create "${ARTIFACT_REPOSITORY}" \
-            --project="${GCP_PROJECT_ID}" \
-            --repository-format=docker \
-            --location="${GCP_REGION}" \
-            --description="Cloud Run containers for ecom-accounting-system"
+            --location="${GCP_REGION}" >/dev/null 2>&1; then
+            gcloud artifacts repositories create "${ARTIFACT_REPOSITORY}" \
+              --project="${GCP_PROJECT_ID}" \
+              --repository-format=docker \
+              --location="${GCP_REGION}" \
+              --description="Cloud Run containers for ecom-accounting-system" || \
+            gcloud artifacts repositories describe "${ARTIFACT_REPOSITORY}" \
+              --project="${GCP_PROJECT_ID}" \
+              --location="${GCP_REGION}" >/dev/null
+          fi
 
           gcloud builds submit backend \
             --project="${GCP_PROJECT_ID}" \
             --tag="${IMAGE}"
+
+          # Clone the current service's database environment, secret references,
+          # service account and Cloud SQL attachment into a single-run migration
+          # job. The application image itself never runs migrations on startup.
+          SERVICE_JSON="$(gcloud run services describe "${BACKEND_SERVICE}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --format=json)"
+          jq -c '
+            [
+              .spec.template.spec.containers[0].env[]? |
+              select(has("value")) |
+              { key: .name, value: .value }
+            ] | from_entries
+          ' <<<"${SERVICE_JSON}" > /tmp/migration-env.json
+
+          mapfile -t secret_refs < <(jq -r '
+            .spec.template.spec.containers[0].env[]? |
+            select(.valueFrom.secretKeyRef.name) |
+            "\(.name)=\(.valueFrom.secretKeyRef.name):\(.valueFrom.secretKeyRef.key // "latest")"
+          ' <<<"${SERVICE_JSON}")
+
+          migration_args=(
+            run jobs deploy "${MIGRATION_JOB}"
+            --project="${GCP_PROJECT_ID}"
+            --region="${GCP_REGION}"
+            --image="${IMAGE}"
+            --command=node
+            --args=scripts/migrate-prod.js
+            --env-vars-file=/tmp/migration-env.json
+            --max-retries=0
+            --task-timeout=15m
+          )
+
+          service_account="$(jq -r '.spec.template.spec.serviceAccountName // empty' <<<"${SERVICE_JSON}")"
+          if [[ -n "${service_account}" ]]; then
+            migration_args+=(--service-account="${service_account}")
+          fi
+
+          cloudsql_instances="$(jq -r '.spec.template.metadata.annotations["run.googleapis.com/cloudsql-instances"] // empty' <<<"${SERVICE_JSON}")"
+          if [[ -n "${cloudsql_instances}" ]]; then
+            migration_args+=(--set-cloudsql-instances="${cloudsql_instances}")
+          fi
+
+          if (( ${#secret_refs[@]} > 0 )); then
+            migration_args+=(--set-secrets="$(IFS=,; echo "${secret_refs[*]}")")
+          fi
+
+          gcloud "${migration_args[@]}"
+          gcloud run jobs execute "${MIGRATION_JOB}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --wait
 
           gcloud run deploy "${BACKEND_SERVICE}" \
             --project="${GCP_PROJECT_ID}" \
             --region="${GCP_REGION}" \
             --image="${IMAGE}" \
             --allow-unauthenticated \
-            --port=3000
+            --no-traffic \
+            --tag="${CANDIDATE_TAG}" \
+            --port=3000 \
+            --update-env-vars="^@^CORS_ORIGIN=${ERP_PUBLIC_FRONTEND_URL%/}@APP_BASE_URL=${ERP_PUBLIC_FRONTEND_URL%/}@FRONTEND_PUBLIC_URL=${ERP_PUBLIC_FRONTEND_URL%/}@FRONTEND_URL=${ERP_PUBLIC_FRONTEND_URL%/}@PAYMENT_LINK_BASE_URL=${ERP_PUBLIC_FRONTEND_URL%/}"
+
+          SERVICE_JSON="$(gcloud run services describe "${BACKEND_SERVICE}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --format=json)"
+          CANDIDATE_URL="$(jq -r --arg tag "${CANDIDATE_TAG}" \
+            '.status.traffic[] | select(.tag == $tag) | .url' <<<"${SERVICE_JSON}")"
+
+          if [[ -z "${CANDIDATE_URL}" || "${CANDIDATE_URL}" == "null" ]]; then
+            echo "::error::Unable to resolve the candidate Cloud Run URL."
+            exit 1
+          fi
+
+          curl --fail --silent --show-error \
+            --connect-timeout 10 \
+            --max-time 60 \
+            --retry 5 \
+            --retry-delay 3 \
+            --retry-all-errors \
+            "${CANDIDATE_URL}/api/v1/health/ready" >/dev/null
+
+          gcloud run services update-traffic "${BACKEND_SERVICE}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --to-tags="${CANDIDATE_TAG}=100"
 
           URL="$(gcloud run services describe "${BACKEND_SERVICE}" \
             --project="${GCP_PROJECT_ID}" \
             --region="${GCP_REGION}" \
             --format='value(status.url)')"
-          echo "url=${URL}" >> "${GITHUB_OUTPUT}"
+
+          curl --fail --silent --show-error \
+            --connect-timeout 10 \
+            --max-time 60 \
+            --retry 5 \
+            --retry-delay 3 \
+            --retry-all-errors \
+            "${URL}/api/v1/health/ready" >/dev/null
+
+          PUBLIC_API_URL="${ERP_PUBLIC_API_URL%/}"
+          PUBLIC_FRONTEND_URL="${ERP_PUBLIC_FRONTEND_URL%/}"
+          curl --fail --silent --show-error \
+            --connect-timeout 10 \
+            --max-time 60 \
+            --retry 5 \
+            --retry-delay 3 \
+            --retry-all-errors \
+            "${PUBLIC_API_URL}/api/v1/health/ready" >/dev/null
+
+          curl --fail --silent --show-error \
+            --connect-timeout 10 \
+            --max-time 60 \
+            -X OPTIONS \
+            -H "Origin: ${PUBLIC_FRONTEND_URL}" \
+            -H 'Access-Control-Request-Method: GET' \
+            -H 'Access-Control-Request-Headers: authorization' \
+            -D /tmp/erp-cors.headers \
+            -o /dev/null \
+            "${PUBLIC_API_URL}/api/v1/auth/login-entities"
+          if ! grep -Fqi "access-control-allow-origin: ${PUBLIC_FRONTEND_URL}" /tmp/erp-cors.headers; then
+            echo "::error::ERP public API did not authorize the ERP public frontend origin."
+            exit 1
+          fi
+
+          echo "url=${PUBLIC_API_URL}" >> "${GITHUB_OUTPUT}"
+          echo "cloud_run_url=${URL}" >> "${GITHUB_OUTPUT}"
 
       - name: Show service URL
         run: echo "Deployed to ${{ steps.deploy.outputs.url }}"

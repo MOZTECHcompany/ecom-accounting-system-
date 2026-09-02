@@ -38,7 +38,6 @@ import { attendanceService } from "../services/attendance.service";
 import { payrollService } from "../services/payroll.service";
 import { useAuth } from "../contexts/AuthContext";
 import { hasPermission } from "../utils/access";
-import { GlassCard } from "../components/ui/GlassCard";
 import {
   Department,
   Employee,
@@ -246,8 +245,6 @@ const onboardingStatusMeta: Record<
   VERIFIED: { color: "green", label: "已核實" },
 };
 
-const DEFAULT_EMPLOYEE_INITIAL_PASSWORD = "qwer1234";
-
 const employeeFormFieldLabels: Record<string, string> = {
   employeeNo: "員工代碼",
   name: "姓名",
@@ -406,7 +403,7 @@ const EmployeesTab = ({ departments }: { departments: Department[] }) => {
     salaryBaseOriginal: employee?.salaryBaseOriginal ?? 0,
     isActive: employee?.isActive ?? true,
     loginEmail: employee?.user?.email || "",
-    loginPassword: employee ? "" : DEFAULT_EMPLOYEE_INITIAL_PASSWORD,
+    loginPassword: "",
     onboardingRequirements: onboardingDocDefinitions.reduce(
       (acc, { docType }) => ({
         ...acc,
@@ -1119,7 +1116,7 @@ const EmployeesTab = ({ departments }: { departments: Department[] }) => {
             showIcon
             message={
               mode === "create"
-                ? `新增員工後會自動產生員工代碼；初始密碼預設為 ${DEFAULT_EMPLOYEE_INITIAL_PASSWORD}。`
+                ? "新增員工後會自動產生員工代碼與唯一的臨時密碼；只會在建立成功後顯示一次。"
                 : "密碼不會以明文保存；輸入新密碼後，員工下次登入會被要求修改密碼。"
             }
           />
@@ -1135,9 +1132,6 @@ const EmployeesTab = ({ departments }: { departments: Department[] }) => {
           <Title level={4} className="!mb-1 !font-light">
             員工名單
           </Title>
-          <Text className="text-gray-500">
-            在這裡建立員工、維護到職資訊與薪資設定；員工代碼與首次登入憑證會由系統自動產生。
-          </Text>
         </div>
         {canManageEmployees ? (
           <div className="flex shrink-0 items-center">
@@ -1160,13 +1154,9 @@ const EmployeesTab = ({ departments }: { departments: Department[] }) => {
           showIcon
           className="mb-6"
           message="目前登入者尚未有對應員工資料"
-          description="這會讓「我的請假」、「我的薪資單」、「打卡儀表板」等員工頁面看起來像沒功能。請確認目前使用者是否已有員工資料。"
+          description="請先連結員工資料。"
         />
       ) : null}
-
-      <div className="rounded-2xl border border-white/30 bg-white/45 px-4 py-3 text-xs leading-6 text-slate-500 shadow-[0_10px_30px_rgba(148,163,184,0.08)]">
-        建議先建立部門，再新增員工；系統會自動產生員工代碼與首次登入密碼。若需要處理假別或額度，可切換上方頁籤接續設定。
-      </div>
 
       {reviewQueue.length > 0 ? (
         <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 shadow-[0_10px_30px_rgba(245,158,11,0.08)]">
@@ -2396,50 +2386,9 @@ const EmployeesPage: React.FC = () => {
       transition={{ duration: 0.5 }}
       className="space-y-8"
     >
-      <GlassCard className="relative overflow-hidden border-white/35 bg-white/40">
-        <div className="absolute inset-y-0 right-0 w-56 bg-[radial-gradient(circle_at_center,rgba(255,197,94,0.28),transparent_72%)]" />
-        <div className="relative flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-          <div className="max-w-3xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/35 bg-white/60 px-4 py-2 text-xs font-semibold tracking-[0.24em] text-slate-500 uppercase">
-              <ApartmentOutlined />
-              Workforce Console
-            </div>
-            <Title level={2} className="!mb-2 !mt-4 !font-light">
-              員工與部門管理
-            </Title>
-            <Text className="text-[15px] leading-7 text-slate-500">
-              員工、部門、假別規則與年度額度都已整合在同一個管理頁。你可以照建立組織、維護人員、設定規則的順序一路完成，不需要再跳往其他入口。
-            </Text>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-3 xl:w-[420px]">
-            <div className="rounded-2xl border border-white/35 bg-white/55 px-4 py-4">
-              <div className="text-xs font-semibold tracking-[0.16em] text-slate-400 uppercase">
-                Step 1
-              </div>
-              <div className="mt-2 text-sm font-medium text-slate-700">
-                建立部門
-              </div>
-            </div>
-            <div className="rounded-2xl border border-white/35 bg-white/55 px-4 py-4">
-              <div className="text-xs font-semibold tracking-[0.16em] text-slate-400 uppercase">
-                Step 2
-              </div>
-              <div className="mt-2 text-sm font-medium text-slate-700">
-                產生員工代碼
-              </div>
-            </div>
-            <div className="rounded-2xl border border-white/35 bg-white/55 px-4 py-4">
-              <div className="text-xs font-semibold tracking-[0.16em] text-slate-400 uppercase">
-                Step 3
-              </div>
-              <div className="mt-2 text-sm font-medium text-slate-700">
-                補假別與年度額度
-              </div>
-            </div>
-          </div>
-        </div>
-      </GlassCard>
+      <Title level={2} className="!mb-0 !font-light">
+        員工管理
+      </Title>
 
       <Tabs
         defaultActiveKey="employees"
