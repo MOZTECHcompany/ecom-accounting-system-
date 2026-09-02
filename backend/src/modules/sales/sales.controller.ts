@@ -32,6 +32,11 @@ import {
   CreateSalesQuotationDto,
   UpdateSalesQuotationStatusDto,
 } from './dto/create-sales-quotation.dto';
+import {
+  CreateAfterSalesCaseDto,
+  SetAfterSalesItemPaymentRequiredDto,
+  ShipAfterSalesCaseDto,
+} from './dto/create-after-sales-case.dto';
 /**
  * SalesController 銷售控制器
  */
@@ -164,7 +169,7 @@ export class SalesController {
   @Post('after-sales-cases')
   @ApiOperation({ summary: '建立售後來回件' })
   async createAfterSalesCase(
-    @Body() body: any,
+    @Body() body: CreateAfterSalesCaseDto,
     @CurrentUser('id') userId: string,
   ) {
     return this.afterSalesCaseService.create(body, userId);
@@ -177,7 +182,7 @@ export class SalesController {
     @Param('caseId', ParseUUIDPipe) caseId: string,
     @Param('itemId', ParseUUIDPipe) itemId: string,
     @Query('entityId') entityId: string,
-    @Body() body: { paymentRequired: boolean; paymentAmountOriginal?: number },
+    @Body() body: SetAfterSalesItemPaymentRequiredDto,
   ) {
     return this.afterSalesCaseService.setItemPaymentRequired(
       this.requireEntityId(entityId),
@@ -198,7 +203,7 @@ export class SalesController {
   }
 
   @Post('after-sales-cases/:caseId/mark-paid')
-  @ApiOperation({ summary: '確認售後來回件客戶付款並自動標記發票已開立' })
+  @ApiOperation({ summary: '確認售後來回件客戶付款（不開立發票）' })
   @ApiQuery({ name: 'entityId', required: true })
   async markAfterSalesPaid(
     @Param('caseId', ParseUUIDPipe) caseId: string,
@@ -239,7 +244,7 @@ export class SalesController {
   async shipAfterSalesCase(
     @Param('caseId', ParseUUIDPipe) caseId: string,
     @Query('entityId') entityId: string,
-    @Body() body: { trackingNo?: string },
+    @Body() body: ShipAfterSalesCaseDto,
   ) {
     return this.afterSalesCaseService.ship(
       this.requireEntityId(entityId),

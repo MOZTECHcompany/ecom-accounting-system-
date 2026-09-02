@@ -21,6 +21,8 @@ env:
   FRONTEND_SERVICE: ${{ secrets.CLOUD_RUN_FRONTEND_SERVICE || 'ecom-accounting-frontend' }}
   FRONTEND_API_URL: ${{ vars.FRONTEND_API_URL || secrets.FRONTEND_API_URL || '' }}
   FRONTEND_WS_URL: ${{ vars.FRONTEND_WS_URL || secrets.FRONTEND_WS_URL || '' }}
+  ERP_PUBLIC_FRONTEND_URL: ${{ vars.ERP_PUBLIC_FRONTEND_URL || 'https://erp.corely.cc' }}
+  ERP_PUBLIC_API_URL: ${{ vars.ERP_PUBLIC_API_URL || 'https://api.erp.corely.cc' }}
   DEFAULT_ENTITY_ID: ${{ vars.DEFAULT_ENTITY_ID || 'tw-entity-001' }}
 
 jobs:
@@ -44,8 +46,19 @@ jobs:
             exit 1
           fi
           API_BASE="${FRONTEND_API_URL%/}"
+          WS_BASE="${FRONTEND_WS_URL:-${ERP_PUBLIC_API_URL}}"
+          WS_BASE="${WS_BASE%/}"
+          EXPECTED_API_BASE="${ERP_PUBLIC_API_URL%/}/api/v1"
           if [[ ! "${API_BASE}" =~ ^https://.+/api/v1$ ]]; then
             echo "::error::FRONTEND_API_URL must be a non-empty HTTPS URL ending in /api/v1."
+            exit 1
+          fi
+          if [[ "${API_BASE}" != "${EXPECTED_API_BASE}" ]]; then
+            echo "::error::FRONTEND_API_URL must use the ERP public API domain: ${EXPECTED_API_BASE}."
+            exit 1
+          fi
+          if [[ "${WS_BASE}" != "${ERP_PUBLIC_API_URL%/}" ]]; then
+            echo "::error::FRONTEND_WS_URL must use the ERP public API domain: ${ERP_PUBLIC_API_URL%/}."
             exit 1
           fi
 
@@ -68,6 +81,7 @@ jobs:
           IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPOSITORY}/${FRONTEND_SERVICE}:${GITHUB_SHA}"
           CANDIDATE_TAG="candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           API_BASE="${FRONTEND_API_URL%/}"
+          PUBLIC_FRONTEND_URL="${ERP_PUBLIC_FRONTEND_URL%/}"
 
           if ! gcloud artifacts repositories describe "${ARTIFACT_REPOSITORY}" \
             --project="${GCP_PROJECT_ID}" \
@@ -170,13 +184,14 @@ jobs:
             --retry 5 \
             --retry-delay 3 \
             --retry-all-errors \
-            "${URL}/config.js")"
+            "${PUBLIC_FRONTEND_URL}/config.js")"
           if [[ "${PRODUCTION_CONFIG_JS}" != *"${EXPECTED_CONFIG}"* ]]; then
             echo "::error::Production frontend did not expose the expected API URL."
             exit 1
           fi
 
-          echo "url=${URL}" >> "${GITHUB_OUTPUT}"
+          echo "url=${PUBLIC_FRONTEND_URL}" >> "${GITHUB_OUTPUT}"
+          echo "cloud_run_url=${URL}" >> "${GITHUB_OUTPUT}"
 
       - name: Show service URL
         run: echo "Deployed to ${{ steps.deploy.outputs.url }}"

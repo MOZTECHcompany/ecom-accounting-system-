@@ -8,8 +8,10 @@ REPOSITORY="${REPOSITORY:-cloud-run}"
 FRONTEND_SERVICE="${FRONTEND_SERVICE:-ecom-accounting-frontend}"
 BACKEND_SERVICE="${BACKEND_SERVICE:-ecom-accounting-backend}"
 DEFAULT_ENTITY_ID="${DEFAULT_ENTITY_ID:-tw-entity-001}"
-FRONTEND_API_URL="${FRONTEND_API_URL:-}"
-BACKEND_CORS_ORIGIN="${BACKEND_CORS_ORIGIN:-}"
+ERP_PUBLIC_FRONTEND_URL="${ERP_PUBLIC_FRONTEND_URL:-https://erp.corely.cc}"
+ERP_PUBLIC_API_URL="${ERP_PUBLIC_API_URL:-https://api.erp.corely.cc}"
+FRONTEND_API_URL="${FRONTEND_API_URL:-${ERP_PUBLIC_API_URL%/}/api/v1}"
+BACKEND_CORS_ORIGIN="${BACKEND_CORS_ORIGIN:-${ERP_PUBLIC_FRONTEND_URL%/}}"
 BACKEND_ENV_VARS_FILE="${BACKEND_ENV_VARS_FILE:-}"
 
 if [[ -z "${PROJECT_ID}" || -z "${REGION}" ]]; then
@@ -18,12 +20,12 @@ if [[ -z "${PROJECT_ID}" || -z "${REGION}" ]]; then
 fi
 
 if [[ -z "${FRONTEND_API_URL}" ]]; then
-  echo "FRONTEND_API_URL is required, for example: https://ecom-accounting-backend-xxxx.a.run.app/api/v1"
+  echo "FRONTEND_API_URL is required, for example: https://api.erp.corely.cc/api/v1"
   exit 1
 fi
 
 if [[ -z "${BACKEND_CORS_ORIGIN}" ]]; then
-  echo "BACKEND_CORS_ORIGIN is required, for example: https://ecom-accounting-frontend-xxxx.a.run.app"
+  echo "BACKEND_CORS_ORIGIN is required, for example: https://erp.corely.cc"
   exit 1
 fi
 
@@ -86,10 +88,10 @@ backend_deploy_args=(
 if [[ -n "${BACKEND_ENV_VARS_FILE}" ]]; then
   backend_deploy_args+=(
     --env-vars-file="${BACKEND_ENV_VARS_FILE}"
-    --update-env-vars="CORS_ORIGIN=${BACKEND_CORS_ORIGIN}"
+    --update-env-vars="^@^CORS_ORIGIN=${BACKEND_CORS_ORIGIN}@APP_BASE_URL=${ERP_PUBLIC_FRONTEND_URL%/}@FRONTEND_PUBLIC_URL=${ERP_PUBLIC_FRONTEND_URL%/}@FRONTEND_URL=${ERP_PUBLIC_FRONTEND_URL%/}@PAYMENT_LINK_BASE_URL=${ERP_PUBLIC_FRONTEND_URL%/}"
   )
 else
-  backend_deploy_args+=(--set-env-vars="CORS_ORIGIN=${BACKEND_CORS_ORIGIN}")
+  backend_deploy_args+=(--update-env-vars="^@^CORS_ORIGIN=${BACKEND_CORS_ORIGIN}@APP_BASE_URL=${ERP_PUBLIC_FRONTEND_URL%/}@FRONTEND_PUBLIC_URL=${ERP_PUBLIC_FRONTEND_URL%/}@FRONTEND_URL=${ERP_PUBLIC_FRONTEND_URL%/}@PAYMENT_LINK_BASE_URL=${ERP_PUBLIC_FRONTEND_URL%/}")
 fi
 
 gcloud "${backend_deploy_args[@]}"

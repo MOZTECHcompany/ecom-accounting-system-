@@ -20,6 +20,8 @@ env:
   ARTIFACT_REPOSITORY: ${{ vars.CLOUD_RUN_ARTIFACT_REPOSITORY || 'cloud-run' }}
   BACKEND_SERVICE: ${{ secrets.CLOUD_RUN_BACKEND_SERVICE || secrets.CLOUD_RUN_SERVICE || 'ecom-accounting-backend' }}
   MIGRATION_JOB: ${{ vars.CLOUD_RUN_MIGRATION_JOB || 'ecom-accounting-db-migrate' }}
+  ERP_PUBLIC_FRONTEND_URL: ${{ vars.ERP_PUBLIC_FRONTEND_URL || 'https://erp.corely.cc' }}
+  ERP_PUBLIC_API_URL: ${{ vars.ERP_PUBLIC_API_URL || 'https://api.erp.corely.cc' }}
 
 jobs:
   quality:
@@ -39,6 +41,14 @@ jobs:
           set -euo pipefail
           if [[ -z "${GCP_WIF_PROVIDER}" || -z "${GCP_WIF_SERVICE_ACCOUNT}" ]]; then
             echo "::error::Missing GCP_WIF_PROVIDER or GCP_WIF_SERVICE_ACCOUNT. Add them to GitHub Actions Secrets or Variables."
+            exit 1
+          fi
+          if [[ "${ERP_PUBLIC_FRONTEND_URL%/}" != "https://erp.corely.cc" ]]; then
+            echo "::error::ERP_PUBLIC_FRONTEND_URL must be https://erp.corely.cc."
+            exit 1
+          fi
+          if [[ "${ERP_PUBLIC_API_URL%/}" != "https://api.erp.corely.cc" ]]; then
+            echo "::error::ERP_PUBLIC_API_URL must be https://api.erp.corely.cc."
             exit 1
           fi
 
@@ -139,7 +149,8 @@ jobs:
             --allow-unauthenticated \
             --no-traffic \
             --tag="${CANDIDATE_TAG}" \
-            --port=3000
+            --port=3000 \
+            --update-env-vars="^@^CORS_ORIGIN=${ERP_PUBLIC_FRONTEND_URL%/}@APP_BASE_URL=${ERP_PUBLIC_FRONTEND_URL%/}@FRONTEND_PUBLIC_URL=${ERP_PUBLIC_FRONTEND_URL%/}@FRONTEND_URL=${ERP_PUBLIC_FRONTEND_URL%/}@PAYMENT_LINK_BASE_URL=${ERP_PUBLIC_FRONTEND_URL%/}"
 
           SERVICE_JSON="$(gcloud run services describe "${BACKEND_SERVICE}" \
             --project="${GCP_PROJECT_ID}" \
@@ -179,7 +190,33 @@ jobs:
             --retry-all-errors \
             "${URL}/api/v1/health/ready" >/dev/null
 
-          echo "url=${URL}" >> "${GITHUB_OUTPUT}"
+          PUBLIC_API_URL="${ERP_PUBLIC_API_URL%/}"
+          PUBLIC_FRONTEND_URL="${ERP_PUBLIC_FRONTEND_URL%/}"
+          curl --fail --silent --show-error \
+            --connect-timeout 10 \
+            --max-time 60 \
+            --retry 5 \
+            --retry-delay 3 \
+            --retry-all-errors \
+            "${PUBLIC_API_URL}/api/v1/health/ready" >/dev/null
+
+          curl --fail --silent --show-error \
+            --connect-timeout 10 \
+            --max-time 60 \
+            -X OPTIONS \
+            -H "Origin: ${PUBLIC_FRONTEND_URL}" \
+            -H 'Access-Control-Request-Method: GET' \
+            -H 'Access-Control-Request-Headers: authorization' \
+            -D /tmp/erp-cors.headers \
+            -o /dev/null \
+            "${PUBLIC_API_URL}/api/v1/auth/login-entities"
+          if ! grep -Fqi "access-control-allow-origin: ${PUBLIC_FRONTEND_URL}" /tmp/erp-cors.headers; then
+            echo "::error::ERP public API did not authorize the ERP public frontend origin."
+            exit 1
+          fi
+
+          echo "url=${PUBLIC_API_URL}" >> "${GITHUB_OUTPUT}"
+          echo "cloud_run_url=${URL}" >> "${GITHUB_OUTPUT}"
 
       - name: Show service URL
         run: echo "Deployed to ${{ steps.deploy.outputs.url }}"

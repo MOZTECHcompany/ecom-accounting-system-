@@ -4,8 +4,9 @@
 
 ## 本輪實際驗證範圍
 
-- 目前可用正式入口：`https://ecom-accounting-frontend-sp5g377smq-de.a.run.app`
-- Cloud Run frontend `/config.js` 已指向 `https://ecom-accounting-backend-sp5g377smq-de.a.run.app/api/v1`
+- ERP 正式入口：`https://erp.corely.cc`
+- ERP 正式 API：`https://api.erp.corely.cc/api/v1`
+- Cloud Run 原生網址只保留作候選版本驗證與故障排查，不作為日常對外入口
 - Cloud Run backend Swagger 可達：`/api-docs`
 - Render frontend 仍可載入登入頁，但 `/config.js` 是空設定
 - Render backend 回應 `Service Suspended`，不可作為正式驗證入口
@@ -900,3 +901,86 @@ Cloud Run 正式資料目前已經不是空系統，但核心治理缺口很大�
 - 每個 Gmail / Google Workspace 帳號分別完成唯讀 OAuth，token 只放 Secret Manager；先做歷史 dry-run 與各信箱筆數 / 日期範圍核對。
 - ECOUNT 先確認電子發票是否有正式查詢 API；若沒有，先用進項 / 銷項 Excel 匯出做歷史回補，再評估受控的唯讀自動匯出流程。
 - staging 對照供應商、採購單、收貨單與付款後，才允許人工批准轉 AP；銷項則對照 SalesOrder / Invoice。正式切換前 ECOUNT 維持來源系統，不啟用雙向寫入。
+
+### U. ECOUNT 系統移轉採 API 增量與 Excel 歷史回補雙軌
+
+2026-09-01 已完成第一輪唯讀移轉盤點：
+
+- 登入後 Open API 手冊逐項核對，真正可唯讀查詢的範圍為品項、採購單、庫存總量與分倉庫庫存；客戶／供應商、銷售、進貨、會計憑證、電子發票、職員與出勤沒有對等的查詢 API。採購單每次最多查 30 日、每頁最多 100 筆，正式 connector 必須分日期窗、分頁並保存 cursor。
+- 已從 ECOUNT 唯讀匯出 9 份移轉來源：含停用品的完整品項 8,363、客戶／供應商 640、倉庫／工廠 7、部門 9、承辦人 21、專案 17、會計科目 459、職員 20，以及 2026-09-01 分倉庫非零庫存 1,371 列。九份公司抬頭均為 `萬博創意科技有限公司`，原始主鍵皆無空白、無重複。
+- 第一次品項匯出只有 1,012 個啟用品，庫存報表卻包含停用品，造成 563 個庫存品號看似不在主檔；重新使用「包括中止使用」匯出 8,363 個品項後，1,371 個庫存品號全部可在主檔找到。這是來源篩選口徑問題，不是遺失 563 筆庫存資料。
+- 分倉庫報表的每列庫存合計、六個顯示倉庫加總及報表總計均平衡，六個倉庫欄也都能對應倉庫主檔；但仍有 6 列負庫存、合計 -46,554，必須先分類為允許負庫存、非實體品項或歷史錯帳，不能自動改成零。
+- 原始 Excel 只保留在本機 Downloads，未加入 Git；稽核表只保存檔名、工作表、筆數、主鍵名稱與 SHA-256，不複製客戶、聯絡人或員工明細。
+- ECOUNT 匯出格式第一列是公司名稱、第二列才是欄名，最後一列另有匯出時間；若使用一般 `sheet_to_json` 預設欄名會誤判資料。新增 `common/imports/ecount-export.ts`，會偵測真正欄名列、排除 ECOUNT 匯出時間、核對公司名稱、必填欄位、原始主鍵與跨檔公司一致性；無法辨識時停止，不猜欄位。
+- 新增 `npm run audit:ecount-migration -- --file ...`，只輸出筆數、欄位、雜湊、跨檔核對與問題碼，不輸出逐筆個資。實際 9 份匯出檔 dry-run 目前為 `needs_review`，唯一未通過關卡是 6 列負庫存；資料尚未匯入正式表。
+- `artifacts/ECOUNT移轉盤點_2026-09-01.xlsx` 已整理主檔／庫存筆數、API 覆蓋、原始檔雜湊、跨檔核對與正式切換關卡；尚未將任何 ECOUNT 資料寫入自建 ERP 正式資料表。
+
+後續底層原則：
+
+- 品項、採購單與分倉庫庫存改用唯讀 API 做增量同步；API 金鑰只放 Secret Manager，登入 session 短期使用，固定出口 IP 與速率限制由 connector 管理。
+- 其他歷史資料由 ECOUNT Excel 匯出進 staging，保留來源檔雜湊、ECOUNT 原始代碼、來源日期與每列 checksum；重跑以來源鍵冪等，不直接 upsert 正式財務資料。
+- ECOUNT 的承辦人不等同自建 ERP 員工；客戶／供應商共用主檔也必須拆成 Customer / Vendor；會計科目、倉庫與部門先做 mapping，再由人工批准轉正式主檔。
+- 正式切換前仍需補：指定切換日的最終分倉庫庫存、銷貨／訂貨、進貨／採購、庫存異動、總帳與期初餘額、AR/AP、銀行與現金、電子發票／折讓／作廢、薪資與出勤歷史。每一批都先 dry-run、核對筆數與金額平衡，再允許寫入。
+
+### V. ERP 正式自訂網域
+
+2026-09-02 已完成正式網域設定與驗收：
+
+- ERP 對外正式入口改為 `https://erp.corely.cc`；GoDaddy DNS 新增 `erp` CNAME 指向 `ghs.googlehosted.com`，TTL 為 30 分鐘。
+- Cloud Run domain mapping 將 `erp.corely.cc` 綁定正式 frontend service `ecom-accounting-frontend`；`Ready`、`CertificateProvisioned`、`DomainRoutable` 均為 `True`。
+- Google 管理憑證的 CN / SAN 均為 `erp.corely.cc`；`https://erp.corely.cc/login` 與 `https://erp.corely.cc/config.js` 實測回 HTTP 200。
+- 動態 `config.js` 仍指向正式 backend `https://ecom-accounting-backend-sp5g377smq-de.a.run.app/api/v1`，未改接候選或測試環境。
+- Chrome 實際載入 `https://erp.corely.cc/login`，頁面標題為「電子商務 ERP」，公司、帳號、密碼與登入控制項均正常顯示。
+- 原 Cloud Run 網址 `https://ecom-accounting-frontend-sp5g377smq-de.a.run.app` 保留作為故障排查與復原入口，不再作為日常對外網址；既有 Corely AI 產品子網域未變更。
+
+2026-09-02 ERP API 自訂網域與全鏈路切換：
+
+- 建立 `api.erp.corely.cc` Cloud Run domain mapping，指向正式 backend service `ecom-accounting-backend`；GoDaddy `api.erp` CNAME 指向 `ghs.googlehosted.com`，`Ready`、`CertificateProvisioned`、`DomainRoutable` 均為 `True`。
+- Google 管理憑證的 CN / SAN 為 `api.erp.corely.cc`。正式健康檢查、公開登入法人清單、受保護 API 的 `401` 邊界、`erp.corely.cc` CORS 與 Socket.IO polling handshake 全數通過。
+- Backend 使用既有正式 image 建立 config-only revision `ecom-accounting-backend-00502-qek`，100% 流量；`CORS_ORIGIN` 只保留 `https://erp.corely.cc`，並將 `APP_BASE_URL`、`FRONTEND_PUBLIC_URL`、`FRONTEND_URL`、`PAYMENT_LINK_BASE_URL` 統一為 `https://erp.corely.cc`。
+- Frontend 使用既有正式 image 建立 config-only revision `ecom-accounting-frontend-00266-xah`，100% 流量；正式 `/config.js` 的 REST API 與 WebSocket 分別為 `https://api.erp.corely.cc/api/v1`、`https://api.erp.corely.cc`。
+- GitHub Variables `FRONTEND_API_URL`、`FRONTEND_WS_URL`、`ERP_PUBLIC_FRONTEND_URL`、`ERP_PUBLIC_API_URL` 已同步為 Corely ERP 網域；前後端 workflow 新增正式網域契約與發布後 custom-domain smoke test，避免後續部署退回 Cloud Run 原生網址。
+- 電子發票、Shopify、1Shop、Shopline、Meta Ads、Google Ads 六條 Cloud Scheduler URI 均改為 `api.erp.corely.cc`；更新前後逐項比對 schedule、timezone、state、retry、method、headers、body 均未改變。切換後實際執行收據為電子發票 HTTP 200，其餘五條 HTTP 201。
+- 瀏覽器重新載入 `erp.corely.cc/login` 後，登入法人 API 由 `api.erp.corely.cc` 回 HTTP 200。第三方 Shopify、1Shop、Shopline、綠界、Meta、Google 官方 API host 不改寫、不經自建網域代理。
+- Cloud Run 自動產生的 service / revision tag 網址仍存在，僅用於零流量候選驗證、平台維運與故障復原；ERP 的人員操作、前端 runtime、公開連結與正式排程一律使用 Corely 自訂網域。
+
+### W. 售後管理整併採完整功能保留與 ERP 單一資料源
+
+2026-09-02 已完成第一輪唯讀盤點與整併規格：
+
+- 使用者確認現有售後系統每項功能皆為已設計的正式需求；整併不得以簡化模組取代、不得使用 iframe，也不得讓舊系統與 ERP 長期雙寫庫存、付款、退款或發票。
+- 正式售後 Cloud Run service `moztech-after-sales-system` 的 revision `00253-vfv` 目前承接 100% 流量，使用獨立資料庫、認證、LINE / LIFF、付款憑證、綠界發票與保固來源。
+- 正式資料唯讀基準為 613 筆案件，其中 499 筆有效、114 筆軟刪除；有效案件包含漏寄補寄 66、私下購買 131、來回件 67、退款派車 58、維修 177。另有 682 筆商品明細、371 筆正向物流、284 筆逆物流、268 筆付款、51 筆退款、521 筆發票、4,911 筆 Timeline 與 5,138 筆 Audit。
+- 499 筆有效案件都有 Timeline 與 Audit。75 筆歷史商品明細缺 `productId`，必須進人工 mapping queue；不允許用名稱、金額或相似 SKU 猜測配對。
+- 現有售後系統只保存庫存處置結果，尚未寫入 ERP `InventoryTransaction`；商品服務目前也仍讀售後資料庫自己的 Product 表，不是真正的 ERP 商品 API。
+- ERP 現有 `AfterSalesCase` 僅涵蓋簡化來回件流程；`markPaid()` 會直接製造內部已開立 Invoice，而收件與出貨只改案件狀態、不產生庫存流水。這三項必須先從 domain logic 拆開，不能以畫面補丁處理。
+- 完整功能保留、資料責任、狀態機、庫存與發票規則、遷移階段及驗收門檻已整理於 `backend/docs/after-sales-erp-integration-audit-2026-09-02.md`。
+- GitHub 遠端再核對後發現售後本機 checkout `523792c` 落後 `origin/main=6ed5d6d` 共 70 個 commits、97 個檔案；新增或修正維修報價、保固來源、ERP 商品搜尋、物流稽核、發票重開與角色權限等能力。依使用者後續指定，`523792c` 固定為不得遺失的功能驗收基線；遠端 70 個 commits 逐項當作候選修正審核，不直接混入或覆蓋。ERP 工作分支 `7f60c5e3` 相對 `origin/main` 為 ahead 20 / behind 0，但本機仍有未提交工作，因此未執行 pull、reset 或 checkout。
+
+2026-09-02 第一個安全建構切片：
+
+- `523792c` 功能驗收基線與隔離的 `origin/main=6ed5d6d` 候選都已新增受服務金鑰保護的 health、案件增量清單與案件完整明細 API；使用明確 select 排除 `passwordHash` 與認證設定。
+- ERP 已新增 `/api/v1/after-sales/readiness`、`/api/v1/after-sales/legacy/cases` 與案件明細入口，瀏覽器不接觸舊系統金鑰；JWT 與角色權限保持在 ERP 邊界。
+- 缺設定、授權失敗、網路失敗與查詢逾時都 fail closed，不會以空資料代表同步成功。
+- 70 個遠端 commits 已逐項分類並固定功能差異矩陣；完整清單與採用邊界記錄於 `backend/docs/after-sales-523792c-remote-delta-review-2026-09-02.md`。
+- ERP 已建立售後類型／狀態契約、來源 payload 稽核器、穩定 checksum、重複來源與商品 mapping 待審規則，以及 preview、preview-page、stage-page 三個管理入口。
+- 已產生但尚未套用 `AfterSalesImportRun` / `AfterSalesImportCandidate` staging migration；stage-page 只寫暫存快照與稽核結果，不建立正式案件，也不觸發庫存、付款、退款或開票。
+- `markPaid()` 已在 domain service 從付款與發票耦合中拆開，且補上會計、收件、出貨階段守門與冪等測試；前端不再宣稱付款時已自動開票。
+- 建案、商品付款設定與出貨 API 已改用 typed DTO，會在進入服務層前拒絕未知欄位、無效 ID、空明細、負數金額與無效日期。
+- 兩個舊售後候選的 Next production build 與 lint 通過；隔離候選 auth test 1/1 通過；ERP backend 33 suites / 119 tests、backend build、frontend build 及 Prisma format / validate / generate 通過。舊售後依賴樹另有 29 個 audit 項目，列為部署前阻擋條件。
+- 此切片尚未建立正式 Secret、尚未套用 migration、尚未部署，也沒有正式庫存、付款、退款或發票寫入。
+
+2026-09-02 staging 部署與影子匯入收據：
+
+- 使用者只授權進入 staging，未授權正式庫存、退款或開票寫入。正式 `moztech-after-sales-system-00253-vfv` 與 `ecom-accounting-backend-00502-qek` revision 及其正式流量均未變更。
+- 新增 IAM 限制的 `moztech-after-sales-exporter-staging-00001-lt5`。服務以 `READ_ONLY_EXPORTER_MODE=true` 啟動，明確跳過 migration / bootstrap，只允許 `/api/integration/v1/*` 的 GET / HEAD；未授權請求為 HTTP 403，只有 ERP runtime service account 可 invoke，應用層另以 Secret Manager 金鑰驗證。
+- 新增隔離 PostgreSQL database `erp_after_sales_staging`。空白資料庫第一次重建揭露歷史 seed migration 的 raw SQL 未提供 UUID 主鍵；已從 migration 根因修正並加入回歸測試，成功 execution 為 `ecom-accounting-after-sales-staging-migrate-ncvd5`。bootstrap 亦改用與正式啟動相同的 Cloud SQL URL 組裝邏輯，成功 execution 為 `ecom-accounting-after-sales-staging-bootstrap-8bhvj`。
+- ERP staging service `ecom-accounting-backend-after-sales-staging-00002-n44` 使用 image digest `sha256:21b72502d63bf232bb27b5f96ff39423f9e17fd2a68fb8fe8f45b97f181eada7`；Cloud Build `839fbb8d-1cce-437c-bd39-5f5ea8efadc6` 成功。服務只連 staging DB，Shopify、1Shop、Shopline、ECPay invoice、Meta、Google 與 reconciliation 自動同步旗標均明確關閉。
+- 端到端 readiness 經 Cloud Run IAM token、ERP JWT 與 exporter 應用金鑰三層驗證回 HTTP 200：`connected=true`、`mode=read_only`、`sourceCommit=6ed5d6d`、`featureBaseline=523792c`。
+- 目前來源為 614 筆：500 筆有效、114 筆軟刪除。有效案件為漏寄補寄 66、私下購買 132、來回件 67、退款派車 58、維修 177；相較 16:12 的基準新增 1 筆私下購買案件，屬來源真實增量，不覆寫舊基準。
+- 13 頁全量 dry-run 為 candidate 487、needs review 13、deleted 114，另有 75 個商品明細缺 ERP product mapping。第一次 staging 建立 614 筆候選；立即重跑結果為 `created=0`、`updated=0`、`unchanged=614`，證明 source key + checksum 冪等。ERP 正式 `AfterSalesCase` 在隔離資料庫仍為 0。
+- case-scoped 子表 shadow count 為商品 684、正向物流 371、逆物流 286、付款 270、付款請求 328、付款提交 225、退款 51、發票 522、CASE Timeline 4,710、CASE Audit 4,374。來源整張表另有 INVOICE Timeline 220 與其他 entityType Audit 783；直接分組查詢證明先前 4,911 / 5,138 是全 entityType 基準，CASE payload 數量較少不是遺失。
+- 售後切片最終驗證為 6 suites / 24 tests、Nest production build 與 `git diff --check` 通過。Secret 值、JWT、客戶個資與來源 payload 均未寫入文件或終端收據。
+- 為避免主工作目錄既有未提交內容被混入，已在隔離 worktree 建立可追溯的本機 commits：ERP `fa73e85e`、售後 exporter `7dfa2a5`；尚未推送遠端，也未替使用者整理或提交主工作目錄的其他變更。
+
+下一步：加入 `snapshotAt` / high-watermark 契約，核對 staging payload 內付款、退款與發票金額及關聯欄位，處理 13 筆待審案件與 75 個商品 mapping；再建立 ERP 正式售後案件聚合模型與 typed commands，讓 inventory、payment/reconciliation、refund、invoice 各自由原生服務持有 single-writer。在逐欄 shadow compare、測試交易與另一次正式啟用授權完成前，不啟用正式庫存、退款或開票寫入。

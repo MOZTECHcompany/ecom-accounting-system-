@@ -187,46 +187,48 @@ model Entity {
   contactPhone String? @map("contact_phone")
 
   // Relations
-  accounts               Account[]
-  journalEntries         JournalEntry[]
-  periods                Period[]
-  customers              Customer[]
-  vendors                Vendor[]
-  products               Product[]
-  salesChannels          SalesChannel[]
-  salesOrders            SalesOrder[]
-  salesQuotations        SalesQuotation[]
-  afterSalesCases        AfterSalesCase[]
-  afterSalesCaseItems    AfterSalesCaseItem[]
-  arInvoices             ArInvoice[]
-  apInvoices             ApInvoice[]
-  bankAccounts           BankAccount[]
-  departments            Department[]
-  employees              Employee[]
-  userMemberships        UserEntityMembership[]
-  payrollPolicy          PayrollPolicy?
-  payrollRuns            PayrollRun[]
-  expenseRequests        ExpenseRequest[]
-  expenses               Expense[]
-  purchaseOrders         PurchaseOrder[]
-  productBatches         ProductBatch[]
-  devCosts               DevCost[]
-  shipments              Shipment[]
-  payments               Payment[]
-  approvalRequests       ApprovalRequest[]
-  invoices               Invoice[]
-  bankImportBatches      BankImportBatch[]
-  payoutImportBatches    PayoutImportBatch[]
-  warehouses             Warehouse[]
-  inventorySnapshots     InventorySnapshot[]
-  inventoryTransactions  InventoryTransaction[]
-  reimbursementItems     ReimbursementItem[]
-  approvalPolicies       ApprovalPolicy[]
-  paymentTasks           PaymentTask[]
-  classifierFeedbacks    AccountingClassifierFeedback[] @relation("EntityClassifierFeedback")
-  connectorSyncStates    ConnectorSyncState[]
-  invoiceSources         InvoiceSource[]
-  externalInvoiceRecords ExternalInvoiceRecord[]
+  accounts                   Account[]
+  journalEntries             JournalEntry[]
+  periods                    Period[]
+  customers                  Customer[]
+  vendors                    Vendor[]
+  products                   Product[]
+  salesChannels              SalesChannel[]
+  salesOrders                SalesOrder[]
+  salesQuotations            SalesQuotation[]
+  afterSalesCases            AfterSalesCase[]
+  afterSalesCaseItems        AfterSalesCaseItem[]
+  afterSalesImportRuns       AfterSalesImportRun[]
+  afterSalesImportCandidates AfterSalesImportCandidate[]
+  arInvoices                 ArInvoice[]
+  apInvoices                 ApInvoice[]
+  bankAccounts               BankAccount[]
+  departments                Department[]
+  employees                  Employee[]
+  userMemberships            UserEntityMembership[]
+  payrollPolicy              PayrollPolicy?
+  payrollRuns                PayrollRun[]
+  expenseRequests            ExpenseRequest[]
+  expenses                   Expense[]
+  purchaseOrders             PurchaseOrder[]
+  productBatches             ProductBatch[]
+  devCosts                   DevCost[]
+  shipments                  Shipment[]
+  payments                   Payment[]
+  approvalRequests           ApprovalRequest[]
+  invoices                   Invoice[]
+  bankImportBatches          BankImportBatch[]
+  payoutImportBatches        PayoutImportBatch[]
+  warehouses                 Warehouse[]
+  inventorySnapshots         InventorySnapshot[]
+  inventoryTransactions      InventoryTransaction[]
+  reimbursementItems         ReimbursementItem[]
+  approvalPolicies           ApprovalPolicy[]
+  paymentTasks               PaymentTask[]
+  classifierFeedbacks        AccountingClassifierFeedback[] @relation("EntityClassifierFeedback")
+  connectorSyncStates        ConnectorSyncState[]
+  invoiceSources             InvoiceSource[]
+  externalInvoiceRecords     ExternalInvoiceRecord[]
 
   // Attendance Relations
   attendancePolicies     AttendancePolicy[]
@@ -775,6 +777,69 @@ model AfterSalesCaseItem {
   @@index([afterSalesCaseId])
   @@index([productId])
   @@map("after_sales_case_items")
+}
+
+// 售後舊系統遷移執行紀錄。只記錄 dry-run / staging 結果，不直接改正式售後資料。
+model AfterSalesImportRun {
+  id                String    @id @default(uuid())
+  entityId          String    @map("entity_id")
+  sourceSystem      String    @default("legacy_after_sales") @map("source_system")
+  mode              String    @default("dry_run")
+  status            String    @default("running")
+  contractVersion   String?   @map("contract_version")
+  sourceCommit      String?   @map("source_commit")
+  featureBaseline   String?   @map("feature_baseline")
+  scannedCount      Int       @default(0) @map("scanned_count")
+  candidateCount    Int       @default(0) @map("candidate_count")
+  needsReviewCount  Int       @default(0) @map("needs_review_count")
+  deletedCount      Int       @default(0) @map("deleted_count")
+  unmappedItemCount Int       @default(0) @map("unmapped_item_count")
+  summary           Json?
+  errorCode         String?   @map("error_code")
+  startedAt         DateTime  @default(now()) @map("started_at")
+  completedAt       DateTime? @map("completed_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  entity             Entity                      @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  lastSeenCandidates AfterSalesImportCandidate[]
+
+  @@index([entityId, status, startedAt])
+  @@index([entityId, sourceSystem, startedAt])
+  @@map("after_sales_import_runs")
+}
+
+// 每個來源案件只有一筆目前 staging 候選；checksum 相同時重跑只更新 lastSeen，不新增資料。
+model AfterSalesImportCandidate {
+  id                  String    @id @default(uuid())
+  entityId            String    @map("entity_id")
+  sourceSystem        String    @default("legacy_after_sales") @map("source_system")
+  sourceRecordId      String    @map("source_record_id")
+  sourceCaseNumber    String?   @map("source_case_number")
+  sourceCaseType      String?   @map("source_case_type")
+  sourceCaseStatus    String?   @map("source_case_status")
+  sourceUpdatedAt     DateTime? @map("source_updated_at")
+  sourceDeletedAt     DateTime? @map("source_deleted_at")
+  checksum            String
+  decision            String    @default("needs_review")
+  issues              Json?
+  payload             Json
+  lastSeenRunId       String    @map("last_seen_run_id")
+  destinationRecordId String?   @map("destination_record_id")
+  importedAt          DateTime? @map("imported_at")
+  retentionUntil      DateTime? @map("retention_until")
+  firstSeenAt         DateTime  @default(now()) @map("first_seen_at")
+  lastSeenAt          DateTime  @default(now()) @map("last_seen_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  entity      Entity              @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  lastSeenRun AfterSalesImportRun @relation(fields: [lastSeenRunId], references: [id], onDelete: Restrict)
+
+  @@unique([entityId, sourceSystem, sourceRecordId])
+  @@index([entityId, decision, lastSeenAt])
+  @@index([lastSeenRunId])
+  @@index([checksum])
+  @@map("after_sales_import_candidates")
 }
 
 // 銷售訂單

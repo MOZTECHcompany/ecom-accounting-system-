@@ -48,6 +48,7 @@ import { Ga4IntegrationModule } from './modules/integration/ga4/ga4.module';
 import { PurchaseModule } from './modules/purchase/purchase.module';
 import { AssemblyModule } from './modules/assembly/assembly.module';
 import { InvoiceSyncModule } from './modules/invoice-sync/invoice-sync.module';
+import { AfterSalesIntegrationModule } from './modules/integration/after-sales/after-sales.module';
 
 /**
  * AppModule
@@ -121,6 +122,7 @@ import { InvoiceSyncModule } from './modules/invoice-sync/invoice-sync.module';
     MetaAdsIntegrationModule,
     GoogleAdsIntegrationModule,
     Ga4IntegrationModule,
+    AfterSalesIntegrationModule,
     NotificationModule,
     AiModule,
     AttendanceModule,
