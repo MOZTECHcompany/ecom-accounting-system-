@@ -70,7 +70,11 @@ jobs:
           set -euo pipefail
 
           IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPOSITORY}/${BACKEND_SERVICE}:${GITHUB_SHA}"
-          CANDIDATE_TAG="candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          CANDIDATE_TAG="c-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if (( ${#BACKEND_SERVICE} + ${#CANDIDATE_TAG} + 1 > 46 )); then
+            echo "::error::Cloud Run service name and candidate traffic tag exceed the 46-character platform limit."
+            exit 1
+          fi
 
           if ! gcloud artifacts repositories describe "${ARTIFACT_REPOSITORY}" \
             --project="${GCP_PROJECT_ID}" \

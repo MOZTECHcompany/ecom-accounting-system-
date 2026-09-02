@@ -79,7 +79,11 @@ jobs:
           set -euo pipefail
 
           IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPOSITORY}/${FRONTEND_SERVICE}:${GITHUB_SHA}"
-          CANDIDATE_TAG="candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          CANDIDATE_TAG="c-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if (( ${#FRONTEND_SERVICE} + ${#CANDIDATE_TAG} + 1 > 46 )); then
+            echo "::error::Cloud Run service name and candidate traffic tag exceed the 46-character platform limit."
+            exit 1
+          fi
           API_BASE="${FRONTEND_API_URL%/}"
           PUBLIC_FRONTEND_URL="${ERP_PUBLIC_FRONTEND_URL%/}"
 
